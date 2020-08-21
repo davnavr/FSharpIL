@@ -5,6 +5,7 @@ open System.Collections.Immutable
 open System.IO
 open System.Runtime.CompilerServices
 
+open ILInfo.Utilities
 open ILInfo.Utilities.Collections
 
 [<Sealed>]
@@ -30,6 +31,7 @@ type ParseResult<'Result> =
     | Success of result: 'Result
     | Error of msg: string
 
+// TODO: Maybe parsing using Span and ReadOnlySpan is possible?
 type Parser<'Result> = ByteStream -> ParseResult<'Result>
 
 let eof: Parser<_> =
@@ -66,6 +68,13 @@ let pbyte b: Parser<_> =
     fun stream ->
         match stream.Read() with
         | Some read when read = b -> Success read
-        | Some actual -> sprintf "Expected 0x%X, got 0x%X" b actual |> Error
-        | None -> sprintf "Expected 0x%X, but got end of file" b |> Error
-let pbytes: seq<byte> -> Parser<_> = Seq.map pbyte >> pmany
+        | Some actual -> sprintf "Expected 0x%02X, got 0x%02X" b actual |> Error
+        | None -> sprintf "Expected 0x%02X, but got end of file" b |> Error
+let pbytes bytes =
+    let inner = parray (Array.length bytes) pbyte
+    let format() = Bytes.print
+    fun stream ->
+        match inner stream with
+        | Success result when result <> bytes ->
+            sprintf "Expected %a, but got %a" format bytes format result |> Error
+        | result -> result

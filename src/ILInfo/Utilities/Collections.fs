@@ -3,5 +3,5 @@
 open System.Collections.Immutable
 
 module ImmList =
-    let empty<'T> = ImmutableList<'T>.Empty
-    let builder<'T> = ImmutableList.CreateBuilder<'T>
+    let inline empty<'T> = ImmutableList<'T>.Empty
+    let inline builder<'T> = ImmutableList.CreateBuilder<'T>

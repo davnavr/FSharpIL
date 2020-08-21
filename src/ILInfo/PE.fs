@@ -8,8 +8,11 @@ open ILInfo.Utilities
 open ILInfo.Parser
 
 /// Reads a [PortableExecutable] from a <see cref="T:System.IO.Stream"/>.
-let public fromStream (stream: Stream): IO<_> =
+let public fromStream (name: string) (stream: Stream): IO<_> =
     io {
-        use reader = new StreamReader(stream)
+        use source = new ByteStream(name, stream)
         invalidOp "bad"
     }
+
+let public fromPath (path: string): IO<_> =
+    File.OpenRead path |> fromStream path
