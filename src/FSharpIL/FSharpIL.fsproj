@@ -2,7 +2,7 @@
 
   <!-- Project properties -->
   <PropertyGroup>
-    <AssemblyName>ILInfo</AssemblyName>
+    <AssemblyName>FSharpIL</AssemblyName>
     <OutputType>Library</OutputType>
     <TargetFramework>netstandard2.1</TargetFramework>
   </PropertyGroup>

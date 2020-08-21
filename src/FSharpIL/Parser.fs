@@ -1,12 +1,12 @@
-﻿module internal ILInfo.Parser
+﻿module internal FSharpIL.Parser
 
 open System
 open System.Collections.Immutable
 open System.IO
 open System.Runtime.CompilerServices
 
-open ILInfo.Utilities
-open ILInfo.Utilities.Collections
+open FSharpIL.Utilities
+open FSharpIL.Utilities.Collections
 
 [<Sealed>]
 type ByteStream(name: string, stream: Stream) =

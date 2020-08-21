@@ -1,8 +1,8 @@
 ﻿/// Contains various magic numbers
 [<RequireQualifiedAccess>]
-module internal ILInfo.Magic
+module internal FSharpIL.Magic
 
-open ILInfo.Utilities
+open FSharpIL.Utilities
 
 // II.25.2.1
 let DOSHeader = bytes {

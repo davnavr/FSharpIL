@@ -1,4 +1,4 @@
-﻿namespace ILInfo.Utilities
+﻿namespace FSharpIL.Utilities
 
 type internal IO<'Result> = unit -> 'Result
 

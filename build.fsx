@@ -18,7 +18,7 @@ module DotNetCli = Fake.DotNet.DotNet
 let rootDir = __SOURCE_DIRECTORY__
 let testDir = rootDir </> "test"
 
-let slnFile = rootDir </> "ILInfo.sln"
+let slnFile = rootDir </> "FSharpIL.sln"
 
 let handleErr msg: ProcessResult -> _ =
     function
@@ -39,7 +39,7 @@ Target.create "Build" (fun _ ->
 Target.create "Test" (fun _ ->
     sprintf
         "--project %s"
-        (testDir </> "ILInfo.Tests" </> "ILInfo.Tests.fsproj")
+        (testDir </> "FSharpIL.Tests" </> "FSharpIL.Tests.fsproj")
     |> DotNetCli.exec id "run"
     |> handleErr "One or more tests failed"
 )

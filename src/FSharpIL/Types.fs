@@ -1,5 +1,5 @@
 ﻿[<AutoOpen>]
-module ILInfo.Types
+module FSharpIL.Types
 
 // II.25.2.3.1
 type DosHeader =

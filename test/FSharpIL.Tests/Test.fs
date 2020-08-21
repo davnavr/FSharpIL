@@ -1,4 +1,4 @@
-﻿module private ILInfo.Test
+﻿module private FSharpIL.Test
 
 open Fuchu
 

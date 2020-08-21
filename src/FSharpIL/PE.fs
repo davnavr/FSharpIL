@@ -1,11 +1,11 @@
 ﻿[<RequireQualifiedAccess>]
-module ILInfo.PE
+module FSharpIL.PE
 
 open System.IO
 
-open ILInfo.Utilities
+open FSharpIL.Utilities
 
-open ILInfo.Parser
+open FSharpIL.Parser
 
 /// Reads a [PortableExecutable] from a <see cref="T:System.IO.Stream"/>.
 let public fromStream (name: string) (stream: Stream): IO<_> =

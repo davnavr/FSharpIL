@@ -1,4 +1,4 @@
-﻿module internal ILInfo.Utilities.Collections
+﻿module internal FSharpIL.Utilities.Collections
 
 open System.Collections.Immutable
 

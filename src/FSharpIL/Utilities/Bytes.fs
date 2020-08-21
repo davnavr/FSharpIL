@@ -1,5 +1,5 @@
 ﻿[<RequireQualifiedAccess>]
-module internal ILInfo.Utilities.Bytes
+module internal FSharpIL.Utilities.Bytes
 
 let print bytes =
     bytes
