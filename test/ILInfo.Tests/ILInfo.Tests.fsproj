@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Project properties -->
+  <PropertyGroup>
+    <AssemblyName>ILInfo.Tests</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ILInfo</RootNamespace>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <!-- Source files -->
+  <ItemGroup>
+    <Compile Include="Test.fs" />
+  </ItemGroup>
+
+  <!-- References -->
+  <ItemGroup>
+    <PackageReference Include="Fuchu" Version="1.1.0" />
+    <ProjectReference Include="$(RootDirectory)/src/ILInfo/ILInfo.fsproj" />
+  </ItemGroup>
+
+</Project>
