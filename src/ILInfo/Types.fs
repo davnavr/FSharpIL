@@ -1,7 +1,9 @@
 ﻿[<AutoOpen>]
 module ILInfo.Types
 
-// II.25.2.1
-type PEHeader = unit
+// II.25.2.3.1
+type DosHeader =
+    | DosHeader of lfanew: byte * byte * byte * byte
 
-type PortableExecutable = unit
+type PortableExecutable =
+    { DosHeader: DosHeader }

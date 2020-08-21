@@ -3,6 +3,7 @@
 open System
 open System.Collections.Immutable
 open System.IO
+open System.Runtime.CompilerServices
 
 open ILInfo.Utilities.Collections
 
@@ -17,21 +18,37 @@ type ByteStream(name: string, stream: Stream) =
     member _.Read() =
         match stream.ReadByte() with
         | -1 -> None
-        | next -> byte next |> Some
+        | next ->
+            pos <- pos + 1L
+            byte next |> Some
 
     interface IDisposable with
         member _.Dispose() = if not disposed then stream.Close()
 
-[<Struct>]
+[<IsReadOnly; Struct>]
 type ParseResult<'Result> =
     | Success of result: 'Result
     | Error of msg: string
 
 type Parser<'Result> = ByteStream -> ParseResult<'Result>
 
+let eof: Parser<_> =
+    fun stream ->
+        match stream.Read() with
+        | None -> Success()
+        | Some b -> sprintf "Expected end of file, but got 0x%X" b |> Error
 let nothing = fun _ -> ()
-let fail msg: Parser<_> = fun _ -> Error msg
+let fail msg = fun _ -> Error msg
+let preturn item = fun _ -> Success item
 
+let parray count p: Parser<_> =
+    match count with
+    | 0 -> preturn Array.empty
+    | _ ->
+        fun stream ->
+            let results = Array.zeroCreate count
+            
+            invalidOp "bad"
 let pmany (parsers: seq<Parser<_>>): Parser<ImmutableList<_>> =
     fun stream ->
         use enumerator = parsers.GetEnumerator()
@@ -49,6 +66,6 @@ let pbyte b: Parser<_> =
     fun stream ->
         match stream.Read() with
         | Some read when read = b -> Success read
-        | Some actual -> sprintf "Expected %X, got %X" b actual |> Error
-        | None -> sprintf "Expected %X, but got end of file" b |> Error
+        | Some actual -> sprintf "Expected 0x%X, got 0x%X" b actual |> Error
+        | None -> sprintf "Expected 0x%X, but got end of file" b |> Error
 let pbytes: seq<byte> -> Parser<_> = Seq.map pbyte >> pmany
