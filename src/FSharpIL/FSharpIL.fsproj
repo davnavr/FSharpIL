@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Project properties -->
+  <PropertyGroup>
+    <AssemblyName>FSharpIL</AssemblyName>
+    <OutputType>Library</OutputType>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+
+  <!-- Source files -->
+  <ItemGroup>
+    <Compile Include="Utilities\Collections.fs" />
+    <Compile Include="Utilities\Bytes.fs" />
+    <Compile Include="Utilities\IO.fs" />
+    <Compile Include="Utilities\Builders.fs" />
+    <Compile Include="Magic.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="Parser.fs" />
+    <Compile Include="PE.fs" />
+  </ItemGroup>
+  
+  <!-- References -->
+  <ItemGroup>
+    <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
+  </ItemGroup>
+
+</Project>
