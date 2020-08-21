@@ -10,21 +10,45 @@ nuget Fake.IO.FileSystem
 
 open Fake.Core
 open Fake.Core.TargetOperators
+open Fake.DotNet
+open Fake.IO.FileSystemOperators
+
+module DotNetCli = Fake.DotNet.DotNet
+
+let rootDir = __SOURCE_DIRECTORY__
+let testDir = rootDir </> "test"
+
+let slnFile = rootDir </> "ILInfo.sln"
+
+let handleErr msg: ProcessResult -> _ =
+    function
+    | { ExitCode = ecode } when ecode <> 0 ->
+        failwithf "Process exited with code %i: %s" ecode msg
+    | _ -> ()
 
 Target.create "Clean" (fun _ ->
-    Trace.trace "Cleaning..."
+    slnFile
+    |> DotNetCli.exec id "clean"
+    |> ignore
 )
 
 Target.create "Build" (fun _ ->
-    Trace.trace "Building..."
+    DotNetCli.build id slnFile
 )
 
 Target.create "Test" (fun _ ->
-    Trace.trace "Testing..."
+    sprintf
+        "--project %s"
+        (testDir </> "ILInfo.Tests" </> "ILInfo.Tests.fsproj")
+    |> DotNetCli.exec id "run"
+    |> handleErr "One or more tests failed"
 )
 
 Target.create "Lint" (fun _ ->
-    Trace.trace "Linting..."
+    slnFile
+    |> sprintf "lint %s"
+    |> DotNetCli.exec id "fsharplint"
+    |> handleErr "One or more files is formatted incorrectly"
 )
 
 Target.create "Publish" (fun _ ->
