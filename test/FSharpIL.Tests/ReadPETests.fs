@@ -32,7 +32,7 @@ let tests =
                     testPE
                         (assm.GetName().Name)
                         (fun() -> File.OpenRead assm.Location)
-                        ReadResult.get
+                        Result.get
             ]
 
         testPE
@@ -40,6 +40,6 @@ let tests =
             (fun() ->
                 let data = bytes { 1; 2; 3; 4; } in new MemoryStream(data))
             (function
-            | InvalidDOSHeader -> ())
+            | Error InvalidDOSHeader -> ())
     ]
     |> testList "reading tests"

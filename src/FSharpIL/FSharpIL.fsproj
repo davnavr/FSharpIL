@@ -10,14 +10,14 @@
   <!-- Source files -->
   <ItemGroup>
     <Compile Include="Attributes.fs" />
+    <Compile Include="Utilities\Result.fs" />
     <Compile Include="Utilities\Collections.fs" />
     <Compile Include="Utilities\Bytes.fs" />
     <Compile Include="Utilities\IO.fs" />
     <Compile Include="Utilities\Builders.fs" />
     <Compile Include="Magic.fs" />
     <Compile Include="Types.fs" />
-    <Compile Include="Parser.fs" />
-    <Compile Include="ReadResult.fs" />
+    <Compile Include="Reader.fs" />
     <Compile Include="ReadPE.fs" />
     <Compile Include="WritePE.fs" />
   </ItemGroup>
