@@ -53,7 +53,7 @@ module Primitives =
         fun stream ->
             match p1 stream with
             | Ok _ -> p2 stream
-            | err -> err
+            | Error err -> Error err
     let inline (.>>.) p1 p2 = tuple2 p1 p2
     let (|>>) p f: Reader<_> =
         fun stream ->
@@ -69,6 +69,15 @@ module Primitives =
 
     let fail err: Reader<_> = fun _ -> Error err
     let retn value: Reader<_> = fun _ -> Ok value
+
+    let toPos pos err: Reader<_> =
+        fun stream ->
+            if pos < stream.Position then
+                err stream.Position |> Error
+            else
+                while stream.Position < pos do
+                    stream.ReadByte() |> ignore
+                Ok()
 
 [<AutoOpen>]
 module ByteReaders =

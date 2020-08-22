@@ -21,13 +21,16 @@ module private Readers =
             if uint stub >= 0x80u then
                 retn stub
             else
-                InvalidPESignatureOffset(b1, b2, b3, b4) |> fail
+                InvalidPESignatureOffset stub |> fail
         | _ -> invalidOp "Invalid number of bytes for lfanew"
     let file =
         dosHeader
-        // TODO: Skip DOS stub
-        |>> fun doshd ->
-            { DosHeader = doshd }
+        >>= fun doshd ->
+            toPos
+                (uint doshd |> int64)
+                (fun _ -> InvalidPESignatureOffset doshd)
+            >>. retn
+                { DosHeader = doshd }
 
 /// Reads a [PortableExecutable] from a <see cref="T:System.IO.Stream"/>.
 let public fromStream (name: string) (stream: Stream): IO<ReadResult> =
