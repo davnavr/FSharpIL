@@ -11,10 +11,10 @@ open FSharpIL.Reader
 [<AutoOpen>]
 module private Readers =
     let dosHeader =
-        let magic bytes = array bytes (fun _ -> InvalidDOSHeader)
-        magic Magic.dosHeader
-        >>. count 4 (fun _ -> InvalidDOSHeader)
-        .>> magic Magic.dosStub
+        let err _ = InvalidDOSHeader
+        array Magic.dosMagic err
+        >>. count 58 err
+        >>. count 4 err
         >>= function
         | [| b1; b2; b3; b4 |] ->
             let stub = DosStub(b1, b2, b3, b4)
@@ -25,8 +25,9 @@ module private Readers =
         | _ -> invalidOp "Invalid number of bytes for lfanew"
     let file =
         dosHeader
-        |>> fun header ->
-            { DosHeader = header }
+        // TODO: Skip DOS stub
+        |>> fun doshd ->
+            { DosHeader = doshd }
 
 /// Reads a [PortableExecutable] from a <see cref="T:System.IO.Stream"/>.
 let public fromStream (name: string) (stream: Stream): IO<ReadResult> =

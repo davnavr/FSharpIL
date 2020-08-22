@@ -26,6 +26,7 @@ let tests =
                     [
                         typeof<obj>
                         typeof<System.Collections.Immutable.IImmutableList<_>>
+                        typeof<Assert>
                     ]
                 for tpe in types do
                     let assm = tpe.Assembly
