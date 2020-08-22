@@ -47,8 +47,8 @@ module Primitives =
             | Ok result ->
                 match p2 stream with
                 | Ok _ -> Ok result
-                | err -> err
-            | err -> err
+                | Error err -> Error err
+            | Error err -> Error err
     let (>>.) p1 p2: Reader<_> =
         fun stream ->
             match p1 stream with

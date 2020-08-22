@@ -19,11 +19,13 @@ type PortableExecutable =
 
 type ReadError =
     | InvalidDOSHeader
+    | InvalidPESignature // of byte * byte * byte * byte
     | InvalidPESignatureOffset of DosStub
 
     override this.ToString() =
         match this with
         | InvalidDOSHeader -> "The DOS header is invalid"
+        | InvalidPESignature -> "The PE signature is invalid"
         | InvalidPESignatureOffset(stub) ->
             sprintf "The file offset to the PE signature (%O) is invalid" stub
 

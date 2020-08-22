@@ -24,3 +24,5 @@ let dosStub =
         't'; ' '; 'b'; 'e'; ' '; 'r'; 'u'; 'n'; ' '; 'i'; 'n'; ' '; 'D'; 'O'; 'S'; ' ';
         'm'; 'o'; 'd'; 'e'; 0x2e; 0x0d; 0x0d; 0x0a; 0x24; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
     }
+
+let peSignature = [| 0x50uy; 0x45uy; 0uy; 0uy |]

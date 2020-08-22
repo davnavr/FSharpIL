@@ -29,6 +29,9 @@ module private Readers =
             toPos
                 (uint doshd |> int64)
                 (fun _ -> InvalidPESignatureOffset doshd)
+            .>> array
+                Magic.peSignature
+                (fun _ -> InvalidPESignature)
             >>. retn
                 { DosHeader = doshd }
 
