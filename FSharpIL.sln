@@ -7,6 +7,8 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharpIL", "src\FSharpIL\FS
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharpIL.Tests", "test\FSharpIL.Tests\FSharpIL.Tests.fsproj", "{082D2F72-C308-4D7D-B291-0EB32CEA67CA}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpIL.Benchmarks", "test\FSharpIL.Benchmarks\FSharpIL.Benchmarks.fsproj", "{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,18 @@ Global
 		{082D2F72-C308-4D7D-B291-0EB32CEA67CA}.Release|x64.Build.0 = Release|Any CPU
 		{082D2F72-C308-4D7D-B291-0EB32CEA67CA}.Release|x86.ActiveCfg = Release|Any CPU
 		{082D2F72-C308-4D7D-B291-0EB32CEA67CA}.Release|x86.Build.0 = Release|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Debug|x64.Build.0 = Debug|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Debug|x86.Build.0 = Debug|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Release|x64.ActiveCfg = Release|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Release|x64.Build.0 = Release|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Release|x86.ActiveCfg = Release|Any CPU
+		{C4141EA6-B136-4BA3-A0C1-BB92AA54AA7C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

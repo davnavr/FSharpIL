@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Project properties -->
+  <PropertyGroup>
+    <AssemblyName>FSharpIL.Benchmarks</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>FSharpIL</RootNamespace>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="ReadPEBenchmarks.fs" />
+    <Compile Include="Runner.fs" />
+  </ItemGroup>
+
+  <!-- References -->
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.12.1" />
+    <ProjectReference Include="$(RootDirectory)/src/FSharpIL/FSharpIL.fsproj" />
+  </ItemGroup>
+
+</Project>

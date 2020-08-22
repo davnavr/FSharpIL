@@ -36,11 +36,11 @@ module private Readers =
                 { DosHeader = doshd }
 
 /// Reads a [PortableExecutable] from a <see cref="T:System.IO.Stream"/>.
-let public fromStream (name: string) (stream: Stream): IO<ReadResult> =
+let public fromStream (name: string) (stream: Stream): _ -> ReadResult =
     io {
         use source = new ByteStream(name, stream)
         return file source
     }
 
-let public fromPath (path: string): IO<_> =
+let public fromPath (path: string) =
     File.OpenRead path |> fromStream path
