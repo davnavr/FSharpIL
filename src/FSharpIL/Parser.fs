@@ -16,7 +16,7 @@ type ByteStream(name: string, stream: Stream) =
     member _.Name = name
     member _.Position = pos
 
-    member _.Read() =
+    member _.ReadByte() =
         match stream.ReadByte() with
         | -1 -> None
         | next ->
@@ -36,7 +36,7 @@ type Parser<'Result> = ByteStream -> ParseResult<'Result>
 
 let eof: Parser<_> =
     fun stream ->
-        match stream.Read() with
+        match stream.ReadByte() with
         | None -> Success()
         | Some b -> sprintf "Expected end of file, but got 0x%X" b |> Error
 let nothing = fun _ -> ()
@@ -66,7 +66,7 @@ let pmany (parsers: seq<Parser<_>>): Parser<ImmutableList<_>> =
 
 let pbyte b: Parser<_> =
     fun stream ->
-        match stream.Read() with
+        match stream.ReadByte() with
         | Some read when read = b -> Success read
         | Some actual -> sprintf "Expected 0x%02X, got 0x%02X" b actual |> Error
         | None -> sprintf "Expected 0x%02X, but got end of file" b |> Error

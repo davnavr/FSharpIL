@@ -1,5 +1,6 @@
-﻿[<RequireQualifiedAccess>]
-module FSharpIL.PE
+﻿/// Providings functions for reading PE files containing CIL code.
+[<RequireQualifiedAccess>]
+module FSharpIL.ReadPE
 
 open System.IO
 

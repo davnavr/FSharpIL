@@ -16,7 +16,9 @@
     <Compile Include="Magic.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Parser.fs" />
-    <Compile Include="PE.fs" />
+    <Compile Include="ReadResult.fs" />
+    <Compile Include="ReadPE.fs" />
+    <Compile Include="WritePE.fs" />
   </ItemGroup>
   
   <!-- References -->
