@@ -6,34 +6,40 @@ open Fuchu
 
 open FSharpIL.Utilities
 
+let testPE name source body =
+    test name {
+        let file =
+            io {
+                use stream = source()
+                return! ReadPE.fromStream name stream
+            }
+            |> IO.run
+        body file |> ignore
+    }
+
 let tests =
     [
-        test "correct assembly" {
-            let assembly =
-                io {
-                    let path = typeof<obj>.Assembly.Location
-                    use a = null;
-                    return! ReadPE.fromPath path
-                }
-                |> IO.run
-            match assembly with
-            | ValidFile _ -> ()
-            | err -> string err |> failwith // TODO: Find better way to assert the result.
-        }
+        testList
+            "valid assembly is read correctly"
+            [
+                let types =
+                    [
+                        typeof<obj>
+                        typeof<System.Collections.Immutable.IImmutableList<_>>
+                    ]
+                for tpe in types do
+                    let assm = tpe.Assembly
+                    testPE
+                        (assm.GetName().Name)
+                        (fun() -> File.OpenRead assm.Location)
+                        ReadResult.get
+            ]
 
-        test "reading fails when magic number is incorrect" {
-            let file =
-                io {
-                    let data = bytes { 1; 2; 3; 4; }
-                    use source = new MemoryStream(data)
-                    return! ReadPE.fromStream "test" source
-                }
-                |> IO.run
-            match file with
-            | InvalidDOSHeader(value, at) ->
-                Assert.Equal("bad byte", (value, at), (1uy, 0uy))
-            | ValidFile _ -> failwith "unexpected success"
-            | err -> string err |> failwith
-        }
+        testPE
+            "reading fails when magic number is incorrect"
+            (fun() ->
+                let data = bytes { 1; 2; 3; 4; } in new MemoryStream(data))
+            (function
+            | InvalidDOSHeader -> ())
     ]
     |> testList "reading tests"

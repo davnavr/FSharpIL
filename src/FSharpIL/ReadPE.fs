@@ -13,7 +13,7 @@ let public fromStream (name: string) (stream: Stream): IO<ReadResult> =
     io {
         use source = new ByteStream(name, stream)
         pbytes Magic.DOSHeader source
-        return InvalidDOSHeader(1uy, 0uy)
+        return InvalidDOSHeader
     }
 
 let public fromPath (path: string): IO<_> =
