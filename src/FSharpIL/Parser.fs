@@ -43,14 +43,6 @@ let nothing = fun _ -> ()
 let fail msg = fun _ -> Error msg
 let preturn item = fun _ -> Success item
 
-let parray count p: Parser<_> =
-    match count with
-    | 0 -> preturn Array.empty
-    | _ ->
-        fun stream ->
-            let results = Array.zeroCreate count
-            
-            invalidOp "bad"
 let pmany (parsers: seq<Parser<_>>): Parser<ImmutableList<_>> =
     fun stream ->
         use enumerator = parsers.GetEnumerator()
@@ -68,13 +60,17 @@ let pbyte b: Parser<_> =
     fun stream ->
         match stream.ReadByte() with
         | Some read when read = b -> Success read
-        | Some actual -> sprintf "Expected 0x%02X, got 0x%02X" b actual |> Error
-        | None -> sprintf "Expected 0x%02X, but got end of file" b |> Error
-let pbytes bytes =
-    let inner = parray (Array.length bytes) pbyte
-    let format() = Bytes.print
+        | Some actual -> sprintf "Expected 0x%02X at 0x%02X, got 0x%02X" b stream.Position actual |> Error
+        | None -> sprintf "Expected 0x%02X at 0x%02X, but got end of file" b stream.Position |> Error
+let pbytes (bytes: byte[]) =
     fun stream ->
-        match inner stream with
-        | Success result when result <> bytes ->
-            sprintf "Expected %a, but got %a" format bytes format result |> Error
-        | result -> result
+        let mutable pos = 0
+        let mutable err = None
+        while err.IsNone && pos < bytes.Length do
+            let exp = Array.item pos bytes
+            match pbyte exp stream with
+            | Success _ -> pos <- pos + 1
+            | Error msg -> err <- Some msg
+        match err with
+        | None -> Success bytes
+        | Some msg -> Error msg

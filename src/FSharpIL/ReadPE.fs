@@ -9,10 +9,11 @@ open FSharpIL.Utilities
 open FSharpIL.Parser
 
 /// Reads a [PortableExecutable] from a <see cref="T:System.IO.Stream"/>.
-let public fromStream (name: string) (stream: Stream): IO<_> =
+let public fromStream (name: string) (stream: Stream): IO<ReadResult> =
     io {
         use source = new ByteStream(name, stream)
-        invalidOp "bad"
+        pbytes Magic.DOSHeader source
+        return InvalidDOSHeader(1uy, 0uy)
     }
 
 let public fromPath (path: string): IO<_> =

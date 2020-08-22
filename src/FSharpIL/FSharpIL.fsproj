@@ -9,6 +9,7 @@
 
   <!-- Source files -->
   <ItemGroup>
+    <Compile Include="Attributes.fs" />
     <Compile Include="Utilities\Collections.fs" />
     <Compile Include="Utilities\Bytes.fs" />
     <Compile Include="Utilities\IO.fs" />

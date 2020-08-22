@@ -1,12 +1,12 @@
-﻿module private FSharpIL.Test
+﻿module FSharpIL.Test
 
 open Fuchu
 
-let tests =
-    [
-        // TODO: Add tests
-    ]
-    |> testList "tests"
-
 [<EntryPoint>]
-let main args = defaultMain tests args
+let main args =
+    let tests =
+        [
+            ReadPETests.tests
+        ]
+        |> testList "tests"
+    defaultMain tests args
