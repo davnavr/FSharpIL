@@ -18,15 +18,20 @@ type PortableExecutable =
     { DosHeader: DosStub }
 
 type ReadError =
-    | InvalidDOSHeader
-    | InvalidPESignature // of byte * byte * byte * byte
-    | InvalidPESignatureOffset of DosStub
+    | FileTooSmall
+    | IncorrectDOSMagic of byte * byte
+    | IncorrectPESignature // of byte * byte * byte * byte
+    | InvalidPESignatureOffset of DosStub option
 
     override this.ToString() =
         match this with
-        | InvalidDOSHeader -> "The DOS header is invalid"
-        | InvalidPESignature -> "The PE signature is invalid"
-        | InvalidPESignatureOffset(stub) ->
+        | FileTooSmall -> "The file is too small to be a valid PE file"
+        | IncorrectDOSMagic(b1, b2) ->
+            sprintf "The magic number of the file is incorrect and should be 0x4d 0x5a instead of 0x%02x 0x%02x" b1 b2
+        | IncorrectPESignature -> "The PE signature is incorrect"
+        | InvalidPESignatureOffset(None) ->
+            "The PE offset to the signature (lfanew) is missing"
+        | InvalidPESignatureOffset(Some stub) ->
             sprintf "The file offset to the PE signature (%O) is invalid" stub
 
 type ReadResult = Result<PortableExecutable, ReadError>

@@ -9,11 +9,11 @@ open FSharpIL.Utilities
 let testPE name source body =
     test name {
         let file =
-            io {
+            proc {
                 use stream = source()
                 return! ReadPE.fromStream name stream
             }
-            |> IO.run
+            |> Process.run
         body file |> ignore
     }
 
@@ -41,6 +41,6 @@ let tests =
             (fun() ->
                 let data = bytes { 1; 2; 3; 4; } in new MemoryStream(data))
             (function
-            | Error InvalidDOSHeader -> ())
+            | Error(IncorrectDOSMagic(1uy, 2uy)) -> ())
     ]
     |> testList "reading tests"

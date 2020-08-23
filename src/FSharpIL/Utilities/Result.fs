@@ -1,4 +1,10 @@
-﻿module internal FSharpIL.Utilities.Result
+﻿[<RequireQualifiedAccess>]
+module internal FSharpIL.Utilities.Result
+
+let isOk =
+    function
+    | Ok _ -> true
+    | Error _ -> false
 
 let get item =
     match item with

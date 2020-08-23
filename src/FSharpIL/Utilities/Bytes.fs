@@ -1,11 +1,15 @@
 ﻿[<RequireQualifiedAccess>]
 module internal FSharpIL.Utilities.Bytes
 
-let print bytes =
+open System
+
+[<Obsolete>]
+let print (bytes: seq<byte>) =
     bytes
     |> Seq.map (sprintf "0x%02X")
     |> String.concat " "
 
+[<Obsolete>]
 type Builder() =
     member _.Combine(a: byte[], b) = Array.append a b
     member _.Delay(f: unit -> byte[]) = f()

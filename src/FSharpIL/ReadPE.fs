@@ -6,40 +6,19 @@ open System.IO
 
 open FSharpIL.Utilities
 
-open FSharpIL.Reader
-
-[<AutoOpen>]
-module private Readers =
-    let dosHeader =
-        let err _ = InvalidDOSHeader
-        array Magic.dosMagic err
-        >>. count 58 err
-        >>. count 4 err
-        >>= function
-        | [| b1; b2; b3; b4 |] ->
-            let stub = DosStub(b1, b2, b3, b4)
-            if uint stub >= 0x80u then
-                retn stub
-            else
-                InvalidPESignatureOffset stub |> fail
-        | _ -> invalidOp "Invalid number of bytes for lfanew"
-    let file =
-        dosHeader
-        >>= fun doshd ->
-            toPos
-                (uint doshd |> int64)
-                (fun _ -> InvalidPESignatureOffset doshd)
-            .>> array
-                Magic.peSignature
-                (fun _ -> InvalidPESignature)
-            >>. retn
-                { DosHeader = doshd }
-
 /// Reads a [PortableExecutable] from a <see cref="T:System.IO.Stream"/>.
 let public fromStream (name: string) (stream: Stream): _ -> ReadResult =
-    io {
+    proc {
         use source = new ByteStream(name, stream)
-        return file source
+        let! header =
+            match (source.ReadByte(), source.ReadByte()) with
+            | (Some 0x4Duy, Some 0x5Auy) ->
+                // TODO Read lfanew & rest of dos stub
+                invalidOp "bad"
+            | (Some b1, Some b2) ->
+                IncorrectDOSMagic(b1, b2) |> Process.fail
+            | _ -> Process.fail FileTooSmall
+        return { DosHeader = header }
     }
 
 let public fromPath (path: string) =
