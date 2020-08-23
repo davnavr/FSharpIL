@@ -8,14 +8,12 @@ open FSharpIL.Utilities
 
 let testPE name source body =
     test name {
-        let file =
-            proc {
-                use stream = source()
-                return! ReadPE.fromStream name stream
-            }
-            |> Process.run
-        body file |> ignore
+        ReadPE.fromStream name (source()) ()
+        |> body
+        |> ignore
     }
+
+let inline srcbytes arr () = new MemoryStream(Array.map byte arr)
 
 let tests =
     [
@@ -38,9 +36,14 @@ let tests =
 
         testPE
             "reading fails when magic number is incorrect"
-            (fun() ->
-                let data = bytes { 1; 2; 3; 4; } in new MemoryStream(data))
+            (srcbytes [| 1; 2; 3; 4; |])
             (function
             | Error(IncorrectDOSMagic(1uy, 2uy)) -> ())
+
+        testPE
+            "reading fails when DOS stub is too short"
+            (srcbytes [| 0x4A; 0x5A |])
+            (function
+            | Error MissingPESignatureOffset -> ())
     ]
     |> testList "reading tests"

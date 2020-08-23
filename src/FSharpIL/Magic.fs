@@ -4,8 +4,6 @@ module internal FSharpIL.Magic
 
 open FSharpIL.Utilities
 
-// II.25.2.1
-let dosMagic = bytes { 'M'; 'Z' }
 /// Default DOS header, excluding the first two bytes.
 let dosHeader =
     seq {
@@ -16,13 +14,6 @@ let dosHeader =
     }
     |> Seq.map byte
     |> Seq.toArray
-/// Default DOS stub
-let dosStub =
-    bytes {
-        0x0e; 0x1f; 0xba; 0x0e; 0x00; 0xb4; 0x09; 0xcd; 0x21; 0xb8; 0x01; 0x4c; 0xcd; 0x21; 'T'; 'h';
-        'i'; 's'; ' '; 'p'; 'r'; 'o'; 'g'; 'r'; 'a'; 'm'; ' '; 'c'; 'a'; 'n'; 'n'; 'o';
-        't'; ' '; 'b'; 'e'; ' '; 'r'; 'u'; 'n'; ' '; 'i'; 'n'; ' '; 'D'; 'O'; 'S'; ' ';
-        'm'; 'o'; 'd'; 'e'; 0x2e; 0x0d; 0x0d; 0x0a; 0x24; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
-    }
+// let dosStub =
 
 let peSignature = [| 0x50uy; 0x45uy; 0uy; 0uy |]

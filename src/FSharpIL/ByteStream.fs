@@ -23,15 +23,34 @@ type ByteStream(name: string, stream: Stream) =
         | next ->
             pos <- pos + 1u
             byte next |> Some
-    member _.ReadBytes(count) =
-        invalidOp "bad"
-    member this.TryMove offset =
-        let mutable result = Ok()
-        while Result.isOk result && pos < offset do
+    member this.ReadBytes(count) =
+        let results = Array.zeroCreate<byte> count
+        let mutable i = 0
+        let mutable ok = true
+        while ok && i < count do
             match this.ReadByte() with
-            | Some _ -> ()
-            | None -> result <- Error pos
-        result
+            | Some value ->
+                Array.set results i value
+                i <- i + 1
+            | None -> ok <- false
+        if ok
+        then results
+        else Array.take i results
+    member this.TryMove offset =
+        let mutable error = None
+        while Option.isNone error && pos < offset do
+            match this.ReadByte() with
+            | Some a -> ()
+            | None -> error <- Some pos
+        match error with
+        | None -> Ok()
+        | Some err -> Error err
+
+    member this.ReadUInt32() =
+        match this.ReadBytes 4 with
+        | [| b1; b2; b3; b4 |] ->
+            uint b1 + (uint b2 <<< 8) + (uint b3 <<< 16) + (uint b4 <<< 24) |> Ok
+        | err -> Error err
 
     interface IDisposable with
         member _.Dispose() = if not disposed then stream.Close()
