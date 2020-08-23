@@ -12,6 +12,7 @@ open Fake.Core
 open Fake.Core.TargetOperators
 open Fake.DotNet
 open Fake.IO.FileSystemOperators
+open Fake.IO.Globbing.Operators
 
 module DotNetCli = Fake.DotNet.DotNet
 
@@ -40,20 +41,18 @@ Target.create "Clean" (fun _ ->
 )
 
 Target.create "Build" (fun _ ->
-    DotNetCli.build id slnFile
+    DotNetCli.build
+        (fun opt ->
+            { opt with
+                Configuration = DotNetCli.Release
+                NoRestore = true })
+        slnFile
 )
 
 Target.create "Test" (fun _ ->
     testDir </> "FSharpIL.Tests" </> "FSharpIL.Tests.fsproj"
     |> runProj ""
     |> handleErr "One or more tests failed"
-)
-
-Target.create "Lint" (fun _ ->
-    slnFile
-    |> sprintf "lint %s --format msbuild"
-    |> DotNetCli.exec id "fsharplint"
-    |> handleErr "One or more files is formatted incorrectly"
 )
 
 Target.create "Benchmark" (fun _ ->
@@ -70,7 +69,6 @@ Target.create "Publish" (fun _ ->
 ==> "Build"
 ==> "Test"
 ==> "Benchmark"
-==> "Lint"
 ==> "Publish"
 
 Target.runOrDefault "Publish"
