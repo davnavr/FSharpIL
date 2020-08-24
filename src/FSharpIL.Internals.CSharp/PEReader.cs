@@ -19,7 +19,7 @@
         public override ReadResult Invoke(Stream stream)
         {
             using var source = new ByteStream(this.name, stream);
-            PortableExecutable result = new PortableExecutable(DosStub.NewDosStub(0));
+            var result = new PortableExecutable(DosStub.NewDosStub(0));
             ReadError? error = null;
 
             DOSHeader(source, ref result, ref error);
@@ -94,7 +94,7 @@
                     break;
             }
 
-            // TODO: Read the PE signature.
+            // TODO: Read the PE file header.
         }
     }
 }

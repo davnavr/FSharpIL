@@ -34,7 +34,9 @@ type ReadError =
             "The offset to the PE signature in the DOS header (lfanew) is missing"
         | InvalidPESignatureOffset(Some stub) ->
             sprintf "The offset to the PE signature is an invalid value 0x%02x" stub.PESignatureOffset
+        | InvalidPESignature None ->
+            "The PE signature marking the start of the PE file header is missing"
         | InvalidPESignature(Some(b1, b2, b3, b4)) ->
-            sprintf "The PE signature is invalid 0x%02x 0x%02x 0x%02x 0x%02x" b1 b2 b3 b4
+            sprintf "The PE signature is invalid and should be 0x50 0x45 0x00 0x00 instead of 0x%02x 0x%02x 0x%02x 0x%02x" b1 b2 b3 b4
 
 type ReadResult = Result<PortableExecutable, ReadError>

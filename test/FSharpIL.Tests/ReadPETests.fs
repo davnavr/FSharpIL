@@ -13,6 +13,9 @@ let testPE name source body =
         |> ignore
     }
 
+let private assertEqual exp act =
+    Assert.Equal("not equal", exp, act);
+
 let inline srcbytes arr () = new MemoryStream(Array.map byte arr)
 
 let tests =
@@ -37,13 +40,11 @@ let tests =
         testPE
             "reading fails when magic number is incorrect"
             (srcbytes [| 1; 2; 3; 4; |])
-            (function
-            | Error(IncorrectDOSMagic(1uy, 2uy)) -> ())
+            (Error(IncorrectDOSMagic(1uy, 2uy)) |> assertEqual)
 
         testPE
             "reading fails when DOS stub is too short"
-            (srcbytes [| 0x4A; 0x5A |])
-            (function
-            | Error MissingPESignatureOffset -> ())
+            (srcbytes [| 0x4D; 0x5A |])
+            (Error(InvalidPESignatureOffset None) |> assertEqual)
     ]
     |> testList "reading tests"

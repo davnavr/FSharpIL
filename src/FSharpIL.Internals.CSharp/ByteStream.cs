@@ -80,6 +80,19 @@
             };
         }
 
+        /// <summary>
+        /// Reads an unsigned little-endian 2-byte integer.
+        /// </summary>
+        /// <returns>The parsed <see cref="ushort"/>, or <see langword="null"/> if not enough bytes were read.</returns>
+        internal ushort? ReadUInt16()
+        {
+            return this.ReadBytes(4) switch
+            {
+                null => null,
+                byte[] bytes => (ushort)(bytes[0] + (bytes[1] << 8)),
+            };
+        }
+
         public void Dispose()
         {
             if (!this.disposed)
