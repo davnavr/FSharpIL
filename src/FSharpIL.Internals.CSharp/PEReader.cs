@@ -1,10 +1,11 @@
 ﻿namespace FSharpIL
 {
-    using System;
     using System.IO;
+    using System.Linq;
     using Microsoft.FSharp.Core;
     using ReadResult = Microsoft.FSharp.Core.FSharpResult<Types.PortableExecutable, Types.ReadError>;
     using static Types;
+    using System;
 
     internal sealed class PEReader : FSharpFunc<Stream, ReadResult>
     {
@@ -18,14 +19,16 @@
         public override ReadResult Invoke(Stream stream)
         {
             using var source = new ByteStream(this.name, stream);
-            var result = new PortableExecutable(DosStub.NewDosStub(0));
+            PortableExecutable result = new PortableExecutable(DosStub.NewDosStub(0));
             ReadError? error = null;
 
             DOSHeader(source, ref result, ref error);
-            if (error is ReadError err1)
-                return ReadResult.NewError(err1);
-            // TODO: Go to the PE signature.
+            if (error != null) goto result;
 
+            PEFileHeader(source, ref result, ref error);
+            if (error != null) goto result;
+
+            result:
             return error switch
             {
                 null => ReadResult.NewOk(result),
@@ -47,7 +50,7 @@
 
                     if (stream.BytesRead != offset + 4 || lfanew is null)
                     {
-                        error = ReadError.MissingPESignatureOffset;
+                        error = ReadError.NewInvalidPESignatureOffset(null);
                         return;
                     }
 
@@ -64,6 +67,34 @@
                     error = ReadError.NewIncorrectDOSMagic(bytes[0], bytes[1]);
                     return;
             }
+        }
+
+        private static void PEFileHeader(ByteStream stream, ref PortableExecutable result, ref ReadError? error)
+        {
+            var lfanew = result.DosHeader.lfanew;
+            stream.TryMove(lfanew);
+
+            if (stream.BytesRead != lfanew)
+            {
+                error = ReadError.NewInvalidPESignatureOffset(result.DosHeader);
+                return;
+            }
+
+            var signature = new byte[] { 0x50, 0x45, 0, 0 }; // PE\0\0
+            switch (stream.ReadBytes(4))
+            {
+                case null:
+                    error = ReadError.NewInvalidPESignature(null);
+                    return;
+                case byte[] invalid when !invalid.SequenceEqual(signature):
+                    var bytes = Tuple.Create(invalid[0], invalid[1], invalid[2], invalid[3]);
+                    error = ReadError.NewInvalidPESignature(bytes);
+                    return;
+                default:
+                    break;
+            }
+
+            // TODO: Read the PE signature.
         }
     }
 }
