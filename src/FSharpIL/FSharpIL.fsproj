@@ -9,12 +9,9 @@
 
   <!-- Source files -->
   <ItemGroup>
-    <Compile Include="Attributes.fs" />
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Utilities\Result.fs" />
     <Compile Include="Utilities\Collections.fs" />
-    <Compile Include="Magic.fs" />
-    <Compile Include="Types.fs" />
-    <Compile Include="ByteStream.fs" />
     <Compile Include="ReadPE.fs" />
     <Compile Include="WritePE.fs" />
   </ItemGroup>
@@ -22,6 +19,8 @@
   <!-- References -->
   <ItemGroup>
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
+    <ProjectReference Include="$(RootDirectory)/src/FSharpIL.Internals/FSharpIL.Internals.fsproj" Private="true" />
+    <ProjectReference Include="$(RootDirectory)/src/FSharpIL.Internals.CSharp/FSharpIL.Internals.CSharp.csproj" Private="true" />
   </ItemGroup>
 
 </Project>
