@@ -16,19 +16,20 @@ type DosStub =
 type PortableExecutable =
     { DosHeader: DosStub }
 
+    member internal this.SetDosHeader(header) =
+        { this with DosHeader = header }
+
 type ReadError =
-    | FileTooSmall
+    | NonPEFile
     | IncorrectDOSMagic of byte * byte
-    | IncorrectPESignature // of byte * byte * byte * byte
     | MissingPESignatureOffset
     | InvalidPESignatureOffset of DosStub
 
     override this.ToString() =
         match this with
-        | FileTooSmall -> "The file is too small to be a valid PE file"
+        | NonPEFile -> "The is not a valid PE file"
         | IncorrectDOSMagic(b1, b2) ->
             sprintf "The magic number of the file is incorrect and should be 0x4d 0x5a instead of 0x%02x 0x%02x" b1 b2
-        | IncorrectPESignature -> "The PE signature is incorrect"
         | MissingPESignatureOffset ->
             "The offset to the PE signature in the DOS header (lfanew) is missing"
         | InvalidPESignatureOffset stub ->

@@ -52,9 +52,7 @@
         internal uint? TryMove(uint offset)
         {
             if (offset < this.Position)
-            {
                 return 0;
-            }
 
             while (this.Position < offset)
             {
@@ -69,6 +67,19 @@
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Reads an unsigned little-endian 4-byte integer.
+        /// </summary>
+        /// <returns>The parsed <see cref="uint"/>, or <see langword="null"/> if not enough bytes were read.</returns>
+        internal uint? ReadUInt32()
+        {
+            return this.ReadBytes(4) switch
+            {
+                null => null,
+                byte[] bytes => bytes[1] + ((uint)bytes[2] << 8) + ((uint)bytes[3] << 16) + ((uint)bytes[4] << 24),
+            };
         }
 
         public void Dispose()
