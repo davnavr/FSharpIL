@@ -24,6 +24,7 @@
             DOSHeader(source, ref result, ref error);
             if (error is ReadError err1)
                 return ReadResult.NewError(err1);
+            // TODO: Go to the PE signature.
 
             return error switch
             {
@@ -40,8 +41,28 @@
                     error = ReadError.NonPEFile;
                     return;
                 case byte[] magic when magic[0] == 0x4D && magic[1] == 0x5A:
-                    // TODO: Move to 0x3C for lfanew.
-                    throw new NotImplementedException();
+                    const uint offset = 0x3C;
+                    stream.TryMove(offset);
+                    var lfanew = stream.ReadUInt32();
+
+                    if (stream.BytesRead != offset + 4 || lfanew is null)
+                    {
+                        error = ReadError.MissingPESignatureOffset;
+                        return;
+                    }
+
+                    var stub = DosStub.NewDosStub(lfanew.Value);
+                    if (lfanew <= stream.BytesRead)
+                    {
+                        error = ReadError.NewInvalidPESignatureOffset(stub);
+                        return;
+                    }
+
+                    result = result.SetDosHeader(stub);
+                    return;
+                case byte[] bytes:
+                    error = ReadError.NewIncorrectDOSMagic(bytes[0], bytes[1]);
+                    return;
             }
         }
     }

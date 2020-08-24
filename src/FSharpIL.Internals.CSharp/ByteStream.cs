@@ -16,14 +16,19 @@
 
         internal string Name { get; }
 
-        internal uint Position { get; private set; }
+        internal uint BytesRead { get; private set; }
 
-        internal byte? ReadByte() =>
-            this.stream.ReadByte() switch
+        internal byte? ReadByte()
+        {
+            switch (this.stream.ReadByte())
             {
-                -1 => null,
-                int value => (byte)value
-            };
+                case -1:
+                    return null;
+                case int value:
+                    this.BytesRead += 1;
+                    return (byte)value;
+            }
+        }
 
         internal byte[]? ReadBytes(int count)
         {
@@ -48,25 +53,18 @@
         /// Attempts to skip to the specified <paramref name="offset"/>.
         /// </summary>
         /// <param name="offset">The offset from the beginning of the stream to skip to.</param>
-        /// <returns><see langword="null"/> if successful, otherwise the current position or <c>0</c> if the offset is less than the current position.</returns>
-        internal uint? TryMove(uint offset)
+        internal void TryMove(uint offset)
         {
-            if (offset < this.Position)
-                return 0;
-
-            while (this.Position < offset)
+            while (this.BytesRead < offset)
             {
                 switch (this.ReadByte())
                 {
                     case null:
-                        return this.Position;
+                        return;
                     default:
-                        this.Position += 1;
                         continue;
                 }
             }
-
-            return null;
         }
 
         /// <summary>
@@ -78,7 +76,7 @@
             return this.ReadBytes(4) switch
             {
                 null => null,
-                byte[] bytes => bytes[1] + ((uint)bytes[2] << 8) + ((uint)bytes[3] << 16) + ((uint)bytes[4] << 24),
+                byte[] bytes => bytes[0] + ((uint)bytes[1] << 8) + ((uint)bytes[2] << 16) + ((uint)bytes[3] << 24),
             };
         }
 
