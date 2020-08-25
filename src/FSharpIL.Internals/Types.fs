@@ -13,11 +13,31 @@ type DosStub =
     override this.ToString() =
         sprintf "0x%02x" this.PESignatureOffset
 
+// II.25.2.2.1
+[<System.Flags>]
+type PEFileHeaderCharacteristics =
+    | IMAGE_FILE_RELOCS_STRIPPED = 0x001us
+    | IMAGE_FILE_EXECUTABLE_IMAGE = 0x002us
+    | IMAGE_FILE_32BIT_MACHINE = 0x0100us
+    | IMAGE_FILE_DLL = 0x2000us
+
+type PEFileHeader =
+    { Machine: uint16
+      NumberOfSections: uint16
+      TimeDateStamp: uint
+      PointerToSymbolTable: uint
+      NumberOfSymbols: uint
+      SizeOfOptionalHeader: uint16
+      Characteristics: PEFileHeaderCharacteristics }
+
 type PortableExecutable =
-    { DosHeader: DosStub }
+    { DosHeader: DosStub
+      PEFileHeader: PEFileHeader }
 
     member internal this.SetDosHeader(header) =
         { this with DosHeader = header }
+    member internal this.SetPEFileHeader(header) =
+        { this with PEFileHeader = header }
 
 type ReadError =
     | NonPEFile

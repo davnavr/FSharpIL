@@ -18,7 +18,7 @@
         public ReadResult Read(Stream stream)
         {
             using var source = new ByteStream(this.name, stream);
-            var result = new PortableExecutable(DosStub.NewDosStub(0));
+            var result = new PortableExecutable(DosStub.NewDosStub(0), null);
             ReadError? error = null;
 
             DOSHeader(source, ref result, ref error);
@@ -68,18 +68,6 @@
             }
         }
 
-        private static void SkipField(string name, uint size, ByteStream stream, ref ReadError? error)
-        {
-            switch(stream.SkipBytes(size))
-            {
-                case 0:
-                    return;
-                case uint _:
-                    error = ReadError.NewMissingField(name, size);
-                    return;
-            }
-        }
-
         private static void PEFileHeader(ByteStream stream, ref PortableExecutable result, ref ReadError? error)
         {
             var lfanew = result.DosHeader.lfanew;
@@ -91,13 +79,13 @@
                 return;
             }
 
-            var signature = new byte[] { 0x50, 0x45, 0, 0 };
+            // Magic
             switch (stream.ReadBytes(4))
             {
                 case null:
                     error = ReadError.NewInvalidPESignature(null);
                     return;
-                case byte[] invalid when !invalid.SequenceEqual(signature):
+                case byte[] invalid when !invalid.SequenceEqual(new byte[] { 0x50, 0x45, 0, 0 }):
                     var bytes = Tuple.Create(invalid[0], invalid[1], invalid[2], invalid[3]);
                     error = ReadError.NewInvalidPESignature(bytes);
                     return;
@@ -105,10 +93,12 @@
                     break;
             }
 
+            // II.25.2.2
             var machine = stream.ReadUInt16();
             if (machine is null)
             {
                 error = ReadError.NewMissingField("Machine", 2);
+                return;
             }
 
             var sections = stream.ReadUInt16();
@@ -125,13 +115,58 @@
                 return;
             }
 
-            SkipField("PointerToSymbolTable", 4, stream, ref error);
-            if (error != null) return;
+            var symbolsPointer = stream.ReadUInt32();
+            if (symbolsPointer is null)
+            {
+                error = ReadError.NewMissingField("PointerToSymbolTable", 4);
+                return;
+            }
 
-            SkipField("NumberOfSymbols ", 4, stream, ref error);
-            if (error != null) return;
+            var symbolsCount = stream.ReadUInt32();
+            if (symbolsCount is null)
+            {
+                error = ReadError.NewMissingField("NumberOfSymbols ", 4);
+                return;
+            }
 
-            // TODO: Optional header size and characteristics.
+            var headerSize = stream.ReadUInt16();
+            if (headerSize is null)
+            {
+                error = ReadError.NewMissingField("SizeOfOptionalHeader", 2);
+                return;
+            }
+
+            // TODO: Maybe make an enum or validate these values if necessary?
+            // II.25.2.2.1
+            var characteristics1 = stream.ReadUInt16();
+            if (characteristics1 is null)
+            {
+                error = ReadError.NewMissingField("Characteristics", 2);
+                return;
+            }
+
+            PEFileHeaderCharacteristics flags;
+            switch (stream.ReadUInt16())
+            {
+                case null:
+                    error = ReadError.NewMissingField("Characteristics", 2);
+                    return;
+                case ushort value:
+                    flags = (PEFileHeaderCharacteristics)value;
+                    break;
+            }
+
+            var header =
+                new PEFileHeader(
+                        machine.Value,
+                        sections.Value,
+                        time.Value,
+                        symbolsPointer.Value,
+                        symbolsCount.Value,
+                        headerSize.Value,
+                        flags
+                    );
+            result = result.SetPEFileHeader(header);
         }
     }
 }

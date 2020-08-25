@@ -27,3 +27,5 @@ type ReadPEBenchmarks() =
 
     [<Benchmark; ArgumentsSource("StreamSource")>]
     member _.FromPath(path: AssemblyPath) = ReadPE.fromPath path.Location ()
+
+    // TODO: Maybe compare with System.Reflection.Metadata?
