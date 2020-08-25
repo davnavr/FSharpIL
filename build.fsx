@@ -26,6 +26,13 @@ let handleErr msg: ProcessResult -> _ =
         failwithf "Process exited with code %i: %s" ecode msg
     | _ -> ()
 
+let runProj args proj =
+    sprintf
+        "--project %s --no-restore --configuration Release -- %s"
+        proj
+        args
+    |> DotNetCli.exec id "run"
+
 Target.create "Clean" (fun _ ->
     slnFile
     |> DotNetCli.exec id "clean"
@@ -33,22 +40,18 @@ Target.create "Clean" (fun _ ->
 )
 
 Target.create "Build" (fun _ ->
-    DotNetCli.build id slnFile
+    DotNetCli.build
+        (fun opt ->
+            { opt with
+                Configuration = DotNetCli.Release
+                NoRestore = true })
+        slnFile
 )
 
 Target.create "Test" (fun _ ->
-    sprintf
-        "--project %s"
-        (testDir </> "FSharpIL.Tests" </> "FSharpIL.Tests.fsproj")
-    |> DotNetCli.exec id "run"
+    testDir </> "FSharpIL.Tests" </> "FSharpIL.Tests.fsproj"
+    |> runProj ""
     |> handleErr "One or more tests failed"
-)
-
-Target.create "Lint" (fun _ ->
-    slnFile
-    |> sprintf "lint %s"
-    |> DotNetCli.exec id "fsharplint"
-    |> handleErr "One or more files is formatted incorrectly"
 )
 
 Target.create "Publish" (fun _ ->
@@ -58,7 +61,6 @@ Target.create "Publish" (fun _ ->
 "Clean"
 ==> "Build"
 ==> "Test"
-==> "Lint"
 ==> "Publish"
 
 Target.runOrDefault "Publish"

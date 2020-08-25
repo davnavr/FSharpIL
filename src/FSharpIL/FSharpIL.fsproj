@@ -10,12 +10,6 @@
   <!-- Source files -->
   <ItemGroup>
     <Compile Include="Utilities\Collections.fs" />
-    <Compile Include="Utilities\Bytes.fs" />
-    <Compile Include="Utilities\IO.fs" />
-    <Compile Include="Utilities\Builders.fs" />
-    <Compile Include="Magic.fs" />
-    <Compile Include="Types.fs" />
-    <Compile Include="Parser.fs" />
     <Compile Include="PE.fs" />
   </ItemGroup>
   

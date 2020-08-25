@@ -4,7 +4,6 @@
   <PropertyGroup>
     <AssemblyName>FSharpIL.Tests</AssemblyName>
     <OutputType>Exe</OutputType>
-    <RootNamespace>FSharpIL</RootNamespace>
     <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
 

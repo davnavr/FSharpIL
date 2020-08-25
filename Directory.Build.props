@@ -4,7 +4,7 @@
   <PropertyGroup>
     <LangVersion>4.7</LangVersion>
     <NeutralLanguage>en-US</NeutralLanguage>
-    <RootNamespace>$(AssemblyName)</RootNamespace>
+    <RootNamespace>FSharpIL</RootNamespace>
     <RootDirectory>$(MSBuildThisFileDirectory)</RootDirectory>
   </PropertyGroup>
 
