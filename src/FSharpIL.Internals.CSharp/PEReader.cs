@@ -22,7 +22,7 @@
             ReadError? error = null;
 
             DOSHeader(source, ref result, ref error);
-            if (error != null) goto result;
+            if (error != null) goto result; // TODO: See if all of this boilerplate can be removed.
 
             PEFileHeader(source, ref result, ref error);
             if (error != null) goto result;
@@ -44,7 +44,7 @@
                     return;
                 case byte[] magic when magic[0] == 0x4D && magic[1] == 0x5A:
                     const uint offset = 0x3C;
-                    stream.TryMove(offset);
+                    stream.ToOffset(offset);
                     var lfanew = stream.ReadUInt32();
 
                     if (stream.BytesRead != offset + 4 || lfanew is null)
@@ -68,10 +68,22 @@
             }
         }
 
+        private static void SkipField(string name, uint size, ByteStream stream, ref ReadError? error)
+        {
+            switch(stream.SkipBytes(size))
+            {
+                case 0:
+                    return;
+                case uint _:
+                    error = ReadError.NewMissingField(name, size);
+                    return;
+            }
+        }
+
         private static void PEFileHeader(ByteStream stream, ref PortableExecutable result, ref ReadError? error)
         {
             var lfanew = result.DosHeader.lfanew;
-            stream.TryMove(lfanew);
+            stream.ToOffset(lfanew);
 
             if (stream.BytesRead != lfanew)
             {
@@ -96,12 +108,30 @@
             var machine = stream.ReadUInt16();
             if (machine is null)
             {
-                throw new InvalidOperationException("Make error type for invalid fields in PE file header");
+                error = ReadError.NewMissingField("Machine", 2);
             }
 
             var sections = stream.ReadUInt16();
+            if (sections is null)
+            {
+                error = ReadError.NewMissingField("NumberOfSections", 2);
+                return;
+            }
 
-            // TODO: Read the PE file header.
+            var time = stream.ReadUInt32();
+            if (time is null)
+            {
+                error = ReadError.NewMissingField("TimeDateStamp", 4);
+                return;
+            }
+
+            SkipField("PointerToSymbolTable", 4, stream, ref error);
+            if (error != null) return;
+
+            SkipField("NumberOfSymbols ", 4, stream, ref error);
+            if (error != null) return;
+
+            // TODO: Optional header size and characteristics.
         }
     }
 }

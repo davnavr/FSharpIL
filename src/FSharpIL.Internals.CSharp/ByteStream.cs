@@ -53,7 +53,7 @@
         /// Attempts to skip to the specified <paramref name="offset"/>.
         /// </summary>
         /// <param name="offset">The offset from the beginning of the stream to skip to.</param>
-        internal void TryMove(uint offset)
+        internal void ToOffset(uint offset)
         {
             while (this.BytesRead < offset)
             {
@@ -65,6 +65,28 @@
                         continue;
                 }
             }
+        }
+
+        /// <summary>
+        /// Attempts to skip the specified number of bytes.
+        /// </summary>
+        /// <param name="count">The number of bytes to skip.</param>
+        /// <returns><c>0</c> if all of the bytes were skipped; otherwise the number of remaining bytes to skip.</returns>
+        internal uint SkipBytes(uint count)
+        {
+            while (count > 0)
+            {
+                switch (this.ReadByte())
+                {
+                    case null:
+                        return count;
+                    case byte _:
+                        count -= 1;
+                        continue;
+                }
+            }
+
+            return count;
         }
 
         /// <summary>
