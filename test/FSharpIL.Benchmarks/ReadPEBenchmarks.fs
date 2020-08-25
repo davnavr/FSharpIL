@@ -22,6 +22,7 @@ type ReadPEBenchmarks() =
             [|
                 typeof<BenchmarkAttribute>
                 typeof<PortableExecutable>
+                typeof<System.Collections.Immutable.IImmutableList<obj>>
             |]
 
     [<Benchmark; ArgumentsSource("StreamSource")>]

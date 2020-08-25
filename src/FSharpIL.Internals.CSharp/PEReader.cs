@@ -2,12 +2,11 @@
 {
     using System.IO;
     using System.Linq;
-    using Microsoft.FSharp.Core;
     using ReadResult = Microsoft.FSharp.Core.FSharpResult<Types.PortableExecutable, Types.ReadError>;
     using static Types;
     using System;
 
-    internal sealed class PEReader : FSharpFunc<Stream, ReadResult>
+    internal sealed class PEReader
     {
         private readonly string name;
 
@@ -16,7 +15,7 @@
             this.name = name;
         }
 
-        public override ReadResult Invoke(Stream stream)
+        public ReadResult Read(Stream stream)
         {
             using var source = new ByteStream(this.name, stream);
             var result = new PortableExecutable(DosStub.NewDosStub(0));
@@ -80,7 +79,7 @@
                 return;
             }
 
-            var signature = new byte[] { 0x50, 0x45, 0, 0 }; // PE\0\0
+            var signature = new byte[] { 0x50, 0x45, 0, 0 };
             switch (stream.ReadBytes(4))
             {
                 case null:
@@ -93,6 +92,14 @@
                 default:
                     break;
             }
+
+            var machine = stream.ReadUInt16();
+            if (machine is null)
+            {
+                throw new InvalidOperationException("Make error type for invalid fields in PE file header");
+            }
+
+            var sections = stream.ReadUInt16();
 
             // TODO: Read the PE file header.
         }

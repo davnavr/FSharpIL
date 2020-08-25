@@ -4,9 +4,9 @@ module FSharpIL.ReadPE
 
 open System.IO
 
-/// Reads a [PortableExecutable] from a <see cref="T:System.IO.Stream"/>.
-let public fromStream (name: string) (stream: Stream): _ -> ReadResult =
-    fun() -> PEReader(name).Invoke(stream)
+/// Reads a <see cref="T:FSharpIL.Types.PortableExecutable"/> from a <see cref="T:System.IO.Stream"/>.
+let public fromStream (name: string) (stream: _ -> #Stream): _ ->ReadResult =
+    fun() -> stream() |> PEReader(name).Read
 
 let public fromPath (path: string) =
-    File.OpenRead path |> fromStream path
+    fromStream path (fun() -> File.OpenRead path)

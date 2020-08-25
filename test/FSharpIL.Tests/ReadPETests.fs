@@ -8,15 +8,15 @@ open FSharpIL.Utilities
 
 let testPE name source body =
     test name {
-        ReadPE.fromStream name (source()) ()
+        ReadPE.fromStream name source ()
         |> body
         |> ignore
     }
 
-let private assertEqual exp act =
+let private assertEqualTemp exp act = // TODO: Move assert functions to another module.
     Assert.Equal("not equal", exp, act);
 
-let inline srcbytes arr () = new MemoryStream(Array.map byte arr)
+let inline private srcbytes arr () = new MemoryStream(Array.map byte arr)
 
 let tests =
     [
@@ -40,11 +40,11 @@ let tests =
         testPE
             "reading fails when magic number is incorrect"
             (srcbytes [| 1; 2; 3; 4; |])
-            (Error(IncorrectDOSMagic(1uy, 2uy)) |> assertEqual)
+            (Error(IncorrectDOSMagic(1uy, 2uy)) |> assertEqualTemp)
 
         testPE
             "reading fails when DOS stub is too short"
             (srcbytes [| 0x4D; 0x5A |])
-            (Error(InvalidPESignatureOffset None) |> assertEqual)
+            (Error(InvalidPESignatureOffset None) |> assertEqualTemp)
     ]
     |> testList "reading tests"
