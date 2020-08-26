@@ -11,7 +11,7 @@
   <ItemGroup>
     <Compile Include="Utilities\Enum.fs" />
     <Compile Include="Utilities\Collections.fs" />
-    <Compile Include="PETypes.fs" />
+    <Compile Include="Types.fs" />
     <Compile Include="WritePE.fs" />
     <Compile Include="Builders.fs" />
   </ItemGroup>

@@ -3,19 +3,17 @@ module FSharpIL.WritePE
 
 open System.IO
 
-open FSharpIL.PETypes
-
 type Builder internal() =
-    member _.Combine(header: PEFileHeader, pe: PortableExecutable) =
-        { pe with PEFileHeader = header }
-    member _.Delay(f): PortableExecutable = f()
+    member _.Combine(header: PEFileHeader, pe: PEFile) =
+        { pe with FileHeader = header }
+    member _.Delay(f): PEFile = f()
     member _.Yield(header: PEFileHeader) = header
-    member _.Zero(): PortableExecutable = PortableExecutable.Empty
+    member _.Zero(): PEFile = PEFile.Default
 
-let internal writer (pe: PortableExecutable) body output =
+let internal writer (pe: PEFile) body output =
     body (fun source ->
         let write = output source
-        write [| 0x4Duy; 0x5Auy |]
+        write [| 0x4Duy |] // TODO: Write DOS header.
         ())
 
 let toStream (stream: Stream) pe =
