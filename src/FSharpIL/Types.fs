@@ -58,9 +58,12 @@ type StandardFields =
           LMinor = 0uy }
 
 type ImageBase =
-    | ImageBase // of something // NOTE: Is a 4-byte integer and must be a multiple of 0x10000
+    | ImageBase of uint16
 
-    static member Default = ImageBase // This is default for DLLs: 0x10000000u
+    static member op_Implicit(ImageBase imageBase) =
+        (uint32 imageBase) * 0x10000u
+
+    static member Default = ImageBase 0x40us
 
 type ImageSubsystem =
     | WindowsGui
@@ -81,11 +84,26 @@ type ImageDllCharacteristics =
     | GuardCF = 0x4000us
     | TerminalServerAware = 0x8000us
 
+type AlignmentInfo =
+    internal
+        { // 0uy indicates an alignment of 512
+          Section: byte
+          File: byte }
+
+    static member private Convert value =
+        pown 2u (int value + 9)
+
+    member this.SectionAlignment = AlignmentInfo.Convert this.Section
+    member this.FileAlignment = AlignmentInfo.Convert this.File
+
+    static member Default =
+        { Section = 0uy
+          File = 0uy }
+
 // II.25.2.3.2
 type NTSpecificFields =
     { ImageBase: ImageBase
-      // SectionAlignment // Shall be greater than FileAlignment // TODO: Should this field be included?
-      // FileAlignment
+      Alignment: AlignmentInfo
       OSMajor: uint16
       OSMinor: uint16
       UserMajor: uint16
@@ -110,6 +128,7 @@ type NTSpecificFields =
 
     static member Default =
         { ImageBase = ImageBase.Default
+          Alignment = AlignmentInfo.Default
           OSMajor = 0x05us
           OSMinor = 0us
           UserMajor = 0us
@@ -125,14 +144,50 @@ type NTSpecificFields =
               ImageDllCharacteristics.NXCompatible
           LoaderFlags = 0u }
 
+// II.25.2.3.3
+type DataDirectories =
+    { ExportTable: unit
+      ImportTable: unit
+      ResourceTable: unit
+      ExceptionTable: unit
+      CertificateTable: unit
+      BaseRelocationTable: unit
+      DebugTable: unit
+      CopyrightTable: unit
+      //GlobalPointer // This apparently always has a size of zero.
+      TLSTable: unit
+      LoadConfigTable: unit
+      BoundImportTable: unit
+      ImportAddressTable: unit
+      DelayImportDescriptor: unit
+      CLIHeader: unit
+      // Reserved
+      }
+
+    static member Default =
+        { ExportTable = ()
+          ImportTable = ()
+          ResourceTable = ()
+          ExceptionTable = ()
+          CertificateTable = ()
+          BaseRelocationTable = ()
+          DebugTable = ()
+          CopyrightTable = ()
+          TLSTable = ()
+          LoadConfigTable = ()
+          BoundImportTable = ()
+          ImportAddressTable = ()
+          DelayImportDescriptor = ()
+          CLIHeader = () }
+
 type PEFile =
     { FileHeader: PEFileHeader
       StandardFields: StandardFields
       NTSpecificFields: NTSpecificFields
-      DataDirectories: unit }
+      DataDirectories: DataDirectories }
 
     static member Default =
         { FileHeader = PEFileHeader.Default
           StandardFields = StandardFields.Default
           NTSpecificFields = NTSpecificFields.Default
-          DataDirectories = () }
+          DataDirectories = DataDirectories.Default }
