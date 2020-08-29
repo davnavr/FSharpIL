@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL
 
 open System
+open System.Collections.Immutable
 
 open FSharpIL.Utilities
 
@@ -14,7 +15,7 @@ type IsDll =
 type ImageFileFlags =
     | FileRelocsStripped = 0x0001us
     | FileExecutableImage = 0x0002us
-    | File32BitMachine = 0x0100us
+    | File32BitMachine = 0x0100us // TODO This flag depends on a flag from the CLI header, should it be validated?
     | FileDll = 0x2000us
 
 [<RequireQualifiedAccess>]
@@ -22,9 +23,12 @@ type FileCharacteristics =
     | Valid of IsDll
     | Custom of ImageFileFlags
 
+type MachineFlags =
+    | I386 = 0x14Cus
+
 // II.25.2.2
 type PEFileHeader =
-    { Machine: uint16
+    { Machine: MachineFlags
       // NumberOfSections
       TimeDateStamp: uint32
       SymbolTablePointer: uint32
@@ -34,7 +38,7 @@ type PEFileHeader =
 
     /// Default PE file header indicating that the file is a <c>.dll</c> file.
     static member Default =
-        { Machine = 0x14Cus
+        { Machine = MachineFlags.I386
           TimeDateStamp = 0u
           SymbolTablePointer = 0u
           SymbolCount = 0u
@@ -70,7 +74,7 @@ type ImageSubsystem =
     | WindowsCui
 
 [<Flags>]
-type ImageDllCharacteristics =
+type PEFileFlags =
     | Reserved = 0x000Fus
     | HighEntropyVA = 0x0020us
     | DynamicBase = 0x0040us
@@ -116,7 +120,7 @@ type NTSpecificFields =
       // HeaderSize
       FileChecksum: uint32
       Subsystem: ImageSubsystem
-      DllFlags: ImageDllCharacteristics
+      DllFlags: PEFileFlags
       // StackReserveSize
       // StackCommitSize
       // HeapReserveSize
@@ -139,9 +143,9 @@ type NTSpecificFields =
           FileChecksum = 0u
           Subsystem = WindowsCui
           DllFlags =
-              ImageDllCharacteristics.DynamicBase |||
-              ImageDllCharacteristics.NoSEH |||
-              ImageDllCharacteristics.NXCompatible
+              PEFileFlags.DynamicBase |||
+              PEFileFlags.NoSEH |||
+              PEFileFlags.NXCompatible
           LoaderFlags = 0u }
 
 // II.25.2.3.3
@@ -160,7 +164,7 @@ type DataDirectories =
       BoundImportTable: unit
       ImportAddressTable: unit
       DelayImportDescriptor: unit
-      CLIHeader: unit
+      CliHeader: unit
       // Reserved
       }
 
@@ -178,16 +182,75 @@ type DataDirectories =
           BoundImportTable = ()
           ImportAddressTable = ()
           DelayImportDescriptor = ()
-          CLIHeader = () }
+          CliHeader = () }
+
+type SectionName =
+    internal
+    | SectionName of string // Maybe use System.Text.Encoding.UTF8.GetBytes, unless UTF8 is not the encoding of the text.
+
+// TODO: figure out what the DataDirectories point to.
+
+[<Flags>]
+type CliHeaderFlags =
+    | StrongNameSigned = 0x8u
+
+type CliMetadata = unit
+
+type CliHeader =
+    { // Cb
+      MajorRuntimeVersion: uint16
+      MinorRuntimeVersion: uint16
+      Metadata: CliMetadata
+      Flags: CliHeaderFlags // TODO: Create default value for flags.
+      EntryPointToken: unit
+      Resources: unit
+      StrongNameSignature: unit
+      CodeManagerTable: uint64
+      VTableFixups: unit
+      // ExportAddressTableJumps
+      // ManagedNativeHeader
+      }
+
+[<Flags>]
+type SectionFlags =
+    | Code = 0x20u
+    | InitializedData = 0x40u
+    | UninitializedData = 0x80u
+    | Execute = 0x20000000u
+    | Read = 0x40000000u
+    | Write = 0x80000000u
+
+type SectionData =
+    | CliHeader of CliHeader
+    | SectionData of
+        {| Characteristics: SectionFlags
+           RawData: unit |} // TODO: Should raw data be a byte[], ImmutableArray<byte>, other type, or a lazy variation of previous?
+
+/// NOTE: Section headers begin after the file headers, but must account for SizeOfHeaders, which is rounded up to a multiple of FileAlignment.
+type SectionHeader =
+    { SectionName: SectionName
+      // VirtualSize: uint32
+      // VirtualAddress: uint32
+      // TODO: Add data field that handles SizeOfRawData & PointerToRawData
+      Data: SectionData
+      PointerToRelocations: uint32
+      PointerToLineNumbers: uint32
+      NumberOfRelocations: uint16
+      NumberOfLineNumbers: uint16 }
+
+type SectionTable = ImmutableSortedSet<SectionHeader> // TODO: Determine if F# set is faster.
 
 type PEFile =
     { FileHeader: PEFileHeader
       StandardFields: StandardFields
       NTSpecificFields: NTSpecificFields
-      DataDirectories: DataDirectories }
+      DataDirectories: DataDirectories
+
+      SectionTable: SectionTable }
 
     static member Default =
         { FileHeader = PEFileHeader.Default
           StandardFields = StandardFields.Default
           NTSpecificFields = NTSpecificFields.Default
-          DataDirectories = DataDirectories.Default }
+          DataDirectories = DataDirectories.Default
+          SectionTable = invalidOp "what should default be" }
