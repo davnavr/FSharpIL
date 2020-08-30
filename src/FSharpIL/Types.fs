@@ -18,10 +18,9 @@ type ImageFileFlags =
     | File32BitMachine = 0x0100us // TODO This flag depends on a flag from the CLI header, should it be validated?
     | FileDll = 0x2000us
 
-[<RequireQualifiedAccess>]
 type FileCharacteristics =
-    | Valid of IsDll
-    | Custom of ImageFileFlags
+    | FileType of IsDll
+    | FileFlags of ImageFileFlags
 
 type MachineFlags =
     | I386 = 0x14Cus
@@ -33,7 +32,7 @@ type PEFileHeader =
       TimeDateStamp: uint32
       SymbolTablePointer: uint32
       SymbolCount: uint32
-      // OptionalHeaderSize // TODO: Should this be handled by the writer or should it be customizable. Usually value is 0xE0
+      // OptionalHeaderSize
       Characteristics: FileCharacteristics }
 
     /// Default PE file header indicating that the file is a <c>.dll</c> file.
@@ -42,7 +41,7 @@ type PEFileHeader =
           TimeDateStamp = 0u
           SymbolTablePointer = 0u
           SymbolCount = 0u
-          Characteristics = FileCharacteristics.Valid Dll }
+          Characteristics = FileType Dll }
 
 // II.25.2.3.1
 type StandardFields =
@@ -125,8 +124,7 @@ type NTSpecificFields =
       // StackCommitSize
       // HeapReserveSize
       // HeapCommitSize
-      /// Reserved value that should be zero.
-      LoaderFlags: uint32
+      // LoaderFlags
       // NumberOfDataDirectories
       }
 
@@ -145,8 +143,7 @@ type NTSpecificFields =
           DllFlags =
               PEFileFlags.DynamicBase |||
               PEFileFlags.NoSEH |||
-              PEFileFlags.NXCompatible
-          LoaderFlags = 0u }
+              PEFileFlags.NXCompatible }
 
 // II.25.2.3.3
 // TODO: Should data directories and section table be handled by one type instead?
@@ -186,12 +183,14 @@ type DataDirectories =
           ImportAddressTable = ()
           DelayImportDescriptor = () }
 
-// TODO: figure out what the DataDirectories point to.
-
 // II.25.3.3.1
 [<Flags>]
 type CliHeaderFlags =
+    | ILOnly = 0x1u
+    | Requires32Bit = 0x2u
     | StrongNameSigned = 0x8u
+    | NativeEntryPoint = 0x10u
+    | TrackDebugData = 0x10000u
 
 type CliMetadataVersion =
     internal
@@ -208,8 +207,12 @@ type CliMetadataStream =
     | GUIDStream
     | BlobStream
 
-// NOTE: II.24.2.2 says that each type of stream can only occur 1 time at most, so use a Set collection type here.
-type CliMetadataStreams = unit
+// NOTE: II.24.2.2 says that each type of stream can only occur 1 time at most.
+type CliMetadataStreams =
+    { MetadataStream: unit }
+
+    static member Default =
+        { MetadataStream = () }
 
 // II.24.2.1
 type CliMetadataRoot =
@@ -225,7 +228,7 @@ type CliMetadataRoot =
         { MajorVersion = 1us
           MinorVersion = 1us
           Version = CliMetadataVersion "v4.0.30319"
-          Streams = () }
+          Streams = CliMetadataStreams.Default }
 
 // II.25.3.3
 type CliHeader =
@@ -264,11 +267,8 @@ type SectionFlags =
     | Write = 0x80000000u
 
 type SectionData =
-    //
-    | CliHeader of CliHeader
-    | SectionData of
-        {| Characteristics: SectionFlags
-           RawData: unit |} // TODO: Should raw data be a byte[], ImmutableArray<byte>, other type, or a lazy variation of previous?
+    { Characteristics: SectionFlags
+      RawData: unit } // TODO: Should raw data be a byte[], ImmutableArray<byte>, other type, or a lazy variation of previous?
 
 type SectionName =
     internal
