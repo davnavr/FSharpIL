@@ -1,9 +1,9 @@
-﻿namespace FSharpIL
+﻿namespace FSharpIL.PortableExecutable
 
 open System
 open System.Collections.Immutable
 
-open FSharpIL.Utilities
+open FSharpIL.Cil
 
 type IsDll =
     | Dll
@@ -26,7 +26,7 @@ type MachineFlags =
     | I386 = 0x14Cus
 
 // II.25.2.2
-type PEFileHeader =
+type CoffHeader =
     { Machine: MachineFlags
       // NumberOfSections
       TimeDateStamp: uint32
@@ -183,80 +183,6 @@ type DataDirectories =
           ImportAddressTable = ()
           DelayImportDescriptor = () }
 
-// II.25.3.3.1
-[<Flags>]
-type CliHeaderFlags =
-    | ILOnly = 0x1u
-    | Requires32Bit = 0x2u
-    | StrongNameSigned = 0x8u
-    | NativeEntryPoint = 0x10u
-    | TrackDebugData = 0x10000u
-
-type CliMetadataVersion =
-    internal
-    | CliMetadataVersion of string
-
-    override this.ToString() =
-        let (CliMetadataVersion version) = this in version
-
-// II.24.2.2
-type CliMetadataStream =
-    | MetadataStream
-    | StringStream
-    | UserStringStream
-    | GUIDStream
-    | BlobStream
-
-// NOTE: II.24.2.2 says that each type of stream can only occur 1 time at most.
-type CliMetadataStreams =
-    { MetadataStream: unit }
-
-    static member Default =
-        { MetadataStream = () }
-
-// II.24.2.1
-type CliMetadataRoot =
-    { // Signature
-      MajorVersion: uint16
-      MinorVersion: uint16
-      // Reserved
-      Version: CliMetadataVersion
-      // Flags
-      Streams: CliMetadataStreams }
-
-    static member Default =
-        { MajorVersion = 1us
-          MinorVersion = 1us
-          Version = CliMetadataVersion "v4.0.30319"
-          Streams = CliMetadataStreams.Default }
-
-// II.25.3.3
-type CliHeader =
-    { // Cb
-      MajorRuntimeVersion: uint16
-      MinorRuntimeVersion: uint16
-      Metadata: CliMetadataRoot
-      Flags: CliHeaderFlags // TODO: Create default value for flags.
-      EntryPointToken: unit
-      Resources: unit
-      StrongNameSignature: unit
-      CodeManagerTable: uint64
-      VTableFixups: unit
-      // ExportAddressTableJumps
-      // ManagedNativeHeader
-      }
-
-    static member Default =
-        { MajorRuntimeVersion = 2us
-          MinorRuntimeVersion = 0us
-          Metadata = CliMetadataRoot.Default
-          Flags = invalidOp "default here"
-          EntryPointToken = ()
-          Resources = ()
-          StrongNameSignature = ()
-          CodeManagerTable = 0UL
-          VTableFixups = () }
-
 [<Flags>]
 type SectionFlags =
     | Code = 0x20u
@@ -288,16 +214,24 @@ type SectionHeader =
 
 type SectionTable = ImmutableSortedSet<SectionHeader> // TODO: Choose a collection type that allows accessing by index, and determine if duplicate section names are allowed.
 
-type PEFile =
-    { FileHeader: PEFileHeader
+type PEHeaders =
+    { FileHeader: CoffHeader
       StandardFields: StandardFields
       NTSpecificFields: NTSpecificFields
-      DataDirectories: DataDirectories
-      SectionTable: SectionTable }
+      DataDirectories: DataDirectories }
 
     static member Default =
-        { FileHeader = PEFileHeader.Default
-          StandardFields = StandardFields.Default
-          NTSpecificFields = NTSpecificFields.Default
-          DataDirectories = DataDirectories.Default
+      { FileHeader = CoffHeader.Default
+        StandardFields = StandardFields.Default
+        NTSpecificFields = NTSpecificFields.Default
+        DataDirectories = DataDirectories.Default }
+
+type PEFile =
+    { Headers: PEHeaders
+      SectionTable: SectionTable }
+
+    // member this.CliHeader = this.
+
+    static member Default =
+        { Headers = PEHeaders.Default
           SectionTable = invalidOp "what should default be" }
