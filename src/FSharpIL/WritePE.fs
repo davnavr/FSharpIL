@@ -6,10 +6,10 @@ open System.IO
 open FSharpIL.PortableExecutable
 
 type Builder internal() =
-    member _.Combine(header: CoffHeader, pe: PEFile) =
-        { pe with FileHeader = header }
+    member _.Combine(headers: PEHeaders, pe: PEFile) =
+        { pe with Headers = headers }
     member _.Delay(f): PEFile = f()
-    member _.Yield(header: CoffHeader) = header
+    member _.Yield(headers: PEHeaders) = headers
     member _.Zero(): PEFile = PEFile.Default
 
 let internal writer (pe: PEFile) body output =

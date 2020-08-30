@@ -3,6 +3,8 @@
 open System.Collections.Immutable
 open System.ComponentModel
 
+open FSharpIL.Utilities
+
 open FSharpIL.Metadata
 
 // II.25.2.3.3
@@ -24,14 +26,9 @@ type DataDirectories =
       // BoundImportTable
       ImportAddressTable: unit
       // DelayImportDescriptor
-      // CliHeader
+      CliHeader: CliHeader option
       // Reserved
       }
-
-    static member Default =
-        { ImportTable = ()
-          BaseRelocationTable = ()
-          ImportAddressTable = () }
 
 type RawSectionData = Lazy<byte[]>
 
@@ -71,7 +68,29 @@ module SectionInfo =
             { Data: DataDirectories
               Sections: ImmutableArray<SectionHeader> }
 
+        static member Default =
+            { Data =
+                { ImportTable = ()
+                  BaseRelocationTable = ()
+                  ImportAddressTable = ()
+                  CliHeader = Some CliHeader.Default }
+              Sections =
+                invalidOp "add default sections" }
+
         member this.DataDirectories = this.Data
         member this.SectionTable = this.Sections
+
+    let addSection (section: SectionHeader) (info: Info) =
+        let rec validate index state =
+            let next = validate (index + 1)
+            if index >= section.Data.Length then
+                Ok { state with Sections = state.Sections.Add section }
+            else
+                match section.Data.Item index with // TODO: Check if this is this tail recursive.
+                | RawData _ -> next state
+                | CliHeader cli when state.Data.CliHeader.IsNone ->
+                    next { state with Data = { state.Data with CliHeader = Some cli } }
+                | data -> Error data
+        validate 0 info
 
 type SectionInfo = SectionInfo.Info

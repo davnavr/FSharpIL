@@ -146,4 +146,4 @@ type PEFile =
 
     static member Default =
         { Headers = PEHeaders.Default
-          SectionInfo = invalidOp "what should default be" }
+          SectionInfo = SectionInfo.Default }
