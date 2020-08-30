@@ -149,6 +149,9 @@ type NTSpecificFields =
           LoaderFlags = 0u }
 
 // II.25.2.3.3
+// TODO: Should data directories and section table be handled by one type instead?
+// NOTE: Pointers in the DataDirectories can point to content in different parts of a section!
+// NOTE: The RVA is in a weird format, 0x08 0x20 0x00 0x00 means a file offset (not RVA) of 0x208. Search up how to convert RVA to file offset
 type DataDirectories =
     { ExportTable: unit
       ImportTable: unit
@@ -164,7 +167,7 @@ type DataDirectories =
       BoundImportTable: unit
       ImportAddressTable: unit
       DelayImportDescriptor: unit
-      CliHeader: unit
+      // CliHeader
       // Reserved
       }
 
@@ -181,26 +184,55 @@ type DataDirectories =
           LoadConfigTable = ()
           BoundImportTable = ()
           ImportAddressTable = ()
-          DelayImportDescriptor = ()
-          CliHeader = () }
-
-type SectionName =
-    internal
-    | SectionName of string // Maybe use System.Text.Encoding.UTF8.GetBytes, unless UTF8 is not the encoding of the text.
+          DelayImportDescriptor = () }
 
 // TODO: figure out what the DataDirectories point to.
 
+// II.25.3.3.1
 [<Flags>]
 type CliHeaderFlags =
     | StrongNameSigned = 0x8u
 
-type CliMetadata = unit
+type CliMetadataVersion =
+    internal
+    | CliMetadataVersion of string
 
+    override this.ToString() =
+        let (CliMetadataVersion version) = this in version
+
+// II.24.2.2
+type CliMetadataStream =
+    | MetadataStream
+    | StringStream
+    | UserStringStream
+    | GUIDStream
+    | BlobStream
+
+// NOTE: II.24.2.2 says that each type of stream can only occur 1 time at most, so use a Set collection type here.
+type CliMetadataStreams = unit
+
+// II.24.2.1
+type CliMetadataRoot =
+    { // Signature
+      MajorVersion: uint16
+      MinorVersion: uint16
+      // Reserved
+      Version: CliMetadataVersion
+      // Flags
+      Streams: CliMetadataStreams }
+
+    static member Default =
+        { MajorVersion = 1us
+          MinorVersion = 1us
+          Version = CliMetadataVersion "v4.0.30319"
+          Streams = () }
+
+// II.25.3.3
 type CliHeader =
     { // Cb
       MajorRuntimeVersion: uint16
       MinorRuntimeVersion: uint16
-      Metadata: CliMetadata
+      Metadata: CliMetadataRoot
       Flags: CliHeaderFlags // TODO: Create default value for flags.
       EntryPointToken: unit
       Resources: unit
@@ -210,6 +242,17 @@ type CliHeader =
       // ExportAddressTableJumps
       // ManagedNativeHeader
       }
+
+    static member Default =
+        { MajorRuntimeVersion = 2us
+          MinorRuntimeVersion = 0us
+          Metadata = CliMetadataRoot.Default
+          Flags = invalidOp "default here"
+          EntryPointToken = ()
+          Resources = ()
+          StrongNameSignature = ()
+          CodeManagerTable = 0UL
+          VTableFixups = () }
 
 [<Flags>]
 type SectionFlags =
@@ -221,31 +264,35 @@ type SectionFlags =
     | Write = 0x80000000u
 
 type SectionData =
+    //
     | CliHeader of CliHeader
     | SectionData of
         {| Characteristics: SectionFlags
            RawData: unit |} // TODO: Should raw data be a byte[], ImmutableArray<byte>, other type, or a lazy variation of previous?
 
+type SectionName =
+    internal
+    | SectionName of string // Maybe use System.Text.Encoding.UTF8.GetBytes, unless UTF8 is not the encoding of the text.
+
+// II.25.3
 /// NOTE: Section headers begin after the file headers, but must account for SizeOfHeaders, which is rounded up to a multiple of FileAlignment.
 type SectionHeader =
     { SectionName: SectionName
       // VirtualSize: uint32
       // VirtualAddress: uint32
-      // TODO: Add data field that handles SizeOfRawData & PointerToRawData
       Data: SectionData
       PointerToRelocations: uint32
       PointerToLineNumbers: uint32
       NumberOfRelocations: uint16
       NumberOfLineNumbers: uint16 }
 
-type SectionTable = ImmutableSortedSet<SectionHeader> // TODO: Determine if F# set is faster.
+type SectionTable = ImmutableSortedSet<SectionHeader> // TODO: Choose a collection type that allows accessing by index, and determine if duplicate section names are allowed.
 
 type PEFile =
     { FileHeader: PEFileHeader
       StandardFields: StandardFields
       NTSpecificFields: NTSpecificFields
       DataDirectories: DataDirectories
-
       SectionTable: SectionTable }
 
     static member Default =
