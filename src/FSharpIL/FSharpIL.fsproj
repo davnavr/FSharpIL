@@ -11,8 +11,11 @@
   <ItemGroup>
     <Compile Include="Utilities\Enum.fs" />
     <Compile Include="Utilities\Collections.fs" />
-    <Compile Include="Cil.fs" />
-    <Compile Include="PortableExecutable.fs" />
+    <Compile Include="Metadata.fs" />
+    <Compile Include="PortableExecutable\Alignment.fs" />
+    <Compile Include="PortableExecutable\SectionName.fs" />
+    <Compile Include="PortableExecutable\SectionTable.fs" />
+    <Compile Include="PortableExecutable\Types.fs" />
     <Compile Include="WritePE.fs" />
     <Compile Include="Builders.fs" />
   </ItemGroup>

@@ -1,9 +1,6 @@
 ﻿namespace FSharpIL.PortableExecutable
 
 open System
-open System.Collections.Immutable
-
-open FSharpIL.Cil
 
 type IsDll =
     | Dll
@@ -87,26 +84,10 @@ type PEFileFlags =
     | GuardCF = 0x4000us
     | TerminalServerAware = 0x8000us
 
-type AlignmentInfo =
-    internal
-        { // 0uy indicates an alignment of 512
-          Section: byte
-          File: byte }
-
-    static member private Convert value =
-        pown 2u (int value + 9)
-
-    member this.SectionAlignment = AlignmentInfo.Convert this.Section
-    member this.FileAlignment = AlignmentInfo.Convert this.File
-
-    static member Default =
-        { Section = 0uy
-          File = 0uy }
-
 // II.25.2.3.2
 type NTSpecificFields =
     { ImageBase: ImageBase
-      Alignment: AlignmentInfo
+      Alignment: Alignment
       OSMajor: uint16
       OSMinor: uint16
       UserMajor: uint16
@@ -130,7 +111,7 @@ type NTSpecificFields =
 
     static member Default =
         { ImageBase = ImageBase.Default
-          Alignment = AlignmentInfo.Default
+          Alignment = Alignment.Default
           OSMajor = 0x05us
           OSMinor = 0us
           UserMajor = 0us
@@ -145,93 +126,24 @@ type NTSpecificFields =
               PEFileFlags.NoSEH |||
               PEFileFlags.NXCompatible }
 
-// II.25.2.3.3
-// TODO: Should data directories and section table be handled by one type instead?
-// NOTE: Pointers in the DataDirectories can point to content in different parts of a section!
-// NOTE: The RVA is in a weird format, 0x08 0x20 0x00 0x00 means a file offset (not RVA) of 0x208. Search up how to convert RVA to file offset
-type DataDirectories =
-    { ExportTable: unit
-      ImportTable: unit
-      ResourceTable: unit
-      ExceptionTable: unit
-      CertificateTable: unit
-      BaseRelocationTable: unit
-      DebugTable: unit
-      CopyrightTable: unit
-      //GlobalPointer // This apparently always has a size of zero.
-      TLSTable: unit
-      LoadConfigTable: unit
-      BoundImportTable: unit
-      ImportAddressTable: unit
-      DelayImportDescriptor: unit
-      // CliHeader
-      // Reserved
-      }
-
-    static member Default =
-        { ExportTable = ()
-          ImportTable = ()
-          ResourceTable = ()
-          ExceptionTable = ()
-          CertificateTable = ()
-          BaseRelocationTable = ()
-          DebugTable = ()
-          CopyrightTable = ()
-          TLSTable = ()
-          LoadConfigTable = ()
-          BoundImportTable = ()
-          ImportAddressTable = ()
-          DelayImportDescriptor = () }
-
-[<Flags>]
-type SectionFlags =
-    | Code = 0x20u
-    | InitializedData = 0x40u
-    | UninitializedData = 0x80u
-    | Execute = 0x20000000u
-    | Read = 0x40000000u
-    | Write = 0x80000000u
-
-type SectionData =
-    { Characteristics: SectionFlags
-      RawData: unit } // TODO: Should raw data be a byte[], ImmutableArray<byte>, other type, or a lazy variation of previous?
-
-type SectionName =
-    internal
-    | SectionName of string // Maybe use System.Text.Encoding.UTF8.GetBytes, unless UTF8 is not the encoding of the text.
-
-// II.25.3
-/// NOTE: Section headers begin after the file headers, but must account for SizeOfHeaders, which is rounded up to a multiple of FileAlignment.
-type SectionHeader =
-    { SectionName: SectionName
-      // VirtualSize: uint32
-      // VirtualAddress: uint32
-      Data: SectionData
-      PointerToRelocations: uint32
-      PointerToLineNumbers: uint32
-      NumberOfRelocations: uint16
-      NumberOfLineNumbers: uint16 }
-
-type SectionTable = ImmutableSortedSet<SectionHeader> // TODO: Choose a collection type that allows accessing by index, and determine if duplicate section names are allowed.
-
 type PEHeaders =
     { FileHeader: CoffHeader
       StandardFields: StandardFields
-      NTSpecificFields: NTSpecificFields
-      DataDirectories: DataDirectories }
+      NTSpecificFields: NTSpecificFields }
 
     static member Default =
       { FileHeader = CoffHeader.Default
         StandardFields = StandardFields.Default
-        NTSpecificFields = NTSpecificFields.Default
-        DataDirectories = DataDirectories.Default }
+        NTSpecificFields = NTSpecificFields.Default }
 
 type PEFile =
     { Headers: PEHeaders
-      SectionTable: SectionTable }
+      SectionInfo: SectionInfo }
 
-    // member this.CliHeader = this.
+    member this.DataDirectories = this.SectionInfo.DataDirectories
+    member this.SectionTable = this.SectionInfo.DataDirectories
+    //member this.CliHeader = this.
 
     static member Default =
         { Headers = PEHeaders.Default
-          SectionTable = invalidOp "what should default be" }
+          SectionInfo = invalidOp "what should default be" }

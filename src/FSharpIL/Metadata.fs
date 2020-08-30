@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Cil
+﻿namespace FSharpIL.Metadata
 
 open System
 
