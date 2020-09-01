@@ -3,14 +3,10 @@
 open System.Collections.Immutable
 open System.ComponentModel
 
-open FSharpIL.Utilities
-
 open FSharpIL.Metadata
 
 // II.25.2.3.3
-// TODO: Should data directories and section table be handled by one type instead?
-// NOTE: Pointers in the DataDirectories can point to content in different parts of a section!
-// NOTE: The RVA needs to be converted to/from file offset
+/// NOTE: The RVA needs to be converted to/from file offset
 type DataDirectories =
     { // ExportTable
       ImportTable: unit
@@ -34,8 +30,9 @@ type RawSectionData = Lazy<byte[]>
 
 type SectionData =
     | RawData of RawSectionData
-    | CliHeader of CliHeader
-    // TODO: Add types for import table and import address table
+    | CliHeader of CliHeader // NOTE: First 8 bytes of .text section is usually used by CLR loader stub
+    // TODO: Add cases for import table and import address table
+    // NOTE: Some data have rules about where it can be placed, such as the Vtable fixup (II.25.3.3.3) needing to be in a read-write section
 
 [<System.Flags>]
 type SectionFlags =
