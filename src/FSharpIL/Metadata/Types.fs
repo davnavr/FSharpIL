@@ -2,26 +2,20 @@
 
 open System
 
-/// NOTE: Length of string is rounded up to a multiple of 4
-type MetadataVersion =
-    internal
-    | MetadataVersion of string
-
-    override this.ToString() =
-        let (MetadataVersion version) = this in version
-
-    member this.Length =
-        let length = this.ToString().Length |> uint32
-        (length - 1u) - ((length - 1u) % 4u) + 4u
-
 // II.22.30
-type ModuleTable = unit
+type ModuleTable =
+    { // Generation
+      Name: ModuleName
+      // Mvid
+      // EncId
+      // EncBaseId
+      }
+
+    static member Default =
+        { Name = ModuleName "Temp" }
 
 // II.22.38
 type TypeRefTable = unit
-
-// II.22.37
-type TypeDefTable = unit
 
 // II.22.15
 type FieldTable = unit
@@ -178,7 +172,10 @@ type MetadataTables =
     static member Default =
         { MajorVersion = invalidOp "MajorVersion"
           MinorVersion = invalidOp "MinorVersion"
-          Module = ()
+          Module = ModuleTable.Default
+          TypeRef = invalidOp "TypeRefTable"
+          TypeDef = TypeDefTable.empty
+
           Assembly = Some AssemblyTable.Default
           AssemblyRef = Some() }
 
