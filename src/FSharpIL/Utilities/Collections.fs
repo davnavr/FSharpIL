@@ -4,13 +4,14 @@ module internal FSharpIL.Utilities.Collections
 open System.Collections.Generic
 open System.Collections.Immutable
 
-module ImmSet =
-    let empty<'T> = ImmutableSortedSet<'T>.Empty
-    let withComparer comparer (set: ImmutableSortedSet<_>) =
+[<RequireQualifiedAccess>]
+module Comparer =
+    let create comparer =
         { new IComparer<_> with
-            member _.Compare(e1, e2) = comparer e1 e2 }
-        |> set.WithComparer
+              member _.Compare(e1, e2) = comparer e1 e2}
 
+[<RequireQualifiedAccess>]
+module SortedSet =
     let inline intersect items (set: ImmutableSortedSet<_>) = set.Intersect items
 
 let inline (|Empty|_|) col =

@@ -6,16 +6,10 @@ open System
 type ModuleTable =
     { // Generation
       Name: ModuleName
-      // Mvid
+      Mvid: Guid
       // EncId
       // EncBaseId
       }
-
-    static member Default =
-        { Name = ModuleName "Temp" }
-
-// II.22.38
-type TypeRefTable = unit
 
 // II.22.15
 type FieldTable = unit
@@ -125,7 +119,7 @@ type MetadataTables =
       // Sorted: uint64 // TODO: Figure out what Sorted is used for.
       // Rows
       Module: ModuleTable // 0x00
-      TypeRef: TypeRefTable // TODO: Figure out which tables can be empty (put option)
+      TypeRef: TypeRefTable // TODO: Figure out which tables can be empty (put option unless it is a collection type)
       TypeDef: TypeDefTable
       Field: FieldTable // 0x04
       MethodDef: MethodDefTable // 0x06
@@ -169,15 +163,7 @@ type MetadataTables =
 
     // member this.Rows
 
-    static member Default =
-        { MajorVersion = invalidOp "MajorVersion"
-          MinorVersion = invalidOp "MinorVersion"
-          Module = ModuleTable.Default
-          TypeRef = invalidOp "TypeRefTable"
-          TypeDef = TypeDefTable.empty
-
-          Assembly = Some AssemblyTable.Default
-          AssemblyRef = Some() }
+    static member Default: MetadataTables = invalidOp "bad"
 
 /// NOTE: II.24.2.2 says that each type of stream can only occur 1 time at most.
 type MetadataStreams =
