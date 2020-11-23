@@ -12,7 +12,7 @@ type Builder internal() =
     member _.Yield(headers: PEHeaders) = headers
     member _.Zero(): PEFile = PEFile.Default
 
-let internal writer (pe: PEFile) body output =
+let internal writer (pe: PEFile) body output = // TODO: Use a fancy "state machine" when writing?
     body (fun source ->
         let write = output source
         write [| 0x4Duy |] // TODO: Write DOS header.
