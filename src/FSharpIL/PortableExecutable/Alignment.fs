@@ -10,11 +10,12 @@ module Alignment =
         private
             { Section: uint32
               File: uint32 }
-    
-        static member Default = { Section = 512u; File = 512u; }
-    
+
+        static member Default = { Section = 0x2000u; File = 0x200u; }
+
+        /// Always greater than the FileAlignment.
         member this.SectionAlignment = this.Section
-        member this.FileAlignment = this.File
+        member this.FileAlignment = this.File // TODO: Specification says this should always be 0x200, should this be changed?
 
     let create salignment falignment =
         let check num =

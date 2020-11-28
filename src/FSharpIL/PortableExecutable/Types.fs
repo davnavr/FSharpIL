@@ -19,6 +19,13 @@ type FileCharacteristics =
     | FileType of IsDll
     | FileFlags of ImageFileFlags
 
+    static member op_Implicit(characteristics: FileCharacteristics) =
+        match characteristics with
+        | FileType Exe -> ImageFileFlags.FileExecutableImage
+        | FileType Dll -> ImageFileFlags.FileExecutableImage ||| ImageFileFlags.FileDll
+        | FileFlags flags -> flags
+        |> uint16
+
 type MachineFlags =
     | I386 = 0x14Cus
 
@@ -54,7 +61,7 @@ type StandardFields =
       }
 
     static member Default =
-        { LMajor = 0uy
+        { LMajor = 8uy
           LMinor = 0uy }
 
 type ImageBase =
@@ -66,8 +73,20 @@ type ImageBase =
     static member Default = ImageBase 0x40us
 
 type ImageSubsystem =
-    | WindowsGui
-    | WindowsCui
+    | Unknown = 0uy
+    | Native = 1uy
+    | WindowsGui = 2uy
+    | WindowsCui = 3uy
+    | OS2Cui = 5uy
+    | PosixCui = 7uy
+    | NativeWindows = 8uy
+    | WindowsCEGui = 9uy
+    | EfiApplication = 10uy
+    | EfiBootServiceDriver = 11uy
+    | EfiRuntimeDriver = 12uy
+    | EfiRom = 13uy
+    | Xbox = 14uy
+    | WindowsBootApplication = 16uy
 
 [<Flags>]
 type PEFileFlags =
@@ -94,24 +113,26 @@ type NTSpecificFields =
       UserMinor: uint16
       SubSysMajor: uint16
       SubSysMinor: uint16
-      /// Reserved value that should be zero.
+      /// Reserved value that must be zero.
       Win32VersionValue: uint32
       // ImageSize
       // HeaderSize
       FileChecksum: uint32
       Subsystem: ImageSubsystem
       DllFlags: PEFileFlags
-      // StackReserveSize
-      // StackCommitSize
-      // HeapReserveSize
-      // HeapCommitSize
-      // LoaderFlags
+      StackReserveSize: uint32
+      StackCommitSize: uint32
+      HeapReserveSize: uint32
+      HeapCommitSize: uint32
+      /// Reserved value that must be zero.
+      LoaderFlags: uint32
       // NumberOfDataDirectories
       }
 
     static member Default =
         { ImageBase = ImageBase.Default
           Alignment = Alignment.Default
+          // NOTE: OSMajor and SubSysMajor both have values of 0x04 in some assemblies
           OSMajor = 0x05us
           OSMinor = 0us
           UserMajor = 0us
@@ -120,11 +141,16 @@ type NTSpecificFields =
           SubSysMinor = 0us
           Win32VersionValue = 0u
           FileChecksum = 0u
-          Subsystem = WindowsCui
+          Subsystem = ImageSubsystem.WindowsCui
           DllFlags =
               PEFileFlags.DynamicBase |||
               PEFileFlags.NoSEH |||
-              PEFileFlags.NXCompatible }
+              PEFileFlags.NXCompatible
+          StackReserveSize = 0x100000u
+          StackCommitSize = 0x1000u
+          HeapReserveSize = 0x100000u
+          HeapCommitSize = 0x1000u
+          LoaderFlags = 0u }
 
 type PEHeaders =
     { FileHeader: CoffHeader

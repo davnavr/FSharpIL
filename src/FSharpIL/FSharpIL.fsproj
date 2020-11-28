@@ -9,6 +9,7 @@
 
   <!-- Source files -->
   <ItemGroup>
+    <Compile Include="Utilities\Bytes.fs" />
     <Compile Include="Utilities\Enum.fs" />
     <Compile Include="Utilities\Collections.fs" />
     <Compile Include="Metadata\ModuleName.fs" />
