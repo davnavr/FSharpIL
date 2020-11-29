@@ -7,6 +7,7 @@ open FSharpIL.Metadata
 
 // II.25.2.3.3
 /// NOTE: The RVA needs to be converted to/from file offset
+/// TODO: This should be a read-only record with no modification. Modifications should be done in the SectionInfo module.
 type DataDirectories =
     { // ExportTable
       ImportTable: unit

@@ -5,6 +5,8 @@ module internal FSharpIL.Utilities.Bytes
 let inline private andb value by =
     byte (value &&& by)
 
+let inline empty amt = Array.replicate amt 0uy
+
 let inline ofU16 value =
     let value' = uint16 value
     [| andb value' 0xFFus; andb (value' >>> 8) 0xFFus |]

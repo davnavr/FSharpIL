@@ -11,7 +11,7 @@ module private Helpers =
     [<RequireQualifiedAccess>]
     type State =
         | FileHeaders
-        | DataDirectories
+        | SectionHeader of int
 
     let dosstub =
         let lfanew = [| 0x80; 0x00; 0x00; 0x00 |]
@@ -51,24 +51,26 @@ let rec private write (file: PEFile) (bin: BinaryWriter) =
         bin.Write pesig
         let coff = file.Headers.FileHeader
         Bytes.ofU16 coff.Machine |> bin.Write
-        invalidOp "Number of sections"
+        Bytes.ofU16 file.SectionTable.Length |> bin.Write
         Bytes.ofU32 coff.TimeDateStamp |> bin.Write
         Bytes.ofU32 coff.SymbolTablePointer |> bin.Write
         Bytes.ofU32 coff.SymbolCount |> bin.Write
-        invalidOp "Optional header size"
+        bin.Write [| 0xE0uy; 0uy |] // OptionalHeaderSize
         Bytes.ofU16 coff.Characteristics |> bin.Write
+
         let standard = file.Headers.StandardFields
-        bin.Write 0xBuy
-        bin.Write 1uy
+        bin.Write [| 0xBuy; 1uy |] // Magic, 0x10B means PE32
         bin.Write standard.LMajor
         bin.Write standard.LMinor
-        invalidOp "rest of the standard fields"
+        Bytes.empty 24 |> bin.Write // TEMPORARY
+        // TODO: Figure out how to calculate the values for the rest of the standard fields
         // CodeSize
         // InitializedDataSize
         // UninitizalizedDataSize
         // EntryPointRva
         // BaseOfCode
         // BaseOfData
+
         let nt = file.Headers.NTSpecificFields
         Bytes.ofU32 nt.ImageBase |> bin.Write
         Bytes.ofU32 nt.Alignment.SectionAlignment |> bin.Write
@@ -80,9 +82,11 @@ let rec private write (file: PEFile) (bin: BinaryWriter) =
         Bytes.ofU16 nt.SubSysMajor |> bin.Write
         Bytes.ofU16 nt.SubSysMinor |> bin.Write
         Bytes.ofU32 nt.Win32VersionValue |> bin.Write
-        invalidOp "imagesize and headersize"
+        Bytes.empty 4 |> bin.Write // TEMPORARY
+        // TODO: Figure out how to calculate these sizes
         // ImageSize
-        // HeaderSize
+        let hsize = 0u // HeaderSize
+        Bytes.ofU32 hsize |> bin.Write // TEMPORARY
         Bytes.ofU32 nt.FileChecksum |> bin.Write
         Bytes.ofU16 nt.Subsystem |> bin.Write
         Bytes.ofU16 nt.DllFlags |> bin.Write
@@ -91,10 +95,32 @@ let rec private write (file: PEFile) (bin: BinaryWriter) =
         Bytes.ofU32 nt.HeapReserveSize |> bin.Write
         Bytes.ofU32 nt.HeapCommitSize |> bin.Write
         Bytes.ofU32 nt.LoaderFlags |> bin.Write
-        bin.Write [| 16uy; 0uy; 0uy; 0uy |] // NumberOfDataDirectories
-        write file bin State.DataDirectories
-    | State.DataDirectories ->
-        ()
+        Bytes.ofU32 0x10u |> bin.Write // NumberOfDataDirectories
+        
+        Bytes.empty 8 |> bin.Write// ExportTable
+        // ImportTable
+        Bytes.empty 24 |> bin.Write
+        // BaseRelocationTable
+        Bytes.empty 48 |> bin.Write
+        // ImportAddressTable
+        Bytes.empty 8 |> bin.Write // DelayImportDescriptor
+        // CliHeader
+        Bytes.empty 8 |> bin.Write // Reserved
+        State.SectionHeader 0 |> write file bin
+    | State.SectionHeader index when file.SectionTable.Length < index ->
+        let header = file.SectionTable.Item index
+        SectionName.toArray header.SectionName |> bin.Write
+        // TODO: Figure out how to calculate these from the data
+        Bytes.empty 4 |> bin.Write // TEMPORARY // VirtualSize
+        Bytes.empty 4 |> bin.Write // TEMPORARY // VirtualAddress
+        Bytes.empty 4 |> bin.Write // TEMPORARY // SizeOfRawData
+        Bytes.empty 4 |> bin.Write // TEMPORARY // PointerToRawData
+        Bytes.empty 12 |> bin.Write // PointerToRelocations, PointerToLineNumbers, NumberOfRelocations, NumberOfLineNumbers
+        Bytes.ofU32 header.Characteristics |> bin.Write
+        let index' = index + 1
+        State.SectionHeader index' |> write file bin
+    | State.SectionHeader _ -> ()
+
 
 let toStream (stream: Stream) pe = // TODO: Use a fancy "state machine" when writing?
     use writer = new BinaryWriter(stream)

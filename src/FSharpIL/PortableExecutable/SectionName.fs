@@ -1,19 +1,20 @@
 ﻿namespace FSharpIL.PortableExecutable
 
-open System.ComponentModel
-
 [<StructuralComparison; StructuralEquality>]
 type SectionName =
     internal
-    | SectionName of string // Maybe use System.Text.Encoding.UTF8.GetBytes, unless UTF8 is not the encoding of the text.
-
-    override this.ToString() =
-        let (SectionName name) = this in name
+    | SectionName of byte[]
 
 [<RequireQualifiedAccess>]
 module SectionName =
-    let ofString str =
-        match str with
-        | ""
-        | _ when str.Length > 8 -> None
-        | _ -> SectionName str |> Some
+    let ofBytes (bytes: byte[]) =
+        if bytes.Length <= 8 then
+            Array.init
+                8
+                (fun i ->
+                    if i > bytes.Length
+                    then 0uy
+                    else bytes.[i])
+            |> Some
+        else None
+    let toArray (SectionName bytes) = bytes.Clone() :?> byte[]
