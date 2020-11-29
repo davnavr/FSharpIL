@@ -12,7 +12,7 @@ let tests =
     testList "write PE" [
         testCase "PE is valid" <| fun() ->
             let data =
-                use str = new MemoryStream()
+                use str = new MemoryStream(512)
                 do WritePE.toStream str PEFile.Default
                 str.GetBuffer()
             use source = new MemoryStream(data, false)

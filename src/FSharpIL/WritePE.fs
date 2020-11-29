@@ -83,10 +83,20 @@ let rec private write (file: PEFile) (bin: BinaryWriter) =
         Bytes.ofU16 nt.SubSysMinor |> bin.Write
         Bytes.ofU32 nt.Win32VersionValue |> bin.Write
         Bytes.empty 4 |> bin.Write // TEMPORARY
-        // TODO: Figure out how to calculate these sizes
-        // ImageSize
-        let hsize = 0u // HeaderSize
-        Bytes.ofU32 hsize |> bin.Write // TEMPORARY
+        // ImageSize // TODO: Figure out how to calculate the ImageSize
+        let hsizea, hsizer =
+            let actual =
+                uint dosstub.Length
+                + uint pesig.Length
+                + 20u // Coff
+                + 24u // Standard PE32
+                + 68u // NT
+                + 128u // Data Directories, of which there are 16
+                + (40u * uint32 file.SectionTable.Length)
+            let falignment = nt.Alignment.FileAlignment
+            // Rounds the actual size up to a factor of FileAlignment
+            actual, falignment * ((actual + falignment - 1u) / falignment)
+        Bytes.ofU32 hsizea |> bin.Write
         Bytes.ofU32 nt.FileChecksum |> bin.Write
         Bytes.ofU16 nt.Subsystem |> bin.Write
         Bytes.ofU16 nt.DllFlags |> bin.Write
@@ -96,8 +106,8 @@ let rec private write (file: PEFile) (bin: BinaryWriter) =
         Bytes.ofU32 nt.HeapCommitSize |> bin.Write
         Bytes.ofU32 nt.LoaderFlags |> bin.Write
         Bytes.ofU32 0x10u |> bin.Write // NumberOfDataDirectories
-        
-        Bytes.empty 8 |> bin.Write// ExportTable
+
+        Bytes.empty 8 |> bin.Write // ExportTable
         // ImportTable
         Bytes.empty 24 |> bin.Write
         // BaseRelocationTable
@@ -106,6 +116,11 @@ let rec private write (file: PEFile) (bin: BinaryWriter) =
         Bytes.empty 8 |> bin.Write // DelayImportDescriptor
         // CliHeader
         Bytes.empty 8 |> bin.Write // Reserved
+        do // Padding
+            int (hsizer - hsizea)
+            |> Bytes.empty
+            |> bin.Write
+        // Section headers immediately follow the optional header
         State.SectionHeader 0 |> write file bin
     | State.SectionHeader index when file.SectionTable.Length < index ->
         let header = file.SectionTable.Item index

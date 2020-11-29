@@ -15,7 +15,8 @@ module Alignment =
 
         /// Always greater than the FileAlignment.
         member this.SectionAlignment = this.Section
-        member this.FileAlignment = this.File // TODO: Specification says this should always be 0x200, should this be changed?
+        // TODO: Specification says this should always be 0x200, should this be a fixed value?
+        member this.FileAlignment = this.File
 
     let create salignment falignment =
         let check num =
