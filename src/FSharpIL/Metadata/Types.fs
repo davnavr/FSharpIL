@@ -163,7 +163,7 @@ type MetadataTables =
 
     // member this.Rows
 
-    static member Default: MetadataTables = invalidOp "bad"
+    static member Default: MetadataTables = Unchecked.defaultof<MetadataTables>
 
 /// NOTE: II.24.2.2 says that each type of stream can only occur 1 time at most.
 type MetadataStreams =
@@ -217,13 +217,13 @@ type CliHeader =
       // ManagedNativeHeader
       }
 
-    member this.EntryPointToken = invalidOp "bad"
+    member this.EntryPointToken = Unchecked.defaultof<unit>
 
     static member Default =
         { MajorRuntimeVersion = 2us
           MinorRuntimeVersion = 5us
           Metadata = MetadataRoot.Default
-          Flags = invalidOp "default here"
+          Flags = CorFlags.ILOnly // TODO: Figure out if this is an appropriate default.
           Resources = ()
           StrongNameSignature = ()
           CodeManagerTable = 0UL

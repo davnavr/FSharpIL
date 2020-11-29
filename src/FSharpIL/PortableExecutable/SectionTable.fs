@@ -73,7 +73,8 @@ module SectionInfo =
                   ImportAddressTable = ()
                   CliHeader = Some CliHeader.Default }
               Sections =
-                invalidOp "add default sections" }
+                // TODO: Add default sections
+                ImmutableArray.Empty }
 
         member this.DataDirectories = this.Data
         member this.SectionTable = this.Sections
