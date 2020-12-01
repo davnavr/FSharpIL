@@ -5,91 +5,128 @@ open System.ComponentModel
 
 open FSharpIL.Metadata
 
-// II.25.2.3.3
-/// NOTE: The RVA needs to be converted to/from file offset
-/// TODO: This should be a read-only record with no modification. Modifications should be done in the SectionInfo module.
-type DataDirectories =
-    { // ExportTable
-      ImportTable: unit
-      // ResourceTable
-      // ExceptionTable
-      // CertificateTable
-      BaseRelocationTable: unit
-      //DebugTable
-      //CopyrightTable
-      //GlobalPointer
-      // TLSTable
-      // LoadConfigTable
-      // BoundImportTable
-      ImportAddressTable: unit
-      // DelayImportDescriptor
-      CliHeader: CliHeader option
-      // Reserved
-      }
-
 type RawSectionData = Lazy<byte[]>
 
 type SectionData =
     | RawData of RawSectionData
-    | CliHeader of CliHeader // NOTE: First 8 bytes of .text section is usually used by CLR loader stub
+    // First 8 bytes of the .text section
+    | ClrLoaderStub
+    | CliHeader of CliHeader
     // TODO: Add cases for import table and import address table
-    // NOTE: Some data have rules about where it can be placed, such as the Vtable fixup (II.25.3.3.3) needing to be in a read-write section
 
 [<System.Flags>]
 type SectionFlags =
-    | Code = 0x20u
-    | InitializedData = 0x40u
-    | UninitializedData = 0x80u
-    | Execute = 0x20000000u
-    | Read = 0x40000000u
-    | Write = 0x80000000u
+    | CntCode = 0x20u
+    | CntInitializedData = 0x40u
+    | CmtUninitializedData = 0x80u
+    | MemExecute = 0x20000000u
+    | MemRead = 0x40000000u
+    | MemWrite = 0x80000000u
 
 // II.25.3
-/// NOTE: Section headers begin after the file headers, but must account for SizeOfHeaders, which is rounded up to a multiple of FileAlignment.
 type SectionHeader =
     { SectionName: SectionName
       // VirtualSize: uint32
       // VirtualAddress: uint32
+
+      // NOTE: SizeOfRawData is "size of the initialized data on disk in bytes" and is a multiple of FileAlignment
+      // TODO: PointerToRawData is file offset to the data, rounded up to multiple of file alignment
       Data: ImmutableArray<SectionData>
-      //PointerToRelocations: uint32
+
+      /// Reserved value that should be set to zero.
+      PointerToRelocations: uint32
       //PointerToLineNumbers: uint32
-      //NumberOfRelocations: uint16
+      /// Reserved value that should be set to zero.
+      NumberOfRelocations: uint16
       //NumberOfLineNumbers: uint16
-      Characteristics: SectionFlags
-      }
+      Characteristics: SectionFlags }
+
+type SectionKind =
+    | TextSection of ImmutableArray<SectionData>
+    // NOTE: According to the spec, this should be the last section of the PE file.
+    | RelocSection of ImmutableArray<SectionData>
+    | RsrcSection of ImmutableArray<SectionData>
+
+    member this.Data =
+        match this with
+        | TextSection data
+        | RsrcSection data -> data
+
+    member this.Header =
+        let name, flags, data =
+            match this with
+            | TextSection data ->
+                ".text"B,
+                SectionFlags.CntCode ||| SectionFlags.MemExecute ||| SectionFlags.MemRead,
+                data
+            | RsrcSection data ->
+                ".rsrc"B,
+                SectionFlags.CntInitializedData ||| SectionFlags.MemRead,
+                data
+        { SectionName = SectionName.ofBytes name |> Option.get
+          Data = data
+          PointerToRelocations = 0u
+          NumberOfRelocations = 0us
+          Characteristics = flags }
 
 [<RequireQualifiedAccess>]
 module SectionInfo =
+    // II.25.2.3.3
+    /// NOTE: The RVA needs to be converted to/from file offset
+    [<EditorBrowsable(EditorBrowsableState.Never); RequireQualifiedAccess>]
+    type Data =
+        private { Sections: ImmutableArray<SectionKind> }
+        // ExportTable
+        member _.ImportTable = ()
+        // ResourceTable
+        // ExceptionTable
+        // CertificateTable
+        member _.BaseRelocationTable = () // TODO: This uses the Reloc section
+        //DebugTable
+        //CopyrightTable
+        //GlobalPointer
+        // TLSTable
+        // LoadConfigTable
+        // BoundImportTable
+        member _.ImportAddressTable = ()
+        // DelayImportDescriptor
+        member this.CliHeader =
+            this.Sections
+            |> Seq.collect
+                (function
+                | TextSection data -> data
+                | _ -> ImmutableArray.Empty)
+            |> Seq.tryPick
+                (function
+                | CliHeader header -> Some header
+                | _ -> None)
+        // Reserved
+
     [<EditorBrowsable(EditorBrowsableState.Never)>]
     type Info =
         private
-            { Data: DataDirectories
-              Sections: ImmutableArray<SectionHeader> }
+        | Sections of Data
 
         static member Default =
-            { Data =
-                { ImportTable = ()
-                  BaseRelocationTable = ()
-                  ImportAddressTable = ()
-                  CliHeader = Some CliHeader.Default }
-              Sections =
-                // TODO: Add default sections
-                ImmutableArray.Empty }
+            let sections =
+                ImmutableArray.CreateRange [
+                    ImmutableArray.CreateRange [
+                        ClrLoaderStub
+                        CliHeader CliHeader.Default
+                    ]
+                    |> TextSection
 
-        member this.DataDirectories = this.Data
-        member this.SectionTable = this.Sections
+                    RsrcSection ImmutableArray.Empty
+                    RelocSection ImmutableArray.Empty
+                ]
+            Sections { Sections = sections }
 
+        member this.DataDirectories = let (Sections data) = this in data
+        member this.SectionTable = this.DataDirectories.Sections
+
+    // TODO: Create Computation Expression type for SectionTable.
     let addSection (section: SectionHeader) (info: Info) =
-        let rec validate index state =
-            let next = validate (index + 1)
-            if index >= section.Data.Length then
-                Ok { state with Sections = state.Sections.Add section }
-            else
-                match section.Data.Item index with // TODO: Check if this is this tail recursive.
-                | RawData _ -> next state
-                | CliHeader cli when state.Data.CliHeader.IsNone ->
-                    next { state with Data = { state.Data with CliHeader = Some cli } }
-                | data -> Error data
-        validate 0 info
+        invalidOp "bad"
 
 type SectionInfo = SectionInfo.Info
+type DataDirectories = SectionInfo.Data

@@ -12,9 +12,10 @@ module SectionName =
             Array.init
                 8
                 (fun i ->
-                    if i > bytes.Length
+                    if i >= bytes.Length
                     then 0uy
                     else bytes.[i])
+            |> SectionName
             |> Some
         else None
     let toArray (SectionName bytes) = bytes.Clone() :?> byte[]

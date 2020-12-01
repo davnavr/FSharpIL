@@ -204,7 +204,7 @@ type CorFlags =
 
 // II.25.3.3
 type CliHeader =
-    { // Cb
+    { // HeaderSize = 0x48u
       MajorRuntimeVersion: uint16
       MinorRuntimeVersion: uint16
       Metadata: MetadataRoot

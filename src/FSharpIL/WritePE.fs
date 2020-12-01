@@ -10,8 +10,16 @@ open FSharpIL.Utilities
 module private Helpers =
     [<RequireQualifiedAccess>]
     type State =
-        | FileHeaders
+        | DosHeader
+        | CoffHeader
+        | StandardFields
+        | NTSpecificFields
+        | DataDirectories of
+            {| ActualHeaderSize: uint32
+               RoundedHeaderSize: uint32 |}
         | SectionHeader of int
+        | SectionData of int
+        | CliHeader of Metadata.CliHeader
 
     let dosstub =
         let lfanew = [| 0x80; 0x00; 0x00; 0x00 |]
@@ -44,99 +52,133 @@ type Builder internal() =
     member _.Yield(headers: PEHeaders) = headers
     member _.Zero(): PEFile = PEFile.Default
 
-let rec private write (file: PEFile) (bin: BinaryWriter) =
-    function
-    | State.FileHeaders ->
-        bin.Write dosstub
-        bin.Write pesig
-        let coff = file.Headers.FileHeader
-        Bytes.ofU16 coff.Machine |> bin.Write
-        Bytes.ofU16 file.SectionTable.Length |> bin.Write
-        Bytes.ofU32 coff.TimeDateStamp |> bin.Write
-        Bytes.ofU32 coff.SymbolTablePointer |> bin.Write
-        Bytes.ofU32 coff.SymbolCount |> bin.Write
-        bin.Write [| 0xE0uy; 0uy |] // OptionalHeaderSize
-        Bytes.ofU16 coff.Characteristics |> bin.Write
-
-        let standard = file.Headers.StandardFields
-        bin.Write [| 0xBuy; 1uy |] // Magic, 0x10B means PE32
-        bin.Write standard.LMajor
-        bin.Write standard.LMinor
-        Bytes.empty 24 |> bin.Write // TEMPORARY
-        // TODO: Figure out how to calculate the values for the rest of the standard fields
-        // CodeSize
-        // InitializedDataSize
-        // UninitizalizedDataSize
-        // EntryPointRva
-        // BaseOfCode
-        // BaseOfData
-
-        let nt = file.Headers.NTSpecificFields
-        Bytes.ofU32 nt.ImageBase |> bin.Write
-        Bytes.ofU32 nt.Alignment.SectionAlignment |> bin.Write
-        Bytes.ofU32 nt.Alignment.FileAlignment |> bin.Write
-        Bytes.ofU16 nt.OSMajor |> bin.Write
-        Bytes.ofU16 nt.OSMinor |> bin.Write
-        Bytes.ofU16 nt.UserMajor |> bin.Write
-        Bytes.ofU16 nt.UserMinor |> bin.Write
-        Bytes.ofU16 nt.SubSysMajor |> bin.Write
-        Bytes.ofU16 nt.SubSysMinor |> bin.Write
-        Bytes.ofU32 nt.Win32VersionValue |> bin.Write
-        Bytes.empty 4 |> bin.Write // TEMPORARY
-        // ImageSize // TODO: Figure out how to calculate the ImageSize
-        let hsizea, hsizer =
-            let actual =
-                uint dosstub.Length
-                + uint pesig.Length
-                + 20u // Coff
-                + 24u // Standard PE32
-                + 68u // NT
-                + 128u // Data Directories, of which there are 16
-                + (40u * uint32 file.SectionTable.Length)
-            let falignment = nt.Alignment.FileAlignment
-            // Rounds the actual size up to a factor of FileAlignment
-            actual, falignment * ((actual + falignment - 1u) / falignment)
-        Bytes.ofU32 hsizea |> bin.Write
-        Bytes.ofU32 nt.FileChecksum |> bin.Write
-        Bytes.ofU16 nt.Subsystem |> bin.Write
-        Bytes.ofU16 nt.DllFlags |> bin.Write
-        Bytes.ofU32 nt.StackReserveSize |> bin.Write
-        Bytes.ofU32 nt.StackCommitSize |> bin.Write
-        Bytes.ofU32 nt.HeapReserveSize |> bin.Write
-        Bytes.ofU32 nt.HeapCommitSize |> bin.Write
-        Bytes.ofU32 nt.LoaderFlags |> bin.Write
-        Bytes.ofU32 0x10u |> bin.Write // NumberOfDataDirectories
-
-        Bytes.empty 8 |> bin.Write // ExportTable
-        // ImportTable
-        Bytes.empty 24 |> bin.Write
-        // BaseRelocationTable
-        Bytes.empty 48 |> bin.Write
-        // ImportAddressTable
-        Bytes.empty 8 |> bin.Write // DelayImportDescriptor
-        // CliHeader
-        Bytes.empty 8 |> bin.Write // Reserved
-        do // Padding
-            int (hsizer - hsizea)
-            |> Bytes.empty
-            |> bin.Write
-        // Section headers immediately follow the optional header
-        State.SectionHeader 0 |> write file bin
-    | State.SectionHeader index when file.SectionTable.Length < index ->
-        let header = file.SectionTable.Item index
-        SectionName.toArray header.SectionName |> bin.Write
-        // TODO: Figure out how to calculate these from the data
-        Bytes.empty 4 |> bin.Write // TEMPORARY // VirtualSize
-        Bytes.empty 4 |> bin.Write // TEMPORARY // VirtualAddress
-        Bytes.empty 4 |> bin.Write // TEMPORARY // SizeOfRawData
-        Bytes.empty 4 |> bin.Write // TEMPORARY // PointerToRawData
-        Bytes.empty 12 |> bin.Write // PointerToRelocations, PointerToLineNumbers, NumberOfRelocations, NumberOfLineNumbers
-        Bytes.ofU32 header.Characteristics |> bin.Write
-        let index' = index + 1
-        State.SectionHeader index' |> write file bin
-    | State.SectionHeader _ -> ()
-
+let private write (file: PEFile) (bin: BinaryWriter) =
+    let rec inner =
+        function
+        | State.DosHeader ->
+            bin.Write dosstub
+            bin.Write pesig
+            inner State.CoffHeader
+        | State.CoffHeader ->
+            let coff = file.Headers.FileHeader
+            Bytes.ofU16 coff.Machine |> bin.Write
+            Bytes.ofU16 file.SectionTable.Length |> bin.Write
+            Bytes.ofU32 coff.TimeDateStamp |> bin.Write
+            Bytes.ofU32 coff.SymbolTablePointer |> bin.Write
+            Bytes.ofU32 coff.SymbolCount |> bin.Write
+            bin.Write [| 0xE0uy; 0uy |] // OptionalHeaderSize
+            Bytes.ofU16 coff.Characteristics |> bin.Write
+            inner State.StandardFields
+        | State.StandardFields ->
+            let standard = file.Headers.StandardFields
+            bin.Write [| 0xBuy; 1uy |] // Magic, 0x10B means PE32
+            bin.Write standard.LMajor
+            bin.Write standard.LMinor
+            Bytes.empty 24 |> bin.Write // TEMPORARY
+            // TODO: Figure out how to calculate the values for the rest of the standard fields
+            // CodeSize
+            // InitializedDataSize
+            // UninitizalizedDataSize
+            // EntryPointRva
+            // BaseOfCode
+            // BaseOfData
+            inner State.NTSpecificFields
+        | State.NTSpecificFields ->
+            let nt = file.Headers.NTSpecificFields
+            Bytes.ofU32 nt.ImageBase |> bin.Write
+            Bytes.ofU32 nt.Alignment.SectionAlignment |> bin.Write
+            Bytes.ofU32 nt.Alignment.FileAlignment |> bin.Write
+            Bytes.ofU16 nt.OSMajor |> bin.Write
+            Bytes.ofU16 nt.OSMinor |> bin.Write
+            Bytes.ofU16 nt.UserMajor |> bin.Write
+            Bytes.ofU16 nt.UserMinor |> bin.Write
+            Bytes.ofU16 nt.SubSysMajor |> bin.Write
+            Bytes.ofU16 nt.SubSysMinor |> bin.Write
+            Bytes.ofU32 nt.Win32VersionValue |> bin.Write
+            Bytes.empty 4 |> bin.Write // TEMPORARY
+            // ImageSize // TODO: Figure out how to calculate the ImageSize
+            let hsizea, hsizer =
+                let actual =
+                    uint dosstub.Length
+                    + uint pesig.Length
+                    + 20u // Coff
+                    + 24u // Standard PE32
+                    + 68u // NT
+                    + 128u // Data Directories, of which there are 16
+                    + (40u * uint32 file.SectionTable.Length)
+                let falignment = nt.Alignment.FileAlignment
+                // Rounds the actual size up to a factor of FileAlignment
+                actual, falignment * ((actual + falignment - 1u) / falignment)
+            Bytes.ofU32 hsizea |> bin.Write
+            Bytes.ofU32 nt.FileChecksum |> bin.Write
+            Bytes.ofU16 nt.Subsystem |> bin.Write
+            Bytes.ofU16 nt.DllFlags |> bin.Write
+            Bytes.ofU32 nt.StackReserveSize |> bin.Write
+            Bytes.ofU32 nt.StackCommitSize |> bin.Write
+            Bytes.ofU32 nt.HeapReserveSize |> bin.Write
+            Bytes.ofU32 nt.HeapCommitSize |> bin.Write
+            Bytes.ofU32 nt.LoaderFlags |> bin.Write
+            Bytes.ofU32 0x10u |> bin.Write // NumberOfDataDirectories
+            let state' =
+                {| ActualHeaderSize = hsizea
+                   RoundedHeaderSize = hsizer |}
+                |> State.DataDirectories
+            inner state'
+        | State.DataDirectories data ->
+            Bytes.empty 8 |> bin.Write // ExportTable
+            // ImportTable
+            Bytes.empty 24 |> bin.Write
+            // BaseRelocationTable
+            Bytes.empty 48 |> bin.Write
+            // ImportAddressTable
+            Bytes.empty 8 |> bin.Write // DelayImportDescriptor
+            // CliHeader
+            Bytes.empty 8 |> bin.Write // Reserved
+            do // Padding
+                int (data.RoundedHeaderSize - data.ActualHeaderSize)
+                |> Bytes.empty
+                |> bin.Write
+            // Section headers immediately follow the optional header
+            let state' = State.SectionHeader 0
+            inner state'
+        | State.SectionHeader index when file.SectionTable.Length < index ->
+            let header = file.SectionTable.Item(index).Header
+            SectionName.toArray header.SectionName |> bin.Write
+            // TODO: Figure out how to calculate these from the data
+            Bytes.empty 4 |> bin.Write // TEMPORARY // VirtualSize
+            Bytes.empty 4 |> bin.Write // TEMPORARY // VirtualAddress
+            Bytes.empty 4 |> bin.Write // TEMPORARY // SizeOfRawData
+            Bytes.empty 4 |> bin.Write // TEMPORARY // PointerToRawData // Note that this is the file offset where the section starts, rounded to the nearest FileAlignment
+            Bytes.ofU32 header.PointerToRelocations |> bin.Write
+            Bytes.empty 4 |> bin.Write // PointerToLineNumbers
+            Bytes.ofU32 header.NumberOfRelocations |> bin.Write
+            Bytes.empty 4 |> bin.Write // NumberOfLineNumbers
+            Bytes.ofU32 header.Characteristics |> bin.Write
+            let state' = State.SectionHeader(index + 1)
+            inner state'
+        | State.SectionHeader _ ->
+            let state' = State.SectionData 0
+            inner state'
+        | State.SectionData index when file.SectionTable.Length < index ->
+            let section = file.SectionTable.Item(index)
+            Seq.iter
+                (function
+                | RawData data -> bin.Write data.Value
+                | ClrLoaderStub ->
+                    // TODO: Write the 8 bytes of the loader stub
+                    Bytes.empty 8 |> bin.Write // TEMPORARY
+                | CliHeader cli ->
+                    // TODO: Will this function still be tail recursive if a call to "inner State.CliHeader cli" is inserted here?
+                    ())
+                section.Data
+            ()
+        | State.CliHeader cli ->
+            bin.Write [| 0x48uy; 0uy; 0uy; 0uy |] // HeaderSize
+            ()
+        | State.SectionData _ ->
+            ()
+    inner State.DosHeader
 
 let toStream (stream: Stream) pe = // TODO: Use a fancy "state machine" when writing?
     use writer = new BinaryWriter(stream)
-    write pe writer State.FileHeaders
+    write pe writer
