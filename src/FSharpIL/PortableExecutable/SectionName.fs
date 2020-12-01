@@ -5,6 +5,10 @@ type SectionName =
     internal
     | SectionName of byte[]
 
+    override this.ToString() =
+        let (SectionName name) = this
+        Array.map char name |> System.String
+
 [<RequireQualifiedAccess>]
 module SectionName =
     let ofBytes (bytes: byte[]) =

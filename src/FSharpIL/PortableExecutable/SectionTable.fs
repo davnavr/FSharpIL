@@ -18,10 +18,11 @@ type SectionData =
 type SectionFlags =
     | CntCode = 0x20u
     | CntInitializedData = 0x40u
-    | CmtUninitializedData = 0x80u
-    | MemExecute = 0x20000000u
-    | MemRead = 0x40000000u
-    | MemWrite = 0x80000000u
+    | CntUninitializedData = 0x80u
+    | MemDiscardable = 0x200_0000u
+    | MemExecute = 0x2000_0000u
+    | MemRead = 0x4000_0000u
+    | MemWrite = 0x8000_0000u
 
 // II.25.3
 type SectionHeader =
@@ -42,40 +43,54 @@ type SectionHeader =
       Characteristics: SectionFlags }
 
 type SectionKind =
-    | TextSection of ImmutableArray<SectionData>
+    | TextSection
     // NOTE: According to the spec, this should be the last section of the PE file.
-    | RelocSection of ImmutableArray<SectionData>
-    | RsrcSection of ImmutableArray<SectionData>
+    | RelocSection
+    | RsrcSection
 
-    member this.Data =
-        match this with
-        | TextSection data
-        | RsrcSection data -> data
+type Section =
+    { Data: ImmutableArray<SectionData>
+      Kind: SectionKind }
 
-    member this.Header =
-        let name, flags, data =
-            match this with
-            | TextSection data ->
-                ".text"B,
-                SectionFlags.CntCode ||| SectionFlags.MemExecute ||| SectionFlags.MemRead,
-                data
-            | RsrcSection data ->
-                ".rsrc"B,
-                SectionFlags.CntInitializedData ||| SectionFlags.MemRead,
-                data
-        { SectionName = SectionName.ofBytes name |> Option.get
-          Data = data
-          PointerToRelocations = 0u
-          NumberOfRelocations = 0us
-          Characteristics = flags }
+    member private this.HeaderValue =
+        lazy
+            let name, flags =
+                match this.Kind with
+                | TextSection ->
+                    ".text"B, SectionFlags.CntCode ||| SectionFlags.MemExecute ||| SectionFlags.MemRead
+                | RsrcSection ->
+                    ".rsrc"B, SectionFlags.CntInitializedData ||| SectionFlags.MemRead
+                | RelocSection ->
+                    ".reloc"B, SectionFlags.CntInitializedData ||| SectionFlags.MemRead ||| SectionFlags.MemDiscardable
+            { SectionName = SectionName.ofBytes name |> Option.get
+              Data = this.Data
+              PointerToRelocations = 0u
+              NumberOfRelocations = 0us
+              Characteristics = flags }
+
+    member this.Header = this.HeaderValue.Value
 
 [<RequireQualifiedAccess>]
 module SectionInfo =
     // II.25.2.3.3
     /// NOTE: The RVA needs to be converted to/from file offset
     [<EditorBrowsable(EditorBrowsableState.Never); RequireQualifiedAccess>]
-    type Data =
-        private { Sections: ImmutableArray<SectionKind> }
+    type DataDirectories =
+        private { Sections: ImmutableArray<Section> }
+
+        member private this.CliHeaderValue =
+            lazy
+                Seq.tryPick
+                    (function
+                    | { Kind = TextSection; Data = data } -> Some data
+                    | _ -> None)
+                    this.Sections
+                |> Option.defaultValue ImmutableArray.Empty
+                |> Seq.tryPick
+                    (function
+                    | CliHeader header -> Some header
+                    | _ -> None)
+
         // ExportTable
         member _.ImportTable = ()
         // ResourceTable
@@ -90,43 +105,40 @@ module SectionInfo =
         // BoundImportTable
         member _.ImportAddressTable = ()
         // DelayImportDescriptor
-        member this.CliHeader =
-            this.Sections
-            |> Seq.collect
-                (function
-                | TextSection data -> data
-                | _ -> ImmutableArray.Empty)
-            |> Seq.tryPick
-                (function
-                | CliHeader header -> Some header
-                | _ -> None)
+        member this.CliHeader = this.CliHeaderValue.Value
         // Reserved
 
     [<EditorBrowsable(EditorBrowsableState.Never)>]
     type Info =
         private
-        | Sections of Data
+        | SectionInfo of DataDirectories
 
         static member Default =
             let sections =
                 ImmutableArray.CreateRange [
-                    ImmutableArray.CreateRange [
-                        ClrLoaderStub
-                        CliHeader CliHeader.Default
-                    ]
-                    |> TextSection
-
-                    RsrcSection ImmutableArray.Empty
-                    RelocSection ImmutableArray.Empty
+                    { Kind = TextSection
+                      Data = ImmutableArray.Create(ClrLoaderStub, CliHeader CliHeader.Default) }
+                    { Kind = RsrcSection; Data = ImmutableArray.Empty }
+                    { Kind = RelocSection; Data = ImmutableArray.Empty }
                 ]
-            Sections { Sections = sections }
+            SectionInfo { Sections = sections }
 
-        member this.DataDirectories = let (Sections data) = this in data
+        member this.DataDirectories = let (SectionInfo data) = this in data
         member this.SectionTable = this.DataDirectories.Sections
+
+        member private this.TextSectionValue =
+            lazy
+                Seq.tryFind
+                    (function
+                    | { Kind = TextSection } -> true
+                    | _ -> false)
+                    this.SectionTable
+
+        member this.TextSection = this.TextSectionValue.Value
 
     // TODO: Create Computation Expression type for SectionTable.
     let addSection (section: SectionHeader) (info: Info) =
         invalidOp "bad"
 
 type SectionInfo = SectionInfo.Info
-type DataDirectories = SectionInfo.Data
+type DataDirectories = SectionInfo.DataDirectories

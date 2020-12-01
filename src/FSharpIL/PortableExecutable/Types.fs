@@ -166,8 +166,8 @@ type PEFile =
     { Headers: PEHeaders
       SectionInfo: SectionInfo }
 
-    member this.DataDirectories = this.SectionInfo.DataDirectories
-    member this.SectionTable = this.SectionInfo.SectionTable
+    member inline this.DataDirectories = this.SectionInfo.DataDirectories
+    member inline this.SectionTable = this.SectionInfo.SectionTable
     //member this.CliHeader = this.
 
     static member Default =
