@@ -15,12 +15,6 @@ type Builder internal() =
 
 [<AutoOpen>]
 module private Helpers =
-    [<RequireQualifiedAccess>]
-    type State =
-        | SectionHeader of int
-        | SectionData of int
-        | CliHeader of Metadata.CliHeader
-
     let inline (|ValidStream|) (stream: Stream) =
         if stream.CanSeek && stream.CanWrite
         then stream
@@ -98,7 +92,22 @@ type private Writer(stream: Stream) =
     interface System.IDisposable with
         member _.Dispose() = writer.Dispose()
 
-let private cliheader (header: Metadata.CliHeader) (bin: Writer) =
+let private cli (header: Metadata.CliHeader) (bin: Writer) =
+    bin.WriteU32 0x48u // TODO: Fix this, the COR Header size is invalid.
+    bin.WriteU16 header.MajorRuntimeVersion
+    bin.WriteU16 header.MinorRuntimeVersion
+    bin.WriteEmpty 4 // RVA of MetaData
+    bin.WriteEmpty 4 // Size of MetaData
+    bin.WriteU32 header.Flags
+    bin.WriteEmpty 4 // EntryPointToken
+    bin.WriteEmpty 4 // RVA of Resources
+    bin.WriteEmpty 4 // Size of Resources
+    bin.WriteEmpty 4 // RVA of StrongNameSignature
+    bin.WriteEmpty 4 // Size of StrongNameSignature
+    bin.WriteEmpty 8 // CodeManagerTable
+    bin.WriteEmpty 8 // VTableFixups // TODO: See if this needs to be assigned a value
+    bin.WriteEmpty 8 // ExportAddressTableJumps
+    bin.WriteEmpty 8 // ManagedNativeHeader
     ()
 
 let private write (file: PEFile) (bin: Writer) =
@@ -106,16 +115,19 @@ let private write (file: PEFile) (bin: Writer) =
     let standard = file.Headers.StandardFields
     let nt = file.Headers.NTSpecificFields
 
-    let hsizeActual, hsizeRounded =
+    let sectionHeadersSize = 40u * uint32 file.SectionTable.Length
+    let headerSizeActual, headerSizeRounded =
         let actual =
             uint dosstub.Length
             + uint pesig.Length
             + 20u // Coff
-            + 24u // Standard PE32
+            + 28u // Standard (PE32)
             + 68u // NT
             + 128u // Data Directories, of which there are 16
-            + (40u * uint32 file.SectionTable.Length)
+            + sectionHeadersSize
         actual, Round.upTo nt.Alignment.FileAlignment actual
+
+    bin.WriteEmpty headerSizeRounded // Writes the bytes where the headers will eventually go.
 
     let sections =
         Array.init
@@ -126,8 +138,8 @@ let private write (file: PEFile) (bin: Writer) =
                 let pos = bin.Position
                 for data in section.Data do
                     match data with
-                    | RawData bytes -> bin.Write bytes.Value
-                    | CliHeader header -> cliheader header bin
+                    | RawData bytes -> bytes() |> bin.Write
+                    | CliHeader header -> cli header bin
                     | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
                 let size = bin.Position - pos
                 let rsize = Round.upTo falignment size
@@ -136,10 +148,12 @@ let private write (file: PEFile) (bin: Writer) =
                 struct
                     {| ActualSize = size
                        /// The location of the section on disk. Guaranteed to be a multiple of FileAlignment
-                       FileOffset = pos + uint64 hsizeRounded
+                       FileOffset = pos
                        RoundedSize = rsize |})
 
     bin.SeekStart()
+
+    bin.WriteEmpty (headerSizeActual - sectionHeadersSize) // TODO: Instead of writing empty bytes, use seeking here instead.
 
     // NOTE: The generation of RVAs appears to be arbitrary, so why not just try using actual file offsets starting with multiples of FileAlignment.
     // NOTE: The RVA for the first section written (the .text section usually) appears to usually be 0x2000, which matches the value for BaseOfCode. Consider using this value.
@@ -179,10 +193,10 @@ let private write (file: PEFile) (bin: Writer) =
     | None -> 0UL
     |> bin.WriteU32 // CodeSize
 
-    bin.WriteEmpty 20 // TEMPORARY
     // TODO: Figure out how to calculate the values for the rest of the standard fields
-    // InitializedDataSize
-    // UninitizalizedDataSize
+    bin.WriteU32 1u // InitializedDataSize
+    bin.WriteU32 1u // UninitizalizedDataSize
+    bin.WriteEmpty 12 // TEMPORARY
     // EntryPointRva
     // BaseOfCode // NOTE: This matches the RVA of the .text section
     // BaseOfData // NOTE: This matches the RVA of the .rsrc section
@@ -197,8 +211,8 @@ let private write (file: PEFile) (bin: Writer) =
     bin.WriteU16 nt.SubSysMajor
     bin.WriteU16 nt.SubSysMinor
     bin.WriteU32 nt.Win32VersionValue
-    bin.WriteEmpty 4 // TEMPORARY // ImageSize // TODO: Figure out how to calculate the ImageSize
-    bin.WriteU32 hsizeActual
+    bin.WriteEmpty 4 // ImageSize // TODO: Figure out how to calculate the ImageSize
+    bin.WriteU32 headerSizeRounded
     bin.WriteU32 nt.FileChecksum
     bin.WriteU16 nt.Subsystem
     bin.WriteU16 nt.DllFlags
@@ -217,8 +231,7 @@ let private write (file: PEFile) (bin: Writer) =
     // ImportAddressTable
     bin.WriteEmpty 8 // DelayImportDescriptor
     // CliHeader
-    bin.WriteEmpty 8// Reserved
-    int (hsizeRounded - hsizeActual) |> bin.WriteEmpty // Padding
+    bin.WriteEmpty 8 // Reserved
     // Section headers immediately follow the optional header
 
 let toStream (ValidStream stream) pe =

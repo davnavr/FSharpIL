@@ -5,7 +5,7 @@ open System.ComponentModel
 
 open FSharpIL.Metadata
 
-type RawSectionData = Lazy<byte[]>
+type RawSectionData = unit -> byte[]
 
 type SectionData =
     | RawData of RawSectionData
@@ -104,10 +104,11 @@ module SectionInfo =
         static member Default =
             let sections =
                 ImmutableArray.CreateRange [
+                    let empty = RawData (fun() -> Array.replicate 8 0uy) |> ImmutableArray.Create // TEMPORARY
                     { Kind = TextSection
                       Data = ImmutableArray.Create(ClrLoaderStub, CliHeader CliHeader.Default) }
-                    { Kind = RsrcSection; Data = ImmutableArray.Empty }
-                    { Kind = RelocSection; Data = ImmutableArray.Empty }
+                    { Kind = RsrcSection; Data = empty }
+                    { Kind = RelocSection; Data = empty }
                 ]
             let data =
                 { CliHeaderValue =
