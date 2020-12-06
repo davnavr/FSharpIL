@@ -163,7 +163,7 @@ type PEHeaders =
         NTSpecificFields = NTSpecificFields.Default }
 
 type PEFile =
-    { Headers: PEHeaders
+    { Headers: PEHeaders // TODO: Remove separate type for headers and move CoffHeader, StandardFields, and NTSpecificFields into this type.
       SectionInfo: SectionInfo }
 
     member inline this.DataDirectories = this.SectionInfo.DataDirectories

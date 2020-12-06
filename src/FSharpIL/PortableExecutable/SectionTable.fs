@@ -52,44 +52,30 @@ type Section =
     { Data: ImmutableArray<SectionData>
       Kind: SectionKind }
 
-    member private this.HeaderValue =
-        lazy
-            let name, flags =
-                match this.Kind with
-                | TextSection ->
-                    ".text"B, SectionFlags.CntCode ||| SectionFlags.MemExecute ||| SectionFlags.MemRead
-                | RsrcSection ->
-                    ".rsrc"B, SectionFlags.CntInitializedData ||| SectionFlags.MemRead
-                | RelocSection ->
-                    ".reloc"B, SectionFlags.CntInitializedData ||| SectionFlags.MemRead ||| SectionFlags.MemDiscardable
-            { SectionName = SectionName.ofBytes name |> Option.get
-              Data = this.Data
-              PointerToRelocations = 0u
-              NumberOfRelocations = 0us
-              Characteristics = flags }
-
-    member this.Header = this.HeaderValue.Value
+    // TODO: How to cache this value?
+    member this.Header =
+        let name, flags =
+            match this.Kind with
+            | TextSection ->
+                ".text"B, SectionFlags.CntCode ||| SectionFlags.MemExecute ||| SectionFlags.MemRead
+            | RsrcSection ->
+                ".rsrc"B, SectionFlags.CntInitializedData ||| SectionFlags.MemRead
+            | RelocSection ->
+                ".reloc"B, SectionFlags.CntInitializedData ||| SectionFlags.MemRead ||| SectionFlags.MemDiscardable
+        { SectionName = SectionName.ofBytes name |> Option.get
+          Data = this.Data
+          PointerToRelocations = 0u
+          NumberOfRelocations = 0us
+          Characteristics = flags }
 
 [<RequireQualifiedAccess>]
 module SectionInfo =
     // II.25.2.3.3
-    /// NOTE: The RVA needs to be converted to/from file offset
-    [<EditorBrowsable(EditorBrowsableState.Never); RequireQualifiedAccess>]
+    // NOTE: The RVA needs to be converted to/from file offset
+    [<EditorBrowsable(EditorBrowsableState.Never)>]
     type DataDirectories =
-        private { Sections: ImmutableArray<Section> }
-
-        member private this.CliHeaderValue =
-            lazy
-                Seq.tryPick
-                    (function
-                    | { Kind = TextSection; Data = data } -> Some data
-                    | _ -> None)
-                    this.Sections
-                |> Option.defaultValue ImmutableArray.Empty
-                |> Seq.tryPick
-                    (function
-                    | CliHeader header -> Some header
-                    | _ -> None)
+        private
+            { CliHeaderValue: Lazy<CliHeader option> }
 
         // ExportTable
         member _.ImportTable = ()
@@ -111,7 +97,9 @@ module SectionInfo =
     [<EditorBrowsable(EditorBrowsableState.Never)>]
     type Info =
         private
-        | SectionInfo of DataDirectories
+            { Data: DataDirectories
+              Sections: ImmutableArray<Section>
+              TextSectionValue: Lazy<(int * Section) option> }
 
         static member Default =
             let sections =
@@ -121,18 +109,34 @@ module SectionInfo =
                     { Kind = RsrcSection; Data = ImmutableArray.Empty }
                     { Kind = RelocSection; Data = ImmutableArray.Empty }
                 ]
-            SectionInfo { Sections = sections }
+            let data =
+                { CliHeaderValue =
+                    lazy
+                        Seq.tryPick
+                            (function
+                            | { Kind = TextSection; Data = data } -> Some data
+                            | _ -> None)
+                            sections
+                        |> Option.defaultValue ImmutableArray.Empty
+                        |> Seq.tryPick
+                            (function
+                            | CliHeader header -> Some header
+                            | _ -> None) }
+            { Data = data
+              Sections = sections
+              TextSectionValue =
+                lazy
+                    let rec inner i =
+                        if i >= sections.Length
+                        then None
+                        else
+                           match sections.Item i with
+                           | { Kind = TextSection } as text -> Some(i, text)
+                           | _ -> None
+                    inner 0 }
 
-        member this.DataDirectories = let (SectionInfo data) = this in data
-        member this.SectionTable = this.DataDirectories.Sections
-
-        member private this.TextSectionValue =
-            lazy
-                Seq.tryFind
-                    (function
-                    | { Kind = TextSection } -> true
-                    | _ -> false)
-                    this.SectionTable
+        member this.DataDirectories = this.Data
+        member this.SectionTable = this.Sections
 
         member this.TextSection = this.TextSectionValue.Value
 

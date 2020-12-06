@@ -4,6 +4,7 @@ module FSharpIL.WritePE
 open System.IO
 
 open FSharpIL.PortableExecutable
+open FSharpIL.Utilities
 
 type Builder internal() =
     member _.Combine(headers: PEHeaders, pe: PEFile) =
@@ -52,10 +53,17 @@ module private Helpers =
 
 type private Writer(stream: Stream) =
     let writer = new BinaryWriter(stream)
+    let mutable pos = 0UL
 
-    member _.Write(bytes: byte[]) = writer.Write bytes
+    member _.Position = pos
 
-    member _.WriteU8(byte: byte) = writer.Write byte
+    member _.Write(bytes: byte[]) =
+        pos <- pos + uint64 bytes.Length
+        writer.Write bytes
+
+    member _.WriteU8(byte: byte) =
+        pos <- pos + 1UL
+        writer.Write byte
 
     member this.WriteU16(value: uint16) =
         let value' = uint16 value
@@ -77,52 +85,55 @@ type private Writer(stream: Stream) =
 
     member this.WriteEmpty(amt: int) = Array.replicate amt 0uy |> this.Write
 
-    member _.SeekStart() = writer.Seek(0, SeekOrigin.Begin) |> ignore
+    member _.SeekStart() =
+        pos <- 0UL
+        writer.Seek(0, SeekOrigin.Begin) |> ignore
 
     interface System.IDisposable with
         member _.Dispose() = writer.Dispose()
 
-let private write (file: PEFile) (bin: Writer) =
-    let rec inner =
-        function
-        | State.SectionHeader index when file.SectionTable.Length < index ->
-            let header = file.SectionTable.Item(index).Header
-            SectionName.toArray header.SectionName |> bin.Write
-            // TODO: Figure out how to calculate these from the data
-            bin.WriteEmpty 4 // TEMPORARY // VirtualSize
-            bin.WriteEmpty 4 // TEMPORARY // VirtualAddress
-            bin.WriteEmpty 4 // TEMPORARY // SizeOfRawData
-            bin.WriteEmpty 4 // TEMPORARY // PointerToRawData // Note that this is the file offset where the section starts, rounded to the nearest FileAlignment
-            bin.WriteU32 header.PointerToRelocations
-            bin.WriteEmpty 4 // PointerToLineNumbers
-            bin.WriteU16 header.NumberOfRelocations
-            bin.WriteEmpty 2 // NumberOfLineNumbers
-            bin.WriteU32 header.Characteristics
-            let state' = State.SectionHeader(index + 1)
-            inner state'
-        | State.SectionHeader _ ->
-            let state' = State.SectionData 0
-            inner state'
-        | State.SectionData index when file.SectionTable.Length < index ->
-            let section = file.SectionTable.Item(index)
-            Seq.iter
-                (function
-                | RawData data -> bin.Write data.Value
-                | ClrLoaderStub ->
-                    // TODO: Write the 8 bytes of the loader stub
-                    bin.WriteEmpty 8 // TEMPORARY
-                | CliHeader cli ->
-                    // TODO: Will this function still be tail recursive if a call to "inner State.CliHeader cli" is inserted here?
-                    ())
-                section.Data
-            ()
-        | State.CliHeader cli ->
-            bin.WriteU32 0x48u // HeaderSize
-            ()
-        | State.SectionData _ ->
-            ()
+let private cliheader (header: Metadata.CliHeader) (bin: Writer) =
+    ()
 
-    State.SectionHeader 0 |> inner
+let private write (file: PEFile) (bin: Writer) =
+    let sections =
+        Array.init
+            file.SectionTable.Length
+            (fun i ->
+                let section = file.SectionTable.Item i
+                let pos = bin.Position
+                for data in section.Data do
+                    match data with
+                    | RawData bytes -> bin.Write bytes.Value
+                    | CliHeader header -> cliheader header bin
+                    | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
+                // TODO: Write padding, maybe include the actual length and rounded up length as the return value here.
+                bin.Position - pos)
+
+    bin.SeekStart()
+
+    // NOTE: For headers, only SizeOfRawData is required to be a multiple of FileAlignment, not the VirtualSize
+    // NOTE: The generation of RVAs appears to be arbitrary, so why not just try using actual file offsets starting with multiples of FileAlignment.
+    // TODO: Figure out if relocations have any impact on the generated RVAs
+    // NOTE: The RVA for the first section written (the .text section usually) appears to usually be 0x2000, which matches the value for BaseOfCode. Consider using this value.
+    for i = 0 to file.SectionTable.Length - 1 do
+        let header = file.SectionTable.Item(i).Header
+        let size = Array.item i sections
+        let rawsize =
+            Round.upTo
+                (uint64 file.Headers.NTSpecificFields.Alignment.FileAlignment)
+                size
+        SectionName.toArray header.SectionName |> bin.Write
+        bin.WriteU32 size
+        // TODO: Figure out how to calculate these fields from the data
+        bin.WriteEmpty 4 // TEMPORARY // VirtualAddress
+        bin.WriteU32 rawsize // SizeOfRawData
+        bin.WriteEmpty 4 // TEMPORARY // PointerToRawData // Note that this is the file offset where the section starts, rounded up to multiple of FileAlignment
+        bin.WriteU32 header.PointerToRelocations
+        bin.WriteEmpty 4 // PointerToLineNumbers
+        bin.WriteU16 header.NumberOfRelocations
+        bin.WriteEmpty 2 // NumberOfLineNumbers
+        bin.WriteU32 header.Characteristics
 
     bin.SeekStart()
     bin.Write dosstub
@@ -142,18 +153,18 @@ let private write (file: PEFile) (bin: Writer) =
     bin.WriteU8 standard.LMajor
     bin.WriteU8 standard.LMinor
 
-    // TODO: In order to calculate the size of .text section, either write all sections to an array before writing the pe file
-    // or write all sections first to a stream(s) that keeps track of length, before writing the headers afterward.
-    // The latter can be accomplished by using a stream that supports seeking and by going to the beginning after all sections are written
+    match file.SectionInfo.TextSection with
+    | Some(i, _) -> Array.item i sections
+    | None -> 0UL
+    |> bin.WriteU32 // CodeSize
 
-    bin.WriteEmpty 24 // TEMPORARY
+    bin.WriteEmpty 20 // TEMPORARY
     // TODO: Figure out how to calculate the values for the rest of the standard fields
-    // CodeSize
     // InitializedDataSize
     // UninitizalizedDataSize
     // EntryPointRva
-    // BaseOfCode
-    // BaseOfData
+    // BaseOfCode // NOTE: This matches the RVA of the .text section
+    // BaseOfData // NOTE: This matches the RVA of the .rsrc section
 
     let nt = file.Headers.NTSpecificFields
     bin.WriteU32 nt.ImageBase
@@ -168,7 +179,7 @@ let private write (file: PEFile) (bin: Writer) =
     bin.WriteU32 nt.Win32VersionValue
     bin.WriteEmpty 4 // TEMPORARY
     // ImageSize // TODO: Figure out how to calculate the ImageSize
-    let hsizea, hsizer =
+    let hsizeActual, hsizeRounded =
         let actual =
             uint dosstub.Length
             + uint pesig.Length
@@ -177,10 +188,8 @@ let private write (file: PEFile) (bin: Writer) =
             + 68u // NT
             + 128u // Data Directories, of which there are 16
             + (40u * uint32 file.SectionTable.Length)
-        let falignment = nt.Alignment.FileAlignment
-        // Rounds the actual size up to a factor of FileAlignment
-        actual, falignment * ((actual + falignment - 1u) / falignment)
-    bin.WriteU32 hsizea
+        actual, Round.upTo nt.Alignment.FileAlignment actual
+    bin.WriteU32 hsizeActual
     bin.WriteU32 nt.FileChecksum
     bin.WriteU16 nt.Subsystem
     bin.WriteU16 nt.DllFlags
@@ -200,7 +209,7 @@ let private write (file: PEFile) (bin: Writer) =
     bin.WriteEmpty 8 // DelayImportDescriptor
     // CliHeader
     bin.WriteEmpty 8// Reserved
-    int (hsizer - hsizea) |> bin.WriteEmpty // Padding
+    int (hsizeRounded - hsizeActual) |> bin.WriteEmpty // Padding
     // Section headers immediately follow the optional header
 
 let toStream (ValidStream stream) pe =
