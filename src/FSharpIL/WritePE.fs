@@ -45,6 +45,9 @@ module private Helpers =
 
     let pesig = "PE\000\000"B
 
+    [<Literal>]
+    let CliHeaderSize = 0x48u
+
 type private Writer(stream: Stream) =
     let writer = new BinaryWriter(stream)
     let mutable pos = 0UL
@@ -93,7 +96,8 @@ type private Writer(stream: Stream) =
         member _.Dispose() = writer.Dispose()
 
 let private cli (header: Metadata.CliHeader) (bin: Writer) =
-    bin.WriteU32 0x48u // TODO: Fix this, the COR Header size is invalid.
+    let pos = bin.Position
+    bin.WriteU32 CliHeaderSize
     bin.WriteU16 header.MajorRuntimeVersion
     bin.WriteU16 header.MinorRuntimeVersion
     bin.WriteEmpty 4 // RVA of MetaData
@@ -108,7 +112,7 @@ let private cli (header: Metadata.CliHeader) (bin: Writer) =
     bin.WriteEmpty 8 // VTableFixups // TODO: See if this needs to be assigned a value
     bin.WriteEmpty 8 // ExportAddressTableJumps
     bin.WriteEmpty 8 // ManagedNativeHeader
-    ()
+    pos
 
 let private write (file: PEFile) (bin: Writer) =
     let coff = file.Headers.FileHeader
@@ -129,6 +133,8 @@ let private write (file: PEFile) (bin: Writer) =
 
     bin.WriteEmpty headerSizeRounded // Writes the bytes where the headers will eventually go.
 
+    let mutable cliHeader = 0UL
+
     let sections =
         Array.init
             file.SectionTable.Length
@@ -139,7 +145,7 @@ let private write (file: PEFile) (bin: Writer) =
                 for data in section.Data do
                     match data with
                     | RawData bytes -> bytes() |> bin.Write
-                    | CliHeader header -> cli header bin
+                    | CliHeader header -> cliHeader <- cli header bin
                     | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
                 let size = bin.Position - pos
                 let rsize = Round.upTo falignment size
@@ -224,16 +230,25 @@ let private write (file: PEFile) (bin: Writer) =
     bin.WriteU32 0x10u // NumberOfDataDirectories
 
     bin.WriteEmpty 8 // ExportTable
-    // ImportTable
-    bin.WriteEmpty 24
-    // BaseRelocationTable
-    bin.WriteEmpty 48
-    // ImportAddressTable
+    bin.WriteEmpty 8 // TEMPORARY // ImportTable
+    bin.WriteEmpty 8 // ResourceTable
+    bin.WriteEmpty 8 // ExceptionTable
+    bin.WriteEmpty 8 // CertificateTable
+    bin.WriteEmpty 8 // TEMPORARY // BaseRelocationTable
+    bin.WriteEmpty 8 // DebugTable
+    bin.WriteEmpty 8 // CopyrightTable
+    bin.WriteEmpty 8 // GlobalPointerTable
+    bin.WriteEmpty 8 // TLSTable
+    bin.WriteEmpty 8 // LoadConfigTable
+    bin.WriteEmpty 8 // BoundImportTable
+    bin.WriteEmpty 8 // TEMPORARY // ImportAddressTable
     bin.WriteEmpty 8 // DelayImportDescriptor
-    // CliHeader
+    bin.WriteU32 cliHeader // CliHeader // NOTE: RVA points to the CliHeader
+    bin.WriteU32 CliHeaderSize
     bin.WriteEmpty 8 // Reserved
     // Section headers immediately follow the optional header
 
+// NOTE: Since stream seeking is used, find a way to ensure that the written data is written at the end of the stream.
 let toStream (ValidStream stream) pe =
     use writer = new Writer(stream)
     write pe writer
