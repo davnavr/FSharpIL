@@ -1,6 +1,7 @@
 ﻿[<RequireQualifiedAccess>]
 module FSharpIL.WritePE
 
+open System
 open System.IO
 
 open FSharpIL.PortableExecutable
@@ -89,8 +90,15 @@ type private Writer(stream: Stream) =
             this.WriteU8 0uy
 
     member _.SeekStart() =
-        pos <- 0UL
-        writer.Seek(0, SeekOrigin.Begin) |> ignore
+        let max = uint64 Int32.MaxValue
+        while pos > 0UL do
+            let offset =
+                if pos >= max
+                then uint64 Int32.MaxValue
+                else pos
+            pos <- pos - offset
+            writer.Seek(-(int offset), SeekOrigin.Current) |> ignore
+        assert(pos = 0UL)
 
     interface System.IDisposable with
         member _.Dispose() = writer.Dispose()
@@ -112,6 +120,13 @@ let private cli (header: Metadata.CliHeader) (bin: Writer) =
     bin.WriteEmpty 8 // VTableFixups // TODO: See if this needs to be assigned a value
     bin.WriteEmpty 8 // ExportAddressTableJumps
     bin.WriteEmpty 8 // ManagedNativeHeader
+
+    // TODO: Write strong name hash (StrongNameSignature) if needed
+    // TODO: Write method bodies if needed
+    // TODO: Write CLR metadata
+
+    // TODO: Figure out how to write the CLR metadata first, and then inserting the header before it to allow the metadata size to be measured.
+
     pos
 
 let private write (file: PEFile) (bin: Writer) =
@@ -145,7 +160,8 @@ let private write (file: PEFile) (bin: Writer) =
                 for data in section.Data do
                     match data with
                     | RawData bytes -> bytes() |> bin.Write
-                    | CliHeader header -> cliHeader <- cli header bin
+                    | CliHeader header ->
+                        cliHeader <- cli header bin
                     | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
                 let size = bin.Position - pos
                 let rsize = Round.upTo falignment size
@@ -159,17 +175,15 @@ let private write (file: PEFile) (bin: Writer) =
 
     bin.SeekStart()
 
-    bin.WriteEmpty (headerSizeActual - sectionHeadersSize) // TODO: Instead of writing empty bytes, use seeking here instead.
+    bin.WriteEmpty (headerSizeActual - sectionHeadersSize) // TODO: Instead of writing empty bytes, try using seeking here instead.
 
-    // NOTE: The generation of RVAs appears to be arbitrary, so why not just try using actual file offsets starting with multiples of FileAlignment.
-    // NOTE: The RVA for the first section written (the .text section usually) appears to usually be 0x2000, which matches the value for BaseOfCode. Consider using this value.
     for i = 0 to file.SectionTable.Length - 1 do
         let header = file.SectionTable.Item(i).Header
         let info = Array.item i sections
         SectionName.toArray header.SectionName |> bin.Write
         bin.WriteU32 info.ActualSize
         // TODO: Figure out how to calculate these fields from the data
-        bin.WriteEmpty 4 // TEMPORARY // VirtualAddress
+        bin.WriteU32 info.FileOffset // VirtualAddress
         bin.WriteU32 info.RoundedSize
         bin.WriteU32 info.FileOffset // PointerToRawData
         bin.WriteU32 header.PointerToRelocations
@@ -244,11 +258,12 @@ let private write (file: PEFile) (bin: Writer) =
     bin.WriteEmpty 8 // TEMPORARY // ImportAddressTable
     bin.WriteEmpty 8 // DelayImportDescriptor
     bin.WriteU32 cliHeader // CliHeader // NOTE: RVA points to the CliHeader
-    bin.WriteU32 CliHeaderSize
+    bin.WriteU32 CliHeaderSize // TODO: What happens if a header is not specified?
     bin.WriteEmpty 8 // Reserved
     // Section headers immediately follow the optional header
 
 // NOTE: Since stream seeking is used, find a way to ensure that the written data is written at the end of the stream.
+// NOTE: Implementors of the stream class could break something, perhaps use a different stream under the hood?
 let toStream (ValidStream stream) pe =
     use writer = new Writer(stream)
     write pe writer

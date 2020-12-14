@@ -104,11 +104,10 @@ module SectionInfo =
         static member Default =
             let sections =
                 ImmutableArray.CreateRange [
-                    let empty = RawData (fun() -> Array.replicate 8 0uy) |> ImmutableArray.Create // TEMPORARY
                     { Kind = TextSection
                       Data = ImmutableArray.Create(ClrLoaderStub, CliHeader CliHeader.Default) }
-                    { Kind = RsrcSection; Data = empty }
-                    { Kind = RelocSection; Data = empty }
+                    { Kind = RsrcSection; Data = ImmutableArray.Empty }
+                    { Kind = RelocSection; Data = ImmutableArray.Empty }
                 ]
             let data =
                 { CliHeaderValue =
