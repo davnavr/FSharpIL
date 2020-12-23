@@ -1,4 +1,4 @@
-﻿[<AutoOpen>]
+﻿[<AutoOpen; System.ObsoleteAttribute>]
 module internal FSharpIL.Utilities.Collections
 
 open System.Collections.Generic

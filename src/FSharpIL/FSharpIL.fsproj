@@ -9,7 +9,7 @@
 
   <!-- Source files -->
   <ItemGroup>
-    <Compile Include="Utilities\Round.fs" />
+    <Compile Include="Round.fs" />
     <Compile Include="Utilities\Enum.fs" />
     <Compile Include="Utilities\Collections.fs" />
     <Compile Include="Metadata\ModuleName.fs" />
@@ -21,8 +21,6 @@
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />
     <Compile Include="PortableExecutable\Types.fs" />
-    <Compile Include="Magic.fs" />
-    <Compile Include="Length.fs" />
     <Compile Include="WritePE.fs" />
     <Compile Include="Builders.fs" />
   </ItemGroup>

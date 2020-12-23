@@ -4,26 +4,152 @@ module FSharpIL.WritePE
 open System
 open System.IO
 
+open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
-open FSharpIL.Utilities
 
-type Builder internal() =
-    member _.Delay(f): PEFile = f()
-    member _.Zero(): PEFile = PEFile.Default
+[<AutoOpen>]
+module private Magic =
+    let DosStub =
+        let lfanew = [| 0x80; 0x00; 0x00; 0x00 |]
+        [|
+            0x4d; 0x5a; 0x90; 0x00; 0x03; 0x00; 0x00; 0x00
+            0x04; 0x00; 0x00; 0x00; 0xFF; 0xFF; 0x00; 0x00;
+            0xb8; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
+            0x40; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
+            0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
+            0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
+            0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
+            0x00; 0x00; 0x00; 0x00; yield! lfanew
+            0x0e; 0x1f; 0xba; 0x0e; 0x00; 0xb4; 0x09; 0xcd;
+            0x21; 0xb8; 0x01; 0x4c; 0xcd; 0x21; 0x54; 0x68;
+            0x69; 0x73; 0x20; 0x70; 0x72; 0x6f; 0x67; 0x72;
+            0x61; 0x6d; 0x20; 0x63; 0x61; 0x6e; 0x6e; 0x6f;
+            0x74; 0x20; 0x62; 0x65; 0x20; 0x72; 0x75; 0x6e;
+            0x20; 0x69; 0x6e; 0x20; 0x44; 0x4f; 0x53; 0x20;
+            0x6d; 0x6f; 0x64; 0x65; 0x2e; 0x0d; 0x0d; 0x0a;
+            0x24; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
+        |]
+        |> Array.map byte
 
-type private Writer(stream: Stream) =
-    let writer = new BinaryWriter(stream)
+    let PESignature = "PE\000\000"B
+
+    /// Magic number used in the optional header that identifies the file as a PE32 executable.
+    [<Literal>]
+    let PE32 = 0x10Bus
+
+[<RequireQualifiedAccess>]
+module private LengthOf =
+    let peHeader = DosStub.Length + PESignature.Length |> uint64
+
+    [<Literal>]
+    let CoffHeader = 20UL
+
+    /// The value of the SizeOfOptionalHeader field in the COFF file header.
+    [<Literal>]
+    let OptionalHeader = 0xE0us
+
+    [<Literal>]
+    /// The size of the standard fields (PE32).
+    let StandardFields = 28UL
+
+    [<Literal>]
+    /// The size of the NT specific fields (PE32).
+    let NTSpecificFields = 68UL
+
+    [<Literal>]
+    /// The size of the ten data directories.
+    let DataDirectories = 128UL
+
+    /// The length of a single section header.
+    [<Literal>]
+    let SectionHeader = 40UL
+
+    /// The length of the CLI header.
+    [<Literal>]
+    let CliHeader = 0x48UL
+
+    /// Calculates the combined length of the CLI header, the strong name hash, the
+    /// method bodies, and the CLI metadata.
+    let cliData (data: CliHeader) =
+        CliHeader
+        // + Strong Name Hash
+        // + Method Bodies
+        // + Metadata
+
+    let section (section: Section) =
+        let mutable len = 0UL
+        for data in section.Data do
+            let len' =
+                match data with
+                | SectionData.CliHeader cli -> cliData cli
+                | ClrLoaderStub -> 8UL
+                | RawData data -> data() |> Array.length |> uint64
+            len <- len + len'
+        len
+
+/// Stores the lengths of various the objects and structs that make up a PE file.
+type private PELength(pe: PEFile) as this =
+    member val SizeOfCode =
+        match pe.SectionInfo.TextSection with
+        | Some(i, _) -> Array.item i this.SectionLengths
+        | None -> lazy 0UL
+    member val SectionHeadersLength: Lazy<_> =
+        lazy (uint64 pe.SectionTable.Length * LengthOf.SectionHeader)
+    /// Calculates the size of the headers rounded up to nearest multiple of FileAlignment.
+    member val HeaderSizeRounded: Lazy<_> =
+        lazy (
+            let actual =
+                LengthOf.peHeader
+                + LengthOf.CoffHeader
+                + LengthOf.StandardFields
+                + LengthOf.NTSpecificFields
+                + LengthOf.DataDirectories
+                + this.SectionHeadersLength.Value
+            Round.upTo
+                (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
+                actual
+        )
+    member val SectionLengths: Lazy<_>[] =
+        Seq.map
+            (fun section -> lazy (LengthOf.section section))
+            pe.SectionTable
+        |> Seq.toArray
+    member val TotalLength =
+        lazy (
+            LengthOf.peHeader
+            + LengthOf.CoffHeader
+            + LengthOf.StandardFields
+            + LengthOf.NTSpecificFields
+            + LengthOf.DataDirectories
+            + this.SectionHeadersLength.Value
+            // + the padding before the start of the section data.
+            // TODO: Add other stuff
+        )
+
+[<AbstractClass>]
+type private ByteWriter<'Result>() =
+    abstract member GetResult: unit -> 'Result
+    abstract member Write: currentPos: uint64 * byte -> unit
+    abstract member WriteBytes: currentPos: uint64 * byte[] -> unit
+    interface IDisposable with member this.Dispose() = ()
+
+type private Writer<'Result>(writer: ByteWriter<'Result>) =
+    let stream = invalidOp "TODO: Replace stream with ByteWriter"
+    let writer1 = new BinaryWriter(stream)
     let mutable pos = 0UL
 
     member _.Position = pos
 
+    member _.GetResult() = writer.GetResult()
+
     member _.Write(bytes: byte[]) =
+        writer1.Write bytes
+        // The position is updated afterward, which means that the first byte written is always at position zero.
         pos <- pos + uint64 bytes.Length
-        writer.Write bytes
 
     member _.WriteU8(byte: byte) =
+        writer1.Write byte
         pos <- pos + 1UL
-        writer.Write byte
 
     member this.WriteU16(value: uint16) =
         let value' = uint16 value
@@ -45,136 +171,35 @@ type private Writer(stream: Stream) =
 
     member this.WriteEmpty(amt: int) = Array.replicate amt 0uy |> this.Write
 
-    member inline this.WriteEmpty(num: ^T) =
+    member inline this.WriteEmpty(amt: ^T) =
         let mutable i = LanguagePrimitives.GenericZero
-        while i < num do
+        while i < amt do
             i <- i + LanguagePrimitives.GenericOne
             this.WriteU8 0uy
 
-    member _.SeekStart() =
-        let max = uint64 Int32.MaxValue
-        while pos > 0UL do
-            let offset =
-                if pos >= max
-                then uint64 Int32.MaxValue
-                else pos
-            pos <- pos - offset
-            writer.Seek(-(int offset), SeekOrigin.Current) |> ignore
-        assert (pos = 0UL)
+    interface IDisposable with member _.Dispose() = writer1.Dispose()
 
-    interface System.IDisposable with member _.Dispose() = writer.Dispose()
+let private write pe (writer: PELength -> ByteWriter<_>) =
+    let length = PELength pe
+    let bin = new Writer<_> (writer length)
 
-let private cli (header: Metadata.CliHeader) (bin: Writer) =
-    /// File offset to CLI header
-    let start = bin.Position
-    bin.WriteU32 Length.CliHeader
-    bin.WriteU16 header.MajorRuntimeVersion
-    bin.WriteU16 header.MinorRuntimeVersion
-    bin.WriteEmpty 4 // RVA of MetaData
-    bin.WriteEmpty 4 // Size of MetaData
-    bin.WriteU32 header.Flags
-    bin.WriteEmpty 4 // EntryPointToken
-    bin.WriteEmpty 4 // RVA of Resources
-    bin.WriteEmpty 4 // Size of Resources
-    bin.WriteEmpty 4 // RVA of StrongNameSignature
-    bin.WriteEmpty 4 // Size of StrongNameSignature
-    bin.WriteEmpty 8 // CodeManagerTable
-    bin.WriteEmpty 8 // VTableFixups // TODO: See if this needs to be assigned a value
-    bin.WriteEmpty 8 // ExportAddressTableJumps
-    bin.WriteEmpty 8 // ManagedNativeHeader
+    bin.Write DosStub
+    bin.Write PESignature
 
-    // TODO: Write strong name hash (StrongNameSignature) if needed
-    // TODO: Write method bodies if needed
-    // TODO: Write CLR metadata
-
-    // TODO: Figure out how to write the CLR metadata first, and then inserting the header before it to allow the metadata size to be measured.
-
-    start
-
-let private write (file: PEFile) (bin: Writer) =
-    let coff = file.FileHeader
-    let standard = file.StandardFields
-    let nt = file.NTSpecificFields
-
-    let sectionHeadersSize = 40u * uint32 file.SectionTable.Length
-    let headerSizeActual, headerSizeRounded =
-        let actual =
-            uint dosStub.Length
-            + uint peSignature.Length
-            + 20u // Coff
-            + 28u // Standard (PE32)
-            + 68u // NT
-            + 128u // Data Directories, of which there are 16
-            + sectionHeadersSize
-        actual, Round.upTo nt.Alignment.FileAlignment actual
-
-    bin.WriteEmpty headerSizeRounded // Writes the bytes where the headers will eventually go.
-
-    let mutable cliHeader = 0UL
-
-    let sections =
-        Array.init
-            file.SectionTable.Length
-            (fun i ->
-                let falignment = uint64 nt.Alignment.FileAlignment
-                let section = file.SectionTable.Item i
-                let pos = bin.Position
-                for data in section.Data do
-                    match data with
-                    | RawData bytes -> bytes() |> bin.Write
-                    | CliHeader header ->
-                        cliHeader <- cli header bin
-                    | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
-                let size = bin.Position - pos
-                let rsize = Round.upTo falignment size
-                rsize - size |> bin.WriteEmpty // Padding
-                assert (bin.Position % uint64 nt.Alignment.FileAlignment = 0UL)
-                struct
-                    {| ActualSize = size
-                       /// The location of the section on disk. Guaranteed to be a multiple of FileAlignment
-                       FileOffset = pos
-                       RoundedSize = rsize |})
-
-    bin.SeekStart()
-
-    bin.WriteEmpty (headerSizeActual - sectionHeadersSize) // TODO: Instead of writing empty bytes, try using seeking here instead.
-
-    for i = 0 to file.SectionTable.Length - 1 do
-        let header = file.SectionTable.Item(i).Header
-        let info = Array.item i sections
-        SectionName.toArray header.SectionName |> bin.Write
-        bin.WriteU32 info.ActualSize
-        // TODO: Figure out how to calculate these fields from the data
-        bin.WriteU32 info.FileOffset // VirtualAddress
-        bin.WriteU32 info.RoundedSize
-        bin.WriteU32 info.FileOffset // PointerToRawData
-        bin.WriteU32 header.PointerToRelocations
-        bin.WriteEmpty 4 // PointerToLineNumbers
-        bin.WriteU16 header.NumberOfRelocations
-        bin.WriteEmpty 2 // NumberOfLineNumbers
-        bin.WriteU32 header.Characteristics
-
-    bin.SeekStart()
-    bin.Write dosStub
-    bin.Write peSignature
-
+    let coff = pe.FileHeader
     bin.WriteU16 coff.Machine
-    bin.WriteU16 file.SectionTable.Length
+    bin.WriteU16 pe.SectionTable.Length
     bin.WriteU32 coff.TimeDateStamp
     bin.WriteU32 coff.SymbolTablePointer
     bin.WriteU32 coff.SymbolCount
-    bin.WriteU16 0xE0us // OptionalHeaderSize
+    bin.WriteU16 LengthOf.OptionalHeader
     bin.WriteU16 coff.Characteristics
 
-    bin.WriteU16 0x10Bus // Magic, 0x10B means PE32
+    bin.WriteU16 PE32
+    let standard = pe.StandardFields
     bin.WriteU8 standard.LMajor
     bin.WriteU8 standard.LMinor
-
-    match file.SectionInfo.TextSection with
-    | Some(i, _) -> (Array.item i sections).ActualSize
-    | None -> 0UL
-    |> bin.WriteU32 // CodeSize
-
+    bin.WriteU32 length.SizeOfCode.Value
     // TODO: Figure out how to calculate the values for the rest of the standard fields
     bin.WriteU32 1u // InitializedDataSize
     bin.WriteU32 1u // UninitizalizedDataSize
@@ -183,6 +208,7 @@ let private write (file: PEFile) (bin: Writer) =
     // BaseOfCode // NOTE: This matches the RVA of the .text section
     // BaseOfData // NOTE: This matches the RVA of the .rsrc section
 
+    let nt = pe.NTSpecificFields
     bin.WriteU32 nt.ImageBase
     bin.WriteU32 nt.Alignment.SectionAlignment
     bin.WriteU32 nt.Alignment.FileAlignment
@@ -194,7 +220,7 @@ let private write (file: PEFile) (bin: Writer) =
     bin.WriteU16 nt.SubSysMinor
     bin.WriteU32 nt.Win32VersionValue
     bin.WriteEmpty 4 // ImageSize // TODO: Figure out how to calculate the ImageSize
-    bin.WriteU32 headerSizeRounded
+    bin.WriteU32 length.HeaderSizeRounded.Value
     bin.WriteU32 nt.FileChecksum
     bin.WriteU16 nt.Subsystem
     bin.WriteU16 nt.DllFlags
@@ -220,38 +246,26 @@ let private write (file: PEFile) (bin: Writer) =
     bin.WriteEmpty 8 // TEMPORARY // ImportAddressTable
     bin.WriteEmpty 8 // DelayImportDescriptor
     bin.WriteU32 cliHeader // CliHeader // NOTE: RVA points to the CliHeader
-    bin.WriteU32 Length.CliHeader // TODO: What happens if a header is not specified?
+    bin.WriteU32 LengthOf.CliHeader // TODO: What happens if a header is not specified?
     bin.WriteEmpty 8 // Reserved
-    // Section headers immediately follow the optional header
 
-let private signature =
-    [|
-        0x4duy; 0x5auy; 0x90uy; 0x00uy; 0x03uy; 0x00uy; 0x00uy; 0x00uy;
-        0x04uy; 0x00uy; 0x00uy; 0x00uy; 0xFFuy; 0xFFuy; 0x00uy; 0x00uy;
-        0xb8uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x40uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x80uy; 0x00uy; 0x00uy; 0x00uy; // lfanew
-        0x0euy; 0x1fuy; 0xbauy; 0x0euy; 0x00uy; 0xb4uy; 0x09uy; 0xcduy;
-        0x21uy; 0xb8uy; 0x01uy; 0x4cuy; 0xcduy; 0x21uy; 0x54uy; 0x68uy;
-        0x69uy; 0x73uy; 0x20uy; 0x70uy; 0x72uy; 0x6fuy; 0x67uy; 0x72uy;
-        0x61uy; 0x6duy; 0x20uy; 0x63uy; 0x61uy; 0x6euy; 0x6euy; 0x6fuy;
-        0x74uy; 0x20uy; 0x62uy; 0x65uy; 0x20uy; 0x72uy; 0x75uy; 0x6euy;
-        0x20uy; 0x69uy; 0x6euy; 0x20uy; 0x44uy; 0x4fuy; 0x53uy; 0x20uy;
-        0x6duy; 0x6fuy; 0x64uy; 0x65uy; 0x2euy; 0x0duy; 0x0duy; 0x0auy;
-        0x24uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x50uy; 0x45uy; 0x00uy; 0x00uy;
-    |]
+    // TODO: Write section headers
 
-[<RequireQualifiedAccess>]
-module private Header =
-    let coff (header: CoffHeader) =
-        [| |]
+    bin.GetResult()
 
-// NOTE: Since stream seeking is used, find a way to ensure that the written data is written at the end of the stream.
-// NOTE: Implementors of the stream class could break something, perhaps use a different stream under the hood?
-let toStream stream pe =
-    use writer = new Writer(stream)
-    write pe writer
+let toArray pe =
+    let (|ValidIndex|) (i: uint64) =
+        if i > uint64 Int32.MaxValue 
+        then invalidArg "pe" "The PortableExecutable file is too large to fit inside of a byte array."
+        else int32 i
+    write
+        pe
+        (fun length ->
+            let (Lazy (ValidIndex totalLength)) = length.TotalLength
+            let bytes = Array.zeroCreate<byte> totalLength
+            { new ByteWriter<_>() with
+                override _.GetResult() = bytes
+                override _.Write(ValidIndex pos, value) =
+                    Array.set bytes pos value
+                override _.WriteBytes(ValidIndex pos, source) =
+                    Array.Copy(source, 0, bytes, pos, source.Length) })
