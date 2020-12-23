@@ -2,6 +2,7 @@
 module FSharpIL.WritePE
 
 open System
+open System.Collections.Immutable
 open System.IO
 
 open FSharpIL.Metadata
@@ -36,6 +37,13 @@ module private Magic =
     /// Magic number used in the optional header that identifies the file as a PE32 executable.
     [<Literal>]
     let PE32 = 0x10Bus
+
+type private SectionInfo =
+    { ActualSize: Lazy<uint64>
+      FileOffset: Lazy<uint64>
+      /// The size of the section rounded up to a multiple of FileAlignment
+      RoundedSize: Lazy<uint64>
+      Section: Section }
 
 [<RequireQualifiedAccess>]
 module private LengthOf =
@@ -87,14 +95,16 @@ module private LengthOf =
             len <- len + len'
         len
 
-/// Stores the lengths of various the objects and structs that make up a PE file.
-type private PELength(pe: PEFile) as this =
-    member val SizeOfCode =
-        match pe.SectionInfo.TextSection with
-        | Some(i, _) -> Array.item i this.SectionLengths
-        | None -> lazy 0UL
-    member val SectionHeadersLength: Lazy<_> =
-        lazy (uint64 pe.SectionTable.Length * LengthOf.SectionHeader)
+/// Stores the sizes and file offsets of various the objects and structs that make up a PE file.
+type private PEInfo(pe: PEFile) as this =
+    // II.25.2.3.1
+    member val CodeSize =
+        lazy (this.SectionsLength SectionFlags.CntCode)
+    // II.25.2.3.1
+    member val InitializedDataSize =
+        lazy (this.SectionsLength SectionFlags.CntInitializedData)
+    member val UninitializedDataSize =
+        lazy (this.SectionsLength SectionFlags.CntUninitializedData)
     /// Calculates the size of the headers rounded up to nearest multiple of FileAlignment.
     member val HeaderSizeRounded: Lazy<_> =
         lazy (
@@ -104,27 +114,35 @@ type private PELength(pe: PEFile) as this =
                 + LengthOf.StandardFields
                 + LengthOf.NTSpecificFields
                 + LengthOf.DataDirectories
-                + this.SectionHeadersLength.Value
+                + (uint64 pe.SectionTable.Length * LengthOf.SectionHeader)
             Round.upTo
                 (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
                 actual
         )
-    member val SectionLengths: Lazy<_>[] =
-        Seq.map
-            (fun section -> lazy (LengthOf.section section))
-            pe.SectionTable
-        |> Seq.toArray
+    member val Sections: ImmutableArray<_> =
+        let sections = ImmutableArray.CreateBuilder pe.SectionTable.Length
+
+        for section in pe.SectionTable do
+            let length = lazy (LengthOf.section section)
+            { ActualSize = length
+              FileOffset = invalidOp "TODO: Calculate the file offset of the section"
+              RoundedSize =
+                lazy (Round.upTo (uint64 pe.NTSpecificFields.Alignment.FileAlignment) length.Value)
+              Section = section }
+            |> sections.Add
+
+        sections.ToImmutable()
     member val TotalLength =
         lazy (
-            LengthOf.peHeader
-            + LengthOf.CoffHeader
-            + LengthOf.StandardFields
-            + LengthOf.NTSpecificFields
-            + LengthOf.DataDirectories
-            + this.SectionHeadersLength.Value
-            // + the padding before the start of the section data.
+            this.HeaderSizeRounded.Value
             // TODO: Add other stuff
         )
+
+    member private _.SectionsLength (flag: SectionFlags) =
+        Seq.where
+            (fun { Section = section } -> section.Header.Characteristics.HasFlag flag)
+            this.Sections
+        |> Seq.sumBy (fun section -> 0UL) // TODO: What size to use?
 
 [<AbstractClass>]
 type private ByteWriter<'Result>() =
@@ -179,9 +197,9 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
 
     interface IDisposable with member _.Dispose() = writer1.Dispose()
 
-let private write pe (writer: PELength -> ByteWriter<_>) =
-    let length = PELength pe
-    let bin = new Writer<_> (writer length)
+let private write pe (writer: PEInfo -> ByteWriter<_>) =
+    let info = PEInfo pe
+    let bin = new Writer<_> (writer info)
 
     bin.Write DosStub
     bin.Write PESignature
@@ -199,10 +217,9 @@ let private write pe (writer: PELength -> ByteWriter<_>) =
     let standard = pe.StandardFields
     bin.WriteU8 standard.LMajor
     bin.WriteU8 standard.LMinor
-    bin.WriteU32 length.SizeOfCode.Value
-    // TODO: Figure out how to calculate the values for the rest of the standard fields
-    bin.WriteU32 1u // InitializedDataSize
-    bin.WriteU32 1u // UninitizalizedDataSize
+    bin.WriteU32 info.CodeSize.Value
+    bin.WriteU32 info.InitializedDataSize.Value
+    bin.WriteU32 info.UninitializedDataSize.Value
     bin.WriteEmpty 12 // TEMPORARY
     // EntryPointRva
     // BaseOfCode // NOTE: This matches the RVA of the .text section
@@ -220,7 +237,7 @@ let private write pe (writer: PELength -> ByteWriter<_>) =
     bin.WriteU16 nt.SubSysMinor
     bin.WriteU32 nt.Win32VersionValue
     bin.WriteEmpty 4 // ImageSize // TODO: Figure out how to calculate the ImageSize
-    bin.WriteU32 length.HeaderSizeRounded.Value
+    bin.WriteU32 info.HeaderSizeRounded.Value
     bin.WriteU32 nt.FileChecksum
     bin.WriteU16 nt.Subsystem
     bin.WriteU16 nt.DllFlags
@@ -245,11 +262,31 @@ let private write pe (writer: PELength -> ByteWriter<_>) =
     bin.WriteEmpty 8 // BoundImportTable
     bin.WriteEmpty 8 // TEMPORARY // ImportAddressTable
     bin.WriteEmpty 8 // DelayImportDescriptor
-    bin.WriteU32 cliHeader // CliHeader // NOTE: RVA points to the CliHeader
-    bin.WriteU32 LengthOf.CliHeader // TODO: What happens if a header is not specified?
+
+    match pe.DataDirectories.CliHeader with
+    | Some _ ->
+        bin.WriteU32 cliHeader // CliHeader // NOTE: RVA points to the CliHeader
+        bin.WriteU32 LengthOf.CliHeader // TODO: What happens if a header is not specified?
+    | None -> bin.WriteEmpty 8
+
     bin.WriteEmpty 8 // Reserved
 
-    // TODO: Write section headers
+    for i = 0 to pe.SectionTable.Length - 1 do
+        let section = info.Sections.Item(i)
+        let header = section.Section.Header
+        SectionName.toArray header.SectionName |> bin.Write
+        bin.WriteU32 section.ActualSize.Value
+        // TODO: Figure out how to calculate these fields from the data
+        bin.WriteU32 section.FileOffset.Value // VirtualAddress
+        bin.WriteU32 section.RoundedSize.Value
+        bin.WriteU32 section.FileOffset.Value // PointerToRawData
+        bin.WriteU32 header.PointerToRelocations
+        bin.WriteEmpty 4 // PointerToLineNumbers
+        bin.WriteU16 header.NumberOfRelocations
+        bin.WriteEmpty 2 // NumberOfLineNumbers
+        bin.WriteU32 header.Characteristics
+
+    // TODO: Write padding
 
     bin.GetResult()
 
@@ -260,8 +297,8 @@ let toArray pe =
         else int32 i
     write
         pe
-        (fun length ->
-            let (Lazy (ValidIndex totalLength)) = length.TotalLength
+        (fun info ->
+            let (Lazy (ValidIndex totalLength)) = info.TotalLength
             let bytes = Array.zeroCreate<byte> totalLength
             { new ByteWriter<_>() with
                 override _.GetResult() = bytes
