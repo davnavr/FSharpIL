@@ -152,18 +152,10 @@ type NTSpecificFields =
           HeapCommitSize = 0x1000u
           LoaderFlags = 0u }
 
-type PEHeaders =
+type PEFile =
     { FileHeader: CoffHeader
       StandardFields: StandardFields
-      NTSpecificFields: NTSpecificFields }
-
-    static member Default =
-      { FileHeader = CoffHeader.Default
-        StandardFields = StandardFields.Default
-        NTSpecificFields = NTSpecificFields.Default }
-
-type PEFile =
-    { Headers: PEHeaders // TODO: Remove separate type for headers and move CoffHeader, StandardFields, and NTSpecificFields into this type.
+      NTSpecificFields: NTSpecificFields
       SectionInfo: SectionInfo }
 
     member inline this.DataDirectories = this.SectionInfo.DataDirectories
@@ -171,5 +163,7 @@ type PEFile =
     //member this.CliHeader = this.
 
     static member Default =
-        { Headers = PEHeaders.Default
+        { FileHeader = CoffHeader.Default
+          StandardFields = StandardFields.Default
+          NTSpecificFields = NTSpecificFields.Default
           SectionInfo = SectionInfo.Default }

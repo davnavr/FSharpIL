@@ -8,46 +8,8 @@ open FSharpIL.PortableExecutable
 open FSharpIL.Utilities
 
 type Builder internal() =
-    member _.Combine(headers: PEHeaders, pe: PEFile) =
-        { pe with Headers = headers }
     member _.Delay(f): PEFile = f()
-    member _.Yield(headers: PEHeaders) = headers
     member _.Zero(): PEFile = PEFile.Default
-
-[<AutoOpen>]
-module private Helpers =
-    let inline (|ValidStream|) (stream: Stream) =
-        if stream.CanSeek && stream.CanWrite
-        then stream
-        else
-            invalidArg "stream" "The stream should support writing and seeking."
-
-    let dosstub =
-        let lfanew = [| 0x80; 0x00; 0x00; 0x00 |]
-        [|
-            0x4d; 0x5a; 0x90; 0x00; 0x03; 0x00; 0x00; 0x00
-            0x04; 0x00; 0x00; 0x00; 0xFF; 0xFF; 0x00; 0x00;
-            0xb8; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
-            0x40; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
-            0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
-            0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
-            0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
-            0x00; 0x00; 0x00; 0x00; yield! lfanew
-            0x0e; 0x1f; 0xba; 0x0e; 0x00; 0xb4; 0x09; 0xcd;
-            0x21; 0xb8; 0x01; 0x4c; 0xcd; 0x21; 0x54; 0x68;
-            0x69; 0x73; 0x20; 0x70; 0x72; 0x6f; 0x67; 0x72;
-            0x61; 0x6d; 0x20; 0x63; 0x61; 0x6e; 0x6e; 0x6f;
-            0x74; 0x20; 0x62; 0x65; 0x20; 0x72; 0x75; 0x6e;
-            0x20; 0x69; 0x6e; 0x20; 0x44; 0x4f; 0x53; 0x20;
-            0x6d; 0x6f; 0x64; 0x65; 0x2e; 0x0d; 0x0d; 0x0a;
-            0x24; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
-        |]
-        |> Array.map byte
-
-    let pesig = "PE\000\000"B
-
-    [<Literal>]
-    let CliHeaderSize = 0x48u
 
 type private Writer(stream: Stream) =
     let writer = new BinaryWriter(stream)
@@ -98,14 +60,14 @@ type private Writer(stream: Stream) =
                 else pos
             pos <- pos - offset
             writer.Seek(-(int offset), SeekOrigin.Current) |> ignore
-        assert(pos = 0UL)
+        assert (pos = 0UL)
 
-    interface System.IDisposable with
-        member _.Dispose() = writer.Dispose()
+    interface System.IDisposable with member _.Dispose() = writer.Dispose()
 
 let private cli (header: Metadata.CliHeader) (bin: Writer) =
-    let pos = bin.Position
-    bin.WriteU32 CliHeaderSize
+    /// File offset to CLI header
+    let start = bin.Position
+    bin.WriteU32 Length.CliHeader
     bin.WriteU16 header.MajorRuntimeVersion
     bin.WriteU16 header.MinorRuntimeVersion
     bin.WriteEmpty 4 // RVA of MetaData
@@ -127,18 +89,18 @@ let private cli (header: Metadata.CliHeader) (bin: Writer) =
 
     // TODO: Figure out how to write the CLR metadata first, and then inserting the header before it to allow the metadata size to be measured.
 
-    pos
+    start
 
 let private write (file: PEFile) (bin: Writer) =
-    let coff = file.Headers.FileHeader
-    let standard = file.Headers.StandardFields
-    let nt = file.Headers.NTSpecificFields
+    let coff = file.FileHeader
+    let standard = file.StandardFields
+    let nt = file.NTSpecificFields
 
     let sectionHeadersSize = 40u * uint32 file.SectionTable.Length
     let headerSizeActual, headerSizeRounded =
         let actual =
-            uint dosstub.Length
-            + uint pesig.Length
+            uint dosStub.Length
+            + uint peSignature.Length
             + 20u // Coff
             + 28u // Standard (PE32)
             + 68u // NT
@@ -193,8 +155,8 @@ let private write (file: PEFile) (bin: Writer) =
         bin.WriteU32 header.Characteristics
 
     bin.SeekStart()
-    bin.Write dosstub
-    bin.Write pesig
+    bin.Write dosStub
+    bin.Write peSignature
 
     bin.WriteU16 coff.Machine
     bin.WriteU16 file.SectionTable.Length
@@ -258,12 +220,38 @@ let private write (file: PEFile) (bin: Writer) =
     bin.WriteEmpty 8 // TEMPORARY // ImportAddressTable
     bin.WriteEmpty 8 // DelayImportDescriptor
     bin.WriteU32 cliHeader // CliHeader // NOTE: RVA points to the CliHeader
-    bin.WriteU32 CliHeaderSize // TODO: What happens if a header is not specified?
+    bin.WriteU32 Length.CliHeader // TODO: What happens if a header is not specified?
     bin.WriteEmpty 8 // Reserved
     // Section headers immediately follow the optional header
 
+let private signature =
+    [|
+        0x4duy; 0x5auy; 0x90uy; 0x00uy; 0x03uy; 0x00uy; 0x00uy; 0x00uy;
+        0x04uy; 0x00uy; 0x00uy; 0x00uy; 0xFFuy; 0xFFuy; 0x00uy; 0x00uy;
+        0xb8uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
+        0x40uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
+        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
+        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
+        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
+        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x80uy; 0x00uy; 0x00uy; 0x00uy; // lfanew
+        0x0euy; 0x1fuy; 0xbauy; 0x0euy; 0x00uy; 0xb4uy; 0x09uy; 0xcduy;
+        0x21uy; 0xb8uy; 0x01uy; 0x4cuy; 0xcduy; 0x21uy; 0x54uy; 0x68uy;
+        0x69uy; 0x73uy; 0x20uy; 0x70uy; 0x72uy; 0x6fuy; 0x67uy; 0x72uy;
+        0x61uy; 0x6duy; 0x20uy; 0x63uy; 0x61uy; 0x6euy; 0x6euy; 0x6fuy;
+        0x74uy; 0x20uy; 0x62uy; 0x65uy; 0x20uy; 0x72uy; 0x75uy; 0x6euy;
+        0x20uy; 0x69uy; 0x6euy; 0x20uy; 0x44uy; 0x4fuy; 0x53uy; 0x20uy;
+        0x6duy; 0x6fuy; 0x64uy; 0x65uy; 0x2euy; 0x0duy; 0x0duy; 0x0auy;
+        0x24uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
+        0x50uy; 0x45uy; 0x00uy; 0x00uy;
+    |]
+
+[<RequireQualifiedAccess>]
+module private Header =
+    let coff (header: CoffHeader) =
+        [| |]
+
 // NOTE: Since stream seeking is used, find a way to ensure that the written data is written at the end of the stream.
 // NOTE: Implementors of the stream class could break something, perhaps use a different stream under the hood?
-let toStream (ValidStream stream) pe =
+let toStream stream pe =
     use writer = new Writer(stream)
     write pe writer
