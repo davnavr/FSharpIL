@@ -42,6 +42,8 @@ type SectionHeader =
       //NumberOfLineNumbers: uint16
       Characteristics: SectionFlags }
 
+// TODO: Should custom sections be allowed? It would mean that the section name would have to be checked when looking for the .text or .rsrc section.
+[<StructuralComparison; StructuralEquality>]
 type SectionKind =
     | TextSection
     // NOTE: According to the spec, this should be the last section of the PE file.
@@ -68,81 +70,67 @@ type Section =
           NumberOfRelocations = 0us
           Characteristics = flags }
 
+// II.25.2.3.3
+[<Sealed>]
+type DataDirectories internal(sections: ImmutableArray<Section>) =
+    // ExportTable
+    member _.ImportTable = ()
+    // ResourceTable
+    // ExceptionTable
+    // CertificateTable
+    member _.BaseRelocationTable = () // NOTE: This uses the Reloc section
+    // DebugTable
+    // CopyrightTable
+    // GlobalPointer
+    // TLSTable
+    // LoadConfigTable
+    // BoundImportTable
+    member _.ImportAddressTable = ()
+    // DelayImportDescriptor
+    member val CliHeader =
+        lazy
+            Seq.tryPick
+                (function
+                | { Kind = TextSection; Data = data } -> Some data
+                | _ -> None)
+                sections
+            |> Option.defaultValue ImmutableArray.Empty
+            |> Seq.tryPick
+                (function
+                | CliHeader header -> Some header
+                | _ -> None)
+    // Reserved
+
+/// Contains information about the sections of a Portable Executable file.
+[<Sealed>]
+type PESections(sections: ImmutableArray<Section>) as this =
+    let rsrcSection = lazy this.FindSection RsrcSection
+    let textSection = lazy this.FindSection TextSection
+
+    member _.RsrcSection = rsrcSection.Value
+    member _.TextSection = textSection.Value
+
+    member val DataDirectories = DataDirectories sections
+    member _.SectionTable = sections
+
+    member private _.FindSection (kind: SectionKind) =
+        Seq.indexed sections
+        |> Seq.tryPick
+            (function
+            | (i, section) when section.Kind = kind -> Some(i, section)
+            | _ -> None)
+
+    static member val Default =
+        let sections = ImmutableArray.CreateBuilder 3
+        sections.Add
+            { Kind = TextSection
+              Data = ImmutableArray.Create(ClrLoaderStub, CliHeader CliHeader.Default) }
+        sections.Add { Kind = RsrcSection; Data = ImmutableArray.Empty }
+        sections.Add { Kind = RelocSection; Data = ImmutableArray.Empty }
+        sections.ToImmutable() |> PESections
+
 [<RequireQualifiedAccess>]
-module SectionInfo =
-    // II.25.2.3.3
-    // NOTE: The RVA needs to be converted to/from file offset
-    [<EditorBrowsable(EditorBrowsableState.Never)>]
-    type DataDirectories =
-        private
-            { CliHeaderValue: Lazy<CliHeader option> }
-
-        // ExportTable
-        member _.ImportTable = ()
-        // ResourceTable
-        // ExceptionTable
-        // CertificateTable
-        member _.BaseRelocationTable = () // TODO: This uses the Reloc section
-        //DebugTable
-        //CopyrightTable
-        //GlobalPointer
-        // TLSTable
-        // LoadConfigTable
-        // BoundImportTable
-        member _.ImportAddressTable = ()
-        // DelayImportDescriptor
-        member this.CliHeader = this.CliHeaderValue.Value
-        // Reserved
-
-    [<EditorBrowsable(EditorBrowsableState.Never)>]
-    type Info =
-        private
-            { Data: DataDirectories
-              Sections: ImmutableArray<Section>
-              TextSectionValue: Lazy<(int * Section) option> }
-
-        static member Default =
-            let sections =
-                ImmutableArray.CreateRange [
-                    { Kind = TextSection
-                      Data = ImmutableArray.Create(ClrLoaderStub, CliHeader CliHeader.Default) }
-                    { Kind = RsrcSection; Data = ImmutableArray.Empty }
-                    { Kind = RelocSection; Data = ImmutableArray.Empty }
-                ]
-            let data =
-                { CliHeaderValue =
-                    lazy
-                        Seq.tryPick
-                            (function
-                            | { Kind = TextSection; Data = data } -> Some data
-                            | _ -> None)
-                            sections
-                        |> Option.defaultValue ImmutableArray.Empty
-                        |> Seq.tryPick
-                            (function
-                            | CliHeader header -> Some header
-                            | _ -> None) }
-            { Data = data
-              Sections = sections
-              TextSectionValue =
-                lazy
-                    let rec inner i =
-                        if i >= sections.Length
-                        then None
-                        else
-                           match sections.Item i with
-                           | { Kind = TextSection } as text -> Some(i, text)
-                           | _ -> None
-                    inner 0 }
-
-        member this.DataDirectories = this.Data
-        member this.SectionTable = this.Sections
-
-        member this.TextSection = this.TextSectionValue.Value
-
+module SectionTable =
     // TODO: Create Computation Expression type for SectionTable.
-    let addSection (section: SectionHeader) (info: Info) =
+    let addSection (section: SectionHeader) (sections: PESections) =
         invalidOp "bad"
-
-type SectionInfo = SectionInfo.Info
-type DataDirectories = SectionInfo.DataDirectories

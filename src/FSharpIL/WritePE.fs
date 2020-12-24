@@ -99,12 +99,12 @@ module private LengthOf =
 type private PEInfo(pe: PEFile) as this =
     // II.25.2.3.1
     member val CodeSize =
-        lazy (this.SectionsLength SectionFlags.CntCode)
+        lazy this.SectionsLengthRounded SectionFlags.CntCode
     // II.25.2.3.1
     member val InitializedDataSize =
-        lazy (this.SectionsLength SectionFlags.CntInitializedData)
+        lazy this.SectionsLengthRounded SectionFlags.CntInitializedData
     member val UninitializedDataSize =
-        lazy (this.SectionsLength SectionFlags.CntUninitializedData)
+        lazy this.SectionsLengthRounded SectionFlags.CntUninitializedData
     /// Calculates the size of the headers rounded up to nearest multiple of FileAlignment.
     member val HeaderSizeRounded: Lazy<_> =
         lazy (
@@ -138,19 +138,20 @@ type private PEInfo(pe: PEFile) as this =
             // TODO: Add other stuff
         )
 
-    member private _.SectionsLength (flag: SectionFlags) =
+    member private _.SectionsLengthRounded (flag: SectionFlags) =
         Seq.where
             (fun { Section = section } -> section.Header.Characteristics.HasFlag flag)
             this.Sections
-        |> Seq.sumBy (fun section -> 0UL) // TODO: What size to use?
+        |> Seq.sumBy (fun section -> section.RoundedSize.Value) // Apparently the `SizeOfRawData` is used.
 
 [<AbstractClass>]
 type private ByteWriter<'Result>() =
     abstract member GetResult: unit -> 'Result
     abstract member Write: currentPos: uint64 * byte -> unit
     abstract member WriteBytes: currentPos: uint64 * byte[] -> unit
-    interface IDisposable with member this.Dispose() = ()
+    interface IDisposable with member _.Dispose() = ()
 
+[<Sealed>]
 type private Writer<'Result>(writer: ByteWriter<'Result>) =
     let stream = invalidOp "TODO: Replace stream with ByteWriter"
     let writer1 = new BinaryWriter(stream)
@@ -197,6 +198,13 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
 
     interface IDisposable with member _.Dispose() = writer1.Dispose()
 
+[<AutoOpen>]
+module private Helpers =
+    let inline sectionRva (info: PEInfo) =
+        function
+        | Some(i, _) -> info.Sections.Item(i).FileOffset.Value
+        | None -> 0UL
+
 let private write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
     let bin = new Writer<_> (writer info)
@@ -220,10 +228,10 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
     bin.WriteU32 info.CodeSize.Value
     bin.WriteU32 info.InitializedDataSize.Value
     bin.WriteU32 info.UninitializedDataSize.Value
-    bin.WriteEmpty 12 // TEMPORARY
-    // EntryPointRva
-    // BaseOfCode // NOTE: This matches the RVA of the .text section
-    // BaseOfData // NOTE: This matches the RVA of the .rsrc section
+    // NOTE: The EntryPointRva always has a value regardless of whether or not it is a .dll or .exe, and points to somewhere special (see the end of II.25.2.3.1)
+    bin.WriteEmpty 4 // EntryPointRva // TODO: Figure out what this value should be.
+    sectionRva info pe.Sections.TextSection |> bin.WriteU32 // BaseOfCode, matches the RVA of the .text section
+    sectionRva info pe.Sections.TextSection |> bin.WriteU32 // BaseOfData, matches the RVA of the .rsrc section
 
     let nt = pe.NTSpecificFields
     bin.WriteU32 nt.ImageBase
@@ -263,9 +271,9 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
     bin.WriteEmpty 8 // TEMPORARY // ImportAddressTable
     bin.WriteEmpty 8 // DelayImportDescriptor
 
-    match pe.DataDirectories.CliHeader with
+    match pe.CliHeader with
     | Some _ ->
-        bin.WriteU32 cliHeader // CliHeader // NOTE: RVA points to the CliHeader
+        bin.WriteU32 0 // CliHeader // NOTE: RVA points to the CliHeader // TODO: Find the file offset of the CliHeader.
         bin.WriteU32 LengthOf.CliHeader // TODO: What happens if a header is not specified?
     | None -> bin.WriteEmpty 8
 

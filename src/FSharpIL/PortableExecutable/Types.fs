@@ -156,14 +156,14 @@ type PEFile =
     { FileHeader: CoffHeader
       StandardFields: StandardFields
       NTSpecificFields: NTSpecificFields
-      SectionInfo: SectionInfo }
+      Sections: PESections }
 
-    member inline this.DataDirectories = this.SectionInfo.DataDirectories
-    member inline this.SectionTable = this.SectionInfo.SectionTable
-    //member this.CliHeader = this.
+    member inline this.DataDirectories = this.Sections.DataDirectories
+    member inline this.SectionTable = this.Sections.SectionTable
+    member inline this.CliHeader = this.DataDirectories.CliHeader.Value
 
     static member Default =
         { FileHeader = CoffHeader.Default
           StandardFields = StandardFields.Default
           NTSpecificFields = NTSpecificFields.Default
-          SectionInfo = SectionInfo.Default }
+          Sections = PESections.Default }

@@ -9,21 +9,18 @@ open FSharpIL.PortableExecutable
 
 [<Tests>]
 let tests =
-    let testPE name body =
+    let testPE name pe body =
         testCase name <| fun() ->
-            let data =
-                use str = new MemoryStream(512)
-                do WritePE.toStream str PEFile.Default
-                str.GetBuffer()
+            let data = WritePE.toArray pe
             use source = new MemoryStream(data, false)
             use reader = new PEReader(source, PEStreamOptions.PrefetchEntireImage)
             body reader |> ignore
 
     testList "write PE" [
-        testPE "default PE has metadata" <| fun reader ->
+        testPE "default PE has metadata" PEFile.Default <| fun reader ->
             Expect.isTrue reader.HasMetadata "Generated PE should contain metadata"
 
-        testPE "default PE sections have correct names" <| fun reader ->
+        testPE "default PE sections have correct names" PEFile.Default <| fun reader ->
             let names =
                 reader.PEHeaders.SectionHeaders
                 |> Array.ofSeq
