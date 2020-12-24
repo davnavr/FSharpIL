@@ -106,8 +106,8 @@ type private PEInfo(pe: PEFile) as this =
     member val UninitializedDataSize =
         lazy this.SectionsLengthRounded SectionFlags.CntUninitializedData
     /// Calculates the size of the headers rounded up to nearest multiple of FileAlignment.
-    member val HeaderSizeRounded: Lazy<_> =
-        lazy (
+    member val HeaderSizeRounded: Lazy<uint64> =
+        lazy
             let actual =
                 LengthOf.peHeader
                 + LengthOf.CoffHeader
@@ -118,14 +118,19 @@ type private PEInfo(pe: PEFile) as this =
             Round.upTo
                 (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
                 actual
-        )
     member val Sections: ImmutableArray<_> =
         let sections = ImmutableArray.CreateBuilder pe.SectionTable.Length
 
-        for section in pe.SectionTable do
+        for i = 0 to pe.SectionTable.Length - 1 do
+            let section = pe.SectionTable.Item i
             let length = lazy (LengthOf.section section)
             { ActualSize = length
-              FileOffset = invalidOp "TODO: Calculate the file offset of the section"
+              FileOffset =
+                lazy
+                    let mutable offset = this.HeaderSizeRounded.Value
+                    for j = 0 to i - 1 do
+                        offset <- offset + this.Sections.Item(j).FileOffset.Value
+                    offset
               RoundedSize =
                 lazy (Round.upTo (uint64 pe.NTSpecificFields.Alignment.FileAlignment) length.Value)
               Section = section }
@@ -133,10 +138,9 @@ type private PEInfo(pe: PEFile) as this =
 
         sections.ToImmutable()
     member val TotalLength =
-        lazy (
+        lazy
             this.HeaderSizeRounded.Value
             // TODO: Add other stuff
-        )
 
     member private _.SectionsLengthRounded (flag: SectionFlags) =
         Seq.where
@@ -200,6 +204,12 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
 
 [<AutoOpen>]
 module private Helpers =
+    /// Checks if an index is not greater than the maximum allowed index for an array item.
+    let (|ValidArrayIndex|) (i: uint64) =
+        if i > uint64 Int32.MaxValue 
+        then invalidArg "pe" "The PortableExecutable file is too large to fit inside of a byte array."
+        else int32 i
+
     let inline sectionRva (info: PEInfo) =
         function
         | Some(i, _) -> info.Sections.Item(i).FileOffset.Value
@@ -299,18 +309,14 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
     bin.GetResult()
 
 let toArray pe =
-    let (|ValidIndex|) (i: uint64) =
-        if i > uint64 Int32.MaxValue 
-        then invalidArg "pe" "The PortableExecutable file is too large to fit inside of a byte array."
-        else int32 i
     write
         pe
         (fun info ->
-            let (Lazy (ValidIndex totalLength)) = info.TotalLength
+            let (Lazy (ValidArrayIndex totalLength)) = info.TotalLength
             let bytes = Array.zeroCreate<byte> totalLength
             { new ByteWriter<_>() with
                 override _.GetResult() = bytes
-                override _.Write(ValidIndex pos, value) =
+                override _.Write(ValidArrayIndex pos, value) =
                     Array.set bytes pos value
-                override _.WriteBytes(ValidIndex pos, source) =
+                override _.WriteBytes(ValidArrayIndex pos, source) =
                     Array.Copy(source, 0, bytes, pos, source.Length) })
