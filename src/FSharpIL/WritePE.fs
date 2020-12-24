@@ -139,8 +139,11 @@ type private PEInfo(pe: PEFile) as this =
         sections.ToImmutable()
     member val TotalLength =
         lazy
-            this.HeaderSizeRounded.Value
-            // TODO: Add other stuff
+            let sections =
+                Seq.sumBy
+                    (fun { RoundedSize = (Lazy size) } -> size)
+                    this.Sections
+            this.HeaderSizeRounded.Value + sections
 
     member private _.SectionsLengthRounded (flag: SectionFlags) =
         Seq.where
@@ -152,26 +155,27 @@ type private PEInfo(pe: PEFile) as this =
 type private ByteWriter<'Result>() =
     abstract member GetResult: unit -> 'Result
     abstract member Write: currentPos: uint64 * byte -> unit
-    abstract member WriteBytes: currentPos: uint64 * byte[] -> unit
+    abstract member Write: currentPos: uint64 * byte[] -> unit
     interface IDisposable with member _.Dispose() = ()
 
 [<Sealed>]
 type private Writer<'Result>(writer: ByteWriter<'Result>) =
-    let stream = invalidOp "TODO: Replace stream with ByteWriter"
-    let writer1 = new BinaryWriter(stream)
     let mutable pos = 0UL
-
-    member _.Position = pos
 
     member _.GetResult() = writer.GetResult()
 
     member _.Write(bytes: byte[]) =
-        writer1.Write bytes
+        writer.Write(pos, bytes)
         // The position is updated afterward, which means that the first byte written is always at position zero.
         pos <- pos + uint64 bytes.Length
 
     member _.WriteU8(byte: byte) =
-        writer1.Write byte
+        try
+            writer.Write(pos, byte)
+        with
+        | ex ->
+            let msg = sprintf "Exception thrown while writing byte at position %i" pos
+            InvalidOperationException(msg, ex) |> raise
         pos <- pos + 1UL
 
     member this.WriteU16(value: uint16) =
@@ -200,7 +204,7 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
             i <- i + LanguagePrimitives.GenericOne
             this.WriteU8 0uy
 
-    interface IDisposable with member _.Dispose() = writer1.Dispose()
+    interface IDisposable with member _.Dispose() = (writer :> IDisposable).Dispose()
 
 [<AutoOpen>]
 module private Helpers =
@@ -318,5 +322,5 @@ let toArray pe =
                 override _.GetResult() = bytes
                 override _.Write(ValidArrayIndex pos, value) =
                     Array.set bytes pos value
-                override _.WriteBytes(ValidArrayIndex pos, source) =
+                override _.Write(ValidArrayIndex pos, source: byte[]) =
                     Array.Copy(source, 0, bytes, pos, source.Length) })
