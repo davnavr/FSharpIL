@@ -10,7 +10,7 @@ type ModuleName =
 
 [<RequireQualifiedAccess>]
 module ModuleName =
-    let ofStr str =
+    let ofString str =
         match str with
         | "" -> None
         | _ -> ModuleName str |> Some

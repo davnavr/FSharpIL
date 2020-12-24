@@ -175,6 +175,8 @@ type MetadataStreams =
       //BlobStream: unit
       }
 
+    member _.Count = 0us
+
     static member Default =
         { Metadata = MetadataTables.Default }
 

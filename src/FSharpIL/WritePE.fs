@@ -80,7 +80,15 @@ module private LengthOf =
     let CliHeader = 0x48UL
 
     let cliMetadata (data: MetadataRoot) =
+        let version = MetadataVersion.toArray data.Version // TODO: How to cache the MetadataVersion bytes?
         uint64 CliSignature.Length
+        + 2UL // MajorVersion
+        + 2UL // MinorVersion
+        + 4UL // Reserved
+        + 4UL // Length
+        + uint64 version.Length
+        + 2UL // Flags
+        + 2UL // Streams
         // + Other stuff
 
     /// Calculates the combined length of the CLI header, the strong name hash, the
@@ -193,7 +201,12 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
 
     member _.Write(bytes: byte[]) =
         if bytes.Length > 0 then
-            writer.Write(pos, bytes)
+            try writer.Write(pos, bytes)
+            with
+            | ex ->
+                let msg = sprintf "Exception thrown while writing a byte array of length %i at position %i" bytes.Length pos
+                InvalidOperationException(msg, ex) |> raise
+
             // The position is updated afterward, which means that the first byte written is always at position zero.
             pos <- pos + uint64 bytes.Length
 
@@ -201,12 +214,12 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
         bytes |> Seq.iter this.WriteU8
 
     member _.WriteU8(byte: byte) =
-        try
-            writer.Write(pos, byte)
+        try writer.Write(pos, byte)
         with
         | ex ->
             let msg = sprintf "Exception thrown while writing byte at position %i" pos
             InvalidOperationException(msg, ex) |> raise
+
         pos <- pos + 1UL
 
     member inline this.WriteU8 value = this.WriteU8(uint8 value)
@@ -362,8 +375,15 @@ let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
 
     // TODO: Write method bodies
 
-    // TODO: Write CLR metadata
+    let root = header.Metadata
     bin.Write CliSignature
+    bin.WriteU16 root.MajorVersion
+    bin.WriteU16 root.MinorVersion
+    bin.WriteEmpty 4 // Reserved
+    bin.WriteU32 root.Version.Length
+    MetadataVersion.toArray root.Version |> bin.Write
+    bin.WriteEmpty 2 // Flags
+    bin.WriteU16 root.Streams.Count
 
 let private write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
@@ -372,12 +392,22 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
     headers info bin
 
     for section in info.Sections do
-        assert (bin.Position = section.FileOffset.Value)
+        let pos = bin.Position
+        let fileOffset = section.FileOffset.Value
+
+        if pos <> fileOffset then
+            sprintf
+                "The file offset of the section (0x%X) did not match the current position of the writer (0x%X)"
+                fileOffset
+                pos
+            |> invalidOp
+
         for data in section.Section.Data do
             match data with
             | RawData bytes -> bytes() |> bin.Write
             | CliHeader header -> cli info header bin
             | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
+
         section.RoundedSize.Value - section.ActualSize.Value |> int |> bin.WriteEmpty
 
     bin.GetResult()
