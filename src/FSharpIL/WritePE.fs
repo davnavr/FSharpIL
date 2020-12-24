@@ -80,7 +80,7 @@ module private LengthOf =
     let CliHeader = 0x48UL
 
     let cliMetadata (data: MetadataRoot) =
-        let version = MetadataVersion.toArray data.Version // TODO: How to cache the MetadataVersion bytes?
+        let version = MetadataVersion.toArray data.Version
         uint64 CliSignature.Length
         + 2UL // MajorVersion
         + 2UL // MinorVersion
@@ -93,19 +93,20 @@ module private LengthOf =
 
     /// Calculates the combined length of the CLI header, the strong name hash, the
     /// method bodies, and the CLI metadata.
-    let cliData (data: CliHeader) =
+    let cliData (data: CliHeader) = // TODO: Figure out how to use the cached values from CliInfo.
         CliHeader
         + uint64 data.StrongNameSignature.Length
         // + Method Bodies
-        + cliMetadata data.Metadata // TODO: How to cache the length of the metadata?
+        + cliMetadata data.Metadata
 
     let sectionData =
         function
         | SectionData.CliHeader cli -> cliData cli
         | ClrLoaderStub -> 8UL
-        | RawData data -> data() |> Array.length |> uint64
+        | RawData(Lazy data) -> uint64 data.Length
 
 /// Stores the sizes and file offsets of the various objects and structs that make up a PE file.
+[<Sealed>]
 type private PEInfo (pe: PEFile) as this =
     member _.File = pe
     // II.25.2.3.1
@@ -170,19 +171,44 @@ type private PEInfo (pe: PEFile) as this =
                     offset <- offset + prevSize
                 offset
             | None -> 0UL
-    member val TotalLength =
-        lazy
-            let sections =
-                Seq.sumBy
-                    (fun { RoundedSize = (Lazy size) } -> size)
-                    this.Sections
-            this.HeaderSizeRounded.Value + sections
+    member _.TotalLength() =
+        let sections =
+            Seq.sumBy
+                (fun { RoundedSize = (Lazy size) } -> size)
+                this.Sections
+        this.HeaderSizeRounded.Value + sections
 
     member private _.SectionsLengthRounded (flag: SectionFlags) =
         Seq.where
             (fun { Section = section } -> section.Header.Characteristics.HasFlag flag)
             this.Sections
         |> Seq.sumBy (fun section -> section.RoundedSize.Value) // Apparently the `SizeOfRawData` is used.
+
+[<Sealed>]
+type private CliInfo (cli: CliHeader, pe: PEInfo) as this =
+    member _.CliHeaderRva: uint64 = pe.CliHeaderRva.Value // NOTE: This value will be incorrect if more than one CliHeader is present.
+    member _.StrongNameSignatureRva = this.CliHeaderRva + LengthOf.CliHeader
+    member _.StrongNameSignatureSize = uint64 cli.StrongNameSignature.Length
+    member val MethodBodiesLength: Lazy<uint64> =
+        lazy 0UL
+    member val MetaDataRva =
+        lazy
+            this.CliHeaderRva
+            + LengthOf.CliHeader
+            + this.StrongNameSignatureSize
+            + this.MethodBodiesLength.Value
+    member val MetaDataSize =
+        lazy
+            uint64 CliSignature.Length
+            + 2UL // MajorVersion
+            + 2UL // MinorVersion
+            + 4UL // Reserved
+            + 4UL // Length
+            + uint64 this.MetaDataVersion.Value.Length
+            + 2UL // Flags
+            + 2UL // Streams
+            // + Other stuff
+    member val MetaDataVersion: Lazy<byte[]> = lazy MetadataVersion.toArray cli.Metadata.Version
 
 [<AbstractClass>]
 type private ByteWriter<'Result>() =
@@ -348,23 +374,23 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
     info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value |> int |> bin.WriteEmpty
 
 let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
-    let (Lazy start) = pe.CliHeaderRva
-    let temporaryFixThisLaterLengthOfMethodBodies = 0UL
+    let info = CliInfo(header, pe)
     bin.WriteU32 LengthOf.CliHeader
     bin.WriteU16 header.MajorRuntimeVersion
     bin.WriteU16 header.MinorRuntimeVersion
-    bin.WriteU32 (start + LengthOf.CliHeader + uint64 header.StrongNameSignature.Length + temporaryFixThisLaterLengthOfMethodBodies) // RVA of MetaData
-    bin.WriteU32 (LengthOf.cliMetadata header.Metadata) // Size of MetaData
+    bin.WriteU32 info.MetaDataRva.Value
+    bin.WriteU32 info.MetaDataSize.Value
     bin.WriteU32 header.Flags
     bin.WriteEmpty 4 // EntryPointToken
+
     bin.WriteEmpty 4 // RVA of Resources
     bin.WriteEmpty 4 // Size of Resources
 
     if header.StrongNameSignature.IsEmpty
     then bin.WriteEmpty 8
     else
-        bin.WriteU32 (start + LengthOf.CliHeader) // RVA of StrongNameSignature
-        bin.WriteU32 header.StrongNameSignature.Length // Size of StrongNameSignature
+        bin.WriteU32 info.StrongNameSignatureRva
+        bin.WriteU32 info.StrongNameSignatureSize
 
     bin.WriteEmpty 8 // CodeManagerTable
     bin.WriteEmpty 8 // VTableFixups // TODO: See if this needs to be assigned a value
@@ -381,9 +407,11 @@ let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
     bin.WriteU16 root.MinorVersion
     bin.WriteEmpty 4 // Reserved
     bin.WriteU32 root.Version.Length
-    MetadataVersion.toArray root.Version |> bin.Write
+    bin.Write info.MetaDataVersion.Value
     bin.WriteEmpty 2 // Flags
     bin.WriteU16 root.Streams.Count
+
+    // TODO: Write stream headers.
 
 let private write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
@@ -404,7 +432,7 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
 
         for data in section.Section.Data do
             match data with
-            | RawData bytes -> bytes() |> bin.Write
+            | RawData(Lazy bytes)-> bin.Write bytes
             | CliHeader header -> cli info header bin
             | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
 
@@ -416,7 +444,7 @@ let toArray pe =
     write
         pe
         (fun info ->
-            let (Lazy (ValidArrayIndex totalLength)) = info.TotalLength
+            let (ValidArrayIndex totalLength) = info.TotalLength()
             let bytes = Array.zeroCreate<byte> totalLength
             { new ByteWriter<_>() with
                 override _.GetResult() = bytes

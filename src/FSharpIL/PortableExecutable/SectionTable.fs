@@ -4,7 +4,7 @@ open System.Collections.Immutable
 
 open FSharpIL.Metadata
 
-type RawSectionData = unit -> byte[]
+type RawSectionData = Lazy<byte[]>
 
 type SectionData =
     | RawData of RawSectionData

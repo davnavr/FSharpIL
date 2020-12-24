@@ -214,7 +214,7 @@ type CliHeader =
       Flags: CorFlags // TODO: Create default value for flags.
       Resources: unit
       StrongNameSignature: ImmutableArray<byte>
-      CodeManagerTable: uint64
+      CodeManagerTable: uint64 // TODO: Figure out if this field should exist.
       VTableFixups: unit
       // ExportAddressTableJumps
       // ManagedNativeHeader
