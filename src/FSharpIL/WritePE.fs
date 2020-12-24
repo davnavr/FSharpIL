@@ -96,7 +96,7 @@ module private LengthOf =
         len
 
 /// Stores the sizes and file offsets of various the objects and structs that make up a PE file.
-type private PEInfo(pe: PEFile) as this =
+type private PEInfo (pe: PEFile) as this =
     member _.File = pe
     // II.25.2.3.1
     member val CodeSize =
@@ -181,21 +181,21 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
             InvalidOperationException(msg, ex) |> raise
         pos <- pos + 1UL
 
+    member inline this.WriteU8 value = this.WriteU8(uint8 value)
+
     member this.WriteU16(value: uint16) =
         let value' = uint16 value
-        this.Write [| byte (value' &&& 0xFFus); (value' >>> 8) &&& 0xFFus |> byte |]
+        this.WriteU8 (value' &&& 0xFFus)
+        (value' >>> 8) &&& 0xFFus |> this.WriteU8
 
     member inline this.WriteU16 value = this.WriteU16(uint16 value)
 
     member this.WriteU32(value: uint32) =
         let value' = uint32 value
-        [|
-            byte (value' &&& 0xFFu)
-            (value' >>> 8) &&& 0xFFu |> byte
-            (value' >>> 16) &&& 0xFFu |> byte
-            (value' >>> 24) &&& 0xFFu |> byte
-        |]
-        |> this.Write
+        this.WriteU8 (value' &&& 0xFFu)
+        (value' >>> 8) &&& 0xFFu |> this.WriteU8
+        (value' >>> 16) &&& 0xFFu |> this.WriteU8
+        (value' >>> 24) &&& 0xFFu |> this.WriteU8
 
     member inline this.WriteU32 value = this.WriteU32(uint32 value)
 
@@ -307,6 +307,29 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
     // Padding separating headers from the sections
     info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value |> int |> bin.WriteEmpty
 
+let private cli (header: Metadata.CliHeader) (bin: Writer<_>) =
+    bin.WriteU32 LengthOf.CliHeader
+    bin.WriteU16 header.MajorRuntimeVersion
+    bin.WriteU16 header.MinorRuntimeVersion
+    bin.WriteU32 0 // RVA of MetaData
+    bin.WriteU32 0 // Size of MetaData
+    bin.WriteU32 header.Flags
+    bin.WriteEmpty 4 // EntryPointToken
+    bin.WriteEmpty 4 // RVA of Resources
+    bin.WriteEmpty 4 // Size of Resources
+    bin.WriteEmpty 4 // RVA of StrongNameSignature
+    bin.WriteEmpty 4 // Size of StrongNameSignature
+    bin.WriteEmpty 8 // CodeManagerTable
+    bin.WriteEmpty 8 // VTableFixups // TODO: See if this needs to be assigned a value
+    bin.WriteEmpty 8 // ExportAddressTableJumps
+    bin.WriteEmpty 8 // ManagedNativeHeader
+
+    // TODO: Write strong name hash (StrongNameSignature) if needed
+    // TODO: Write method bodies if needed
+    // TODO: Write CLR metadata
+
+    // TODO: Figure out how to write the CLR metadata first, and then inserting the header before it to allow the metadata size to be measured.
+
 let private write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
     let bin = new Writer<_> (writer info)
@@ -317,8 +340,7 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
         for data in section.Data do
             match data with
             | RawData bytes -> bytes() |> bin.Write
-            | CliHeader header ->
-                invalidOp "TODO: Should writing of cli be in separate function?"
+            | CliHeader header -> cli header bin
             | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
 
     bin.GetResult()
