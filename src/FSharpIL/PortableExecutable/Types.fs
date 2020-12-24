@@ -160,7 +160,7 @@ type PEFile =
 
     member inline this.DataDirectories = this.Sections.DataDirectories
     member inline this.SectionTable = this.Sections.SectionTable
-    member inline this.CliHeader = this.DataDirectories.CliHeader
+    member inline this.CliHeader = this.DataDirectories.CliHeader |> Option.map (fun header -> header.Header)
 
     static member Default =
         { FileHeader = CoffHeader.Default

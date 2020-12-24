@@ -75,12 +75,16 @@ type DataDirectories internal(sections: PESections) =
     let cliHeader =
         lazy
             Option.bind
-                (fun (i, { Section.Data = data }) ->
-                    Seq.tryPick
+                (fun (sectionIndex, { Section.Data = data }) ->
+                    Seq.indexed data
+                    |> Seq.tryPick
                         (function
-                        | CliHeader header -> Some(i, header)
-                        | _ -> None)
-                        data)
+                        | (dataIndex, CliHeader header) ->
+                            {| DataIndex = dataIndex
+                               Header = header
+                               SectionIndex = sectionIndex |}
+                            |> Some
+                        | _ -> None))
                 sections.TextSection
 
     // ExportTable

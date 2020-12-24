@@ -76,24 +76,24 @@ module private LengthOf =
     [<Literal>]
     let CliHeader = 0x48UL
 
+    let cliMetadata (data: MetadataRoot) =
+        0UL
+
     /// Calculates the combined length of the CLI header, the strong name hash, the
     /// method bodies, and the CLI metadata.
     let cliData (data: CliHeader) =
         CliHeader
         + uint64 data.StrongNameSignature.Length
         // + Method Bodies
-        // + Metadata
+        + cliMetadata data.Metadata // TODO: How to cache the length of the metadata?
 
-    let section (section: Section) =
-        let mutable len = 0UL
-        for data in section.Data do
-            let len' =
-                match data with
-                | SectionData.CliHeader cli -> cliData cli
-                | ClrLoaderStub -> 8UL
-                | RawData data -> data() |> Array.length |> uint64
-            len <- len + len'
-        len
+    let sectionData =
+        function
+        | SectionData.CliHeader cli -> cliData cli
+        | ClrLoaderStub -> 8UL
+        | RawData data -> data() |> Array.length |> uint64
+
+    let section (section: Section) = Seq.sumBy sectionData section.Data
 
 /// Stores the sizes and file offsets of the various objects and structs that make up a PE file.
 type private PEInfo (pe: PEFile) as this =
@@ -123,22 +123,39 @@ type private PEInfo (pe: PEFile) as this =
     member val Sections: ImmutableArray<_> =
         let sections = ImmutableArray.CreateBuilder pe.SectionTable.Length
 
-        for i = 0 to pe.SectionTable.Length - 1 do
-            let section = pe.SectionTable.Item i
-            let length = lazy (LengthOf.section section)
-            { ActualSize = length
-              FileOffset =
+        for sectionIndex = 0 to pe.SectionTable.Length - 1 do
+            let section = pe.SectionTable.Item sectionIndex
+            let actualSize = lazy LengthOf.section section
+            let roundedSize =
                 lazy
-                    let mutable offset = this.HeaderSizeRounded.Value
-                    for j = 0 to i - 1 do
-                        offset <- offset + this.Sections.Item(j).FileOffset.Value
-                    offset
-              RoundedSize =
-                lazy (Round.upTo (uint64 pe.NTSpecificFields.Alignment.FileAlignment) length.Value)
+                    Round.upTo
+                        (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
+                        actualSize.Value
+            { ActualSize = actualSize
+              FileOffset =
+                if sectionIndex = 0 then
+                    lazy this.HeaderSizeRounded.Value
+                else
+                    let prevIndex = sectionIndex - 1
+                    lazy
+                        let prevSection = this.Sections.Item prevIndex
+                        prevSection.FileOffset.Value + roundedSize.Value
+              RoundedSize = roundedSize
               Section = section }
             |> sections.Add
 
         sections.ToImmutable()
+    member val CliHeaderRva: Lazy<uint64> =
+        lazy
+            match pe.DataDirectories.CliHeader with
+            | Some header ->
+                let section = this.Sections.Item header.SectionIndex
+                let mutable offset = section.FileOffset.Value
+                for i = 0 to header.DataIndex - 1 do // TODO: Should the lengths of the data be cached in SectionInfo as well?
+                    let prevData = section.Section.Data.Item i
+                    offset <- offset + (LengthOf.sectionData prevData)
+                offset
+            | None -> 0UL
     member val TotalLength =
         lazy
             let sections =
@@ -286,11 +303,10 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
     bin.WriteEmpty 8 // TEMPORARY // ImportAddressTable
     bin.WriteEmpty 8 // DelayImportDescriptor
 
-    match pe.CliHeader with
-    | Some (i, _) ->
-        bin.WriteU32 0 // CliHeader // NOTE: RVA points to the CliHeader // TODO: Find the file offset of the CliHeader.
-        bin.WriteU32 LengthOf.CliHeader
-    | None -> bin.WriteEmpty 8
+    if pe.CliHeader.IsSome then
+        bin.WriteU32 info.CliHeaderRva.Value // CliHeader
+        bin.WriteU32 LengthOf.CliHeader // TODO: Should use total length of CLI data instead, also maybe consider caching the sizes of cli data.
+    else bin.WriteEmpty 8
 
     bin.WriteEmpty 8 // Reserved
 
@@ -312,13 +328,14 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
     // Padding separating headers from the sections
     info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value |> int |> bin.WriteEmpty
 
-let private cli (header: Metadata.CliHeader) (bin: Writer<_>) =
-    let start = bin.Position
+let private cli (header: CliHeader) (bin: Writer<_>) =
+    let start = bin.Position // NOTE: The CliHeader file offset would probably already be calculated, since its RVA is used in the data directories, so maybe reuse it?
+    let temporaryFixThisLaterLengthOfMethodBodies = 0UL
     bin.WriteU32 LengthOf.CliHeader
     bin.WriteU16 header.MajorRuntimeVersion
     bin.WriteU16 header.MinorRuntimeVersion
-    bin.WriteU32 0 // RVA of MetaData
-    bin.WriteU32 0 // Size of MetaData
+    bin.WriteU32 (start + LengthOf.CliHeader + uint64 header.StrongNameSignature.Length + temporaryFixThisLaterLengthOfMethodBodies) // RVA of MetaData
+    bin.WriteU32 (LengthOf.cliMetadata header.Metadata) // Size of MetaData
     bin.WriteU32 header.Flags
     bin.WriteEmpty 4 // EntryPointToken
     bin.WriteEmpty 4 // RVA of Resources
@@ -337,7 +354,7 @@ let private cli (header: Metadata.CliHeader) (bin: Writer<_>) =
 
     bin.Write header.StrongNameSignature
 
-    // TODO: Write method bodies if needed
+    // TODO: Write method bodies
 
     // TODO: Write CLR metadata
 
