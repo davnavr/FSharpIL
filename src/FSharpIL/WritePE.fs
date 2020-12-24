@@ -37,6 +37,9 @@ module private Magic =
     [<Literal>]
     let PE32 = 0x10Bus
 
+    /// The signature of the CLI metadata root.
+    let CliSignature = [| 0x42uy; 0x53uy; 0x4Auy; 0x42uy; |]
+
 type private SectionInfo =
     { ActualSize: Lazy<uint64>
       DataSizes: ImmutableArray<Lazy<uint64>>
@@ -47,7 +50,7 @@ type private SectionInfo =
 
 [<RequireQualifiedAccess>]
 module private LengthOf =
-    let peHeader = DosStub.Length + PESignature.Length |> uint64
+    let PEHeader = DosStub.Length + PESignature.Length |> uint64
 
     [<Literal>]
     let CoffHeader = 20UL
@@ -77,7 +80,8 @@ module private LengthOf =
     let CliHeader = 0x48UL
 
     let cliMetadata (data: MetadataRoot) =
-        0UL
+        uint64 CliSignature.Length
+        // + Other stuff
 
     /// Calculates the combined length of the CLI header, the strong name hash, the
     /// method bodies, and the CLI metadata.
@@ -107,7 +111,7 @@ type private PEInfo (pe: PEFile) as this =
     /// Calculates the size of the headers rounded up to nearest multiple of FileAlignment.
     member val HeaderSizeActual: Lazy<uint64> =
         lazy
-            LengthOf.peHeader
+            LengthOf.PEHeader
             + LengthOf.CoffHeader
             + LengthOf.StandardFields
             + LengthOf.NTSpecificFields
@@ -359,6 +363,7 @@ let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
     // TODO: Write method bodies
 
     // TODO: Write CLR metadata
+    bin.Write CliSignature
 
 let private write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
