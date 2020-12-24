@@ -160,7 +160,7 @@ type PEFile =
 
     member inline this.DataDirectories = this.Sections.DataDirectories
     member inline this.SectionTable = this.Sections.SectionTable
-    member inline this.CliHeader = this.DataDirectories.CliHeader.Value
+    member inline this.CliHeader = this.DataDirectories.CliHeader
 
     static member Default =
         { FileHeader = CoffHeader.Default

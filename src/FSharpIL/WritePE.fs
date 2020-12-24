@@ -97,6 +97,7 @@ module private LengthOf =
 
 /// Stores the sizes and file offsets of various the objects and structs that make up a PE file.
 type private PEInfo(pe: PEFile) as this =
+    member _.File = pe
     // II.25.2.3.1
     member val CodeSize =
         lazy this.SectionsLengthRounded SectionFlags.CntCode
@@ -106,18 +107,19 @@ type private PEInfo(pe: PEFile) as this =
     member val UninitializedDataSize =
         lazy this.SectionsLengthRounded SectionFlags.CntUninitializedData
     /// Calculates the size of the headers rounded up to nearest multiple of FileAlignment.
+    member val HeaderSizeActual: Lazy<uint64> =
+        lazy
+            LengthOf.peHeader
+            + LengthOf.CoffHeader
+            + LengthOf.StandardFields
+            + LengthOf.NTSpecificFields
+            + LengthOf.DataDirectories
+            + (uint64 pe.SectionTable.Length * LengthOf.SectionHeader)
     member val HeaderSizeRounded: Lazy<uint64> =
         lazy
-            let actual =
-                LengthOf.peHeader
-                + LengthOf.CoffHeader
-                + LengthOf.StandardFields
-                + LengthOf.NTSpecificFields
-                + LengthOf.DataDirectories
-                + (uint64 pe.SectionTable.Length * LengthOf.SectionHeader)
             Round.upTo
                 (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
-                actual
+                this.HeaderSizeActual.Value
     member val Sections: ImmutableArray<_> =
         let sections = ImmutableArray.CreateBuilder pe.SectionTable.Length
 
@@ -165,9 +167,10 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
     member _.GetResult() = writer.GetResult()
 
     member _.Write(bytes: byte[]) =
-        writer.Write(pos, bytes)
-        // The position is updated afterward, which means that the first byte written is always at position zero.
-        pos <- pos + uint64 bytes.Length
+        if bytes.Length > 0 then
+            writer.Write(pos, bytes)
+            // The position is updated afterward, which means that the first byte written is always at position zero.
+            pos <- pos + uint64 bytes.Length
 
     member _.WriteU8(byte: byte) =
         try
@@ -198,12 +201,6 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
 
     member this.WriteEmpty(amt: int) = Array.replicate amt 0uy |> this.Write
 
-    member inline this.WriteEmpty(amt: ^T) =
-        let mutable i = LanguagePrimitives.GenericZero
-        while i < amt do
-            i <- i + LanguagePrimitives.GenericOne
-            this.WriteU8 0uy
-
     interface IDisposable with member _.Dispose() = (writer :> IDisposable).Dispose()
 
 [<AutoOpen>]
@@ -219,10 +216,9 @@ module private Helpers =
         | Some(i, _) -> info.Sections.Item(i).FileOffset.Value
         | None -> 0UL
 
-let private write pe (writer: PEInfo -> ByteWriter<_>) =
-    let info = PEInfo pe
-    let bin = new Writer<_> (writer info)
-
+/// Writes the headers and section headers of a PE file.
+let private headers (info: PEInfo) (bin: Writer<_>) =
+    let pe = info.File
     bin.Write DosStub
     bin.Write PESignature
 
@@ -286,9 +282,9 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
     bin.WriteEmpty 8 // DelayImportDescriptor
 
     match pe.CliHeader with
-    | Some _ ->
+    | Some (i, _) ->
         bin.WriteU32 0 // CliHeader // NOTE: RVA points to the CliHeader // TODO: Find the file offset of the CliHeader.
-        bin.WriteU32 LengthOf.CliHeader // TODO: What happens if a header is not specified?
+        bin.WriteU32 LengthOf.CliHeader
     | None -> bin.WriteEmpty 8
 
     bin.WriteEmpty 8 // Reserved
@@ -308,7 +304,22 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
         bin.WriteEmpty 2 // NumberOfLineNumbers
         bin.WriteU32 header.Characteristics
 
-    // TODO: Write padding
+    // Padding separating headers from the sections
+    info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value |> int |> bin.WriteEmpty
+
+let private write pe (writer: PEInfo -> ByteWriter<_>) =
+    let info = PEInfo pe
+    let bin = new Writer<_> (writer info)
+
+    headers info bin
+
+    for section in pe.SectionTable do
+        for data in section.Data do
+            match data with
+            | RawData bytes -> bytes() |> bin.Write
+            | CliHeader header ->
+                invalidOp "TODO: Should writing of cli be in separate function?"
+            | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
 
     bin.GetResult()
 

@@ -1,7 +1,6 @@
-﻿namespace FSharpIL.PortableExecutable
+﻿namespace rec FSharpIL.PortableExecutable
 
 open System.Collections.Immutable
-open System.ComponentModel
 
 open FSharpIL.Metadata
 
@@ -72,7 +71,18 @@ type Section =
 
 // II.25.2.3.3
 [<Sealed>]
-type DataDirectories internal(sections: ImmutableArray<Section>) =
+type DataDirectories internal(sections: PESections) =
+    let cliHeader =
+        lazy
+            Option.bind
+                (fun (i, { Section.Data = data }) ->
+                    Seq.tryPick
+                        (function
+                        | CliHeader header -> Some(i, header)
+                        | _ -> None)
+                        data)
+                sections.TextSection
+
     // ExportTable
     member _.ImportTable = ()
     // ResourceTable
@@ -87,18 +97,8 @@ type DataDirectories internal(sections: ImmutableArray<Section>) =
     // BoundImportTable
     member _.ImportAddressTable = ()
     // DelayImportDescriptor
-    member val CliHeader =
-        lazy
-            Seq.tryPick
-                (function
-                | { Kind = TextSection; Data = data } -> Some data
-                | _ -> None)
-                sections
-            |> Option.defaultValue ImmutableArray.Empty
-            |> Seq.tryPick
-                (function
-                | CliHeader header -> Some header
-                | _ -> None)
+    /// Returns the CLI header of the Portable Executable and the index of the section containing it.
+    member _.CliHeader = cliHeader.Value
     // Reserved
 
 /// Contains information about the sections of a Portable Executable file.
@@ -110,7 +110,7 @@ type PESections(sections: ImmutableArray<Section>) as this =
     member _.RsrcSection = rsrcSection.Value
     member _.TextSection = textSection.Value
 
-    member val DataDirectories = DataDirectories sections
+    member val DataDirectories = DataDirectories this
     member _.SectionTable = sections
 
     member private _.FindSection (kind: SectionKind) =
