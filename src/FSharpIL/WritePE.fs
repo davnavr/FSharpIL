@@ -128,11 +128,6 @@ type private PEInfo (pe: PEFile) as this =
                     lazy LengthOf.sectionData item |> items.Add
                 items.ToImmutable()
             let actualSize = lazy Seq.sumBy (|Lazy|) data
-            let roundedSize =
-                lazy
-                    Round.upTo
-                        (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
-                        actualSize.Value
             { ActualSize = actualSize
               DataSizes = data // TODO: Figure out if file offset of each data "segment" can be stored as well.
               FileOffset =
@@ -142,8 +137,12 @@ type private PEInfo (pe: PEFile) as this =
                     let prevIndex = sectionIndex - 1
                     lazy
                         let prevSection = this.Sections.Item prevIndex
-                        prevSection.FileOffset.Value + roundedSize.Value
-              RoundedSize = roundedSize
+                        prevSection.FileOffset.Value + prevSection.RoundedSize.Value
+              RoundedSize =
+                lazy
+                    Round.upTo
+                        (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
+                        actualSize.Value
               Section = section }
             |> sections.Add
 
@@ -308,7 +307,7 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
 
     if pe.CliHeader.IsSome then
         bin.WriteU32 info.CliHeaderRva.Value // CliHeader
-        bin.WriteU32 LengthOf.CliHeader // TODO: Should use total length of CLI data instead, also maybe consider caching the sizes of cli data.
+        bin.WriteU32 LengthOf.CliHeader
     else bin.WriteEmpty 8
 
     bin.WriteEmpty 8 // Reserved
@@ -361,20 +360,20 @@ let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
 
     // TODO: Write CLR metadata
 
-    // TODO: Figure out how to write the CLR metadata first, and then inserting the header before it to allow the metadata size to be measured.
-
 let private write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
     let bin = new Writer<_> (writer info)
 
     headers info bin
 
-    for section in pe.SectionTable do
-        for data in section.Data do
+    for section in info.Sections do
+        assert (bin.Position = section.FileOffset.Value)
+        for data in section.Section.Data do
             match data with
             | RawData bytes -> bytes() |> bin.Write
             | CliHeader header -> cli info header bin
             | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
+        section.RoundedSize.Value - section.ActualSize.Value |> int |> bin.WriteEmpty
 
     bin.GetResult()
 
