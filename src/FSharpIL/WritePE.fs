@@ -80,7 +80,7 @@ module private LengthOf =
     /// method bodies, and the CLI metadata.
     let cliData (data: CliHeader) =
         CliHeader
-        // + Strong Name Hash
+        + uint64 data.StrongNameSignature.Length
         // + Method Bodies
         // + Metadata
 
@@ -95,7 +95,7 @@ module private LengthOf =
             len <- len + len'
         len
 
-/// Stores the sizes and file offsets of various the objects and structs that make up a PE file.
+/// Stores the sizes and file offsets of the various objects and structs that make up a PE file.
 type private PEInfo (pe: PEFile) as this =
     member _.File = pe
     // II.25.2.3.1
@@ -164,6 +164,8 @@ type private ByteWriter<'Result>() =
 type private Writer<'Result>(writer: ByteWriter<'Result>) =
     let mutable pos = 0UL
 
+    member _.Position = pos
+
     member _.GetResult() = writer.GetResult()
 
     member _.Write(bytes: byte[]) =
@@ -171,6 +173,9 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
             writer.Write(pos, bytes)
             // The position is updated afterward, which means that the first byte written is always at position zero.
             pos <- pos + uint64 bytes.Length
+
+    member this.Write(bytes: ImmutableArray<byte>) =
+        bytes |> Seq.iter this.WriteU8
 
     member _.WriteU8(byte: byte) =
         try
@@ -308,6 +313,7 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
     info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value |> int |> bin.WriteEmpty
 
 let private cli (header: Metadata.CliHeader) (bin: Writer<_>) =
+    let start = bin.Position
     bin.WriteU32 LengthOf.CliHeader
     bin.WriteU16 header.MajorRuntimeVersion
     bin.WriteU16 header.MinorRuntimeVersion
@@ -317,15 +323,22 @@ let private cli (header: Metadata.CliHeader) (bin: Writer<_>) =
     bin.WriteEmpty 4 // EntryPointToken
     bin.WriteEmpty 4 // RVA of Resources
     bin.WriteEmpty 4 // Size of Resources
-    bin.WriteEmpty 4 // RVA of StrongNameSignature
-    bin.WriteEmpty 4 // Size of StrongNameSignature
+
+    if header.StrongNameSignature.IsEmpty
+    then bin.WriteEmpty 8
+    else
+        bin.WriteU32 (start + LengthOf.CliHeader) // RVA of StrongNameSignature
+        bin.WriteU32 header.StrongNameSignature.Length // Size of StrongNameSignature
+
     bin.WriteEmpty 8 // CodeManagerTable
     bin.WriteEmpty 8 // VTableFixups // TODO: See if this needs to be assigned a value
     bin.WriteEmpty 8 // ExportAddressTableJumps
     bin.WriteEmpty 8 // ManagedNativeHeader
 
-    // TODO: Write strong name hash (StrongNameSignature) if needed
+    bin.Write header.StrongNameSignature
+
     // TODO: Write method bodies if needed
+
     // TODO: Write CLR metadata
 
     // TODO: Figure out how to write the CLR metadata first, and then inserting the header before it to allow the metadata size to be measured.

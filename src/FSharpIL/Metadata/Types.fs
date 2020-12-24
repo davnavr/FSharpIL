@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
 open System
+open System.Collections.Immutable
 
 // II.22.30
 type ModuleTable =
@@ -210,7 +211,7 @@ type CliHeader =
       Metadata: MetadataRoot
       Flags: CorFlags // TODO: Create default value for flags.
       Resources: unit
-      StrongNameSignature: unit
+      StrongNameSignature: ImmutableArray<byte>
       CodeManagerTable: uint64
       VTableFixups: unit
       // ExportAddressTableJumps
@@ -225,6 +226,6 @@ type CliHeader =
           Metadata = MetadataRoot.Default
           Flags = CorFlags.ILOnly // TODO: Figure out if this is an appropriate default.
           Resources = ()
-          StrongNameSignature = ()
+          StrongNameSignature = ImmutableArray.Empty
           CodeManagerTable = 0UL
           VTableFixups = () }
