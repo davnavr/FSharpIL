@@ -3,7 +3,6 @@ module FSharpIL.WritePE
 
 open System
 open System.Collections.Immutable
-open System.IO
 
 open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
@@ -40,6 +39,7 @@ module private Magic =
 
 type private SectionInfo =
     { ActualSize: Lazy<uint64>
+      DataSizes: ImmutableArray<Lazy<uint64>>
       FileOffset: Lazy<uint64>
       /// The size of the section rounded up to a multiple of FileAlignment
       RoundedSize: Lazy<uint64>
@@ -93,8 +93,6 @@ module private LengthOf =
         | ClrLoaderStub -> 8UL
         | RawData data -> data() |> Array.length |> uint64
 
-    let section (section: Section) = Seq.sumBy sectionData section.Data
-
 /// Stores the sizes and file offsets of the various objects and structs that make up a PE file.
 type private PEInfo (pe: PEFile) as this =
     member _.File = pe
@@ -122,16 +120,21 @@ type private PEInfo (pe: PEFile) as this =
                 this.HeaderSizeActual.Value
     member val Sections: ImmutableArray<_> =
         let sections = ImmutableArray.CreateBuilder pe.SectionTable.Length
-
         for sectionIndex = 0 to pe.SectionTable.Length - 1 do
             let section = pe.SectionTable.Item sectionIndex
-            let actualSize = lazy LengthOf.section section
+            let data =
+                let items = ImmutableArray.CreateBuilder section.Data.Length
+                for item in section.Data do
+                    lazy LengthOf.sectionData item |> items.Add
+                items.ToImmutable()
+            let actualSize = lazy Seq.sumBy (|Lazy|) data
             let roundedSize =
                 lazy
                     Round.upTo
                         (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
                         actualSize.Value
             { ActualSize = actualSize
+              DataSizes = data // TODO: Figure out if file offset of each data "segment" can be stored as well.
               FileOffset =
                 if sectionIndex = 0 then
                     lazy this.HeaderSizeRounded.Value
@@ -151,9 +154,9 @@ type private PEInfo (pe: PEFile) as this =
             | Some header ->
                 let section = this.Sections.Item header.SectionIndex
                 let mutable offset = section.FileOffset.Value
-                for i = 0 to header.DataIndex - 1 do // TODO: Should the lengths of the data be cached in SectionInfo as well?
-                    let prevData = section.Section.Data.Item i
-                    offset <- offset + (LengthOf.sectionData prevData)
+                for i = 0 to header.DataIndex - 1 do
+                    let (Lazy prevSize) = section.DataSizes.Item i
+                    offset <- offset + prevSize
                 offset
             | None -> 0UL
     member val TotalLength =
@@ -328,8 +331,8 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
     // Padding separating headers from the sections
     info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value |> int |> bin.WriteEmpty
 
-let private cli (header: CliHeader) (bin: Writer<_>) =
-    let start = bin.Position // NOTE: The CliHeader file offset would probably already be calculated, since its RVA is used in the data directories, so maybe reuse it?
+let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
+    let (Lazy start) = pe.CliHeaderRva
     let temporaryFixThisLaterLengthOfMethodBodies = 0UL
     bin.WriteU32 LengthOf.CliHeader
     bin.WriteU16 header.MajorRuntimeVersion
@@ -370,7 +373,7 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
         for data in section.Data do
             match data with
             | RawData bytes -> bytes() |> bin.Write
-            | CliHeader header -> cli header bin
+            | CliHeader header -> cli info header bin
             | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
 
     bin.GetResult()
