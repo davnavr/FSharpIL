@@ -1,5 +1,5 @@
 ﻿[<RequireQualifiedAccess>]
-module FSharpIL.WritePE
+module rec FSharpIL.WritePE
 
 open System
 open System.Collections.Immutable
@@ -42,16 +42,8 @@ module private Magic =
 
     let MetadataTableStreamName = "#~\000\000"B
 
-type private SectionInfo =
-    { ActualSize: Lazy<uint64>
-      DataSizes: ImmutableArray<Lazy<uint64>>
-      FileOffset: Lazy<uint64>
-      /// The size of the section rounded up to a multiple of FileAlignment
-      RoundedSize: Lazy<uint64>
-      Section: Section }
-
 [<RequireQualifiedAccess>]
-module private LengthOf =
+module private SizeOf =
     let PEHeader = DosStub.Length + PESignature.Length |> uint64
 
     [<Literal>]
@@ -81,44 +73,13 @@ module private LengthOf =
     [<Literal>]
     let CliHeader = 0x48UL
 
-    // TODO: See if CLI size calculations can be moved to CliInfo class.
-
-    let cliMetadataTableStreamSize (tables: MetadataTables) = // NOTE: Round up to multiple of 4
-        24UL
-        // + Rows
-        // + Tables
-
-    let cliMetadataStreamHeaders =
-        // #~
-        12UL
-
-    /// Calculates the size of the CLI metadata root, excluding the stream headers.
-    let cliMetadataRoot (data: MetadataRoot) =
-        let version = MetadataVersion.toArray data.Version
-        uint64 CliSignature.Length
-        + 2UL // MajorVersion
-        + 2UL // MinorVersion
-        + 4UL // Reserved
-        + 4UL // Length
-        + uint64 version.Length
-        + 2UL // Flags
-        + 2UL // Streams
-
-    /// Calculates the combined length of the CLI header, the strong name hash, the
-    /// method bodies, and the CLI metadata.
-    let cliData (data: CliHeader) = // TODO: Figure out how to use the cached values from CliInfo.
-        CliHeader
-        + uint64 data.StrongNameSignature.Length
-        // + Method Bodies
-        + cliMetadataRoot data.Metadata
-        + cliMetadataStreamHeaders
-        + cliMetadataTableStreamSize data.Metadata.Streams.Metadata
-
-    let sectionData =
-        function
-        | SectionData.CliHeader cli -> cliData cli
-        | ClrLoaderStub -> 8UL
-        | RawData(Lazy data) -> uint64 data.Length
+type private SectionInfo =
+    { ActualSize: Lazy<uint64>
+      DataSizes: ImmutableArray<Lazy<uint64>>
+      FileOffset: Lazy<uint64>
+      /// The size of the section rounded up to a multiple of FileAlignment
+      RoundedSize: Lazy<uint64>
+      Section: Section }
 
 /// Stores the sizes and file offsets of the various objects and structs that make up a PE file.
 [<Sealed>]
@@ -135,12 +96,12 @@ type private PEInfo (pe: PEFile) as this =
     /// Calculates the size of the headers rounded up to nearest multiple of FileAlignment.
     member val HeaderSizeActual: Lazy<uint64> =
         lazy
-            LengthOf.PEHeader
-            + LengthOf.CoffHeader
-            + LengthOf.StandardFields
-            + LengthOf.NTSpecificFields
-            + LengthOf.DataDirectories
-            + (uint64 pe.SectionTable.Length * LengthOf.SectionHeader)
+            SizeOf.PEHeader
+            + SizeOf.CoffHeader
+            + SizeOf.StandardFields
+            + SizeOf.NTSpecificFields
+            + SizeOf.DataDirectories
+            + (uint64 pe.SectionTable.Length * SizeOf.SectionHeader)
     member val HeaderSizeRounded: Lazy<uint64> =
         lazy
             Round.upTo
@@ -153,7 +114,15 @@ type private PEInfo (pe: PEFile) as this =
             let data =
                 let items = ImmutableArray.CreateBuilder section.Data.Length
                 for item in section.Data do
-                    lazy LengthOf.sectionData item |> items.Add
+                    lazy
+                        match item with
+                        | CliHeader cli ->
+                            if Some cli = pe.CliHeader
+                            then (Option.get this.CliHeader.Value).TotalLength()
+                            else invalidOp "Multiple CLI headers are not supported, and may never be supported in the future"
+                        | ClrLoaderStub -> 8UL
+                        | RawData(Lazy data) -> uint64 data.Length
+                    |> items.Add
                 items.ToImmutable()
             let actualSize = lazy Seq.sumBy (|Lazy|) data
             { ActualSize = actualSize
@@ -175,6 +144,11 @@ type private PEInfo (pe: PEFile) as this =
             |> sections.Add
 
         sections.ToImmutable()
+    member val CliHeader: Lazy<CliInfo option> =
+        lazy
+            Option.map
+                (fun cli -> CliInfo(cli, this))
+                pe.CliHeader
     member val CliHeaderRva: Lazy<uint64> =
         lazy
             match pe.DataDirectories.CliHeader with
@@ -202,24 +176,46 @@ type private PEInfo (pe: PEFile) as this =
 [<Sealed>]
 type private CliInfo (cli: CliHeader, pe: PEInfo) as this =
     member _.CliHeaderRva: uint64 = pe.CliHeaderRva.Value // NOTE: This value will be incorrect if more than one CliHeader is present.
-    member _.StrongNameSignatureRva = this.CliHeaderRva + LengthOf.CliHeader
+    member _.StrongNameSignatureRva = this.CliHeaderRva + SizeOf.CliHeader
     member _.StrongNameSignatureSize = uint64 cli.StrongNameSignature.Length
     member val MethodBodiesLength: Lazy<uint64> =
         lazy 0UL
     member val MetaDataRva: Lazy<uint64> =
         lazy
             this.CliHeaderRva
-            + LengthOf.CliHeader
+            + SizeOf.CliHeader
             + this.StrongNameSignatureSize
             + this.MethodBodiesLength.Value
-    member val MetaDataSize: Lazy<uint64> = lazy LengthOf.cliMetadataRoot cli.Metadata
+    member val MetaDataSize: Lazy<uint64> =
+        lazy
+            uint64 CliSignature.Length
+            + 2UL // MajorVersion
+            + 2UL // MinorVersion
+            + 4UL // Reserved
+            + 4UL // Length
+            + uint64 this.MetaDataVersion.Value.Length
+            + 2UL // Flags
+            + 2UL // Streams
+            + this.StreamHeadersSize.Value
     member val MetaDataVersion: Lazy<byte[]> = lazy MetadataVersion.toArray cli.Metadata.Version
-    member val StreamHeadersSize: Lazy<uint64> = lazy LengthOf.cliMetadataStreamHeaders
+    member val StreamHeadersSize: Lazy<uint64> =
+        lazy
+            // #~
+            12UL
     /// Location of the `#~` stream.
     member val MetadataTableOffset =
         lazy (this.MetaDataRva.Value + this.MetaDataSize.Value + this.StreamHeadersSize.Value)
-    member val MetadataTableSize = // NOTE: Must be rounded to a multiple of 4
-        lazy LengthOf.cliMetadataTableStreamSize cli.Metadata.Streams.Metadata
+    member val MetadataTableSize = // NOTE: Must be rounded to a multiple of 4?
+        lazy
+            24UL
+            // + Rows
+            // + Tables
+    member _.TotalLength() =
+        SizeOf.CliHeader
+        + this.StrongNameSignatureSize
+        // + Method Bodies
+        + this.MetaDataSize.Value
+        + this.MetadataTableSize.Value
 
 [<AbstractClass>]
 type private ByteWriter<'Result>() =
@@ -306,7 +302,7 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
     bin.WriteU32 coff.TimeDateStamp
     bin.WriteU32 coff.SymbolTablePointer
     bin.WriteU32 coff.SymbolCount
-    bin.WriteU16 LengthOf.OptionalHeader
+    bin.WriteU16 SizeOf.OptionalHeader
     bin.WriteU16 coff.Characteristics
 
     bin.WriteU16 PE32
@@ -361,7 +357,7 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
 
     if pe.CliHeader.IsSome then
         bin.WriteU32 info.CliHeaderRva.Value // CliHeader
-        bin.WriteU32 LengthOf.CliHeader
+        bin.WriteU32 SizeOf.CliHeader
     else bin.WriteEmpty 8
 
     bin.WriteEmpty 8 // Reserved
@@ -384,9 +380,10 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
     // Padding separating headers from the sections
     info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value |> int |> bin.WriteEmpty
 
-let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
-    let info = CliInfo(header, pe)
-    bin.WriteU32 LengthOf.CliHeader
+let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) = // NOTE: This function won't work if more than one Cliheader is present.
+    let info = Option.get pe.CliHeader.Value
+    assert (Some header = pe.File.CliHeader)
+    bin.WriteU32 SizeOf.CliHeader
     bin.WriteU16 header.MajorRuntimeVersion
     bin.WriteU16 header.MinorRuntimeVersion
     bin.WriteU32 info.MetaDataRva.Value

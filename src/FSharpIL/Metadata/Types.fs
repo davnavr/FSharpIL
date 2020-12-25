@@ -207,6 +207,7 @@ type CorFlags =
     | TrackDebugData = 0x10000u
 
 // II.25.3.3
+[<ReferenceEquality>]
 type CliHeader =
     { // HeaderSize = 0x48u
       MajorRuntimeVersion: uint16
