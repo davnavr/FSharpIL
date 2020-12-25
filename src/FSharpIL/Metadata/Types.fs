@@ -168,14 +168,15 @@ type MetadataTables =
 
 /// NOTE: II.24.2.2 says that each type of stream can only occur 1 time at most.
 type MetadataStreams =
-    { Metadata: MetadataTables
+    { /// The `#~` stream.
+      Metadata: MetadataTables
       //StringStream: unit
       //UserStringStream: unit
       //GUIDStream: unit
       //BlobStream: unit
       }
 
-    member _.Count = 0us
+    member _.Count = 1us
 
     static member Default =
         { Metadata = MetadataTables.Default }

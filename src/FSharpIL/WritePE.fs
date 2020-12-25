@@ -40,6 +40,8 @@ module private Magic =
     /// The signature of the CLI metadata root.
     let CliSignature = [| 0x42uy; 0x53uy; 0x4Auy; 0x42uy; |]
 
+    let MetadataTableStreamName = "#~\000\000"B
+
 type private SectionInfo =
     { ActualSize: Lazy<uint64>
       DataSizes: ImmutableArray<Lazy<uint64>>
@@ -79,7 +81,19 @@ module private LengthOf =
     [<Literal>]
     let CliHeader = 0x48UL
 
-    let cliMetadata (data: MetadataRoot) =
+    // TODO: See if CLI size calculations can be moved to CliInfo class.
+
+    let cliMetadataTableStreamSize (tables: MetadataTables) = // NOTE: Round up to multiple of 4
+        24UL
+        // + Rows
+        // + Tables
+
+    let cliMetadataStreamHeaders =
+        // #~
+        12UL
+
+    /// Calculates the size of the CLI metadata root, excluding the stream headers.
+    let cliMetadataRoot (data: MetadataRoot) =
         let version = MetadataVersion.toArray data.Version
         uint64 CliSignature.Length
         + 2UL // MajorVersion
@@ -89,7 +103,6 @@ module private LengthOf =
         + uint64 version.Length
         + 2UL // Flags
         + 2UL // Streams
-        // + Other stuff
 
     /// Calculates the combined length of the CLI header, the strong name hash, the
     /// method bodies, and the CLI metadata.
@@ -97,7 +110,9 @@ module private LengthOf =
         CliHeader
         + uint64 data.StrongNameSignature.Length
         // + Method Bodies
-        + cliMetadata data.Metadata
+        + cliMetadataRoot data.Metadata
+        + cliMetadataStreamHeaders
+        + cliMetadataTableStreamSize data.Metadata.Streams.Metadata
 
     let sectionData =
         function
@@ -191,24 +206,20 @@ type private CliInfo (cli: CliHeader, pe: PEInfo) as this =
     member _.StrongNameSignatureSize = uint64 cli.StrongNameSignature.Length
     member val MethodBodiesLength: Lazy<uint64> =
         lazy 0UL
-    member val MetaDataRva =
+    member val MetaDataRva: Lazy<uint64> =
         lazy
             this.CliHeaderRva
             + LengthOf.CliHeader
             + this.StrongNameSignatureSize
             + this.MethodBodiesLength.Value
-    member val MetaDataSize =
-        lazy
-            uint64 CliSignature.Length
-            + 2UL // MajorVersion
-            + 2UL // MinorVersion
-            + 4UL // Reserved
-            + 4UL // Length
-            + uint64 this.MetaDataVersion.Value.Length
-            + 2UL // Flags
-            + 2UL // Streams
-            // + Other stuff
+    member val MetaDataSize: Lazy<uint64> = lazy LengthOf.cliMetadataRoot cli.Metadata
     member val MetaDataVersion: Lazy<byte[]> = lazy MetadataVersion.toArray cli.Metadata.Version
+    member val StreamHeadersSize: Lazy<uint64> = lazy LengthOf.cliMetadataStreamHeaders
+    /// Location of the `#~` stream.
+    member val MetadataTableOffset =
+        lazy (this.MetaDataRva.Value + this.MetaDataSize.Value + this.StreamHeadersSize.Value)
+    member val MetadataTableSize = // NOTE: Must be rounded to a multiple of 4
+        lazy LengthOf.cliMetadataTableStreamSize cli.Metadata.Streams.Metadata
 
 [<AbstractClass>]
 type private ByteWriter<'Result>() =
@@ -412,6 +423,23 @@ let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
     bin.WriteU16 root.Streams.Count
 
     // TODO: Write stream headers.
+    // NOTE: stream header offsets are relative to info.MetaDataRva
+    // #~ stream header
+    bin.WriteU32 info.MetadataTableOffset.Value
+    bin.WriteU32 info.MetadataTableSize.Value
+    bin.Write MetadataTableStreamName
+
+    // #~ stream
+    let metadata = header.Metadata.Streams.Metadata
+    bin.WriteEmpty 4 // Reserved
+    bin.WriteU8 metadata.MajorVersion
+    bin.WriteU8 metadata.MinorVersion
+    bin.WriteEmpty 1 // HeapSizes // TODO: Determine what value this should have.
+    bin.WriteEmpty 1 // Reserved
+    bin.WriteEmpty 8 // Valid // WHAT VALUE
+    bin.WriteEmpty 8 // Sorted // WHAT VALUE
+    // Rows
+    // Tables
 
 let private write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
