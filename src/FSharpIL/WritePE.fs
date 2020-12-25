@@ -202,10 +202,12 @@ type private CliInfo (cli: CliHeader, pe: PEInfo) as this =
         lazy
             // #~
             8UL + uint64 MetadataTableStreamName.Length
+    /// Calculates the size of all of the streams in the CLI metadata.
+    member val MetaDataStreamsSize: Lazy<uint64> =
+        lazy this.MetaDataTableSize.Value
     /// Location of the `#~` stream.
-    member val MetadataTableOffset =
-        lazy (this.MetaDataRva.Value + this.MetaDataRootSize.Value + this.StreamHeadersSize.Value)
-    member val MetaDataTableSize = // NOTE: Must be rounded to a multiple of 4?
+    member inline _.MetaDataTableOffset = this.MetaDataRootSize
+    member val MetaDataTableSize: Lazy<uint64> = // NOTE: Must be rounded to a multiple of 4.
         lazy
             24UL
             // + Rows
@@ -215,7 +217,7 @@ type private CliInfo (cli: CliHeader, pe: PEInfo) as this =
         + this.StrongNameSignatureSize
         // + Method Bodies
         + this.MetaDataRootSize.Value
-        + this.MetaDataTableSize.Value
+        + this.MetaDataStreamsSize.Value
 
 [<AbstractClass>]
 type private ByteWriter<'Result>() =
@@ -380,14 +382,15 @@ let private headers (info: PEInfo) (bin: Writer<_>) =
     // Padding separating headers from the sections
     info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value |> int |> bin.WriteEmpty
 
-let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) = // NOTE: This function won't work if more than one Cliheader is present.
+// NOTE: This function won't work if more than one Cliheader is present, since the retrieved CliInfo will only be for the first one.
+let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
     let info = Option.get pe.CliHeader.Value
     assert (Some header = pe.File.CliHeader)
     bin.WriteU32 SizeOf.CliHeader
     bin.WriteU16 header.MajorRuntimeVersion
     bin.WriteU16 header.MinorRuntimeVersion
     bin.WriteU32 info.MetaDataRva.Value
-    bin.WriteU32 (info.MetaDataRootSize.Value + info.StreamHeadersSize.Value)
+    bin.WriteU32 (info.MetaDataRootSize.Value + info.MetaDataStreamsSize.Value)
     bin.WriteU32 header.Flags
     bin.WriteEmpty 4 // EntryPointToken
 
@@ -422,7 +425,7 @@ let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) = // NOTE: Thi
     // TODO: Write stream headers.
     // NOTE: stream header offsets are relative to info.MetaDataRva
     // #~ stream header
-    bin.WriteU32 info.MetadataTableOffset.Value
+    bin.WriteU32 info.MetaDataTableOffset.Value
     bin.WriteU32 info.MetaDataTableSize.Value
     bin.Write MetadataTableStreamName
 
