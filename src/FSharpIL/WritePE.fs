@@ -260,20 +260,28 @@ type private Writer<'Result>(writer: ByteWriter<'Result>) =
     member inline this.WriteU8 value = this.WriteU8(uint8 value)
 
     member this.WriteU16(value: uint16) =
-        let value' = uint16 value
-        this.WriteU8 (value' &&& 0xFFus)
-        (value' >>> 8) &&& 0xFFus |> this.WriteU8
+        this.WriteU8 (value &&& 0xFFus)
+        (value >>> 8) &&& 0xFFus |> this.WriteU8
 
     member inline this.WriteU16 value = this.WriteU16(uint16 value)
 
     member this.WriteU32(value: uint32) =
-        let value' = uint32 value
-        this.WriteU8 (value' &&& 0xFFu)
-        (value' >>> 8) &&& 0xFFu |> this.WriteU8
-        (value' >>> 16) &&& 0xFFu |> this.WriteU8
-        (value' >>> 24) &&& 0xFFu |> this.WriteU8
+        this.WriteU8 (value &&& 0xFFu)
+        (value >>> 8) &&& 0xFFu |> this.WriteU8
+        (value >>> 16) &&& 0xFFu |> this.WriteU8
+        (value >>> 24) &&& 0xFFu |> this.WriteU8
 
     member inline this.WriteU32 value = this.WriteU32(uint32 value)
+
+    member this.WriteU64(value: uint64) =
+        this.WriteU8 (value &&& 0xFFUL)
+        (value >>> 8) &&& 0xFFUL |> this.WriteU8
+        (value >>> 16) &&& 0xFFUL |> this.WriteU8
+        (value >>> 24) &&& 0xFFUL |> this.WriteU8
+        (value >>> 32) &&& 0xFFUL |> this.WriteU8
+        (value >>> 40) &&& 0xFFUL |> this.WriteU8
+        (value >>> 48) &&& 0xFFUL |> this.WriteU8
+        (value >>> 56) &&& 0xFFUL |> this.WriteU8
 
     member this.WriteEmpty(amt: int) = Array.replicate amt 0uy |> this.Write
 
@@ -436,9 +444,9 @@ let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
     bin.WriteU8 metadata.MinorVersion
     bin.WriteEmpty 1 // HeapSizes // TODO: Determine what value this should have.
     bin.WriteEmpty 1 // Reserved
-    bin.WriteEmpty 8 // Valid // WHAT VALUE
+    bin.WriteU64 metadata.Valid
     bin.WriteEmpty 8 // Sorted // WHAT VALUE
-    // Rows
+    // Rows // TODO: Determine which integer in the array corresponds to which table.
     // Tables
 
 let private write pe (writer: PEInfo -> ByteWriter<_>) =

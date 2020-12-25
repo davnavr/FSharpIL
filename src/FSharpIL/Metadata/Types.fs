@@ -164,9 +164,11 @@ type MetadataTables =
 
     // NOTE: HeapSizes should be set depending on the number of entries in each stream, see II.24.2.6
     // member this.HeapSizes
-    // member this.Valid
 
-    // member this.Rows
+    /// Gets a bit vector that indicates which tables are present.
+    member this.Valid: uint64 = // TODO: Should this be moved to a class so the value can be cached?
+        /// NOTE: Bit zero appears to be the right-most bit.
+        0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000001UL
 
     static member Default: MetadataTables =
         { MajorVersion = 1uy
