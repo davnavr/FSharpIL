@@ -186,7 +186,7 @@ type private CliInfo (cli: CliHeader, pe: PEInfo) as this =
             + SizeOf.CliHeader
             + this.StrongNameSignatureSize
             + this.MethodBodiesLength.Value
-    member val MetaDataSize: Lazy<uint64> =
+    member val MetaDataRootSize: Lazy<uint64> =
         lazy
             uint64 CliSignature.Length
             + 2UL // MajorVersion
@@ -201,11 +201,11 @@ type private CliInfo (cli: CliHeader, pe: PEInfo) as this =
     member val StreamHeadersSize: Lazy<uint64> =
         lazy
             // #~
-            12UL
+            8UL + uint64 MetadataTableStreamName.Length
     /// Location of the `#~` stream.
     member val MetadataTableOffset =
-        lazy (this.MetaDataRva.Value + this.MetaDataSize.Value + this.StreamHeadersSize.Value)
-    member val MetadataTableSize = // NOTE: Must be rounded to a multiple of 4?
+        lazy (this.MetaDataRva.Value + this.MetaDataRootSize.Value + this.StreamHeadersSize.Value)
+    member val MetaDataTableSize = // NOTE: Must be rounded to a multiple of 4?
         lazy
             24UL
             // + Rows
@@ -214,8 +214,8 @@ type private CliInfo (cli: CliHeader, pe: PEInfo) as this =
         SizeOf.CliHeader
         + this.StrongNameSignatureSize
         // + Method Bodies
-        + this.MetaDataSize.Value
-        + this.MetadataTableSize.Value
+        + this.MetaDataRootSize.Value
+        + this.MetaDataTableSize.Value
 
 [<AbstractClass>]
 type private ByteWriter<'Result>() =
@@ -387,7 +387,7 @@ let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) = // NOTE: Thi
     bin.WriteU16 header.MajorRuntimeVersion
     bin.WriteU16 header.MinorRuntimeVersion
     bin.WriteU32 info.MetaDataRva.Value
-    bin.WriteU32 info.MetaDataSize.Value
+    bin.WriteU32 (info.MetaDataRootSize.Value + info.StreamHeadersSize.Value)
     bin.WriteU32 header.Flags
     bin.WriteEmpty 4 // EntryPointToken
 
@@ -423,7 +423,7 @@ let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) = // NOTE: Thi
     // NOTE: stream header offsets are relative to info.MetaDataRva
     // #~ stream header
     bin.WriteU32 info.MetadataTableOffset.Value
-    bin.WriteU32 info.MetadataTableSize.Value
+    bin.WriteU32 info.MetaDataTableSize.Value
     bin.Write MetadataTableStreamName
 
     // #~ stream
@@ -450,7 +450,8 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
 
         if pos <> fileOffset then
             sprintf
-                "The file offset of the section (0x%X) did not match the current position of the writer (0x%X)"
+                "The file offset indicating the start of the %A section (0x%X) did not match the current position of the writer (0x%X)"
+                section.Section.Header.SectionName
                 fileOffset
                 pos
             |> invalidOp

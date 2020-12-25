@@ -10,13 +10,13 @@ open FSharpIL.PortableExecutable
 
 [<Tests>]
 let tests =
-    let inline testPE name pe body =
+    let testPE name pe body =
         testCase name <| fun() ->
             let data = WritePE.toArray pe
             use source = new MemoryStream(data, false)
             use reader = new PEReader(source, PEStreamOptions.PrefetchEntireImage)
             body reader |> ignore
-    let inline testMetadata name pe body =
+    let testMetadata name pe body =
         testPE name pe <| fun reader ->
             reader.GetMetadataReader() |> body
 

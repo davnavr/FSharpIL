@@ -12,6 +12,10 @@ type ModuleTable =
       // EncBaseId
       }
 
+    static member Default =
+        { Name = ModuleName "Default.dll"
+          Mvid = Guid.Empty } // TODO: What should the default Mvid be?
+
 // II.22.15
 type FieldTable = unit
 
@@ -164,7 +168,43 @@ type MetadataTables =
 
     // member this.Rows
 
-    static member Default: MetadataTables = Unchecked.defaultof<MetadataTables>
+    static member Default: MetadataTables =
+        { MajorVersion = 1uy
+          MinorVersion = 1uy
+          Module = ModuleTable.Default
+          TypeRef = TypeRefTable.empty
+          TypeDef = TypeDefTable.empty
+          Field = ()
+          MethodDef = ()
+          Param = ()
+          InterfaceImpl = ()
+          MemberRef = ()
+          Constant = ()
+          CustomAttribute = ()
+          FieldMarshal = ()
+          DeclSecurity = ()
+          ClassLayout = ()
+          FieldLayout = ()
+          StandAloneSig = ()
+          EventMap = ()
+          Event = ()
+          PropertyMap = ()
+          Property = ()
+          MethodSemantics = ()
+          MethodImpl = ()
+          ModuleRef = ()
+          TypeSpec = ()
+          ImplMap = ()
+          FieldRva = ()
+          Assembly = None // TODO: Figure out if None is a good default value.
+          AssemblyRef = None
+          File = ()
+          ExportedType = ()
+          ManifestResource = ()
+          NestedClass = ()
+          GenericParam = ()
+          MethodSpec = ()
+          GenericParamConstraint = () }
 
 /// NOTE: II.24.2.2 says that each type of stream can only occur 1 time at most.
 type MetadataStreams =
