@@ -34,10 +34,6 @@ type Writer<'Result>(writer: ByteWriter<'Result>) =
             // The position is updated afterward, which means that the first byte written is always at position zero.
             pos <- pos + uint64 bytes.Length
 
-    [<Obsolete>]
-    member this.Write(bytes: ImmutableArray<byte>) =
-        bytes |> Seq.iter this.WriteU8
-
     member _.Write(byte: byte) =
         try writer.Write(pos, byte)
         with
@@ -46,44 +42,6 @@ type Writer<'Result>(writer: ByteWriter<'Result>) =
             InvalidOperationException(msg, ex) |> raise
 
         pos <- pos + 1UL
-
-    [<Obsolete>]
-    member this.WriteU8(byte: byte) = this.Write byte
-
-    [<Obsolete>]
-    member inline this.WriteU8 value = this.WriteU8(uint8 value)
-
-    [<Obsolete>]
-    member this.WriteU16(value: uint16) =
-        this.WriteU8 (value &&& 0xFFus)
-        (value >>> 8) &&& 0xFFus |> this.WriteU8
-
-    [<Obsolete>]
-    member inline this.WriteU16 value = this.WriteU16(uint16 value)
-
-    [<Obsolete>]
-    member this.WriteU32(value: uint32) =
-        this.WriteU8 (value &&& 0xFFu)
-        (value >>> 8) &&& 0xFFu |> this.WriteU8
-        (value >>> 16) &&& 0xFFu |> this.WriteU8
-        (value >>> 24) &&& 0xFFu |> this.WriteU8
-
-    [<Obsolete>]
-    member inline this.WriteU32 value = this.WriteU32(uint32 value)
-
-    [<Obsolete>]
-    member this.WriteU64(value: uint64) =
-        this.WriteU8 (value &&& 0xFFUL)
-        (value >>> 8) &&& 0xFFUL |> this.WriteU8
-        (value >>> 16) &&& 0xFFUL |> this.WriteU8
-        (value >>> 24) &&& 0xFFUL |> this.WriteU8
-        (value >>> 32) &&& 0xFFUL |> this.WriteU8
-        (value >>> 40) &&& 0xFFUL |> this.WriteU8
-        (value >>> 48) &&& 0xFFUL |> this.WriteU8
-        (value >>> 56) &&& 0xFFUL |> this.WriteU8
-
-    [<Obsolete>]
-    member this.WriteEmpty(amt: int) = Array.replicate amt 0uy |> this.Write
 
     interface IDisposable with member _.Dispose() = (writer :> IDisposable).Dispose()
 
@@ -321,8 +279,8 @@ module private Helpers =
 
 /// Writes the headers and section headers of a PE file.
 let private headers (info: PEInfo) =
-    let pe = info.File
     writer {
+        let pe = info.File
         DosStub
         PESignature
 
@@ -343,7 +301,7 @@ let private headers (info: PEInfo) =
         uint32 info.InitializedDataSize.Value
         uint32 info.UninitializedDataSize.Value
         // NOTE: The EntryPointRva always has a value regardless of whether or not it is a .dll or .exe, and points to somewhere special (see the end of II.25.2.3.1)
-        yield! empty 4UL // EntryPointRva // TODO: Figure out what this value should be.
+        0u // EntryPointRva // TODO: Figure out what this value should be.
         sectionRva info pe.Sections.TextSection |> uint32 // BaseOfCode, matches the RVA of the .text section
         sectionRva info pe.Sections.TextSection |> uint32 // BaseOfData, matches the RVA of the .rsrc section
 
@@ -358,7 +316,7 @@ let private headers (info: PEInfo) =
         nt.SubSysMajor
         nt.SubSysMinor
         nt.Win32VersionValue
-        yield! empty 4UL // ImageSize // TODO: Figure out how to calculate the ImageSize
+        0u // ImageSize // TODO: Figure out how to calculate the ImageSize
         uint32 info.HeaderSizeRounded.Value
         nt.FileChecksum
         uint16 nt.Subsystem
@@ -411,69 +369,71 @@ let private headers (info: PEInfo) =
     }
 
 // NOTE: This function won't work if more than one Cliheader is present, since the retrieved CliInfo will only be for the first one.
-let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
-    let info = Option.get pe.CliHeader.Value
+let private cli (pe: PEInfo) (header: CliHeader) =
     assert (Some header = pe.File.CliHeader)
-    bin.WriteU32 SizeOf.CliHeader
-    bin.WriteU16 header.MajorRuntimeVersion
-    bin.WriteU16 header.MinorRuntimeVersion
-    bin.WriteU32 info.MetaDataRva.Value
-    bin.WriteU32 (info.MetaDataRootSize.Value + info.MetaDataStreamsSize.Value)
-    bin.WriteU32 header.Flags
-    bin.WriteEmpty 4 // EntryPointToken
+    writer {
+        let info = Option.get pe.CliHeader.Value
+        uint32 SizeOf.CliHeader
+        header.MajorRuntimeVersion
+        header.MinorRuntimeVersion
+        uint32 info.MetaDataRva.Value
+        uint32 (info.MetaDataRootSize.Value + info.MetaDataStreamsSize.Value)
+        uint32 header.Flags
+        0u // EntryPointToken
 
-    bin.WriteEmpty 4 // RVA of Resources
-    bin.WriteEmpty 4 // Size of Resources
+        0u // RVA of Resources
+        0u // Size of Resources
 
-    if header.StrongNameSignature.IsEmpty
-    then bin.WriteEmpty 8
-    else
-        bin.WriteU32 info.StrongNameSignatureRva
-        bin.WriteU32 info.StrongNameSignatureSize
+        if header.StrongNameSignature.IsEmpty
+        then 0UL
+        else
+            uint32 info.StrongNameSignatureRva
+            uint32 info.StrongNameSignatureSize
 
-    bin.WriteEmpty 8 // CodeManagerTable
-    bin.WriteEmpty 8 // VTableFixups // TODO: See if this needs to be assigned a value
-    bin.WriteEmpty 8 // ExportAddressTableJumps
-    bin.WriteEmpty 8 // ManagedNativeHeader
+        0UL // CodeManagerTable
+        0UL // VTableFixups // TODO: See if this needs to be assigned a value
+        0UL // ExportAddressTableJumps
+        0UL // ManagedNativeHeader
 
-    bin.Write header.StrongNameSignature
+        header.StrongNameSignature
 
-    // TODO: Write method bodies
+        // TODO: Write method bodies
 
-    let root = header.Metadata
-    bin.Write CliSignature
-    bin.WriteU16 root.MajorVersion
-    bin.WriteU16 root.MinorVersion
-    bin.WriteEmpty 4 // Reserved
-    bin.WriteU32 root.Version.Length
-    bin.Write info.MetaDataVersion.Value
-    bin.WriteEmpty 2 // Flags
-    bin.WriteU16 root.Streams.Count
+        let root = header.Metadata
+        CliSignature
+        root.MajorVersion
+        root.MinorVersion
+        0u  // Reserved
+        root.Version.Length
+        info.MetaDataVersion.Value
+        0us // Flags
+        root.Streams.Count
 
-    // TODO: Write stream headers.
-    // NOTE: stream header offsets are relative to info.MetaDataRva
-    // #~ stream header
-    bin.WriteU32 info.MetaDataTableOffset.Value
-    bin.WriteU32 info.MetaDataTableSize.Value
-    bin.Write MetadataTableStreamName
+        // TODO: Write stream headers.
+        // NOTE: stream header offsets are relative to info.MetaDataRva
+        // #~ stream header
+        uint32 info.MetaDataTableOffset.Value
+        uint32 info.MetaDataTableSize.Value
+        MetadataTableStreamName
 
-    // #~ stream
-    let metadata = header.Metadata.Streams.Metadata
-    bin.WriteEmpty 4 // Reserved
-    bin.WriteU8 metadata.MajorVersion
-    bin.WriteU8 metadata.MinorVersion
-    bin.WriteEmpty 1 // HeapSizes // TODO: Determine what value this should have.
-    bin.WriteEmpty 1 // Reserved
-    bin.WriteU64 metadata.Valid
-    bin.WriteEmpty 8 // Sorted // WHAT VALUE
-    // Rows // TODO: Determine which integer in the array corresponds to which table.
+        // #~ stream
+        let metadata = header.Metadata.Streams.Metadata
+        0u // Reserved
+        metadata.MajorVersion
+        metadata.MinorVersion
+        0uy // HeapSizes // TODO: Determine what value this should have.
+        0uy // Reserved
+        metadata.Valid
+        0UL // Sorted // WHAT VALUE
+        // Rows // TODO: Determine which integer in the array corresponds to which table.
 
-    // Tables
-    // bin.WriteU32 0 // Module
+        // Tables
+        // bin.WriteU32 0 // Module
 
-    // NOTE: Perhaps the Module table can be written after the fields of the #~ stream.
+        // NOTE: Perhaps the Module table can be written after the fields of the #~ stream.
 
-    // TODO: Write #Strings, #US, #GUID, and #Blob streams
+        // TODO: Write #Strings, #US, #GUID, and #Blob streams
+    }
 
 let private write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
@@ -497,9 +457,9 @@ let private write pe (writer: PEInfo -> ByteWriter<_>) =
             match data with
             | RawData(Lazy bytes)-> bin.Write bytes
             | CliHeader header -> cli info header bin
-            | ClrLoaderStub -> bin.WriteEmpty 8 // TODO: Write the loader stub
+            | ClrLoaderStub -> empty 8UL bin // TODO: Write the loader stub
 
-        section.RoundedSize.Value - section.ActualSize.Value |> int |> bin.WriteEmpty
+        empty (section.RoundedSize.Value - section.ActualSize.Value) bin
 
     bin.GetResult()
 
