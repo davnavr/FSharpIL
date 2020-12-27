@@ -9,6 +9,7 @@
 
   <!-- Source files -->
   <ItemGroup>
+    <Compile Include="Magic.fs" />
     <Compile Include="Round.fs" />
     <Compile Include="Utilities\Enum.fs" />
     <Compile Include="Utilities\Collections.fs" />
