@@ -2,7 +2,10 @@
 module FSharpIL.WritePE
 
 open System
+open System.Collections
+open System.Collections.Generic
 open System.Collections.Immutable
+open System.Text
 
 open FSharpIL.Bytes
 open FSharpIL.Magic
@@ -163,6 +166,7 @@ and [<Sealed>] private CliInfo (cli: CliHeader, pe: PEInfo) as this =
             + 2UL // Flags
             + 2UL // Streams
             + this.StreamHeadersSize.Value
+    /// The null-terminated version string.
     member val MetaDataVersion: Lazy<byte[]> = lazy MetadataVersion.toArray cli.Metadata.Version
     member val StreamHeadersSize: Lazy<uint64> =
         lazy
@@ -296,6 +300,27 @@ let private headers (info: PEInfo) =
         yield! empty (info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value)
     }
 
+/// Represents the `#Strings` heap of a PE file containing CLI metadata.
+[<Sealed>]
+type StringHeap() =
+    let strings = LinkedList<string>()
+    let lookup = Dictionary<string, int>()
+
+    member _.Count = strings.Count
+
+    /// Adds a string to the `#Strings` heap and returns an index pointing to the string.
+    member _.AddString(str: string) =
+        match lookup.TryGetValue str with
+        | (true, index) -> index
+        | (false, _) ->
+            let index = strings.Count
+            lookup.Add(str, index)
+            strings.AddLast str |> ignore
+            index
+
+    interface seq<string> with member _.GetEnumerator() = (strings :> IEnumerable<_>).GetEnumerator()
+    interface IEnumerable with member _.GetEnumerator() = (strings :> IEnumerable).GetEnumerator()
+
 // NOTE: This function won't work if more than one Cliheader is present, since the retrieved CliInfo will only be for the first one.
 let private cli (pe: PEInfo) (header: CliHeader) =
     assert (Some header = pe.File.CliHeader)
@@ -355,12 +380,21 @@ let private cli (pe: PEInfo) (header: CliHeader) =
         0UL // Sorted // WHAT VALUE
         // Rows // TODO: Determine which integer in the array corresponds to which table.
 
+        let strings = StringHeap()
+
         // Tables
         // bin.WriteU32 0 // Module
 
         // NOTE: Perhaps the Module table can be written after the fields of the #~ stream.
 
         // TODO: Write #Strings, #US, #GUID, and #Blob streams
+
+        // #Strings
+        if true = false then // TODO: Figure out the lengths of things first.
+            0uy // empty string
+            for str in strings do
+                Encoding.UTF8.GetBytes str
+                0uy // null-terminated
     }
 
 let private write pe (writer: PEInfo -> ByteWriter<_>) =

@@ -1,7 +1,6 @@
 ﻿module FSharpIL.Bytes
 
 open System
-open System.Collections.Immutable
 
 [<AbstractClass>]
 type ByteWriter<'Result>() =
@@ -43,6 +42,7 @@ type Writer<'Result>(writer: ByteWriter<'Result>) =
 type WriteExpr<'Result> = Writer<'Result> -> unit
 
 // TODO: Maybe figure out how to keep track of and calculate lengths here.
+[<Sealed>]
 type ByteBuilder() =
     member inline _.Combine(one: WriteExpr<_>, two: WriteExpr<_>) = fun writer -> one writer; two writer
     member inline _.Delay(f: unit -> WriteExpr<_>) = fun writer -> f () writer
