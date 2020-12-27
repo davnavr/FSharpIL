@@ -1,5 +1,5 @@
 ﻿[<RequireQualifiedAccess>]
-module rec FSharpIL.WritePE
+module FSharpIL.WritePE
 
 open System
 open System.Collections.Immutable
@@ -7,6 +7,121 @@ open System.Collections.Immutable
 open FSharpIL.Magic
 open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
+
+[<AbstractClass>]
+type ByteWriter<'Result>() =
+    abstract member GetResult: unit -> 'Result
+    abstract member Write: currentPos: uint64 * byte -> unit
+    abstract member Write: currentPos: uint64 * byte[] -> unit
+    interface IDisposable with member _.Dispose() = ()
+
+[<Sealed>]
+type Writer<'Result>(writer: ByteWriter<'Result>) =
+    let mutable pos = 0UL
+
+    member _.Position = pos
+
+    member _.GetResult() = writer.GetResult()
+
+    member _.Write(bytes: byte[]) =
+        if bytes.Length > 0 then
+            try writer.Write(pos, bytes)
+            with
+            | ex ->
+                let msg = sprintf "Exception thrown while writing a byte array of length %i at position %i" bytes.Length pos
+                InvalidOperationException(msg, ex) |> raise
+
+            // The position is updated afterward, which means that the first byte written is always at position zero.
+            pos <- pos + uint64 bytes.Length
+
+    [<Obsolete>]
+    member this.Write(bytes: ImmutableArray<byte>) =
+        bytes |> Seq.iter this.WriteU8
+
+    member _.Write(byte: byte) =
+        try writer.Write(pos, byte)
+        with
+        | ex ->
+            let msg = sprintf "Exception thrown while writing byte at position %i" pos
+            InvalidOperationException(msg, ex) |> raise
+
+        pos <- pos + 1UL
+
+    [<Obsolete>]
+    member this.WriteU8(byte: byte) = this.Write byte
+
+    [<Obsolete>]
+    member inline this.WriteU8 value = this.WriteU8(uint8 value)
+
+    [<Obsolete>]
+    member this.WriteU16(value: uint16) =
+        this.WriteU8 (value &&& 0xFFus)
+        (value >>> 8) &&& 0xFFus |> this.WriteU8
+
+    [<Obsolete>]
+    member inline this.WriteU16 value = this.WriteU16(uint16 value)
+
+    [<Obsolete>]
+    member this.WriteU32(value: uint32) =
+        this.WriteU8 (value &&& 0xFFu)
+        (value >>> 8) &&& 0xFFu |> this.WriteU8
+        (value >>> 16) &&& 0xFFu |> this.WriteU8
+        (value >>> 24) &&& 0xFFu |> this.WriteU8
+
+    [<Obsolete>]
+    member inline this.WriteU32 value = this.WriteU32(uint32 value)
+
+    [<Obsolete>]
+    member this.WriteU64(value: uint64) =
+        this.WriteU8 (value &&& 0xFFUL)
+        (value >>> 8) &&& 0xFFUL |> this.WriteU8
+        (value >>> 16) &&& 0xFFUL |> this.WriteU8
+        (value >>> 24) &&& 0xFFUL |> this.WriteU8
+        (value >>> 32) &&& 0xFFUL |> this.WriteU8
+        (value >>> 40) &&& 0xFFUL |> this.WriteU8
+        (value >>> 48) &&& 0xFFUL |> this.WriteU8
+        (value >>> 56) &&& 0xFFUL |> this.WriteU8
+
+    [<Obsolete>]
+    member this.WriteEmpty(amt: int) = Array.replicate amt 0uy |> this.Write
+
+    interface IDisposable with member _.Dispose() = (writer :> IDisposable).Dispose()
+
+type WriteExpr<'Result> = Writer<'Result> -> unit
+
+// TODO: Maybe figure out how to keep track of and calculate lengths here.
+type Writer() =
+    member inline _.Combine(one: WriteExpr<_>, two: WriteExpr<_>) = fun writer -> one writer; two writer
+    member inline _.Delay(f: unit -> WriteExpr<_>) = fun writer -> f () writer
+    member inline _.YieldFrom(f: WriteExpr<_>) = f
+    member inline _.For(items: seq<'T>, body: 'T -> WriteExpr<_>) =
+        fun writer -> for item in items do body item writer
+    member inline _.Yield(value: byte) = fun (writer: Writer<_>) -> writer.Write value
+    member inline _.Yield(bytes: byte[]) = fun (writer: Writer<_>) -> writer.Write bytes
+    member inline _.Yield(bytes: seq<byte>) = fun (writer: Writer<_>) -> bytes |> Seq.iter writer.Write
+    member inline _.Yield(value: uint16) =
+        fun (writer: Writer<_>) ->
+            byte (value &&& 0xFFus) |> writer.Write
+            (value >>> 8) &&& 0xFFus |> byte |> writer.Write
+    member inline _.Yield(value: uint32) =
+        fun (writer: Writer<_>) ->
+            byte (value &&& 0xFFu) |> writer.Write
+            (value >>> 8) &&& 0xFFu |> byte |> writer.Write
+            (value >>> 16) &&& 0xFFu |> byte |> writer.Write
+            (value >>> 24) &&& 0xFFu |> byte |> writer.Write
+    member inline _.Yield(value: uint64) =
+        fun (writer: Writer<_>) ->
+            byte (value &&& 0xFFUL) |> writer.Write
+            (value >>> 8) &&& 0xFFUL |> byte |> writer.Write
+            (value >>> 16) &&& 0xFFUL |> byte |> writer.Write
+            (value >>> 24) &&& 0xFFUL |> byte |> writer.Write
+            (value >>> 32) &&& 0xFFUL |> byte |> writer.Write
+            (value >>> 40) &&& 0xFFUL |> byte |> writer.Write
+            (value >>> 48) &&& 0xFFUL |> byte |> writer.Write
+            (value >>> 56) &&& 0xFFUL |> byte |> writer.Write
+    member inline _.Zero() = ignore<Writer<_>>
+
+let writer = Writer()
 
 [<RequireQualifiedAccess>]
 module private SizeOf =
@@ -139,8 +254,7 @@ type private PEInfo (pe: PEFile) as this =
             this.Sections
         |> Seq.sumBy (fun section -> section.RoundedSize.Value) // Apparently the `SizeOfRawData` is used.
 
-[<Sealed>]
-type private CliInfo (cli: CliHeader, pe: PEInfo) as this =
+and [<Sealed>] private CliInfo (cli: CliHeader, pe: PEInfo) as this =
     member _.CliHeaderRva: uint64 = pe.CliHeaderRva.Value // NOTE: This value will be incorrect if more than one CliHeader is present.
     member _.StrongNameSignatureRva = this.CliHeaderRva + SizeOf.CliHeader
     member _.StrongNameSignatureSize = uint64 cli.StrongNameSignature.Length
@@ -186,76 +300,6 @@ type private CliInfo (cli: CliHeader, pe: PEInfo) as this =
         + this.MetaDataRootSize.Value
         + this.MetaDataStreamsSize.Value
 
-[<AbstractClass>]
-type private ByteWriter<'Result>() =
-    abstract member GetResult: unit -> 'Result
-    abstract member Write: currentPos: uint64 * byte -> unit
-    abstract member Write: currentPos: uint64 * byte[] -> unit
-    interface IDisposable with member _.Dispose() = ()
-
-// TODO: Maybe make a computation expression that handles writing and calculation of lengths.
-
-[<Sealed>]
-type private Writer<'Result>(writer: ByteWriter<'Result>) =
-    let mutable pos = 0UL
-
-    member _.Position = pos
-
-    member _.GetResult() = writer.GetResult()
-
-    member _.Write(bytes: byte[]) =
-        if bytes.Length > 0 then
-            try writer.Write(pos, bytes)
-            with
-            | ex ->
-                let msg = sprintf "Exception thrown while writing a byte array of length %i at position %i" bytes.Length pos
-                InvalidOperationException(msg, ex) |> raise
-
-            // The position is updated afterward, which means that the first byte written is always at position zero.
-            pos <- pos + uint64 bytes.Length
-
-    member this.Write(bytes: ImmutableArray<byte>) =
-        bytes |> Seq.iter this.WriteU8
-
-    member _.WriteU8(byte: byte) =
-        try writer.Write(pos, byte)
-        with
-        | ex ->
-            let msg = sprintf "Exception thrown while writing byte at position %i" pos
-            InvalidOperationException(msg, ex) |> raise
-
-        pos <- pos + 1UL
-
-    member inline this.WriteU8 value = this.WriteU8(uint8 value)
-
-    member this.WriteU16(value: uint16) =
-        this.WriteU8 (value &&& 0xFFus)
-        (value >>> 8) &&& 0xFFus |> this.WriteU8
-
-    member inline this.WriteU16 value = this.WriteU16(uint16 value)
-
-    member this.WriteU32(value: uint32) =
-        this.WriteU8 (value &&& 0xFFu)
-        (value >>> 8) &&& 0xFFu |> this.WriteU8
-        (value >>> 16) &&& 0xFFu |> this.WriteU8
-        (value >>> 24) &&& 0xFFu |> this.WriteU8
-
-    member inline this.WriteU32 value = this.WriteU32(uint32 value)
-
-    member this.WriteU64(value: uint64) =
-        this.WriteU8 (value &&& 0xFFUL)
-        (value >>> 8) &&& 0xFFUL |> this.WriteU8
-        (value >>> 16) &&& 0xFFUL |> this.WriteU8
-        (value >>> 24) &&& 0xFFUL |> this.WriteU8
-        (value >>> 32) &&& 0xFFUL |> this.WriteU8
-        (value >>> 40) &&& 0xFFUL |> this.WriteU8
-        (value >>> 48) &&& 0xFFUL |> this.WriteU8
-        (value >>> 56) &&& 0xFFUL |> this.WriteU8
-
-    member this.WriteEmpty(amt: int) = Array.replicate amt 0uy |> this.Write
-
-    interface IDisposable with member _.Dispose() = (writer :> IDisposable).Dispose()
-
 [<AutoOpen>]
 module private Helpers =
     /// Checks if an index is not greater than the maximum allowed index for an array item.
@@ -269,95 +313,102 @@ module private Helpers =
         | Some(i, _) -> info.Sections.Item(i).FileOffset.Value
         | None -> 0UL
 
+    let empty amt (writer: Writer<_>) =
+        let mutable i = 0UL
+        while i < amt do
+            writer.Write 0uy
+            i <- i + 1UL
+
 /// Writes the headers and section headers of a PE file.
-let private headers (info: PEInfo) (bin: Writer<_>) =
+let private headers (info: PEInfo) =
     let pe = info.File
-    bin.Write DosStub
-    bin.Write PESignature
+    writer {
+        DosStub
+        PESignature
 
-    let coff = pe.FileHeader
-    bin.WriteU16 coff.Machine
-    bin.WriteU16 pe.SectionTable.Length
-    bin.WriteU32 coff.TimeDateStamp
-    bin.WriteU32 coff.SymbolTablePointer
-    bin.WriteU32 coff.SymbolCount
-    bin.WriteU16 SizeOf.OptionalHeader
-    bin.WriteU16 coff.Characteristics
+        let coff = pe.FileHeader
+        uint16 coff.Machine
+        uint16 pe.SectionTable.Length
+        coff.TimeDateStamp
+        coff.SymbolTablePointer
+        coff.SymbolCount
+        SizeOf.OptionalHeader
+        uint16 coff.Characteristics
 
-    bin.WriteU16 PE32
-    let standard = pe.StandardFields
-    bin.WriteU8 standard.LMajor
-    bin.WriteU8 standard.LMinor
-    bin.WriteU32 info.CodeSize.Value
-    bin.WriteU32 info.InitializedDataSize.Value
-    bin.WriteU32 info.UninitializedDataSize.Value
-    // NOTE: The EntryPointRva always has a value regardless of whether or not it is a .dll or .exe, and points to somewhere special (see the end of II.25.2.3.1)
-    bin.WriteEmpty 4 // EntryPointRva // TODO: Figure out what this value should be.
-    sectionRva info pe.Sections.TextSection |> bin.WriteU32 // BaseOfCode, matches the RVA of the .text section
-    sectionRva info pe.Sections.TextSection |> bin.WriteU32 // BaseOfData, matches the RVA of the .rsrc section
+        let standard = pe.StandardFields
+        PE32
+        standard.LMajor
+        standard.LMinor
+        uint32 info.CodeSize.Value
+        uint32 info.InitializedDataSize.Value
+        uint32 info.UninitializedDataSize.Value
+        // NOTE: The EntryPointRva always has a value regardless of whether or not it is a .dll or .exe, and points to somewhere special (see the end of II.25.2.3.1)
+        yield! empty 4UL // EntryPointRva // TODO: Figure out what this value should be.
+        sectionRva info pe.Sections.TextSection |> uint32 // BaseOfCode, matches the RVA of the .text section
+        sectionRva info pe.Sections.TextSection |> uint32 // BaseOfData, matches the RVA of the .rsrc section
 
-    let nt = pe.NTSpecificFields
-    bin.WriteU32 nt.ImageBase
-    bin.WriteU32 nt.Alignment.SectionAlignment
-    bin.WriteU32 nt.Alignment.FileAlignment
-    bin.WriteU16 nt.OSMajor
-    bin.WriteU16 nt.OSMinor
-    bin.WriteU16 nt.UserMajor
-    bin.WriteU16 nt.UserMinor
-    bin.WriteU16 nt.SubSysMajor
-    bin.WriteU16 nt.SubSysMinor
-    bin.WriteU32 nt.Win32VersionValue
-    bin.WriteEmpty 4 // ImageSize // TODO: Figure out how to calculate the ImageSize
-    bin.WriteU32 info.HeaderSizeRounded.Value
-    bin.WriteU32 nt.FileChecksum
-    bin.WriteU16 nt.Subsystem
-    bin.WriteU16 nt.DllFlags
-    bin.WriteU32 nt.StackReserveSize
-    bin.WriteU32 nt.StackCommitSize
-    bin.WriteU32 nt.HeapReserveSize
-    bin.WriteU32 nt.HeapCommitSize
-    bin.WriteU32 nt.LoaderFlags
-    bin.WriteU32 0x10u // NumberOfDataDirectories
+        let nt = pe.NTSpecificFields
+        uint32 nt.ImageBase
+        nt.Alignment.SectionAlignment
+        nt.Alignment.FileAlignment
+        nt.OSMajor
+        nt.OSMinor
+        nt.UserMajor
+        nt.UserMinor
+        nt.SubSysMajor
+        nt.SubSysMinor
+        nt.Win32VersionValue
+        yield! empty 4UL // ImageSize // TODO: Figure out how to calculate the ImageSize
+        uint32 info.HeaderSizeRounded.Value
+        nt.FileChecksum
+        uint16 nt.Subsystem
+        uint16 nt.DllFlags
+        nt.StackReserveSize
+        nt.StackCommitSize
+        nt.HeapReserveSize
+        nt.HeapCommitSize
+        nt.LoaderFlags
+        0x10u // NumberOfDataDirectories
 
-    bin.WriteEmpty 8 // ExportTable
-    bin.WriteEmpty 8 // TEMPORARY // ImportTable
-    bin.WriteEmpty 8 // ResourceTable
-    bin.WriteEmpty 8 // ExceptionTable
-    bin.WriteEmpty 8 // CertificateTable
-    bin.WriteEmpty 8 // TEMPORARY // BaseRelocationTable
-    bin.WriteEmpty 8 // DebugTable
-    bin.WriteEmpty 8 // CopyrightTable
-    bin.WriteEmpty 8 // GlobalPointerTable
-    bin.WriteEmpty 8 // TLSTable
-    bin.WriteEmpty 8 // LoadConfigTable
-    bin.WriteEmpty 8 // BoundImportTable
-    bin.WriteEmpty 8 // TEMPORARY // ImportAddressTable
-    bin.WriteEmpty 8 // DelayImportDescriptor
+        0UL // ExportTable
+        0UL // TEMPORARY // ImportTable
+        0UL // ResourceTable
+        0UL // ExceptionTable
+        0UL // CertificateTable
+        0UL // TEMPORARY // BaseRelocationTable
+        0UL // DebugTable
+        0UL // CopyrightTable
+        0UL // GlobalPointerTable
+        0UL // TLSTable
+        0UL // LoadConfigTable
+        0UL // BoundImportTable
+        0UL // TEMPORARY // ImportAddressTable
+        0UL // DelayImportDescriptor
 
-    if pe.CliHeader.IsSome then
-        bin.WriteU32 info.CliHeaderRva.Value // CliHeader
-        bin.WriteU32 SizeOf.CliHeader
-    else bin.WriteEmpty 8
+        if pe.CliHeader.IsSome then
+            uint32 info.CliHeaderRva.Value // CliHeader
+            uint32 SizeOf.CliHeader
+        else 0UL
 
-    bin.WriteEmpty 8 // Reserved
+        0UL // Reserved
 
-    for i = 0 to pe.SectionTable.Length - 1 do
-        let section = info.Sections.Item(i)
-        let header = section.Section.Header
-        SectionName.toArray header.SectionName |> bin.Write
-        bin.WriteU32 section.ActualSize.Value
-        // TODO: Figure out how to calculate these fields from the data
-        bin.WriteU32 section.FileOffset.Value // VirtualAddress
-        bin.WriteU32 section.RoundedSize.Value
-        bin.WriteU32 section.FileOffset.Value // PointerToRawData
-        bin.WriteU32 header.PointerToRelocations
-        bin.WriteEmpty 4 // PointerToLineNumbers
-        bin.WriteU16 header.NumberOfRelocations
-        bin.WriteEmpty 2 // NumberOfLineNumbers
-        bin.WriteU32 header.Characteristics
+        for i = 0 to pe.SectionTable.Length - 1 do
+            let section = info.Sections.Item(i)
+            let header = section.Section.Header
+            SectionName.toArray header.SectionName
+            uint32 section.ActualSize.Value
+            // TODO: Figure out how to calculate these fields from the data
+            uint32 section.FileOffset.Value // VirtualAddress
+            uint32 section.RoundedSize.Value
+            uint32 section.FileOffset.Value // PointerToRawData
+            header.PointerToRelocations
+            0u // PointerToLineNumbers
+            header.NumberOfRelocations
+            0us // NumberOfLineNumbers
+            uint32 header.Characteristics
 
-    // Padding separating headers from the sections
-    info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value |> int |> bin.WriteEmpty
+        yield! empty (info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value)
+    }
 
 // NOTE: This function won't work if more than one Cliheader is present, since the retrieved CliInfo will only be for the first one.
 let private cli (pe: PEInfo) (header: CliHeader) (bin: Writer<_>) =
@@ -461,6 +512,10 @@ let toArray pe =
             { new ByteWriter<_>() with
                 override _.GetResult() = bytes
                 override _.Write(ValidArrayIndex pos, value) =
-                    Array.set bytes pos value
+                    try
+                        Array.set bytes pos value
+                    with
+                    | ex ->
+                        InvalidOperationException(sprintf "Array length is %i" bytes.Length, ex) |> raise
                 override _.Write(ValidArrayIndex pos, source: byte[]) =
                     Array.Copy(source, 0, bytes, pos, source.Length) })
