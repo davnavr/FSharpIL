@@ -1,5 +1,5 @@
 ﻿[<RequireQualifiedAccess>]
-module FSharpIL.WritePE
+module FSharpIL.WritePE // TODO: Consider using Checked versions of operators to avoid errors.
 
 open System
 open System.Collections
@@ -301,24 +301,29 @@ let private headers (info: PEInfo) =
     }
 
 /// Represents the `#Strings` heap of a PE file containing CLI metadata.
+// NOTE: Calculating the number of strings beforehand will be necessary, since it is needed to decide if indices into the #Strings heap are a certain size.
+// NOTE: Determining the length of this beforehand would be difficult, all strings that would be used need to converted to a byte array first. A dictionary would then need to be used to retrieve the indices for each string.
 [<Sealed>]
-type StringHeap() =
-    let strings = LinkedList<string>()
-    let lookup = Dictionary<string, int>()
+type StringHeap(metadata: MetadataTables) =
+    let capacity = 1
+    let mutable i = 1u
+    let strings = Array.zeroCreate capacity
+    let lookup = Dictionary<string, uint32>()
 
-    member _.Count = strings.Count
+    member _.Capacity = uint32 capacity
 
     /// Adds a string to the `#Strings` heap and returns an index pointing to the string.
     member _.AddString(str: string) =
         match lookup.TryGetValue str with
-        | (true, index) -> index
+        | (true, index') -> index'
         | (false, _) ->
-            let index = strings.Count
-            lookup.Add(str, index)
-            strings.AddLast str |> ignore
+            let index = i
+            i <- i + 1u
+            lookup.Item <- str, index
+            Array.set strings (int32 index - 1) str
             index
 
-    interface seq<string> with member _.GetEnumerator() = (strings :> IEnumerable<_>).GetEnumerator()
+    interface IEnumerable<string> with member _.GetEnumerator() = (strings :> IEnumerable<_>).GetEnumerator()
     interface IEnumerable with member _.GetEnumerator() = (strings :> IEnumerable).GetEnumerator()
 
 // NOTE: This function won't work if more than one Cliheader is present, since the retrieved CliInfo will only be for the first one.
@@ -368,19 +373,19 @@ let private cli (pe: PEInfo) (header: CliHeader) =
         uint32 info.MetaDataTableOffset.Value
         uint32 info.MetaDataTableSize.Value
         MetadataTableStreamName
+        
+        let metadata = header.Metadata.Streams.Metadata
+        let strings = StringHeap metadata
 
         // #~ stream
-        let metadata = header.Metadata.Streams.Metadata
         0u // Reserved
         metadata.MajorVersion
         metadata.MinorVersion
-        0uy // HeapSizes // TODO: Determine what value this should have.
+        0uy // HeapSizes // TODO: Determine what value this should have. Set flag 0x01 if string heap size is greater than 2 to the 16.
         0uy // Reserved
         metadata.Valid
         0UL // Sorted // WHAT VALUE
         // Rows // TODO: Determine which integer in the array corresponds to which table.
-
-        let strings = StringHeap()
 
         // Tables
         // bin.WriteU32 0 // Module
