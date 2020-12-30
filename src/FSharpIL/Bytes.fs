@@ -41,7 +41,6 @@ type Writer<'Result>(writer: ByteWriter<'Result>) =
 
 type WriteExpr<'Result> = Writer<'Result> -> unit
 
-// TODO: Maybe figure out how to keep track of and calculate lengths here.
 [<Sealed>]
 type ByteBuilder() =
     member inline _.Combine(one: WriteExpr<_>, two: WriteExpr<_>) = fun writer -> one writer; two writer
@@ -72,6 +71,24 @@ type ByteBuilder() =
             (value >>> 40) &&& 0xFFUL |> byte |> writer.Write
             (value >>> 48) &&& 0xFFUL |> byte |> writer.Write
             (value >>> 56) &&& 0xFFUL |> byte |> writer.Write
+    member inline _.Yield(expr: WriteExpr<_>) = expr
     member inline _.Zero() = ignore<Writer<_>>
 
 let bytes = ByteBuilder()
+
+let withLength (len: uint64) (expr: WriteExpr<_>) =
+    fun (printer: Writer<_>) ->
+        let startPos = printer.Position
+        expr printer
+        let currentPos = printer.Position
+        let len' = currentPos - startPos
+        if len' <> len then
+            sprintf "Expected final length to be %i while writing bytes, but the actual length was %i" len len'
+            |> internalExn
+                [
+                    "Writer", printer :> obj
+                    "StartPosition", startPos :> obj
+                    "CurrentPosition", currentPos :> obj
+                    "ExpectedLength", len :> obj
+                    "ActualLength", len' :> obj
+                ]
