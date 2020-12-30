@@ -45,7 +45,6 @@ type WriteExpr<'Result> = Writer<'Result> -> unit
 type ByteBuilder() =
     member inline _.Combine(one: WriteExpr<_>, two: WriteExpr<_>) = fun writer -> one writer; two writer
     member inline _.Delay(f: unit -> WriteExpr<_>) = fun writer -> f () writer
-    member inline _.YieldFrom(f: WriteExpr<_>) = f
     member inline _.For(items: seq<'T>, body: 'T -> WriteExpr<_>) =
         fun writer -> for item in items do body item writer
     member inline _.Yield(value: byte) = fun (writer: Writer<_>) -> writer.Write value
@@ -92,3 +91,9 @@ let withLength (len: uint64) (expr: WriteExpr<_>) =
                     "ExpectedLength", len :> obj
                     "ActualLength", len' :> obj
                 ]
+
+let empty amt (writer: Writer<_>) =
+    let mutable i = 0UL
+    while i < amt do
+        writer.Write 0uy
+        i <- i + 1UL

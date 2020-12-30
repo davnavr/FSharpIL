@@ -1,25 +1,22 @@
 ﻿[<RequireQualifiedAccess>]
-module FSharpIL.WritePE // TODO: Consider using Checked versions of operators to avoid errors.
+module FSharpIL.WritePE
 
 open System
-open System.Collections
-open System.Collections.Generic
-open System.Collections.Immutable
-open System.Text
+
+open FSharp.Core.Operators.Checked
 
 open FSharpIL.Bytes
 open FSharpIL.Magic
-open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 
 [<RequireQualifiedAccess>]
-module private SizeOf =
+module Size =
     let PEHeader = DosStub.Length + PESignature.Length |> uint64
 
     [<Literal>]
     let CoffHeader = 20UL
 
-    /// The value of the SizeOfOptionalHeader field in the COFF file header.
+    /// The value of the `SizeOfOptionalHeader` field in the COFF file header.
     [<Literal>]
     let OptionalHeader = 0xE0us
 
@@ -39,157 +36,101 @@ module private SizeOf =
     [<Literal>]
     let SectionHeader = 40UL
 
-    /// The length of the CLI header.
-    [<Literal>]
-    let CliHeader = 0x48UL
-
-type private SectionInfo =
-    { ActualSize: Lazy<uint64>
-      DataSizes: ImmutableArray<Lazy<uint64>>
-      FileOffset: Lazy<uint64>
+type SectionInfo =
+    { ActualSize: uint64
+      DataSizes: uint64[]
+      FileOffset: uint64
       /// The size of the section rounded up to a multiple of FileAlignment
-      RoundedSize: Lazy<uint64>
+      RoundedSize: uint64
       Section: Section }
 
 /// Stores the sizes and file offsets of the various objects and structs that make up a PE file.
 [<Sealed>]
-type private PEInfo (pe: PEFile) as this =
-    member _.File = pe
-    // II.25.2.3.1
-    member val CodeSize =
-        lazy this.SectionsLengthRounded SectionFlags.CntCode
-    // II.25.2.3.1
-    member val InitializedDataSize =
-        lazy this.SectionsLengthRounded SectionFlags.CntInitializedData
-    member val UninitializedDataSize =
-        lazy this.SectionsLengthRounded SectionFlags.CntUninitializedData
-    /// Calculates the size of the headers rounded up to nearest multiple of FileAlignment.
-    member val HeaderSizeActual: Lazy<uint64> =
-        lazy
-            SizeOf.PEHeader
-            + SizeOf.CoffHeader
-            + SizeOf.StandardFields
-            + SizeOf.NTSpecificFields
-            + SizeOf.DataDirectories
-            + (uint64 pe.SectionTable.Length * SizeOf.SectionHeader)
-    member val HeaderSizeRounded: Lazy<uint64> =
-        lazy
-            Round.upTo
-                (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
-                this.HeaderSizeActual.Value
-    member val Sections: ImmutableArray<_> =
-        let sections = ImmutableArray.CreateBuilder pe.SectionTable.Length
+type PEInfo (pe: PEFile) =
+    let mutable codeSize = 0UL
+    let mutable initializedDataSize = 0UL
+    let mutable uninitializedDataSize = 0UL
+    let headerSizeActual =
+        Size.PEHeader
+        + Size.CoffHeader
+        + Size.StandardFields
+        + Size.NTSpecificFields
+        + Size.DataDirectories
+        + (uint64 pe.SectionTable.Length * Size.SectionHeader)
+    let headerSizeRounded =
+        Round.upTo
+            (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
+            headerSizeActual
+    let sections = Array.zeroCreate<SectionInfo> pe.SectionTable.Length
+
+    do // Calculate section size and location information.
         for sectionIndex = 0 to pe.SectionTable.Length - 1 do
             let section = pe.SectionTable.Item sectionIndex
-            let data =
-                let items = ImmutableArray.CreateBuilder section.Data.Length
-                for item in section.Data do
-                    lazy
+            let dataSizes =
+                Array.init
+                    section.Data.Length
+                    (fun itemIndex ->
+                        let item = section.Data.Item itemIndex
                         match item with
-                        | CliHeader cli ->
-                            if Some cli = pe.CliHeader
-                            then (Option.get this.CliHeader.Value).TotalLength()
-                            else invalidOp "Multiple CLI headers are not supported, and may never be supported in the future"
+                        | CliHeader cli -> invalidOp "Calculation of CLI length has not yet been implemented." // TODO: Calculate CLI length somehow.
                         | ClrLoaderStub -> 8UL
-                        | RawData(Lazy data) -> uint64 data.Length
-                    |> items.Add
-                items.ToImmutable()
-            let actualSize = lazy Seq.sumBy (|Lazy|) data
-            { ActualSize = actualSize
-              DataSizes = data // TODO: Figure out if file offset of each data "segment" can be stored as well.
+                        | RawData(Lazy data) -> uint64 data.Length)
+            let actualSize = Array.sum dataSizes
+            { ActualSize = actualSize 
+              DataSizes = dataSizes
               FileOffset =
-                if sectionIndex = 0 then
-                    lazy this.HeaderSizeRounded.Value
+                if sectionIndex = 0
+                then headerSizeRounded
                 else
-                    let prevIndex = sectionIndex - 1
-                    lazy
-                        let prevSection = this.Sections.Item prevIndex
-                        prevSection.FileOffset.Value + prevSection.RoundedSize.Value
-              RoundedSize =
-                lazy
-                    Round.upTo
-                        (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
-                        actualSize.Value
+                    let prevSection = Array.get sections (sectionIndex - 1)
+                    prevSection.FileOffset + prevSection.RoundedSize
+              RoundedSize = Round.upTo (uint64 pe.NTSpecificFields.Alignment.FileAlignment) actualSize 
               Section = section }
-            |> sections.Add
+            |> Array.set sections sectionIndex
 
-        sections.ToImmutable()
-    member val CliHeader: Lazy<CliInfo option> =
-        lazy
-            Option.map
-                (fun cli -> CliInfo(cli, this))
-                pe.CliHeader
-    member val CliHeaderRva: Lazy<uint64> =
-        lazy
-            match pe.DataDirectories.CliHeader with
-            | Some header ->
-                let section = this.Sections.Item header.SectionIndex
-                let mutable offset = section.FileOffset.Value
-                for i = 0 to header.DataIndex - 1 do
-                    let (Lazy prevSize) = section.DataSizes.Item i
-                    offset <- offset + prevSize
-                offset
-            | None -> 0UL
+    do // Calculates the values for sizes in the standard fields (II.25.2.3.1)
+        for { RoundedSize = rsize; Section = section } in sections do
+            let inline hasFlag flag = section.Header.Characteristics.HasFlag flag
+
+            if hasFlag SectionFlags.CntCode then
+                codeSize <- codeSize + rsize
+
+            if hasFlag SectionFlags.CntInitializedData then
+                initializedDataSize <- initializedDataSize + rsize
+
+            if hasFlag SectionFlags.CntUninitializedData then
+                uninitializedDataSize <- uninitializedDataSize + rsize
+
+    member _.File = pe
+
+    member _.CodeSize = codeSize
+    member _.InitializedDataSize = initializedDataSize
+    member _.UninitializedDataSize = uninitializedDataSize
+
+    /// Returns the size of the headers rounded up to nearest multiple of FileAlignment.
+    member _.HeaderSizeActual = headerSizeActual
+    member _.HeaderSizeRounded = headerSizeRounded
+
+    member _.Sections = sections
+
+    member val CliHeaderRva =
+        match pe.DataDirectories.CliHeader with
+        | Some header ->
+            let section = Array.get sections header.SectionIndex
+            let mutable offset = section.FileOffset
+            for i = 0 to header.DataIndex - 1 do
+                offset <- offset + (Array.get section.DataSizes i)
+            offset
+        | None -> 0UL
+
     member _.TotalLength() =
         let sections =
-            Seq.sumBy
-                (fun { RoundedSize = (Lazy size) } -> size)
-                this.Sections
-        this.HeaderSizeRounded.Value + sections
+            Array.sumBy
+                (fun { RoundedSize = rsize } -> rsize)
+                sections
+        headerSizeRounded + sections
 
-    member private _.SectionsLengthRounded (flag: SectionFlags) =
-        Seq.where
-            (fun { Section = section } -> section.Header.Characteristics.HasFlag flag)
-            this.Sections
-        |> Seq.sumBy (fun section -> section.RoundedSize.Value) // Apparently the `SizeOfRawData` is used.
-
-and [<Sealed>] private CliInfo (cli: CliHeader, pe: PEInfo) as this =
-    member _.CliHeaderRva: uint64 = pe.CliHeaderRva.Value // NOTE: This value will be incorrect if more than one CliHeader is present.
-    member _.StrongNameSignatureRva = this.CliHeaderRva + SizeOf.CliHeader
-    member _.StrongNameSignatureSize = uint64 cli.StrongNameSignature.Length
-    member val MethodBodiesLength: Lazy<uint64> =
-        lazy 0UL
-    member val MetaDataRva: Lazy<uint64> =
-        lazy
-            this.CliHeaderRva
-            + SizeOf.CliHeader
-            + this.StrongNameSignatureSize
-            + this.MethodBodiesLength.Value
-    member val MetaDataRootSize: Lazy<uint64> =
-        lazy
-            uint64 CliSignature.Length
-            + 2UL // MajorVersion
-            + 2UL // MinorVersion
-            + 4UL // Reserved
-            + 4UL // Length
-            + uint64 this.MetaDataVersion.Value.Length
-            + 2UL // Flags
-            + 2UL // Streams
-            + this.StreamHeadersSize.Value
-    /// The null-terminated version string.
-    member val MetaDataVersion: Lazy<byte[]> = lazy MetadataVersion.toArray cli.Metadata.Version
-    member val StreamHeadersSize: Lazy<uint64> =
-        lazy
-            // #~
-            8UL + uint64 MetadataTableStreamName.Length
-    /// Calculates the size of all of the streams in the CLI metadata.
-    member val MetaDataStreamsSize: Lazy<uint64> =
-        lazy this.MetaDataTableSize.Value
-    /// Location of the `#~` stream.
-    member inline _.MetaDataTableOffset = this.MetaDataRootSize
-    member val MetaDataTableSize: Lazy<uint64> = // NOTE: Must be rounded to a multiple of 4.
-        lazy
-            24UL
-            // + Rows
-            // + Tables
-            // TODO: + Size of Module table?
-    member _.TotalLength() =
-        SizeOf.CliHeader
-        + this.StrongNameSignatureSize
-        // + Method Bodies
-        + this.MetaDataRootSize.Value
-        + this.MetaDataStreamsSize.Value
-
+[<Obsolete>]
 [<AutoOpen>]
 module private Helpers =
     /// Checks if an index is not greater than the maximum allowed index for an array item.
@@ -198,46 +139,57 @@ module private Helpers =
         then invalidArg "pe" "The PortableExecutable file is too large to fit inside of a byte array."
         else int32 i
 
+    // TODO: Should this be a method on PEInfo?
     let inline sectionRva (info: PEInfo) =
         function
-        | Some(i, _) -> info.Sections.Item(i).FileOffset.Value
+        | Some(i, _) -> (Array.get info.Sections i).FileOffset
         | None -> 0UL
 
-    let empty amt (writer: Writer<_>) =
-        let mutable i = 0UL
-        while i < amt do
-            writer.Write 0uy
-            i <- i + 1UL
-
-/// Writes the headers and section headers of a PE file.
-let private headers (info: PEInfo) =
+/// Writes the DOS stub and PE signature of a PE file.
+// II.25.2.1
+let peHeader() =
     bytes {
-        let pe = info.File
         DosStub
         PESignature
+    }
+    |> withLength Size.PEHeader
 
+// II.25.2.2
+let coffHeader (pe: PEFile) =
+    bytes {
         let coff = pe.FileHeader
         uint16 coff.Machine
         uint16 pe.SectionTable.Length
         coff.TimeDateStamp
         coff.SymbolTablePointer
         coff.SymbolCount
-        SizeOf.OptionalHeader
+        Size.OptionalHeader
         uint16 coff.Characteristics
+    }
+    |> withLength Size.CoffHeader
 
+// II.25.2.3.1
+let standardFields (info: PEInfo) =
+    bytes {
+        let pe = info.File
         let standard = pe.StandardFields
         PE32
         standard.LMajor
         standard.LMinor
-        uint32 info.CodeSize.Value
-        uint32 info.InitializedDataSize.Value
-        uint32 info.UninitializedDataSize.Value
+        uint32 info.CodeSize
+        uint32 info.InitializedDataSize
+        uint32 info.UninitializedDataSize
         // NOTE: The EntryPointRva always has a value regardless of whether or not it is a .dll or .exe, and points to somewhere special (see the end of II.25.2.3.1)
         0u // EntryPointRva // TODO: Figure out what this value should be.
         sectionRva info pe.Sections.TextSection |> uint32 // BaseOfCode, matches the RVA of the .text section
         sectionRva info pe.Sections.TextSection |> uint32 // BaseOfData, matches the RVA of the .rsrc section
+    }
+    |> withLength Size.StandardFields
 
-        let nt = pe.NTSpecificFields
+// II.25.2.3.2
+let ntSpecificFields (info: PEInfo) =
+    bytes {
+        let nt = info.File.NTSpecificFields
         uint32 nt.ImageBase
         nt.Alignment.SectionAlignment
         nt.Alignment.FileAlignment
@@ -249,7 +201,7 @@ let private headers (info: PEInfo) =
         nt.SubSysMinor
         nt.Win32VersionValue
         0u // ImageSize // TODO: Figure out how to calculate the ImageSize
-        uint32 info.HeaderSizeRounded.Value
+        uint32 info.HeaderSizeRounded
         nt.FileChecksum
         uint16 nt.Subsystem
         uint16 nt.DllFlags
@@ -259,7 +211,12 @@ let private headers (info: PEInfo) =
         nt.HeapCommitSize
         nt.LoaderFlags
         0x10u // NumberOfDataDirectories
+    }
+    |> withLength Size.NTSpecificFields
 
+// II.25.2.3.3
+let dataDirectories (info: PEInfo) =
+    bytes {
         0UL // ExportTable
         0UL // TEMPORARY // ImportTable
         0UL // ResourceTable
@@ -275,160 +232,51 @@ let private headers (info: PEInfo) =
         0UL // TEMPORARY // ImportAddressTable
         0UL // DelayImportDescriptor
 
-        if pe.CliHeader.IsSome then
-            uint32 info.CliHeaderRva.Value // CliHeader
-            uint32 SizeOf.CliHeader
+        // CliHeader
+        if info.File.CliHeader.IsSome then
+            uint32 info.CliHeaderRva
+            uint32 WriteCli.Size.CliHeader
         else 0UL
 
         0UL // Reserved
+    }
+    |> withLength Size.DataDirectories
 
-        for i = 0 to pe.SectionTable.Length - 1 do
-            let section = info.Sections.Item(i)
+let headers (info: PEInfo) =
+    bytes {
+        peHeader()
+        coffHeader info.File
+        standardFields info 
+        ntSpecificFields info
+        dataDirectories info
+
+        for i = 0 to info.File.SectionTable.Length - 1 do
+            let section = Array.get info.Sections i
             let header = section.Section.Header
             SectionName.toArray header.SectionName
-            uint32 section.ActualSize.Value
+            uint32 section.ActualSize
             // TODO: Figure out how to calculate these fields from the data
-            uint32 section.FileOffset.Value // VirtualAddress
-            uint32 section.RoundedSize.Value
-            uint32 section.FileOffset.Value // PointerToRawData
+            uint32 section.FileOffset // VirtualAddress
+            uint32 section.RoundedSize
+            uint32 section.FileOffset // PointerToRawData
             header.PointerToRelocations
             0u // PointerToLineNumbers
             header.NumberOfRelocations
             0us // NumberOfLineNumbers
             uint32 header.Characteristics
 
-        yield! empty (info.HeaderSizeRounded.Value - info.HeaderSizeActual.Value)
+        empty (info.HeaderSizeRounded - info.HeaderSizeActual)
     }
-
-/// Represents the `#Strings` heap of a PE file containing CLI metadata.
-// NOTE: Calculating the number of strings beforehand will be necessary, since it is needed to decide if indices into the #Strings heap are a certain size.
-// NOTE: Determining the length of this beforehand would be difficult, all strings that would be used need to converted to a byte array first. A dictionary would then need to be used to retrieve the indices for each string.
-[<Sealed>]
-type StringHeap(metadata: MetadataTables) =
-    let capacity = 1
-    let mutable i = 1u
-    let strings = Array.zeroCreate capacity
-    let lookup = Dictionary<string, uint32>()
-
-    member _.Capacity = uint32 capacity
-
-    /// Adds a string to the `#Strings` heap and returns an index pointing to the string.
-    member _.AddString(str: string) =
-        match lookup.TryGetValue str with
-        | (true, index') -> index'
-        | (false, _) ->
-            let index = i
-            i <- i + 1u
-            lookup.Item <- str, index
-            Array.set strings (int32 index - 1) str
-            index
-
-    interface IEnumerable<string> with member _.GetEnumerator() = (strings :> IEnumerable<_>).GetEnumerator()
-    interface IEnumerable with member _.GetEnumerator() = (strings :> IEnumerable).GetEnumerator()
-
-// NOTE: This function won't work if more than one Cliheader is present, since the retrieved CliInfo will only be for the first one.
-let private cli (pe: PEInfo) (header: CliHeader) =
-    assert (Some header = pe.File.CliHeader)
-    bytes {
-        let info = Option.get pe.CliHeader.Value
-        uint32 SizeOf.CliHeader
-        header.MajorRuntimeVersion
-        header.MinorRuntimeVersion
-        uint32 info.MetaDataRva.Value
-        uint32 (info.MetaDataRootSize.Value + info.MetaDataStreamsSize.Value)
-        uint32 header.Flags
-        0u // EntryPointToken
-
-        0u // RVA of Resources
-        0u // Size of Resources
-
-        if header.StrongNameSignature.IsEmpty
-        then 0UL
-        else
-            uint32 info.StrongNameSignatureRva
-            uint32 info.StrongNameSignatureSize
-
-        0UL // CodeManagerTable
-        0UL // VTableFixups // TODO: See if this needs to be assigned a value
-        0UL // ExportAddressTableJumps
-        0UL // ManagedNativeHeader
-
-        header.StrongNameSignature
-
-        // TODO: Write method bodies
-
-        let root = header.Metadata
-        CliSignature
-        root.MajorVersion
-        root.MinorVersion
-        0u  // Reserved
-        root.Version.Length
-        info.MetaDataVersion.Value
-        0us // Flags
-        root.Streams.Count
-
-        // TODO: Write stream headers.
-        // NOTE: stream header offsets are relative to info.MetaDataRva
-        // #~ stream header
-        uint32 info.MetaDataTableOffset.Value
-        uint32 info.MetaDataTableSize.Value
-        MetadataTableStreamName
-        
-        let metadata = header.Metadata.Streams.Metadata
-        let strings = StringHeap metadata
-
-        // #~ stream
-        0u // Reserved
-        metadata.MajorVersion
-        metadata.MinorVersion
-        0uy // HeapSizes // TODO: Determine what value this should have. Set flag 0x01 if string heap size is greater than 2 to the 16.
-        0uy // Reserved
-        metadata.Valid
-        0UL // Sorted // WHAT VALUE
-        // Rows // TODO: Determine which integer in the array corresponds to which table.
-
-        // Tables
-        // bin.WriteU32 0 // Module
-
-        // NOTE: Perhaps the Module table can be written after the fields of the #~ stream.
-
-        // TODO: Write #Strings, #US, #GUID, and #Blob streams
-
-        // #Strings
-        if true = false then // TODO: Figure out the lengths of things first.
-            0uy // empty string
-            for str in strings do
-                Encoding.UTF8.GetBytes str
-                0uy // null-terminated
-    }
+    |> withLength info.HeaderSizeRounded
 
 let private write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
-    let bin = new Writer<_> (writer info)
+    let writer' = new Writer<_> (writer info)
 
-    headers info bin
+    headers info writer'
 
-    for section in info.Sections do
-        let pos = bin.Position
-        let fileOffset = section.FileOffset.Value
-
-        if pos <> fileOffset then
-            sprintf
-                "The file offset indicating the start of the %A section (0x%X) did not match the current position of the writer (0x%X)"
-                section.Section.Header.SectionName
-                fileOffset
-                pos
-            |> invalidOp
-
-        for data in section.Section.Data do
-            match data with
-            | RawData(Lazy bytes)-> bin.Write bytes
-            | CliHeader header -> cli info header bin
-            | ClrLoaderStub -> empty 8UL bin // TODO: Write the loader stub
-
-        empty (section.RoundedSize.Value - section.ActualSize.Value) bin
-
-    bin.GetResult()
+    writer'.GetResult()
+    // TODO: Check that the amount of bytes written matches the total length calculated in PEInfo.
 
 let toArray pe =
     write
