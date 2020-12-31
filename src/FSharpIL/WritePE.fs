@@ -287,13 +287,7 @@ let streams (info: PEInfo) (writer: Writer<_>) =
                     section.Section.Header.SectionName
                     fileOffset
                     pos
-                |> internalExn
-                    [
-                        "Writer", writer :> obj
-                        "File", info.File :> obj
-                        "ExpectedPosition", box fileOffset
-                        "ActualPosition", box pos
-                    ]
+                |> invalidOp
 
             for dataIndex = 0 to data.Length - 1 do
                 let item = data.Item dataIndex
@@ -319,10 +313,13 @@ let file (info: PEInfo) =
     |> withLength info.TotalLength
 
 let write pe (writer: PEInfo -> ByteWriter<_>) =
-    let info = PEInfo pe
-    let writer' = new Writer<_> (writer info)
-    file info writer'
-    writer'.GetResult()
+    try
+        let info = PEInfo pe
+        let writer' = new Writer<_> (writer info)
+        file info writer'
+        writer'.GetResult()
+    with
+    | ex -> InternalException ex |> raise
 
 let toArray pe =
     write

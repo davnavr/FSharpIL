@@ -83,14 +83,7 @@ let withLength (len: uint64) (expr: WriteExpr<_>) =
         let len' = currentPos - startPos
         if len' <> len then
             sprintf "Expected final length to be %i while writing bytes, but the actual length was %i" len len'
-            |> internalExn
-                [
-                    "Writer", printer :> obj
-                    "StartPosition", box startPos
-                    "CurrentPosition", box currentPos
-                    "ExpectedLength", box len
-                    "ActualLength", box len'
-                ]
+            |> invalidOp
 
 let empty amt (writer: Writer<_>) =
     try
