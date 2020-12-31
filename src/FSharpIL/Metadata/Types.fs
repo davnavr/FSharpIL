@@ -211,7 +211,7 @@ type MetadataTables =
 /// NOTE: II.24.2.2 says that each type of stream can only occur 1 time at most.
 type MetadataStreams =
     { /// The `#~` stream.
-      Metadata: MetadataTables
+      Tables: MetadataTables
       //StringStream: unit
       //UserStringStream: unit
       //GUIDStream: unit
@@ -221,7 +221,7 @@ type MetadataStreams =
     member _.Count = 1us
 
     static member Default =
-        { Metadata = MetadataTables.Default }
+        { Tables = MetadataTables.Default }
 
 // II.24.2.1
 type MetadataRoot =

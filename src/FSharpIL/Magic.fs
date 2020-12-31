@@ -31,5 +31,3 @@ let PE32 = 0x10Bus
 
 /// The signature of the CLI metadata root.
 let CliSignature = [| 0x42uy; 0x53uy; 0x4Auy; 0x42uy; |]
-
-let MetadataTableStreamName = "#~\000\000"B

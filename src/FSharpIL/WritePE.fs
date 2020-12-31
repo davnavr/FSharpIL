@@ -131,21 +131,6 @@ type PEInfo (pe: PEFile) =
                 sections
         headerSizeRounded + sections
 
-[<Obsolete>]
-[<AutoOpen>]
-module private Helpers =
-    /// Checks if an index is not greater than the maximum allowed index for an array item.
-    let (|ValidArrayIndex|) (i: uint64) =
-        if i > uint64 Int32.MaxValue 
-        then invalidArg "pe" "The PortableExecutable file is too large to fit inside of a byte array."
-        else int32 i
-
-    // TODO: Should this be a method on PEInfo?
-    let inline sectionRva (info: PEInfo) =
-        function
-        | Some(i, _) -> (Array.get info.Sections i).FileOffset
-        | None -> 0UL
-
 /// Writes the DOS stub and PE signature of a PE file.
 // II.25.2.1
 let peHeader() =
@@ -171,6 +156,10 @@ let coffHeader (pe: PEFile) =
 
 // II.25.2.3.1
 let standardFields (info: PEInfo) =
+    let sectionRva =
+        function
+        | Some(i, _) -> (Array.get info.Sections i).FileOffset
+        | None -> 0UL
     bytes {
         let pe = info.File
         let standard = pe.StandardFields
@@ -182,8 +171,8 @@ let standardFields (info: PEInfo) =
         uint32 info.UninitializedDataSize
         // NOTE: The EntryPointRva always has a value regardless of whether or not it is a .dll or .exe, and points to somewhere special (see the end of II.25.2.3.1)
         0u // EntryPointRva // TODO: Figure out what this value should be.
-        sectionRva info pe.Sections.TextSection |> uint32 // BaseOfCode, matches the RVA of the .text section
-        sectionRva info pe.Sections.TextSection |> uint32 // BaseOfData, matches the RVA of the .rsrc section
+        sectionRva pe.Sections.TextSection |> uint32 // BaseOfCode, matches the RVA of the .text section
+        sectionRva pe.Sections.TextSection |> uint32 // BaseOfData, matches the RVA of the .rsrc section
     }
     |> withLength Size.StandardFields
 
@@ -284,6 +273,10 @@ let toArray pe =
     write
         pe
         (fun info ->
+            let (|ValidArrayIndex|) (i: uint64) =
+                if i > uint64 Int32.MaxValue 
+                then invalidArg "pe" "The PortableExecutable file is too large to fit inside of a byte array of size."
+                else int32 i
             let (ValidArrayIndex totalLength) = info.TotalLength()
             let bytes = Array.zeroCreate<byte> totalLength
             { new ByteWriter<_>() with
