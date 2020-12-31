@@ -1,9 +1,9 @@
 ﻿[<RequireQualifiedAccess>]
 module FSharpIL.WritePE
 
-open System
-
 open FSharp.Core.Operators.Checked
+
+open System
 
 open FSharpIL.Bytes
 open FSharpIL.Magic
@@ -123,6 +123,7 @@ type PEInfo (pe: PEFile) =
             offset
         | None -> 0UL
 
+    /// Calculates the total length of the PE file.
     member _.TotalLength() =
         let sections =
             Array.sumBy
@@ -250,6 +251,7 @@ let headers (info: PEInfo) =
         ntSpecificFields info
         dataDirectories info
 
+        // Section headers
         for i = 0 to info.File.SectionTable.Length - 1 do
             let section = Array.get info.Sections i
             let header = section.Section.Header
@@ -269,7 +271,7 @@ let headers (info: PEInfo) =
     }
     |> withLength info.HeaderSizeRounded
 
-let private write pe (writer: PEInfo -> ByteWriter<_>) =
+let write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
     let writer' = new Writer<_> (writer info)
 
