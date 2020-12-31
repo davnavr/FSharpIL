@@ -32,7 +32,7 @@ type Writer<'Result>(writer: ByteWriter<'Result>) =
         try writer.Write(pos, byte)
         with
         | ex ->
-            let msg = sprintf "Exception thrown while writing byte at position %i" pos
+            let msg = sprintf "Exception thrown while writing byte 0x%X at position %i" byte pos
             InvalidOperationException(msg, ex) |> raise
 
         pos <- pos + 1UL
@@ -86,14 +86,19 @@ let withLength (len: uint64) (expr: WriteExpr<_>) =
             |> internalExn
                 [
                     "Writer", printer :> obj
-                    "StartPosition", startPos :> obj
-                    "CurrentPosition", currentPos :> obj
-                    "ExpectedLength", len :> obj
-                    "ActualLength", len' :> obj
+                    "StartPosition", box startPos
+                    "CurrentPosition", box currentPos
+                    "ExpectedLength", box len
+                    "ActualLength", box len'
                 ]
 
 let empty amt (writer: Writer<_>) =
-    let mutable i = 0UL
-    while i < amt do
-        writer.Write 0uy
-        i <- i + 1UL
+    try
+        let mutable i = 0UL
+        while i < amt do
+            writer.Write 0uy
+            i <- i + 1UL
+    with
+    | ex ->
+        let msg = sprintf "Exception thrown while writing padding of length %i" amt
+        InvalidOperationException(msg, ex) |> raise

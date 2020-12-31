@@ -85,7 +85,7 @@ type PEInfo (pe: PEFile) =
                             | CliHeader cli ->
                                 let info = WriteCli.CliInfo(cli, pos)
                                 cliMetadata.Item <- (sectionIndex, itemIndex), info
-                                info.TotalLength
+                                info.TotalSize
                             | ClrLoaderStub -> 8UL
                             | RawData(Lazy data) -> uint64 data.Length
                         pos <- pos + size
@@ -130,6 +130,7 @@ type PEInfo (pe: PEFile) =
 
     member _.Sections = sections
 
+    member _.CliMetadata = cliMetadata
     member val CliHeaderRva =
         match pe.DataDirectories.CliHeader with
         | Some header ->
@@ -272,15 +273,55 @@ let headers (info: PEInfo) =
     }
     |> withLength info.HeaderSizeRounded
 
+let streams (info: PEInfo) (writer: Writer<_>) =
+    for sectionIndex = 0 to info.Sections.Length - 1 do
+        let section = Array.get info.Sections sectionIndex
+        try
+            let data = section.Section.Data
+            let pos = writer.Position
+            let fileOffset = section.FileOffset
+
+            if pos <> fileOffset then
+                sprintf
+                    "The file offset indicating the start of the %A section (0x%X) did not match the current position of the writer (0x%X)"
+                    section.Section.Header.SectionName
+                    fileOffset
+                    pos
+                |> internalExn
+                    [
+                        "Writer", writer :> obj
+                        "File", info.File :> obj
+                        "ExpectedPosition", box fileOffset
+                        "ActualPosition", box pos
+                    ]
+
+            for dataIndex = 0 to data.Length - 1 do
+                let item = data.Item dataIndex
+                match item with
+                | RawData(Lazy bytes)-> writer.Write bytes
+                | CliHeader _ ->
+                    let cli = info.CliMetadata.Item(sectionIndex, dataIndex)
+                    WriteCli.data cli writer
+                | ClrLoaderStub -> empty 8UL writer // TODO: Write the loader stub
+
+            empty (section.RoundedSize - section.ActualSize) writer
+        with
+        | ex ->
+            let msg = sprintf "An exception was thrown while writing the %O section." section.Section.Header.SectionName
+            InvalidOperationException(msg, ex) |> raise
+
+/// Writes a Portrable Executable file.
+let file (info: PEInfo) =
+    bytes {
+        headers info
+        streams info
+    }
+    |> withLength info.TotalLength
+
 let write pe (writer: PEInfo -> ByteWriter<_>) =
     let info = PEInfo pe
     let writer' = new Writer<_> (writer info)
-
-    headers info writer'
-
-    // TODO: Write streams
-
-    withLength info.TotalLength ignore writer'
+    file info writer'
     writer'.GetResult()
 
 let toArray pe =
@@ -300,6 +341,6 @@ let toArray pe =
                         Array.set bytes pos value
                     with
                     | ex ->
-                        InvalidOperationException(sprintf "Array length is %i" bytes.Length, ex) |> raise
+                        InvalidOperationException(sprintf "Exception thrown while writting to array of length %i" bytes.Length, ex) |> raise
                 override _.Write(ValidArrayIndex pos, source: byte[]) =
                     Array.Copy(source, 0, bytes, pos, source.Length) })
