@@ -28,7 +28,9 @@ type MetadataInfo (metadata: MetadataRoot, rootRva: uint64) =
         + 16UL
     let tableSize = // NOTE: Must be rounded to a multiple of 4.
         24UL
-        // + Rows
+        // Rows
+        + 4UL
+        // TODO: Add other rows
         // + Tables
         // TODO: + Size of Module table?
     let streamsSize =
@@ -40,7 +42,7 @@ type MetadataInfo (metadata: MetadataRoot, rootRva: uint64) =
     member _.RootRva = rootRva
     member _.RootSize = rootSize
     member inline this.TableOffset = this.RootSize
-    member _.TableSize = tableSize
+    member _.TablesSize = tableSize
     member _.StreamsSize = streamsSize
     member _.TotalSize = rootSize + streamsSize
 
@@ -117,7 +119,7 @@ let metadata (info: CliInfo) =
     /// Writes the stream headers.
     let headers =
         bytes {
-            streamHeader info.Metadata.TableOffset info.Metadata.TableSize "#~"
+            streamHeader info.Metadata.TableOffset info.Metadata.TablesSize "#~"
             // TODO: Write other stream headers.
         }
     bytes {
@@ -134,24 +136,34 @@ let metadata (info: CliInfo) =
     }
     // TODO: Check that length is correct.
 
-let streams (info: CliInfo) =
-    bytes {
-        let tables = info.Metadata.Root.Streams.Tables
+let tables (info: MetadataInfo) =
+    let tables = info.Root.Streams.Tables
+    let header =
+        bytes {
+            0u // Reserved
+            tables.MajorVersion
+            tables.MinorVersion
+            0uy // HeapSizes // TODO: Determine what value this should have. Set flag 0x01 if string heap size is greater than 2 to the 16.
+            0uy // Reserved
+            tables.Valid
+            0UL // Sorted // WHAT VALUE
 
-        // #~ stream
-        0u // Reserved
-        tables.MajorVersion
-        tables.MinorVersion
-        0uy // HeapSizes // TODO: Determine what value this should have. Set flag 0x01 if string heap size is greater than 2 to the 16.
-        0uy // Reserved
-        tables.Valid
-        0UL // Sorted // WHAT VALUE
-        // Rows // TODO: Determine which integer in the array corresponds to which table.
+            // Rows
+            // NOTE: Integers are sorted by table number.
+            1u // Module
+        }
+    bytes {
+        header
 
         // Tables
         // bin.WriteU32 0 // Module
+    }
+    |> withLength info.TablesSize
 
-        // NOTE: Perhaps the Module table can be written after the fields of the #~ stream.
+let streams (info: CliInfo) =
+    bytes {
+        // #~ stream
+        tables info.Metadata
 
         // TODO: Write #Strings, #US, #GUID, and #Blob streams
 
