@@ -4,6 +4,7 @@ module FSharpIL.WritePE
 open FSharp.Core.Operators.Checked
 
 open System
+open System.Collections.Generic
 
 open FSharpIL.Bytes
 open FSharpIL.Magic
@@ -61,29 +62,38 @@ type PEInfo (pe: PEFile) =
         Round.upTo
             (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
             headerSizeActual
+    let cliMetadata = Dictionary<int * int, WriteCli.CliInfo> 1
     let sections = Array.zeroCreate<SectionInfo> pe.SectionTable.Length
 
     do // Calculate section size and location information.
         for sectionIndex = 0 to pe.SectionTable.Length - 1 do
             let section = pe.SectionTable.Item sectionIndex
-            let dataSizes =
-                Array.init
-                    section.Data.Length
-                    (fun itemIndex ->
-                        let item = section.Data.Item itemIndex
-                        match item with
-                        | CliHeader cli -> invalidOp "Calculation of CLI length has not yet been implemented." // TODO: Calculate CLI length somehow.
-                        | ClrLoaderStub -> 8UL
-                        | RawData(Lazy data) -> uint64 data.Length)
-            let actualSize = Array.sum dataSizes
-            { ActualSize = actualSize 
-              DataSizes = dataSizes
-              FileOffset =
+            let fileOffset =
                 if sectionIndex = 0
                 then headerSizeRounded
                 else
                     let prevSection = Array.get sections (sectionIndex - 1)
                     prevSection.FileOffset + prevSection.RoundedSize
+            let dataSizes =
+                let mutable pos = fileOffset
+                Array.init // TODO: Figure out if this is optimized to be a for loop.
+                    section.Data.Length
+                    (fun itemIndex ->
+                        let item = section.Data.Item itemIndex
+                        let size =
+                            match item with
+                            | CliHeader cli ->
+                                let info = WriteCli.CliInfo(cli, pos)
+                                cliMetadata.Item <- (sectionIndex, itemIndex), info
+                                info.TotalLength
+                            | ClrLoaderStub -> 8UL
+                            | RawData(Lazy data) -> uint64 data.Length
+                        pos <- pos + size
+                        size)
+            let actualSize = Array.sum dataSizes
+            { ActualSize = actualSize
+              DataSizes = dataSizes
+              FileOffset = fileOffset
               RoundedSize = Round.upTo (uint64 pe.NTSpecificFields.Alignment.FileAlignment) actualSize 
               Section = section }
             |> Array.set sections sectionIndex
@@ -101,13 +111,20 @@ type PEInfo (pe: PEFile) =
             if hasFlag SectionFlags.CntUninitializedData then
                 uninitializedDataSize <- uninitializedDataSize + rsize
 
+    let totalLength =
+        let sections =
+            Array.sumBy
+                (fun { RoundedSize = rsize } -> rsize)
+                sections
+        headerSizeRounded + sections
+
     member _.File = pe
 
     member _.CodeSize = codeSize
     member _.InitializedDataSize = initializedDataSize
     member _.UninitializedDataSize = uninitializedDataSize
 
-    /// Returns the size of the headers rounded up to nearest multiple of FileAlignment.
+    /// Gets the size of the headers rounded up to nearest multiple of FileAlignment.
     member _.HeaderSizeActual = headerSizeActual
     member _.HeaderSizeRounded = headerSizeRounded
 
@@ -123,13 +140,8 @@ type PEInfo (pe: PEFile) =
             offset
         | None -> 0UL
 
-    /// Calculates the total length of the PE file.
-    member _.TotalLength() =
-        let sections =
-            Array.sumBy
-                (fun { RoundedSize = rsize } -> rsize)
-                sections
-        headerSizeRounded + sections
+    /// Gets the total length of the PE file.
+    member _.TotalLength = totalLength
 
 /// Writes the DOS stub and PE signature of a PE file.
 // II.25.2.1
@@ -266,8 +278,10 @@ let write pe (writer: PEInfo -> ByteWriter<_>) =
 
     headers info writer'
 
+    // TODO: Write streams
+
+    withLength info.TotalLength ignore writer'
     writer'.GetResult()
-    // TODO: Check that the amount of bytes written matches the total length calculated in PEInfo.
 
 let toArray pe =
     write
@@ -277,7 +291,7 @@ let toArray pe =
                 if i > uint64 Int32.MaxValue 
                 then invalidArg "pe" "The PortableExecutable file is too large to fit inside of a byte array of size."
                 else int32 i
-            let (ValidArrayIndex totalLength) = info.TotalLength()
+            let (ValidArrayIndex totalLength) = info.TotalLength
             let bytes = Array.zeroCreate<byte> totalLength
             { new ByteWriter<_>() with
                 override _.GetResult() = bytes

@@ -53,6 +53,10 @@ type CliInfo (cli: CliHeader, headerRva: uint64) =
 
     // TODO: Have separate Info class for CLI metadata.
 
+    // TODO: Use Encoding.GetByteCount to determine the size of the Strings heap.
+
+    let totalLength = 0UL
+
     member _.Header = cli
     member _.HeaderRva = headerRva
     member _.StrongNameSignatureRva  = strongNameSignatureRva
@@ -60,8 +64,7 @@ type CliInfo (cli: CliHeader, headerRva: uint64) =
     member _.MethodBodiesSize = methodBodiesSize
     member _.MetadataRva = metadataRva
     member val Metadata = MetadataInfo (cli.Metadata, metadataRva)
-
-    // TODO: Use Encoding.GetByteCount to determine the size of the Strings heap.
+    member _.TotalLength = totalLength
 
 let header (info: CliInfo) =
     bytes {
