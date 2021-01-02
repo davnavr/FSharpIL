@@ -16,6 +16,7 @@
     <Compile Include="Utilities\Enum.fs" />
     <Compile Include="Utilities\Collections.fs" />
     <Compile Include="Metadata\ModuleName.fs" />
+    <Compile Include="Metadata\AssemblyName.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\TypeRefTable.fs" />
     <Compile Include="Metadata\TypeDefTable.fs" />

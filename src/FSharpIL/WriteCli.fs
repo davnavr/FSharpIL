@@ -57,8 +57,6 @@ type CliInfo (cli: CliHeader, headerRva: uint64) =
         + methodBodiesSize
     let metadata = MetadataInfo (cli.Metadata, metadataRva)
 
-    // TODO: Have separate Info class for CLI metadata.
-
     // TODO: Use Encoding.GetByteCount to determine the size of the Strings heap.
 
     let totalSize =

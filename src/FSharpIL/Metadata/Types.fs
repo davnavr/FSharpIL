@@ -3,6 +3,12 @@
 open System
 open System.Collections.Immutable
 
+type AssemblyCulture = // TODO: Add more cultures
+    | NullCulture
+    | Ar_SA
+    | En_US
+    | Div_MV
+
 // II.22.30
 type ModuleTable =
     { // Generation
@@ -84,13 +90,43 @@ type FieldRvaTable = unit
 
 // II.22.2
 type AssemblyTable =
-    { HashAlgId: unit }
+    { HashAlgId: unit // II.23.1.1
+      Version: Version
+      Flags: unit
+      PublicKey: unit option
+      Name: AssemblyName // TODO: Create a separate type for name? Apparently it cannot have a colon, forward/back slash, period, or be empty.
+      Culture: AssemblyCulture }
 
     static member Default =
-        { HashAlgId = () }
+        { HashAlgId = ()
+          Version = Version(1, 0, 0, 0)
+          Flags = ()
+          PublicKey = None
+          Name = AssemblyName "Default"
+          Culture = NullCulture }
+
+type PublicKeyOrToken =
+    | PublicKey // of ?
+    | HashedToken // of ?
+    | NoPublicKey
+
+[<CustomEquality; NoComparison>]
+type AssemblyRef =
+    { Version: Version
+      PublicKeyOrToken: PublicKeyOrToken
+      Name: AssemblyName
+      Culture: AssemblyCulture
+      HashValue: unit option }
+
+    interface IEquatable<AssemblyRef> with
+        member this.Equals other =
+            this.Version = other.Version
+            && this.PublicKeyOrToken = other.PublicKeyOrToken
+            && this.Name = other.Name
+            && this.Culture = other.Culture
 
 // II.22.5
-type AssemblyRefTable = unit
+type AssemblyRefTable = IImmutableSet<AssemblyRef>
 
 // II.22.19
 type FileTable = unit
@@ -149,11 +185,11 @@ type MetadataTables =
       ImplMap: ImplMapTable
       FieldRva: FieldRvaTable
       Assembly: AssemblyTable option // 0x20
-      // AssemblyProcessor
-      // AssemblyOS
-      AssemblyRef: AssemblyRefTable option // 0x23
-      // AssemblyRefProcessor // TODO: Determine if these tables are needed.
-      // AssemblyRefOS
+      // AssemblyProcessor // Not used when writing a PE file
+      // AssemblyOS // Not used when writing a PE file
+      AssemblyRef: AssemblyRefTable // 0x23
+      // AssemblyRefProcessor // Not used when writing a PE file
+      // AssemblyRefOS // Not used when writing a PE file
       File: FileTable
       ExportedType: ExportedTypeTable
       ManifestResource: ManifestResourceTable
@@ -199,7 +235,7 @@ type MetadataTables =
           ImplMap = ()
           FieldRva = ()
           Assembly = None // TODO: Figure out if None is a good default value.
-          AssemblyRef = None
+          AssemblyRef = ImmutableHashSet.Empty
           File = ()
           ExportedType = ()
           ManifestResource = ()
