@@ -3,25 +3,6 @@
 open System
 open System.Collections.Immutable
 
-type AssemblyCulture = // TODO: Add more cultures
-    | NullCulture
-    | Ar_SA
-    | En_US
-    | Div_MV
-
-// II.22.30
-type ModuleTable =
-    { // Generation
-      Name: ModuleName
-      Mvid: Guid
-      // EncId
-      // EncBaseId
-      }
-
-    static member Default =
-        { Name = ModuleName "Default.dll"
-          Mvid = Guid.Empty } // TODO: What should the default Mvid be?
-
 // II.22.15
 type FieldTable = unit
 
@@ -88,46 +69,6 @@ type ImplMapTable = unit
 // II.22.18
 type FieldRvaTable = unit
 
-// II.22.2
-type AssemblyTable =
-    { HashAlgId: unit // II.23.1.1
-      Version: Version
-      Flags: unit
-      PublicKey: unit option
-      Name: AssemblyName // TODO: Create a separate type for name? Apparently it cannot have a colon, forward/back slash, period, or be empty.
-      Culture: AssemblyCulture }
-
-    static member Default =
-        { HashAlgId = ()
-          Version = Version(1, 0, 0, 0)
-          Flags = ()
-          PublicKey = None
-          Name = AssemblyName "Default"
-          Culture = NullCulture }
-
-type PublicKeyOrToken =
-    | PublicKey // of ?
-    | HashedToken // of ?
-    | NoPublicKey
-
-[<CustomEquality; NoComparison>]
-type AssemblyRef =
-    { Version: Version
-      PublicKeyOrToken: PublicKeyOrToken
-      Name: AssemblyName
-      Culture: AssemblyCulture
-      HashValue: unit option }
-
-    interface IEquatable<AssemblyRef> with
-        member this.Equals other =
-            this.Version = other.Version
-            && this.PublicKeyOrToken = other.PublicKeyOrToken
-            && this.Name = other.Name
-            && this.Culture = other.Culture
-
-// II.22.5
-type AssemblyRefTable = IImmutableSet<AssemblyRef>
-
 // II.22.19
 type FileTable = unit
 
@@ -150,8 +91,9 @@ type MethodSpecTable = unit
 type GenericParamConstraintTable = unit
 
 // II.24.2.6
-// TODO: Make this a mutable class, and make users use a computation expression to safely modify tables such as the ClassLayout table which need indexes to types.
-type MetadataTables =
+// TODO: Make a mutable and immutable class, and make users use a computation expression to safely modify tables such as the ClassLayout table which need indexes to types.
+[<Obsolete>]
+type MetadataTablesOld =
     { // Reserved: uint32
       MajorVersion: byte
       MinorVersion: byte
@@ -161,8 +103,8 @@ type MetadataTables =
       // Sorted: uint64 // TODO: Figure out what Sorted is used for.
       // Rows
       Module: ModuleTable // 0x00
-      TypeRef: TypeRefTable // TODO: Figure out which tables can be empty (put option unless it is a collection type)
-      TypeDef: TypeDefTable
+      TypeRef: unit // TODO: Figure out which tables can be empty (put option unless it is a collection type)
+      TypeDef: unit
       Field: FieldTable // 0x04
       MethodDef: MethodDefTable // 0x06
       Param: ParamTable // 0x08
@@ -188,7 +130,7 @@ type MetadataTables =
       Assembly: AssemblyTable option // 0x20
       // AssemblyProcessor // Not used when writing a PE file
       // AssemblyOS // Not used when writing a PE file
-      AssemblyRef: AssemblyRefTable // 0x23
+      AssemblyRef: ImmutableHashSet<AssemblyRef> // 0x23
       // AssemblyRefProcessor // Not used when writing a PE file
       // AssemblyRefOS // Not used when writing a PE file
       File: FileTable
@@ -207,12 +149,12 @@ type MetadataTables =
         /// NOTE: Bit zero appears to be the right-most bit.
         0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000001UL
 
-    static member Default: MetadataTables =
-        { MajorVersion = 1uy
-          MinorVersion = 1uy
+    static member Default =
+        { MajorVersion = 2uy
+          MinorVersion = 0uy
           Module = ModuleTable.Default
-          TypeRef = TypeRefTable.empty
-          TypeDef = TypeDefTable.empty
+          TypeRef = ()
+          TypeDef = ()
           Field = ()
           MethodDef = ()
           Param = ()
@@ -258,7 +200,7 @@ type MetadataStreams =
     member _.Count = 1us
 
     static member Default =
-        { Tables = MetadataTables.Default }
+        { Tables = invalidOp "Default metadata table" }
 
 // II.24.2.1
 type MetadataRoot =
