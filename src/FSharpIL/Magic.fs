@@ -1,5 +1,5 @@
 ﻿/// Contains various magic numbers and bytes used throught a PE file.
-module FSharpIL.Magic
+module internal FSharpIL.Magic
 
 let DosStub =
     let lfanew = [| 0x80; 0x00; 0x00; 0x00 |]

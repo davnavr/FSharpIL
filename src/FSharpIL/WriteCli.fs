@@ -1,9 +1,7 @@
-﻿module FSharpIL.WriteCli
+﻿module internal FSharpIL.WriteCli
 
 open FSharp.Core.Operators.Checked
 
-open System
-open System.Collections.Generic
 open System.Text
 
 open FSharpIL.Bytes

@@ -150,6 +150,7 @@ type MethodSpecTable = unit
 type GenericParamConstraintTable = unit
 
 // II.24.2.6
+// TODO: Make this a mutable class, and make users use a computation expression to safely modify tables such as the ClassLayout table which need indexes to types.
 type MetadataTables =
     { // Reserved: uint32
       MajorVersion: byte

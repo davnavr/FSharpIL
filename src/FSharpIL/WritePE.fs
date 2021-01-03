@@ -304,7 +304,6 @@ let streams (info: PEInfo) (writer: Writer<_>) =
             let msg = sprintf "An exception was thrown while writing the %O section." section.Section.Header.SectionName
             InvalidOperationException(msg, ex) |> raise
 
-/// Writes a Portrable Executable file.
 let file (info: PEInfo) =
     bytes {
         headers info
@@ -312,7 +311,7 @@ let file (info: PEInfo) =
     }
     |> withLength info.TotalLength
 
-let write pe (writer: PEInfo -> ByteWriter<_>) =
+let toWriter pe (writer: PEInfo -> ByteWriter<_>) =
     try
         let info = PEInfo pe
         let writer' = new Writer<_> (writer info)
@@ -322,7 +321,7 @@ let write pe (writer: PEInfo -> ByteWriter<_>) =
     | ex -> InternalException ex |> raise
 
 let toArray pe =
-    write
+    toWriter
         pe
         (fun info ->
             let (|ValidArrayIndex|) (i: uint64) =

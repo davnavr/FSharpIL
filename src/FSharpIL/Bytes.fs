@@ -1,4 +1,4 @@
-﻿module FSharpIL.Bytes
+﻿module internal FSharpIL.Bytes
 
 open System
 
