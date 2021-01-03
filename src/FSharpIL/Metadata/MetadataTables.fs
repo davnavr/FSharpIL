@@ -4,11 +4,14 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
-type internal IHandle =
+type ValidationWarning =
+    | TypeRefUsesModuleResolutionScope of TypeRef
+
+type IHandle =
     abstract Owner : MetadataBuilderState
     abstract ValueType : Type
 
-type internal IHandleIndexer =
+type IHandleIndexer =
     abstract Handles: seq<IHandle>
 
 /// <summary>
@@ -25,12 +28,17 @@ type Handle<'Value when 'Value : equality> =
         member this.Owner = let (Handle (owner, _)) = this in owner
         member this.ValueType = this.Item.GetType()
 
-type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> internal (owner: MetadataBuilderState) =
-    let set = ImmutableHashSet.CreateBuilder<'Value>()
+type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> internal (owner: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
+    let set = ImmutableHashSet.CreateBuilder<'Value> comparer
 
-    member internal _.ToImmutable() = set.ToImmutable()
+    new(owner: MetadataBuilderState) = HandleSet(owner, EqualityComparer.Default)
+
+    member _.ToImmutable() = set.ToImmutable()
+
     // Not having a Remove method means we won't have to check if the item of a handle is valid.
-    member internal _.Add(item: 'Value) =
+
+    abstract member Add : 'Value -> Handle<'Value>
+    default _.Add(item: 'Value) =
         let vname = typeof<'Value>.Name
         for handle in item.Handles do
             if handle.Owner <> owner then
@@ -46,20 +54,17 @@ type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> inter
             |> invalidArg "item"
         Handle (owner, item)
 
-    static member internal CreateRef() =
-        ref Unchecked.defaultof<HandleSet<'Value>>
-
 /// II.22.30
 type ModuleTable =
     { // Generation
-      Name: ModuleName
+      Name: NonEmptyName
       Mvid: Guid
       // EncId
       // EncBaseId
       }
 
     static member Default =
-        { Name = ModuleName "Default.dll"
+        { Name = NonEmptyName "Default.dll"
           Mvid = Guid.Empty } // TODO: What should the default Mvid be?
 
 [<NoComparison; StructuralEquality>]
@@ -90,6 +95,24 @@ type TypeRef =
             | ResolutionScope.AssemblyRef t -> t :> IHandle |> Seq.singleton
             | _ -> Seq.empty
 
+[<Sealed>]
+type TypeRefTable internal (owner: MetadataBuilderState) =
+    let typeSet = HandleSet<TypeRef> owner
+    let clsSet =
+        ImmutableHashSet.CreateBuilder<TypeRef>
+
+    member _.ToImmutable() = typeSet.ToImmutable()
+
+    member _.Add typeRef =
+        let token = typeSet.Add typeRef
+        let cls =
+            [
+                // TODO: Check that the name is a "valid CLS identifier".
+            ]
+        match typeRef.ResolutionScope with
+        | ResolutionScope.Module -> ValidationWarning(token, cls, [ TypeRefUsesModuleResolutionScope typeRef ])
+        | _ -> ValidationSuccess(token, cls)
+
 /// <summary>
 /// Specifies which type a <see cref="FSharpIL.Metadata.TypeDef"/> extends.
 /// </summary>
@@ -102,7 +125,7 @@ type Extends =
     /// </summary>
     | Null
 
-// TODO: How to have CLS checks whenever a TypeDef is added to a HandleSet?
+// TODO: Enforce CLS checks by inheriting from HandleSet.
 // TODO: Maybe make this a union, and define cases for classes, interfaces, and structs.
 /// II.22.37
 [<CustomEquality; NoComparison>]
@@ -129,10 +152,12 @@ type TypeDef =
             }
 
 /// II.22.15
-type Field =
+type Field = // TODO: How to enforce that fields only have one owner?
     { Flags: unit
-      Name: string
+      Name: NonEmptyName
       Signature: unit }
+
+    // NOTE: Equality is based on name, signature, and the owning type.
 
 /// II.22.2
 type AssemblyTable =
@@ -171,7 +196,7 @@ type AssemblyRef =
 
 [<Sealed>]
 type MetadataBuilderState () as this =
-    let typeRef = HandleSet<TypeRef> this
+    let typeRef = TypeRefTable this
     let typeDef = HandleSet<TypeDef> this
 
     let assemblyRef = HandleSet<AssemblyRef> this

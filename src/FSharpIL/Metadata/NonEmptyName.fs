@@ -1,16 +1,16 @@
 ﻿namespace FSharpIL.Metadata
 
 [<StructuralComparison; StructuralEquality>]
-type ModuleName =
+type NonEmptyName =
     internal
-    | ModuleName of string
+    | NonEmptyName of string
 
     override this.ToString() =
-        let (ModuleName name) = this in name
+        let (NonEmptyName name) = this in name
 
 [<RequireQualifiedAccess>]
-module ModuleName =
+module NonEmptyName =
     let ofString str =
         match str with
         | "" -> None
-        | _ -> ModuleName str |> Some
+        | _ -> NonEmptyName str |> Some

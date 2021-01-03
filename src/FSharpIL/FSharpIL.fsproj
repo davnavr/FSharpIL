@@ -10,12 +10,12 @@
   <!-- Source files -->
   <ItemGroup>
     <Compile Include="InternalException.fs" />
-    <Compile Include="ValidationResult.fs" />
     <Compile Include="Bytes.fs" />
     <Compile Include="Magic.fs" />
     <Compile Include="Round.fs" />
+    <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\MiscTypes.fs" />
-    <Compile Include="Metadata\ModuleName.fs" />
+    <Compile Include="Metadata\NonEmptyName.fs" />
     <Compile Include="Metadata\AssemblyName.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\MetadataTables.fs" />

@@ -1,4 +1,4 @@
-﻿namespace FSharpIL
+﻿namespace FSharpIL.Metadata
 
 /// <summary>
 /// Represents a violation of a Common Language Specification rule (I.7).
@@ -14,6 +14,7 @@ type ValidationResult<'Result, 'Warning, 'Error> =
 
 [<RequireQualifiedAccess>]
 module ValidationResult =
+
     let toOption value =
         match value with
         | ValidationSuccess (result, _)
