@@ -6,33 +6,33 @@ open System.Collections.Immutable
 
 // TODO: Have a Result type that allows Success, Warning, or Error.
 
-type internal IToken =
+type internal IHandle =
     abstract Owner : MetadataBuilderState
 
-type internal ITokenIndexer =
-    abstract Tokens: seq<IToken>
+type internal IHandleIndexer =
+    abstract Handles: seq<IHandle>
 
 /// <summary>
 /// Guarantees that values originate from the same <see cref="FSharpIL.Metadata.MetadataBuilderState"/>.
 /// </summary>
 [<NoComparison; StructuralEquality>]
-type Token<'Value when 'Value : equality> =
+type Handle<'Value when 'Value : equality> =
     internal
     | Token of MetadataBuilderState * 'Value
 
     member this.Item = let (Token (_, item)) = this in item
 
-    interface IToken with
+    interface IHandle with
         member this.Owner = let (Token (owner, _)) = this in owner
 
-type TokenSet<'Value when 'Value :> ITokenIndexer and 'Value : equality> internal (owner: MetadataBuilderState) = // TODO: Have a mechanism to check that any tokens 'Value has have the same owner.
+type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> internal (owner: MetadataBuilderState) = // TODO: Have a mechanism to check that any tokens 'Value has have the same owner.
     let set = ImmutableHashSet.CreateBuilder<'Value> ()
 
     member internal _.ToImmutable() = set.ToImmutable()
     member internal _.Add(item: 'Value) =
-        for token in item.Tokens do
-            if token.Owner <> owner then
-                invalidOp "A token owned by another state was incorrectly referenced."
+        for handle in item.Handles do
+            if handle.Owner <> owner then
+                invalidOp "A handle owned by another state was incorrectly referenced."
         set.Add item
 
 // II.22.30
@@ -53,7 +53,7 @@ type ModuleTable =
 type ResolutionScope =
     | Module // of ?? // NOTE: Does not occur in a CLI module?
     | ModuleRef // of ?
-    | AssemblyRef of Token<AssemblyRef>
+    | AssemblyRef of Handle<AssemblyRef>
     | TypeRef // of ?
     | Null
 
@@ -70,10 +70,10 @@ type TypeRef =
             && this.TypeName = other.TypeName
             && this.TypeNamespace = other.TypeNamespace
 
-    interface ITokenIndexer with
-        member this.Tokens =
+    interface IHandleIndexer with
+        member this.Handles =
             match this.ResolutionScope with
-            | ResolutionScope.AssemblyRef t -> t :> IToken |> Seq.singleton
+            | ResolutionScope.AssemblyRef t -> t :> IHandle |> Seq.singleton
             | _ -> Seq.empty
 
 /// <summary>
@@ -82,7 +82,7 @@ type TypeRef =
 [<NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]
 type Extends =
-    | TypeDef of Token<TypeDef>
+    | TypeDef of Handle<TypeDef>
     /// <summary>
     /// Indicates that a class does not extend another class, used for <see cref="System.Object"/>.
     /// </summary>
@@ -104,11 +104,11 @@ type TypeDef = // TODO: Maybe make this a union, and define cases for classes, i
             && this.TypeNamespace = other.TypeNamespace
             && this.TypeName = other.TypeName
 
-    interface ITokenIndexer with
-        member this.Tokens =
+    interface IHandleIndexer with
+        member this.Handles =
             seq {
                 match this.Extends with
-                | Extends.TypeDef t -> t :> IToken
+                | Extends.TypeDef t -> t :> IHandle
                 | Extends.Null -> ()
             }
 
@@ -145,14 +145,14 @@ type AssemblyRef =
             && this.Name = other.Name
             && this.Culture = other.Culture
 
-    interface ITokenIndexer with member _.Tokens = Seq.empty
+    interface IHandleIndexer with member _.Handles = Seq.empty
 
 [<Sealed>]
 type MetadataBuilderState () as this =
-    let typeRef = TokenSet<TypeRef> this
-    let typeDef = TokenSet<TypeDef> this
+    let typeRef = HandleSet<TypeRef> this
+    let typeDef = HandleSet<TypeDef> this
 
-    let assemblyRef = TokenSet<AssemblyRef> this
+    let assemblyRef = HandleSet<AssemblyRef> this
 
     // Reserved: uint32
     member val MajorVersion: byte = 2uy
