@@ -4,34 +4,21 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
-[<StructuralEquality; NoComparison>]
+/// <summary>
+/// Guarantees that values originate from the same <see cref="FSharpIL.Metadata.MetadataBuilderState">.
+/// </summary>
+[<NoComparison; StructuralEquality>]
 type Token<'Value when 'Value : equality> =
     internal
     | Token of MetadataBuilderState * 'Value
 
-type internal TokenDictionary<'Value when 'Value : equality> (owner: MetadataBuilderState) =
-    let dict = ImmutableDictionary.CreateBuilder<Token<'Value>, 'Value>()
+    member this.Item = let (Token (_, item)) = this in item
 
-    interface IDictionary<Token<'Value>, 'Value> with
-        member _.Add(token, value) =
-            dict.Add(token, value)
-        member this.Add(item: KeyValuePair<_, _>) = dict.Add item
-        member _.Clear() = dict.Clear()
-        member _.Contains(item: KeyValuePair<_, _>) = dict.Contains item
-        member _.ContainsKey token = dict.ContainsKey token
-        member _.CopyTo(array, arrayIndex) = (dict :> ICollection<_>).CopyTo(array, arrayIndex)
-        member _.Count = dict.Count
-        member _.GetEnumerator() = dict.GetEnumerator() :> IEnumerator<_>
-        member _.GetEnumerator() = dict.GetEnumerator() :> System.Collections.IEnumerator
-        member _.IsReadOnly = (dict :> ICollection<_>).IsReadOnly
-        member _.Item
-            with get token = dict.Item token
-            and set token item = dict.Item <- token, item
-        member _.Keys = (dict :> IDictionary<_, _>).Keys
-        member _.Remove(token: Token<_>) = dict.Remove token
-        member _.Remove(item: KeyValuePair<_, _>) = dict.Remove item
-        member _.TryGetValue(key, value) = dict.TryGetValue(key, ref value)
-        member _.Values = (dict :> IDictionary<_, _>).Values
+type TokenSet<'Value when 'Value : equality> internal (owner: MetadataBuilderState) =
+    let set = ImmutableHashSet.CreateBuilder<'Value> ()
+
+    member _.ToImmutable() = set.ToImmutable()
+    member _.Add item = set.Add item
 
 // II.22.30
 type ModuleTable =
@@ -46,12 +33,26 @@ type ModuleTable =
         { Name = ModuleName "Default.dll"
           Mvid = Guid.Empty } // TODO: What should the default Mvid be?
 
+[<NoComparison; StructuralEquality>]
+type ResolutionScope =
+    | Module // of ?? // NOTE: Does not occur in a CLI module?
+    | ModuleRef // of ?
+    | AssemblyRef of Token<AssemblyRef>
+    | TypeRef // of ?
+    | NullScope
+
 // II.22.38
-[<StructuralComparison; StructuralEquality>]
+[<NoComparison; CustomEquality>]
 type TypeRef =
-    { ResolutionScope: unit
+    { ResolutionScope: ResolutionScope
       TypeName: string
       TypeNamespace: string }
+
+    interface IEquatable<TypeRef> with
+        member this.Equals other =
+            this.ResolutionScope = other.ResolutionScope
+            && this.TypeName = other.TypeName
+            && this.TypeNamespace = other.TypeNamespace
 
 // II.22.2
 type AssemblyTable =
@@ -88,7 +89,8 @@ type AssemblyRef =
 
 [<Sealed>]
 type MetadataBuilderState () as this =
-    let typeRef = TokenDictionary<TypeRef> this
+    let typeRef = TokenSet<TypeRef> this
+    let assemblyRef = TokenSet<AssemblyRef> this
 
     // Reserved: uint32
     member val MajorVersion: byte = 2uy
@@ -100,18 +102,20 @@ type MetadataBuilderState () as this =
     // Rows
     /// (0x00)
     member val Module = ModuleTable.Default with get, set
-    member val TypeRef = typeRef :> IDictionary<_, _> // TODO: Are run time recursion/initialization checks generated for this?
+    /// (0x01)
+    member _.TypeRef = typeRef
     /// (0x20)
     member val Assembly = None with get, set // 0x20 // TODO: Figure out if None is a good default value.
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
-    member val AssemblyRef = ImmutableHashSet.CreateBuilder<AssemblyRef>()
+    member _.AssemblyRef = assemblyRef
 
 [<Sealed>]
 type MetadataTables (state: MetadataBuilderState) =
     member val MajorVersion = state.MajorVersion
     member val MinorVersion = state.MinorVersion
     member val Module = state.Module
+    member val TypeRef = state.TypeRef.ToImmutable()
 
     member val AssemblyRef = state.AssemblyRef.ToImmutable()
 
@@ -139,11 +143,8 @@ module MetadataBuilder =
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
     let inline assembly (assembly: AssemblyTable) (state: MetadataBuilderState) =
         state.Assembly <- Some assembly
-    /// Modifies the assembly reference table.
-    let inline assemblyRef (f: ISet<AssemblyRef> -> unit) (state: MetadataBuilderState) =
-        f state.AssemblyRef
     /// Adds a reference to an assembly.
     let inline addAssemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) =
         state.AssemblyRef.Add ref |> ignore
     let inline addTypeRef (typeRef: TypeRef) (state: MetadataBuilderState) =
-        state.TypeRef.Add(Token(state, typeRef), typeRef)
+        state.TypeRef.Add typeRef
