@@ -5,7 +5,7 @@ open System.Collections.Generic
 open System.Collections.Immutable
 
 /// <summary>
-/// Guarantees that values originate from the same <see cref="FSharpIL.Metadata.MetadataBuilderState">.
+/// Guarantees that values originate from the same <see cref="FSharpIL.Metadata.MetadataBuilderState"/>.
 /// </summary>
 [<NoComparison; StructuralEquality>]
 type Token<'Value when 'Value : equality> =
@@ -14,7 +14,7 @@ type Token<'Value when 'Value : equality> =
 
     member this.Item = let (Token (_, item)) = this in item
 
-type TokenSet<'Value when 'Value : equality> internal (owner: MetadataBuilderState) =
+type TokenSet<'Value when 'Value : equality> internal (owner: MetadataBuilderState) = // TODO: Have a mechanism to check that any tokens 'Value has have the same owner.
     let set = ImmutableHashSet.CreateBuilder<'Value> ()
 
     member _.ToImmutable() = set.ToImmutable()
@@ -34,12 +34,13 @@ type ModuleTable =
           Mvid = Guid.Empty } // TODO: What should the default Mvid be?
 
 [<NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess>]
 type ResolutionScope =
     | Module // of ?? // NOTE: Does not occur in a CLI module?
     | ModuleRef // of ?
     | AssemblyRef of Token<AssemblyRef>
     | TypeRef // of ?
-    | NullScope
+    | Null
 
 // II.22.38
 [<NoComparison; CustomEquality>]
@@ -53,6 +54,34 @@ type TypeRef =
             this.ResolutionScope = other.ResolutionScope
             && this.TypeName = other.TypeName
             && this.TypeNamespace = other.TypeNamespace
+
+/// <summary>
+/// Specifies which type a <see cref="FSharpIL.Metadata.TypeDef"/> extends.
+/// </summary>
+[<NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess>]
+type Extends =
+    | TypeDef of Token<TypeDef>
+    /// <summary>
+    /// Indicates that a class does not extend another class, used for <see cref="System.Object"/>.
+    /// </summary>
+    | Null
+
+// II.22.37
+[<CustomEquality; NoComparison>]
+type TypeDef = // TODO: Maybe make this a union, and define cases for classes, interfaces, and structs.
+    { Flags: unit
+      TypeName: string
+      TypeNamespace: string
+      Extends: Extends
+      FieldList: unit
+      MethodList: unit }
+
+    interface IEquatable<TypeDef> with
+        member this.Equals other =
+            this.Extends = other.Extends
+            && this.TypeNamespace = other.TypeNamespace
+            && this.TypeName = other.TypeName
 
 // II.22.2
 type AssemblyTable =
@@ -90,6 +119,8 @@ type AssemblyRef =
 [<Sealed>]
 type MetadataBuilderState () as this =
     let typeRef = TokenSet<TypeRef> this
+    let typeDef = TokenSet<TypeDef> this
+
     let assemblyRef = TokenSet<AssemblyRef> this
 
     // Reserved: uint32
@@ -104,6 +135,9 @@ type MetadataBuilderState () as this =
     member val Module = ModuleTable.Default with get, set
     /// (0x01)
     member _.TypeRef = typeRef
+    /// (0x02)
+    member _.TypeDef = typeDef
+
     /// (0x20)
     member val Assembly = None with get, set // 0x20 // TODO: Figure out if None is a good default value.
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
@@ -116,6 +150,7 @@ type MetadataTables (state: MetadataBuilderState) =
     member val MinorVersion = state.MinorVersion
     member val Module = state.Module
     member val TypeRef = state.TypeRef.ToImmutable()
+    member val TypeDef = state.TypeDef.ToImmutable()
 
     member val AssemblyRef = state.AssemblyRef.ToImmutable()
 
