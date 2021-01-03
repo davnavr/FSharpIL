@@ -4,10 +4,9 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
-// TODO: Have a Result type that allows Success, Warning, or Error.
-
 type internal IHandle =
     abstract Owner : MetadataBuilderState
+    abstract ValueType : Type
 
 type internal IHandleIndexer =
     abstract Handles: seq<IHandle>
@@ -24,15 +23,21 @@ type Handle<'Value when 'Value : equality> =
 
     interface IHandle with
         member this.Owner = let (Token (owner, _)) = this in owner
+        member this.ValueType = this.Item.GetType()
 
-type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> internal (owner: MetadataBuilderState) = // TODO: Have a mechanism to check that any tokens 'Value has have the same owner.
+type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> internal (owner: MetadataBuilderState) =
     let set = ImmutableHashSet.CreateBuilder<'Value> ()
 
     member internal _.ToImmutable() = set.ToImmutable()
-    member internal _.Add(item: 'Value) =
+    member internal _.Add(item: 'Value) = // TODO: Return a Handle<_> so that it can be used by the user.
+        // TODO: How to check that the handle references a valid item in anotehr set.
         for handle in item.Handles do
             if handle.Owner <> owner then
-                invalidOp "A handle owned by another state was incorrectly referenced."
+                sprintf
+                    "A handle to a %s owned by another state was incorrectly referenced by an %s."
+                    handle.ValueType.Name
+                    (typeof<'Value>.Name)
+                |> invalidOp
         set.Add item
 
 // II.22.30
@@ -189,6 +194,8 @@ type MetadataTables (state: MetadataBuilderState) =
     member val Valid: uint64 =
         /// NOTE: Bit zero appears to be the right-most bit.
         0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000001UL
+
+    static member val Default = MetadataBuilderState() |> MetadataTables
 
 [<Sealed>]
 type MetadataBuilder internal () =

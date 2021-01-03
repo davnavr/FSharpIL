@@ -200,7 +200,7 @@ type MetadataStreams =
     member _.Count = 1us
 
     static member Default =
-        { Tables = invalidOp "Default metadata table" }
+        { Tables = MetadataTables.Default }
 
 // II.24.2.1
 type MetadataRoot =
