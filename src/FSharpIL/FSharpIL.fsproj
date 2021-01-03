@@ -17,7 +17,6 @@
     <Compile Include="Metadata\ModuleName.fs" />
     <Compile Include="Metadata\AssemblyName.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
-    <Compile Include="Metadata\TypeDefTable.fs" />
     <Compile Include="Metadata\MetadataTables.fs" />
     <Compile Include="Metadata\OldTypes.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />

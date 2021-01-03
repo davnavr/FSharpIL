@@ -4,6 +4,14 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
+// TODO: Have a Result type that allows Success, Warning, or Error.
+
+type internal IToken =
+    abstract Owner : MetadataBuilderState
+
+type internal ITokenIndexer =
+    abstract Tokens: seq<IToken>
+
 /// <summary>
 /// Guarantees that values originate from the same <see cref="FSharpIL.Metadata.MetadataBuilderState"/>.
 /// </summary>
@@ -14,11 +22,18 @@ type Token<'Value when 'Value : equality> =
 
     member this.Item = let (Token (_, item)) = this in item
 
-type TokenSet<'Value when 'Value : equality> internal (owner: MetadataBuilderState) = // TODO: Have a mechanism to check that any tokens 'Value has have the same owner.
+    interface IToken with
+        member this.Owner = let (Token (owner, _)) = this in owner
+
+type TokenSet<'Value when 'Value :> ITokenIndexer and 'Value : equality> internal (owner: MetadataBuilderState) = // TODO: Have a mechanism to check that any tokens 'Value has have the same owner.
     let set = ImmutableHashSet.CreateBuilder<'Value> ()
 
-    member _.ToImmutable() = set.ToImmutable()
-    member _.Add item = set.Add item
+    member internal _.ToImmutable() = set.ToImmutable()
+    member internal _.Add(item: 'Value) =
+        for token in item.Tokens do
+            if token.Owner <> owner then
+                invalidOp "A token owned by another state was incorrectly referenced."
+        set.Add item
 
 // II.22.30
 type ModuleTable =
@@ -55,6 +70,12 @@ type TypeRef =
             && this.TypeName = other.TypeName
             && this.TypeNamespace = other.TypeNamespace
 
+    interface ITokenIndexer with
+        member this.Tokens =
+            match this.ResolutionScope with
+            | ResolutionScope.AssemblyRef t -> t :> IToken |> Seq.singleton
+            | _ -> Seq.empty
+
 /// <summary>
 /// Specifies which type a <see cref="FSharpIL.Metadata.TypeDef"/> extends.
 /// </summary>
@@ -82,6 +103,14 @@ type TypeDef = // TODO: Maybe make this a union, and define cases for classes, i
             this.Extends = other.Extends
             && this.TypeNamespace = other.TypeNamespace
             && this.TypeName = other.TypeName
+
+    interface ITokenIndexer with
+        member this.Tokens =
+            seq {
+                match this.Extends with
+                | Extends.TypeDef t -> t :> IToken
+                | Extends.Null -> ()
+            }
 
 // II.22.2
 type AssemblyTable =
@@ -115,6 +144,8 @@ type AssemblyRef =
             && this.PublicKeyOrToken = other.PublicKeyOrToken
             && this.Name = other.Name
             && this.Culture = other.Culture
+
+    interface ITokenIndexer with member _.Tokens = Seq.empty
 
 [<Sealed>]
 type MetadataBuilderState () as this =
