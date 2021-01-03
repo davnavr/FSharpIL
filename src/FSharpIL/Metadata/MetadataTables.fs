@@ -16,31 +16,40 @@ type internal IHandleIndexer =
 /// </summary>
 [<NoComparison; StructuralEquality>]
 type Handle<'Value when 'Value : equality> =
-    internal
-    | Token of MetadataBuilderState * 'Value
+    private
+    | Handle of MetadataBuilderState * 'Value
 
-    member this.Item = let (Token (_, item)) = this in item
+    member this.Item = let (Handle (_, item)) = this in item
 
     interface IHandle with
-        member this.Owner = let (Token (owner, _)) = this in owner
+        member this.Owner = let (Handle (owner, _)) = this in owner
         member this.ValueType = this.Item.GetType()
 
 type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> internal (owner: MetadataBuilderState) =
-    let set = ImmutableHashSet.CreateBuilder<'Value> ()
+    let set = ImmutableHashSet.CreateBuilder<'Value>()
 
     member internal _.ToImmutable() = set.ToImmutable()
-    member internal _.Add(item: 'Value) = // TODO: Return a Handle<_> so that it can be used by the user.
-        // TODO: How to check that the handle references a valid item in anotehr set.
+    // Not having a Remove method means we won't have to check if the item of a handle is valid.
+    member internal _.Add(item: 'Value) =
+        let vname = typeof<'Value>.Name
         for handle in item.Handles do
             if handle.Owner <> owner then
                 sprintf
                     "A handle to a %s owned by another state was incorrectly referenced by an %s."
                     handle.ValueType.Name
-                    (typeof<'Value>.Name)
-                |> invalidOp
-        set.Add item
+                    vname
+                |> invalidArg "item"
+        if set.Add item |> not then
+            sprintf
+                "A duplicate %s was added to the set."
+                vname
+            |> invalidArg "item"
+        Handle (owner, item)
 
-// II.22.30
+    static member internal CreateRef() =
+        ref Unchecked.defaultof<HandleSet<'Value>>
+
+/// II.22.30
 type ModuleTable =
     { // Generation
       Name: ModuleName
@@ -62,7 +71,7 @@ type ResolutionScope =
     | TypeRef // of ?
     | Null
 
-// II.22.38
+/// II.22.38
 [<NoComparison; CustomEquality>]
 type TypeRef =
     { ResolutionScope: ResolutionScope
@@ -93,9 +102,11 @@ type Extends =
     /// </summary>
     | Null
 
-// II.22.37
+// TODO: How to have CLS checks whenever a TypeDef is added to a HandleSet?
+// TODO: Maybe make this a union, and define cases for classes, interfaces, and structs.
+/// II.22.37
 [<CustomEquality; NoComparison>]
-type TypeDef = // TODO: Maybe make this a union, and define cases for classes, interfaces, and structs.
+type TypeDef =
     { Flags: unit
       TypeName: string
       TypeNamespace: string
@@ -117,7 +128,13 @@ type TypeDef = // TODO: Maybe make this a union, and define cases for classes, i
                 | Extends.Null -> ()
             }
 
-// II.22.2
+/// II.22.15
+type Field =
+    { Flags: unit
+      Name: string
+      Signature: unit }
+
+/// II.22.2
 type AssemblyTable =
     { HashAlgId: unit // II.23.1.1
       Version: Version
@@ -134,7 +151,7 @@ type AssemblyTable =
           Name = AssemblyName "Default"
           Culture = NullCulture }
 
-// II.22.5
+/// II.22.5
 [<CustomEquality; NoComparison>]
 type AssemblyRef =
     { Version: Version
@@ -173,6 +190,8 @@ type MetadataBuilderState () as this =
     member _.TypeRef = typeRef
     /// (0x02)
     member _.TypeDef = typeDef
+    /// (0x04)
+
 
     /// (0x20)
     member val Assembly = None with get, set // 0x20 // TODO: Figure out if None is a good default value.
@@ -192,6 +211,7 @@ type MetadataTables (state: MetadataBuilderState) =
 
     /// Gets a bit vector that indicates which tables are present.
     member val Valid: uint64 =
+        // TODO: Update this based on the tables.
         /// NOTE: Bit zero appears to be the right-most bit.
         0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000001UL
 
@@ -204,8 +224,11 @@ type MetadataBuilder internal () =
     member inline _.Delay(f: unit -> MetadataBuilderState -> unit) = fun state -> f () state
     member inline _.For(items: seq<'T>, body: 'T -> MetadataBuilderState -> unit) =
         fun state -> for item in items do body item state
-    member inline _.Run(expr: MetadataBuilderState -> unit) = MetadataBuilderState() |> expr
-    member inline _.Yield(expr: MetadataBuilderState -> unit) = expr
+    member inline _.Run(expr: MetadataBuilderState -> unit) =
+        let state = MetadataBuilderState()
+        expr state
+        MetadataTables state
+    member inline _.Yield(expr: MetadataBuilderState -> _) = expr >> ignore
     member inline _.Zero() = ignore<MetadataBuilderState>
 
 [<AutoOpen>]
@@ -217,7 +240,9 @@ module MetadataBuilder =
     let inline assembly (assembly: AssemblyTable) (state: MetadataBuilderState) =
         state.Assembly <- Some assembly
     /// Adds a reference to an assembly.
-    let inline addAssemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) =
-        state.AssemblyRef.Add ref |> ignore
-    let inline addTypeRef (typeRef: TypeRef) (state: MetadataBuilderState) =
+    let addAssemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) =
+        state.AssemblyRef.Add ref
+    let addTypeDef (typeDef: TypeDef) (state: MetadataBuilderState) =
+        state.TypeDef.Add typeDef
+    let addTypeRef (typeRef: TypeRef) (state: MetadataBuilderState) =
         state.TypeRef.Add typeRef

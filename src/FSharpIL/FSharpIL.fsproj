@@ -10,6 +10,7 @@
   <!-- Source files -->
   <ItemGroup>
     <Compile Include="InternalException.fs" />
+    <Compile Include="ValidationResult.fs" />
     <Compile Include="Bytes.fs" />
     <Compile Include="Magic.fs" />
     <Compile Include="Round.fs" />
