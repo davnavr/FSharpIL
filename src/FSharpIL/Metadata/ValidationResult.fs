@@ -14,7 +14,6 @@ type ValidationResult<'Result, 'Warning, 'Error> =
 
 [<RequireQualifiedAccess>]
 module ValidationResult =
-
     let toOption value =
         match value with
         | ValidationSuccess (result, _)

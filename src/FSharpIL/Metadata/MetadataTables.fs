@@ -35,10 +35,8 @@ type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> inter
 
     member _.ToImmutable() = set.ToImmutable()
 
-    // Not having a Remove method means we won't have to check if the item of a handle is valid.
-
-    abstract member Add : 'Value -> Handle<'Value>
-    default _.Add(item: 'Value) =
+    abstract member GetToken : 'Value -> Handle<'Value>
+    default _.GetToken(item: 'Value) =
         let vname = typeof<'Value>.Name
         for handle in item.Handles do
             if handle.Owner <> owner then
@@ -48,10 +46,7 @@ type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> inter
                     vname
                 |> invalidArg "item"
         if set.Add item |> not then
-            sprintf
-                "A duplicate %s was added to the set."
-                vname
-            |> invalidArg "item"
+            invalidOp "TODO: Return an Error instead of an exception if a duplicate occurs"
         Handle (owner, item)
 
 /// II.22.30
@@ -103,8 +98,8 @@ type TypeRefTable internal (owner: MetadataBuilderState) =
 
     member _.ToImmutable() = typeSet.ToImmutable()
 
-    member _.Add typeRef =
-        let token = typeSet.Add typeRef
+    member _.GetToken typeRef =
+        let token = typeSet.GetToken typeRef
         let cls =
             [
                 // TODO: Check that the name is a "valid CLS identifier".
@@ -195,11 +190,14 @@ type AssemblyRef =
     interface IHandleIndexer with member _.Handles = Seq.empty
 
 [<Sealed>]
-type MetadataBuilderState () as this =
+type MetadataBuilderState internal () as this =
     let typeRef = TypeRefTable this
     let typeDef = HandleSet<TypeDef> this
 
     let assemblyRef = HandleSet<AssemblyRef> this
+
+    member val Warnings = ImmutableArray.CreateBuilder<ValidationWarning>()
+    member val ClsChecks = ImmutableArray.CreateBuilder<ClsCheck>()
 
     // Reserved: uint32
     member val MajorVersion: byte = 2uy
@@ -225,14 +223,14 @@ type MetadataBuilderState () as this =
     member _.AssemblyRef = assemblyRef
 
 [<Sealed>]
-type MetadataTables (state: MetadataBuilderState) =
+type MetadataTables internal (state: MetadataBuilderState) =
     member val MajorVersion = state.MajorVersion
     member val MinorVersion = state.MinorVersion
     member val Module = state.Module
-    member val TypeRef = state.TypeRef.ToImmutable()
-    member val TypeDef = state.TypeDef.ToImmutable()
+    member val TypeRef = state.TypeRef.ToImmutable() :> IImmutableSet<_>
+    member val TypeDef = state.TypeDef.ToImmutable() :> IImmutableSet<_>
 
-    member val AssemblyRef = state.AssemblyRef.ToImmutable()
+    member val AssemblyRef = state.AssemblyRef.ToImmutable() :> IImmutableSet<_>
 
     /// Gets a bit vector that indicates which tables are present.
     member val Valid: uint64 =
@@ -244,8 +242,8 @@ type MetadataTables (state: MetadataBuilderState) =
 
 [<Sealed>]
 type MetadataBuilder internal () =
-    member inline _.Combine(one: MetadataBuilderState -> unit, two: MetadataBuilderState -> unit) =
-        fun state -> one state; two state;
+    member inline _.Combine(one: MetadataBuilderState -> _, two: MetadataBuilderState -> _) =
+        fun state -> one state |> ignore; two state |> ignore;
     member inline _.Delay(f: unit -> MetadataBuilderState -> unit) = fun state -> f () state
     member inline _.For(items: seq<'T>, body: 'T -> MetadataBuilderState -> unit) =
         fun state -> for item in items do body item state
@@ -266,8 +264,8 @@ module MetadataBuilder =
         state.Assembly <- Some assembly
     /// Adds a reference to an assembly.
     let addAssemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) =
-        state.AssemblyRef.Add ref
+        state.AssemblyRef.GetToken ref
     let addTypeDef (typeDef: TypeDef) (state: MetadataBuilderState) =
-        state.TypeDef.Add typeDef
+        state.TypeDef.GetToken typeDef
     let addTypeRef (typeRef: TypeRef) (state: MetadataBuilderState) =
-        state.TypeRef.Add typeRef
+        state.TypeRef.GetToken typeRef
