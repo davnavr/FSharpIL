@@ -235,6 +235,9 @@ type MetadataBuilderState internal () as this =
 
 [<Sealed>]
 type MetadataTables internal (state: MetadataBuilderState) =
+    member val internal Warnings = state.Warnings.ToImmutable()
+    member val internal ClsChecks = state.ClsChecks.ToImmutable()
+
     member val MajorVersion = state.MajorVersion
     member val MinorVersion = state.MinorVersion
     member val Module = state.Module
@@ -258,10 +261,14 @@ type MetadataBuilder internal () =
     member inline _.Delay(f: unit -> MetadataBuilderState -> unit) = fun state -> f () state
     member inline _.For(items: seq<'T>, body: 'T -> MetadataBuilderState -> unit) =
         fun state -> for item in items do body item state
-    member _.Run(expr: MetadataBuilderState -> unit) = // TODO: Return a ValidationResult<MetadataTables>.
+    member _.Run(expr: MetadataBuilderState -> unit): ValidationResult<MetadataTables> =
         let state = MetadataBuilderState()
         expr state
-        MetadataTables state
+        let tables = MetadataTables state
+        if state.Warnings.Count > 0 then
+            ValidationWarning(tables, tables.ClsChecks, tables.Warnings)
+        else
+            ValidationSuccess(tables, tables.ClsChecks)
     member inline _.Yield(expr: MetadataBuilderState -> _) = expr >> ignore
     member inline _.Zero() = ignore<MetadataBuilderState>
 
