@@ -4,14 +4,25 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
+/// <summary>
+/// Represents a violation of a Common Language Specification rule (I.7).
+/// </summary>
+type ClsCheck =
+    | PointerTypeUsage // of
+
 type ValidationWarning =
     | TypeRefUsesModuleResolutionScope of TypeRef
+
+type ValidationError =
+    | DuplicateValue of IHandleValue
+
+type ValidationResult<'Result> = ValidationResult<'Result, ClsCheck, ValidationWarning, ValidationError>
 
 type IHandle =
     abstract Owner : MetadataBuilderState
     abstract ValueType : Type
 
-type IHandleIndexer =
+type IHandleValue =
     abstract Handles: seq<IHandle>
 
 /// <summary>
@@ -28,14 +39,14 @@ type Handle<'Value when 'Value : equality> =
         member this.Owner = let (Handle (owner, _)) = this in owner
         member this.ValueType = this.Item.GetType()
 
-type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> internal (owner: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
+type HandleSet<'Value when 'Value :> IHandleValue and 'Value : equality> internal (owner: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
     let set = ImmutableHashSet.CreateBuilder<'Value> comparer
 
     new(owner: MetadataBuilderState) = HandleSet(owner, EqualityComparer.Default)
 
     member _.ToImmutable() = set.ToImmutable()
 
-    abstract member GetToken : 'Value -> Handle<'Value>
+    abstract member GetToken : 'Value -> Result<Handle<'Value>, ValidationError>
     default _.GetToken(item: 'Value) =
         let vname = typeof<'Value>.Name
         for handle in item.Handles do
@@ -45,9 +56,9 @@ type HandleSet<'Value when 'Value :> IHandleIndexer and 'Value : equality> inter
                     handle.ValueType.Name
                     vname
                 |> invalidArg "item"
-        if set.Add item |> not then
-            invalidOp "TODO: Return an Error instead of an exception if a duplicate occurs"
-        Handle (owner, item)
+        if set.Add item |> not
+        then item :> IHandleValue |> DuplicateValue |> Error
+        else Handle (owner, item) |> Ok
 
 /// II.22.30
 type ModuleTable =
@@ -84,7 +95,7 @@ type TypeRef =
             && this.TypeName = other.TypeName
             && this.TypeNamespace = other.TypeNamespace
 
-    interface IHandleIndexer with
+    interface IHandleValue with
         member this.Handles =
             match this.ResolutionScope with
             | ResolutionScope.AssemblyRef t -> t :> IHandle |> Seq.singleton
@@ -92,21 +103,21 @@ type TypeRef =
 
 [<Sealed>]
 type TypeRefTable internal (owner: MetadataBuilderState) =
-    let typeSet = HandleSet<TypeRef> owner
-    let clsSet =
-        ImmutableHashSet.CreateBuilder<TypeRef>
+    inherit HandleSet<TypeRef>(owner)
 
-    member _.ToImmutable() = typeSet.ToImmutable()
+    override _.GetToken typeRef =
+        let token = base.GetToken typeRef
 
-    member _.GetToken typeRef =
-        let token = typeSet.GetToken typeRef
-        let cls =
-            [
-                // TODO: Check that the name is a "valid CLS identifier".
-            ]
-        match typeRef.ResolutionScope with
-        | ResolutionScope.Module -> ValidationWarning(token, cls, [ TypeRefUsesModuleResolutionScope typeRef ])
-        | _ -> ValidationSuccess(token, cls)
+        match token with
+        | Ok _ ->
+            // TODO: Check that the name is a "valid CLS identifier".
+
+            match typeRef.ResolutionScope with
+            | ResolutionScope.Module -> TypeRefUsesModuleResolutionScope typeRef |> owner.Warnings.Add
+            | _ -> ()
+        | _ -> ()
+
+        token
 
 /// <summary>
 /// Specifies which type a <see cref="FSharpIL.Metadata.TypeDef"/> extends.
@@ -138,7 +149,7 @@ type TypeDef =
             && this.TypeNamespace = other.TypeNamespace
             && this.TypeName = other.TypeName
 
-    interface IHandleIndexer with
+    interface IHandleValue with
         member this.Handles =
             seq {
                 match this.Extends with
@@ -187,7 +198,7 @@ type AssemblyRef =
             && this.Name = other.Name
             && this.Culture = other.Culture
 
-    interface IHandleIndexer with member _.Handles = Seq.empty
+    interface IHandleValue with member _.Handles = Seq.empty
 
 [<Sealed>]
 type MetadataBuilderState internal () as this =
@@ -196,7 +207,7 @@ type MetadataBuilderState internal () as this =
 
     let assemblyRef = HandleSet<AssemblyRef> this
 
-    member val Warnings = ImmutableArray.CreateBuilder<ValidationWarning>()
+    member val Warnings: ImmutableArray<ValidationWarning>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
     member val ClsChecks = ImmutableArray.CreateBuilder<ClsCheck>()
 
     // Reserved: uint32
@@ -247,7 +258,7 @@ type MetadataBuilder internal () =
     member inline _.Delay(f: unit -> MetadataBuilderState -> unit) = fun state -> f () state
     member inline _.For(items: seq<'T>, body: 'T -> MetadataBuilderState -> unit) =
         fun state -> for item in items do body item state
-    member inline _.Run(expr: MetadataBuilderState -> unit) =
+    member _.Run(expr: MetadataBuilderState -> unit) = // TODO: Return a ValidationResult<MetadataTables>.
         let state = MetadataBuilderState()
         expr state
         MetadataTables state

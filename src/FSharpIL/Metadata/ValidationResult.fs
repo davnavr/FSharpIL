@@ -1,15 +1,11 @@
 ﻿namespace FSharpIL.Metadata
 
-/// <summary>
-/// Represents a violation of a Common Language Specification rule (I.7).
-/// </summary>
-type ClsCheck =
-    | PointerTypeUsage
+open System.Collections.Immutable
 
 /// II.22.1
-type ValidationResult<'Result, 'Warning, 'Error> =
-    | ValidationSuccess of 'Result * ClsCheck list
-    | ValidationWarning of 'Result * ClsCheck list * 'Warning
+type ValidationResult<'Result, 'ClsCheck, 'Warning, 'Error> =
+    | ValidationSuccess of 'Result * IImmutableList<'ClsCheck>
+    | ValidationWarning of 'Result * IImmutableList<'ClsCheck> * IImmutableList<'Warning>
     | ValidationError of 'Error
 
 [<RequireQualifiedAccess>]
