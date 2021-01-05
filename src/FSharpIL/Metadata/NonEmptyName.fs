@@ -1,5 +1,6 @@
 ﻿namespace FSharpIL.Metadata
 
+[<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
 type NonEmptyName =
     internal
@@ -14,3 +15,7 @@ module NonEmptyName =
         match str with
         | "" -> None
         | _ -> NonEmptyName str |> Some
+
+[<AutoOpen>]
+module NonEmptyNamePatterns =
+    let (|NonEmptyName|) (NonEmptyName name) = name

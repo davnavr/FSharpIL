@@ -39,6 +39,12 @@ module ValidationResult =
         | ValidationWarning (result, _, _) -> Ok result
         | ValidationError err -> Error err
 
+    let map mapping value =
+        match value with
+        | ValidationSuccess (result, checks) -> ValidationSuccess(mapping result, checks)
+        | ValidationWarning (result, checks, warnings) -> ValidationWarning(mapping result, checks, warnings)
+        | ValidationError err -> ValidationError err
+
 [<AutoOpen>]
 module ValidationResultPatterns =
     /// Extracts the result only if there are no warnings or CLS rule violations.
