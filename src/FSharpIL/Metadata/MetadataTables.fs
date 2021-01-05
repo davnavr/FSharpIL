@@ -275,9 +275,13 @@ type MetadataTables internal (state: MetadataBuilderState) =
 type MetadataBuilder internal () =
     member inline _.Combine(one: MetadataBuilderState -> _, two: MetadataBuilderState -> _) =
         fun state -> one state |> ignore; two state |> ignore;
+    member inline _.Bind(expr: MetadataBuilderState -> 'T, body: 'T -> MetadataBuilderState -> _) =
+        fun state ->
+            let result = expr state
+            body result state
     member inline _.Delay(f: unit -> MetadataBuilderState -> unit) = fun state -> f () state
-    member inline _.For(items: seq<'T>, body: 'T -> MetadataBuilderState -> unit) =
-        fun state -> for item in items do body item state
+    member inline _.For(items: seq<'T>, body: 'T -> MetadataBuilderState -> _) =
+        fun state -> for item in items do body item state |> ignore
     member _.Run(expr: MetadataBuilderState -> unit): ValidationResult<MetadataTables> =
         let state = MetadataBuilderState()
         expr state

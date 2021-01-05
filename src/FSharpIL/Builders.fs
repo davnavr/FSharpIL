@@ -5,4 +5,4 @@ module FSharpIL.Builders
 let metadataBuilder = FSharpIL.Metadata.MetadataBuilder()
 
 /// Builds a .NET assembly using a high-level computation expression syntax.
-let assembly: obj = invalidOp "no impl"
+let assembly = null
