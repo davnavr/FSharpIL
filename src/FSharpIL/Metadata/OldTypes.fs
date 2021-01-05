@@ -127,7 +127,7 @@ type MetadataTablesOld =
       TypeSpec: TypeSpecTable
       ImplMap: ImplMapTable
       FieldRva: FieldRvaTable
-      Assembly: AssemblyTable option // 0x20
+      Assembly: Assembly option // 0x20
       // AssemblyProcessor // Not used when writing a PE file
       // AssemblyOS // Not used when writing a PE file
       AssemblyRef: ImmutableHashSet<AssemblyRef> // 0x23

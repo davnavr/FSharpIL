@@ -8,6 +8,17 @@ type ValidationResult<'Result, 'ClsCheck, 'Warning, 'Error> =
     | ValidationWarning of 'Result * IImmutableList<'ClsCheck> * IImmutableList<'Warning>
     | ValidationError of 'Error
 
+    member this.Warnings =
+        match this with
+        | ValidationWarning (_, _, warnings) -> warnings
+        | _ -> ImmutableArray.Empty :> IImmutableList<_>
+
+    member this.ClsChecks =
+        match this with
+        | ValidationSuccess (_, checks)
+        | ValidationWarning (_, checks, _) -> checks
+        | _ -> ImmutableArray.Empty :> IImmutableList<_>
+
 [<RequireQualifiedAccess>]
 module ValidationResult =
     let get value =

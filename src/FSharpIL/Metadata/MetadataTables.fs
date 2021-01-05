@@ -11,10 +11,17 @@ type ClsCheck =
     | PointerTypeUsage // of
 
 type ValidationWarning =
+    /// 10
+    | DuplicateAssemblyRef of AssemblyRef
+    /// 1d
     | TypeRefUsesModuleResolutionScope of TypeRef
 
 type ValidationError =
     | DuplicateValue of IHandleValue
+
+    override this.ToString() =
+        match this with
+        | DuplicateValue value -> sprintf "Cannot add duplicate %s (%A) to the table" (value.GetType().Name) value
 
 type ValidationResult<'Result> = ValidationResult<'Result, ClsCheck, ValidationWarning, ValidationError>
 
@@ -28,8 +35,7 @@ type IHandleValue =
 /// <summary>
 /// Guarantees that values originate from the same <see cref="FSharpIL.Metadata.MetadataBuilderState"/>.
 /// </summary>
-[<NoComparison; StructuralEquality>]
-type Handle<'Value when 'Value : equality> =
+type Handle<'Value> =
     private
     | Handle of MetadataBuilderState * 'Value
 
@@ -39,7 +45,7 @@ type Handle<'Value when 'Value : equality> =
         member this.Owner = let (Handle (owner, _)) = this in owner
         member this.ValueType = this.Item.GetType()
 
-type HandleSet<'Value when 'Value :> IHandleValue and 'Value : equality> internal (owner: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
+type HandleSet<'Value when 'Value :> IHandleValue> internal (owner: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
     let set = ImmutableHashSet.CreateBuilder<'Value> comparer
 
     new(owner: MetadataBuilderState) = HandleSet(owner, EqualityComparer.Default)
@@ -47,18 +53,11 @@ type HandleSet<'Value when 'Value :> IHandleValue and 'Value : equality> interna
     member _.ToImmutable() = set.ToImmutable()
 
     abstract member GetToken : 'Value -> Result<Handle<'Value>, ValidationError>
-    default _.GetToken(item: 'Value) =
-        let vname = typeof<'Value>.Name
-        for handle in item.Handles do
-            if handle.Owner <> owner then
-                sprintf
-                    "A handle to a %s owned by another state was incorrectly referenced by an %s."
-                    handle.ValueType.Name
-                    vname
-                |> invalidArg "item"
-        if set.Add item |> not
-        then item :> IHandleValue |> DuplicateValue |> Error
-        else Handle (owner, item) |> Ok
+    default _.GetToken(value: 'Value) =
+        owner.EnsureOwner value
+        if set.Add value |> not
+        then value :> IHandleValue |> DuplicateValue |> Error
+        else Handle (owner, value) |> Ok
 
 /// II.22.30
 type ModuleTable =
@@ -164,9 +163,10 @@ type Field = // TODO: How to enforce that fields only have one owner?
       Signature: unit }
 
     // NOTE: Equality is based on name, signature, and the owning type.
+    // TODO: See if all equality code can be moved to a FieldTable class and that the equality constraint on Handle items can be removed.
 
 /// II.22.2
-type AssemblyTable =
+type Assembly =
     { HashAlgId: unit // II.23.1.1
       Version: Version
       Flags: unit
@@ -174,38 +174,46 @@ type AssemblyTable =
       Name: AssemblyName
       Culture: AssemblyCulture }
 
-    static member Default =
-        { HashAlgId = ()
-          Version = Version(1, 0, 0, 0)
-          Flags = ()
-          PublicKey = None
-          Name = AssemblyName "Default"
-          Culture = NullCulture }
-
 /// II.22.5
-[<CustomEquality; NoComparison>]
+[<ReferenceEquality; NoComparison>]
 type AssemblyRef =
     { Version: Version
+      Flags: unit
       PublicKeyOrToken: PublicKeyOrToken
       Name: AssemblyName
       Culture: AssemblyCulture
       HashValue: unit option }
 
-    interface IEquatable<AssemblyRef> with
-        member this.Equals other =
-            this.Version = other.Version
-            && this.PublicKeyOrToken = other.PublicKeyOrToken
-            && this.Name = other.Name
-            && this.Culture = other.Culture
-
     interface IHandleValue with member _.Handles = Seq.empty
+
+[<Sealed>]
+type AssemblyRefTable internal (owner: MetadataBuilderState) =
+    let set = ImmutableHashSet.CreateBuilder<AssemblyRef>()
+    let cls =
+        { new IEqualityComparer<AssemblyRef> with
+            member _.GetHashCode assemblyRef =
+                hash (assemblyRef.Version, assemblyRef.PublicKeyOrToken, assemblyRef.Name, assemblyRef.Culture)
+            member _.Equals(x, y) =
+                x.Version = y.Version
+                && x.PublicKeyOrToken = y.PublicKeyOrToken
+                && x.Name = y.Name
+                && x.Culture = y.Culture }
+        |> HashSet
+
+    member _.ToImmutable() = set.ToImmutable()
+
+    member _.GetToken assemblyRef =
+        set.Add assemblyRef |> ignore
+        if cls.Add assemblyRef |> not then
+            DuplicateAssemblyRef assemblyRef |> owner.Warnings.Add
+        Handle(owner, assemblyRef)
 
 [<Sealed>]
 type MetadataBuilderState internal () as this =
     let typeRef = TypeRefTable this
     let typeDef = HandleSet<TypeDef> this
 
-    let assemblyRef = HandleSet<AssemblyRef> this
+    let assemblyRef = AssemblyRefTable this
 
     member val Warnings: ImmutableArray<ValidationWarning>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
     member val ClsChecks = ImmutableArray.CreateBuilder<ClsCheck>()
@@ -232,6 +240,15 @@ type MetadataBuilderState internal () as this =
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     member _.AssemblyRef = assemblyRef
+
+    member internal this.EnsureOwner(value: IHandleValue) =
+        for handle in value.Handles do
+            if handle.Owner <> this then
+                sprintf
+                    "A handle to a %s owned by another state was incorrectly referenced by an %s."
+                    handle.ValueType.Name
+                    (value.GetType().Name)
+                |> invalidArg "item"
 
 [<Sealed>]
 type MetadataTables internal (state: MetadataBuilderState) =
@@ -278,7 +295,7 @@ module MetadataBuilder =
     let inline mdle (mdle: ModuleTable) (state: MetadataBuilderState) =
         state.Module <- mdle
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
-    let inline assembly (assembly: AssemblyTable) (state: MetadataBuilderState) =
+    let inline assembly (assembly: Assembly) (state: MetadataBuilderState) =
         state.Assembly <- Some assembly
     /// Adds a reference to an assembly.
     let addAssemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) =
