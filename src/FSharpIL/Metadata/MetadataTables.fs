@@ -137,11 +137,7 @@ type Extends =
     /// </summary>
     | Null
 
-// TODO: Enforce CLS checks by inheriting a class from HandleSet.
-// TODO: Maybe make this a union, and define cases for classes, interfaces, and structs.
-/// II.22.37
-[<CustomEquality; NoComparison>]
-type TypeDef =
+type ClassDef =
     { Flags: unit
       TypeName: NonEmptyName
       TypeNamespace: string
@@ -149,20 +145,78 @@ type TypeDef =
       FieldList: unit
       MethodList: unit }
 
+/// <summary>
+/// Defines a delegate type, which derives from <see cref="System.Delegate"/>.
+/// </summary>
+type DelegateDef =
+    { TypeName: NonEmptyName
+      TypeNamespace: string }
+
+/// <summary>
+/// Defines an enumeration, which is a class that derives from <see cref="System.Enum"/>.
+/// </summary>
+type EnumDef =
+  { Flags: unit
+    TypeName: NonEmptyName
+    TypeNamespace: string }
+
+type InterfaceDef =
+    { Flags: unit
+      TypeName: NonEmptyName
+      TypeNamespace: string
+      MethodList: unit }
+
+/// <summary>
+/// Defines a struct, which is a class that derives from <see cref="System.ValueType"/>.
+/// </summary>
+type StructDef =
+   { Flags: unit
+     TypeName: NonEmptyName
+     TypeNamespace: string
+     FieldList: unit
+     MethodList: unit }
+
+/// II.22.37
+[<CustomEquality; NoComparison>]
+type TypeDef =
+    | ClassDef of ClassDef
+    | DelegateDef of DelegateDef
+    | EnumDef of EnumDef
+    | InterfaceDef of InterfaceDef
+    | StructDef of StructDef
+
+    member this.TypeName =
+        match this with
+        | ClassDef { TypeName = name }
+        | DelegateDef { TypeName = name }
+        | EnumDef { TypeName = name }
+        | InterfaceDef { TypeName = name }
+        | StructDef { TypeName = name } -> name
+
+    member this.TypeNamespace =
+        match this with
+        | ClassDef { TypeNamespace = ns }
+        | DelegateDef { TypeNamespace = ns }
+        | EnumDef { TypeNamespace = ns }
+        | InterfaceDef { TypeNamespace = ns }
+        | StructDef { TypeNamespace = ns } -> ns
+
     interface IEquatable<TypeDef> with
         member this.Equals other =
             this.TypeNamespace = other.TypeNamespace && this.TypeName = other.TypeName
 
     interface IHandleValue with
         member this.Handles =
-            match this.Extends with
-            | Extends.TypeDef (Handle handle)
-            | Extends.TypeRef (Handle handle) -> Seq.singleton handle
-            | Extends.Null -> Seq.empty
+            match this with
+            | ClassDef { Extends = Extends.TypeDef (Handle handle) }
+            | ClassDef { Extends = Extends.TypeRef (Handle handle) } -> Seq.singleton handle
+            | _ -> Seq.empty
 
 [<Sealed>]
 type TypeDefTable (owner: MetadataBuilderState) =
     inherit HandleTable<TypeDef>(owner)
+
+    // TODO: Enforce CLS checks and warnings.
 
 /// II.22.15
 type Field = // TODO: How to enforce that fields only have one owner?
