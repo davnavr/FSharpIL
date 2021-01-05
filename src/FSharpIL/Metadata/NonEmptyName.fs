@@ -10,7 +10,7 @@ type NonEmptyName =
 
 [<RequireQualifiedAccess>]
 module NonEmptyName =
-    let ofString str =
+    let ofStr str =
         match str with
         | "" -> None
         | _ -> NonEmptyName str |> Some

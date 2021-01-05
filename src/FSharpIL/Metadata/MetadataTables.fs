@@ -78,14 +78,14 @@ type ResolutionScope =
     | Module // of ?? // NOTE: Does not occur in a CLI module?
     | ModuleRef // of ?
     | AssemblyRef of Handle<AssemblyRef>
-    | TypeRef // of ?
+    | TypeRef of Handle<TypeRef>
     | Null
 
 /// II.22.38
 [<NoComparison; CustomEquality>]
 type TypeRef =
     { ResolutionScope: ResolutionScope
-      TypeName: string
+      TypeName: NonEmptyName
       TypeNamespace: string }
 
     interface IEquatable<TypeRef> with
@@ -130,13 +130,13 @@ type Extends =
     /// </summary>
     | Null
 
-// TODO: Enforce CLS checks by inheriting from HandleSet.
+// TODO: Enforce CLS checks by inheriting a class from HandleSet.
 // TODO: Maybe make this a union, and define cases for classes, interfaces, and structs.
 /// II.22.37
 [<CustomEquality; NoComparison>]
 type TypeDef =
     { Flags: unit
-      TypeName: string
+      TypeName: NonEmptyName
       TypeNamespace: string
       Extends: Extends
       FieldList: unit
@@ -209,14 +209,14 @@ type AssemblyRefTable internal (owner: MetadataBuilderState) =
         Handle(owner, assemblyRef)
 
 [<Sealed>]
-type MetadataBuilderState internal () as this =
+type MetadataBuilderState () as this =
     let typeRef = TypeRefTable this
     let typeDef = HandleSet<TypeDef> this
 
     let assemblyRef = AssemblyRefTable this
 
-    member val Warnings: ImmutableArray<ValidationWarning>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
-    member val ClsChecks = ImmutableArray.CreateBuilder<ClsCheck>()
+    member val internal Warnings: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
+    member val internal ClsChecks: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ClsCheck>()
 
     // Reserved: uint32
     member val MajorVersion: byte = 2uy
@@ -251,9 +251,9 @@ type MetadataBuilderState internal () as this =
                 |> invalidArg "item"
 
 [<Sealed>]
-type MetadataTables internal (state: MetadataBuilderState) =
-    member val internal Warnings = state.Warnings.ToImmutable()
-    member val internal ClsChecks = state.ClsChecks.ToImmutable()
+type MetadataTables (state: MetadataBuilderState) =
+    member val Warnings = state.Warnings.ToImmutable()
+    member val ClsChecks = state.ClsChecks.ToImmutable()
 
     member val MajorVersion = state.MajorVersion
     member val MinorVersion = state.MinorVersion

@@ -33,7 +33,7 @@ let tests =
                         let! token = addAssemblyRef expected
                         addTypeRef
                             { ResolutionScope = ResolutionScope.AssemblyRef token
-                              TypeName = "Test"
+                              TypeName = NonEmptyName.ofStr "Test" |> Option.get
                               TypeNamespace = "" }
                     }
                     |> ValidationResult.get
