@@ -30,8 +30,8 @@ let tests =
                       HashValue = None }
                 let metadata =
                     metadataBuilder {
-                        let! token = addAssemblyRef expected
-                        addTypeRef
+                        let! token = assemblyRef expected
+                        typeRef
                             { ResolutionScope = ResolutionScope.AssemblyRef token
                               TypeName = NonEmptyName.ofStr "Test" |> Option.get
                               TypeNamespace = "" }

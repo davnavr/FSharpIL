@@ -4,6 +4,10 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
+[<AutoOpen>]
+module internal Helpers =
+    let inline (|Handle|) (handle: #IHandle) = handle :> IHandle
+
 /// <summary>
 /// Represents a violation of a Common Language Specification rule (I.7).
 /// </summary>
@@ -45,10 +49,10 @@ type Handle<'Value> =
         member this.Owner = let (Handle (owner, _)) = this in owner
         member this.ValueType = this.Item.GetType()
 
-type HandleSet<'Value when 'Value :> IHandleValue> internal (owner: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
+type HandleTable<'Value when 'Value :> IHandleValue> internal (owner: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
     let set = ImmutableHashSet.CreateBuilder<'Value> comparer
 
-    new(owner: MetadataBuilderState) = HandleSet(owner, EqualityComparer.Default)
+    new(owner: MetadataBuilderState) = HandleTable(owner, EqualityComparer.Default)
 
     member _.ToImmutable() = set.ToImmutable()
 
@@ -75,8 +79,8 @@ type ModuleTable =
 [<NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]
 type ResolutionScope =
-    | Module // of ?? // NOTE: Does not occur in a CLI module?
-    | ModuleRef // of ?
+    | Module // NOTE: Does not occur in a compressed CLI module, and should produce a warning.
+    | ModuleRef // of Handle<?>
     | AssemblyRef of Handle<AssemblyRef>
     | TypeRef of Handle<TypeRef>
     | Null
@@ -97,12 +101,13 @@ type TypeRef =
     interface IHandleValue with
         member this.Handles =
             match this.ResolutionScope with
-            | ResolutionScope.AssemblyRef t -> t :> IHandle |> Seq.singleton
+            | ResolutionScope.AssemblyRef (Handle handle)
+            | ResolutionScope.TypeRef (Handle handle) -> handle |> Seq.singleton
             | _ -> Seq.empty
 
 [<Sealed>]
 type TypeRefTable internal (owner: MetadataBuilderState) =
-    inherit HandleSet<TypeRef>(owner)
+    inherit HandleTable<TypeRef>(owner)
 
     override _.GetToken typeRef =
         let token = base.GetToken typeRef
@@ -125,6 +130,8 @@ type TypeRefTable internal (owner: MetadataBuilderState) =
 [<RequireQualifiedAccess>]
 type Extends =
     | TypeDef of Handle<TypeDef>
+    | TypeRef of Handle<TypeRef>
+    // | TypeSpec of Handle<?>
     /// <summary>
     /// Indicates that a class does not extend another class, used for <see cref="System.Object"/>.
     /// </summary>
@@ -144,17 +151,18 @@ type TypeDef =
 
     interface IEquatable<TypeDef> with
         member this.Equals other =
-            this.Extends = other.Extends
-            && this.TypeNamespace = other.TypeNamespace
-            && this.TypeName = other.TypeName
+            this.TypeNamespace = other.TypeNamespace && this.TypeName = other.TypeName
 
     interface IHandleValue with
         member this.Handles =
-            seq {
-                match this.Extends with
-                | Extends.TypeDef t -> t :> IHandle
-                | Extends.Null -> ()
-            }
+            match this.Extends with
+            | Extends.TypeDef (Handle handle)
+            | Extends.TypeRef (Handle handle) -> Seq.singleton handle
+            | Extends.Null -> Seq.empty
+
+[<Sealed>]
+type TypeDefTable (owner: MetadataBuilderState) =
+    inherit HandleTable<TypeDef>(owner)
 
 /// II.22.15
 type Field = // TODO: How to enforce that fields only have one owner?
@@ -211,7 +219,7 @@ type AssemblyRefTable internal (owner: MetadataBuilderState) =
 [<Sealed>]
 type MetadataBuilderState () as this =
     let typeRef = TypeRefTable this
-    let typeDef = HandleSet<TypeDef> this
+    let typeDef = TypeDefTable this
 
     let assemblyRef = AssemblyRefTable this
 
@@ -252,6 +260,7 @@ type MetadataBuilderState () as this =
 
 [<Sealed>]
 type MetadataTables (state: MetadataBuilderState) =
+    /// A collection of warnings produced while creating the metadata.
     member val Warnings = state.Warnings.ToImmutable()
     member val ClsChecks = state.ClsChecks.ToImmutable()
 
@@ -302,9 +311,9 @@ module MetadataBuilder =
     let inline assembly (assembly: Assembly) (state: MetadataBuilderState) =
         state.Assembly <- Some assembly
     /// Adds a reference to an assembly.
-    let addAssemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) =
+    let assemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) =
         state.AssemblyRef.GetToken ref
-    let addTypeDef (typeDef: TypeDef) (state: MetadataBuilderState) =
-        state.TypeDef.GetToken typeDef
-    let addTypeRef (typeRef: TypeRef) (state: MetadataBuilderState) =
-        state.TypeRef.GetToken typeRef
+    let typeDef (def: TypeDef) (state: MetadataBuilderState) =
+        state.TypeDef.GetToken def
+    let typeRef (ref: TypeRef) (state: MetadataBuilderState) =
+        state.TypeRef.GetToken ref
