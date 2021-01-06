@@ -36,6 +36,7 @@ let tests =
                               TypeName = NonEmptyName.ofStr "Test" |> Option.get
                               TypeNamespace = "" }
                     }
+                    |> MetadataTables.ofBuilder
                     |> ValidationResult.get
                 let actual =
                     let testType = metadata.TypeRef |> Seq.head
@@ -54,6 +55,7 @@ let tests =
                               FieldList = ()
                               MethodList = () }
                     }
+                    |> MetadataTables.ofBuilder
                 ValidationExpect.isError result "Result should be error when System.ValueType cannot be found"
         ]
     ]

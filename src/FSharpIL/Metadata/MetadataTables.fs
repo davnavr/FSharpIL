@@ -403,7 +403,7 @@ type MetadataBuilderState () as this =
                 |> invalidArg "item"
 
 [<Sealed>]
-type MetadataTables (state: MetadataBuilderState) =
+type MetadataTables internal (state: MetadataBuilderState) =
     /// A collection of warnings produced while creating the metadata.
     member val Warnings = state.Warnings.ToImmutable()
     member val ClsChecks = state.ClsChecks.ToImmutable()
@@ -424,28 +424,43 @@ type MetadataTables (state: MetadataBuilderState) =
 
     static member val Default = MetadataBuilderState() |> MetadataTables
 
+[<RequireQualifiedAccess>]
+module MetadataTables =
+    let ofBuilder (expr: MetadataBuilderState -> _): ValidationResult<MetadataTables> =
+        let state = MetadataBuilderState()
+        match expr state with
+        | Ok _ ->
+            let tables = MetadataTables state
+            if state.Warnings.Count > 0 then
+                ValidationWarning(tables, tables.ClsChecks, tables.Warnings)
+            else
+                ValidationSuccess(tables, tables.ClsChecks)
+        | Error err -> ValidationError err
+
 [<Sealed>]
 type MetadataBuilder internal () =
-    member inline _.Combine(one: MetadataBuilderState -> _, two: MetadataBuilderState -> _) =
-        fun state -> one state |> ignore; two state |> ignore;
-    member inline _.Bind(expr: MetadataBuilderState -> 'T, body: 'T -> MetadataBuilderState -> _) =
+    member inline _.Combine(one: MetadataBuilderState -> Result<_, _>, two: MetadataBuilderState -> Result<_, ValidationError>) =
+        fun state ->
+            match one state with
+            | Ok _ -> two state
+            | Error err -> Error err
+    member inline _.Bind(expr: MetadataBuilderState -> 'T, body: 'T -> MetadataBuilderState -> Result<_, ValidationError>) =
         fun state ->
             let result = expr state
             body result state
-    member inline _.Delay(f: unit -> MetadataBuilderState -> unit) = fun state -> f () state
+    member inline _.Bind(expr: MetadataBuilderState -> Result<'T, ValidationError>, body: 'T -> MetadataBuilderState -> _) =
+        fun state ->
+            match expr state with
+            | Ok result -> body result state
+            | Error err -> Error err
+    member inline _.Delay(f: unit -> MetadataBuilderState -> Result<_, ValidationError>) = fun state -> f () state
     member inline _.For(items: seq<'T>, body: 'T -> MetadataBuilderState -> _) =
-        fun state -> for item in items do body item state |> ignore
-    // TODO: Make Run a function in the module instead of the builder, to allow "metadataBuilder { }" expressions to be glued together.
-    member _.Run(expr: MetadataBuilderState -> unit): ValidationResult<MetadataTables> =
-        let state = MetadataBuilderState()
-        expr state
-        let tables = MetadataTables state
-        if state.Warnings.Count > 0 then
-            ValidationWarning(tables, tables.ClsChecks, tables.Warnings)
-        else
-            ValidationSuccess(tables, tables.ClsChecks)
-    member inline _.Yield(expr: MetadataBuilderState -> _) = expr >> ignore
-    member inline _.Zero() = ignore<MetadataBuilderState>
+        fun state ->
+            for item in items do
+                body item state |> ignore
+    member inline _.Yield(expr: MetadataBuilderState -> Handle<_>) = fun state -> expr state |> Result<_, ValidationError>.Ok
+    member inline _.Yield(expr: MetadataBuilderState -> Result<_, ValidationError>) = expr
+    member inline _.Zero() = fun _ -> Result<_, ValidationError>.Ok()
 
 /// <summary>
 /// Contains functions for use within the <see cref="FSharpIL.Metadata.MetadataBuilder"/> computation expression.
