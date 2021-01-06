@@ -43,5 +43,17 @@ let tests =
                     | ResolutionScope.AssemblyRef assm -> assm.Item
                     | _ -> Unchecked.defaultof<_>
                 Expect.equal actual expected "The assembly references should match"
+
+            testCase "struct definition results in error when System.ValueType is missing" <| fun() ->
+                let result =
+                    metadataBuilder {
+                        structDef
+                            { Flags = ()
+                              TypeName = NonEmptyName.ofStr "MyStruct" |> Option.get
+                              TypeNamespace = "Testing"
+                              FieldList = ()
+                              MethodList = () }
+                    }
+                ValidationExpect.isError result "Result should be error when System.ValueType cannot be found"
         ]
     ]

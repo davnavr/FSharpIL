@@ -9,6 +9,7 @@
 
   <!-- Source files -->
   <ItemGroup>
+    <Compile Include="ValidationExpect.fs" />
     <Compile Include="MetadataTests.fs" />
     <Compile Include="WritePETests.fs" />
     <Compile Include="Test.fs" />

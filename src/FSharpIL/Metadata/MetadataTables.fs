@@ -3,7 +3,6 @@
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
-open System.Reflection
 
 [<AutoOpen>]
 module internal Helpers =
@@ -222,7 +221,7 @@ type StructDef =
 /// <seealso cref="FSharpIL.Metadata.StructDef"/>
 [<CustomEquality; NoComparison>]
 type TypeDef =
-    { Flags: TypeAttributes
+    { Flags: System.Reflection.TypeAttributes
       TypeName: NonEmptyName
       TypeNamespace: string
       Extends: Extends
@@ -463,5 +462,6 @@ module MetadataBuilder =
     let inline delegateDef (def: DelegateDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
     let inline enumDef (def: EnumDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
     let inline interfaceDef (def: InterfaceDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
+    /// <summary>Defines a value type, which inherits from <see cref="System.ValueType"/>.</summary>
     let inline structDef (def: StructDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
     let inline typeRef (ref: TypeRef) (state: MetadataBuilderState) = state.TypeRef.GetToken ref

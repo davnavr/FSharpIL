@@ -19,6 +19,12 @@ type ValidationResult<'Result, 'ClsCheck, 'Warning, 'Error> =
         | ValidationWarning (_, checks, _) -> checks
         | _ -> ImmutableArray.Empty :> IImmutableList<_>
 
+    member this.IsError =
+        match this with
+        | ValidationError _ -> true
+        | ValidationSuccess _
+        | ValidationWarning _ -> false
+
 [<RequireQualifiedAccess>]
 module ValidationResult =
     let get value =
