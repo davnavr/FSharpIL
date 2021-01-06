@@ -9,10 +9,16 @@ open System.Reflection
 module internal Helpers =
     let inline (|Handle|) (handle: #IHandle) = handle :> IHandle
 
+[<RequireQualifiedAccess>]
+module internal SystemType =
+    let Delegate = "System", NonEmptyName "Delegate"
+    let Enum = "System", NonEmptyName "Enum"
+    let ValueType = "System", NonEmptyName "ValueType"
+
 /// <summary>
 /// Represents a violation of a Common Language Specification rule (I.7).
 /// </summary>
-type ClsCheck =
+type ClsCheck = // TODO: Rename to CLSViolation
     | PointerTypeUsage // of
 
 type ValidationWarning =
@@ -32,7 +38,7 @@ type ValidationError =
             match ns with
             | "" -> string name
             | _ -> sprintf "%s.%A" ns name
-            |> sprintf "Unable to find TypeRef or TypeDef for the type '%s'"
+            |> sprintf "Unable to find type \"%s\", perhaps a TypeDef or TypeRef is missing"
 
 type ValidationResult<'Result> = ValidationResult<'Result, ClsCheck, ValidationWarning, ValidationError>
 
@@ -126,13 +132,14 @@ type TypeRefTable internal (owner: MetadataBuilderState) = // NOTE: First type i
     /// Searches for a type with the specified name and namespace, with a resolution scope
     /// of <see cref="FSharpIL.Metadata.ResolutionScope.AssemblyRef"/>.
     /// </summary>
-    member this.FindType((ns, name) as t) =
+    member internal this.FindType((ns, name) as t) =
         match search.TryGetValue(t) with
         | (true, existing) -> Handle(owner, existing) |> Some
         | (false, _) ->
             Seq.tryPick
                 (function
                 | { ResolutionScope = ResolutionScope.AssemblyRef _ } as t' when t'.TypeName = name && t'.TypeNamespace = ns ->
+                    search.Item <- (ns, name), t'
                     Handle(owner, t') |> Some
                 | _ -> None)
                 this
@@ -157,11 +164,11 @@ type TypeRefTable internal (owner: MetadataBuilderState) = // NOTE: First type i
 [<NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]
 type Extends =
-    | TypeDef of Handle<TypeDefRow>
+    | TypeDef of Handle<TypeDef>
     | TypeRef of Handle<TypeRef>
     // | TypeSpec of Handle<?>
     /// <summary>
-    /// Indicates that a class does not extend another class, used for <see cref="System.Object"/>.
+    /// Indicates that a class does not extend another class, used by <see cref="System.Object"/> and interfaces.
     /// </summary>
     | Null
 
@@ -192,6 +199,7 @@ type InterfaceDef =
     { Flags: unit
       TypeName: NonEmptyName
       TypeNamespace: string
+      FieldList: unit // NOTE: Apparently static fields are allowed in interfaces?
       MethodList: unit }
 
 /// <summary>
@@ -204,35 +212,16 @@ type StructDef =
      FieldList: unit
      MethodList: unit }
 
-/// II.22.37
-type TypeDef =
-    | ClassDef of ClassDef
-    | DelegateDef of DelegateDef
-    | EnumDef of EnumDef
-    | InterfaceDef of InterfaceDef
-    | StructDef of StructDef
-
-    member this.TypeName =
-        match this with
-        | ClassDef { TypeName = name }
-        | DelegateDef { TypeName = name }
-        | EnumDef { TypeName = name }
-        | InterfaceDef { TypeName = name }
-        | StructDef { TypeName = name } -> name
-
-    member this.TypeNamespace =
-        match this with
-        | ClassDef { TypeNamespace = ns }
-        | DelegateDef { TypeNamespace = ns }
-        | EnumDef { TypeNamespace = ns }
-        | InterfaceDef { TypeNamespace = ns }
-        | StructDef { TypeNamespace = ns } -> ns
-
 /// <summary>
-/// Represents a row in the <see cref="FSharpIL.Metadata.TypeDefTable"/>. Do not construct this type directly.
+/// Represents a row in the <see cref="FSharpIL.Metadata.TypeDefTable"/> (II.22.37). Do not construct this type directly.
 /// </summary>
+/// <seealso cref="FSharpIL.Metadata.ClassDef"/>
+/// <seealso cref="FSharpIL.Metadata.DelegateDef"/>
+/// <seealso cref="FSharpIL.Metadata.EnumDef"/>
+/// <seealso cref="FSharpIL.Metadata.InterfaceDef"/>
+/// <seealso cref="FSharpIL.Metadata.StructDef"/>
 [<CustomEquality; NoComparison>]
-type TypeDefRow =
+type TypeDef =
     { Flags: TypeAttributes
       TypeName: NonEmptyName
       TypeNamespace: string
@@ -240,7 +229,7 @@ type TypeDefRow =
       FieldList: unit
       MethodList: unit }
 
-    interface IEquatable<TypeDefRow> with
+    interface IEquatable<TypeDef> with
         member this.Equals other =
             this.TypeNamespace = other.TypeNamespace && this.TypeName = other.TypeName
 
@@ -252,29 +241,68 @@ type TypeDefRow =
             | Extends.Null -> Seq.empty
 
 [<Sealed>]
-type TypeDefTable (owner: MetadataBuilderState) =
-    let defs = Table<TypeDefRow> owner
+type TypeDefTable internal (owner: MetadataBuilderState) =
+    let defs = Table<TypeDef> owner
 
     member _.ToImmutable() = defs.ToImmutable()
 
     // TODO: Enforce CLS checks and warnings.
     // TODO: Figure out how the value of the Extends field will be determined for Enums, Structs, Delegates, etc. while writing the metadata. Should everything be converted to an intermediate type first?
-    member _.GetToken (typeDef: TypeDef) = // TODO: Create a union type again.
-        match typeDef with
-        // TODO: For enums, structs, delegates, etc., find the corresponding value for Extends.
-        | StructDef str ->
-            let valueType = "System", NonEmptyName "ValueType"
-            match owner.FindType valueType with
-            | Some super ->
-                { Flags = invalidOp "What flags?"
-                  TypeName = str.TypeName
-                  TypeNamespace = str.TypeNamespace
-                  Extends = Extends.TypeRef super // TODO: What if ValueType is a TypeDef that is declared LATER in the assembly? Lazy initialization might be needed.
-                  FieldList = ()
-                  MethodList = () }
-                |> Ok
-            | None -> MissingType valueType |> Error
-        | _ -> invalidOp "bad"
+    member _.GetToken(def: ClassDef) =
+        { Flags = invalidOp "What flags?"
+          TypeName = def.TypeName
+          TypeNamespace = def.TypeNamespace
+          Extends = def.Extends
+          FieldList = ()
+          MethodList = () }
+        |> defs.GetToken
+
+    member _.GetToken(def: DelegateDef) =
+        match owner.FindType SystemType.Delegate with
+        | Some super ->
+            { Flags = invalidOp "What flags?"
+              TypeName = def.TypeName
+              TypeNamespace = def.TypeNamespace
+              Extends = Extends.TypeRef super
+              FieldList = ()
+              MethodList = () }
+            |> Ok
+        | None -> MissingType SystemType.Delegate |> Error
+        |> Result.bind defs.GetToken
+
+    member _.GetToken(def: EnumDef) =
+        match owner.FindType SystemType.Enum with
+        | Some super ->
+            { Flags = invalidOp "What flags?"
+              TypeName = def.TypeName
+              TypeNamespace = def.TypeNamespace
+              Extends = Extends.TypeRef super
+              FieldList = ()
+              MethodList = () }
+            |> Ok
+        | None -> MissingType SystemType.Enum |> Error
+        |> Result.bind defs.GetToken
+
+    member _.GetToken(def: InterfaceDef) =
+        { Flags = invalidOp "What flags?"
+          TypeName = def.TypeName
+          TypeNamespace = def.TypeNamespace
+          Extends = Extends.Null
+          FieldList = ()
+          MethodList = () }
+        |> defs.GetToken
+
+    member _.GetToken(def: StructDef) =
+        match owner.FindType SystemType.ValueType with
+        | Some super ->
+            { Flags = invalidOp "What flags?"
+              TypeName = def.TypeName
+              TypeNamespace = def.TypeNamespace
+              Extends = Extends.TypeRef super
+              FieldList = ()
+              MethodList = () }
+            |> Ok
+        | None -> MissingType SystemType.ValueType |> Error
         |> Result.bind defs.GetToken
 
 /// II.22.15
@@ -408,6 +436,7 @@ type MetadataBuilder internal () =
     member inline _.Delay(f: unit -> MetadataBuilderState -> unit) = fun state -> f () state
     member inline _.For(items: seq<'T>, body: 'T -> MetadataBuilderState -> _) =
         fun state -> for item in items do body item state |> ignore
+    // TODO: Make Run a function in the module instead of the builder, to allow "metadataBuilder { }" expressions to be glued together.
     member _.Run(expr: MetadataBuilderState -> unit): ValidationResult<MetadataTables> =
         let state = MetadataBuilderState()
         expr state
@@ -430,9 +459,9 @@ module MetadataBuilder =
     let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly
     /// Adds a reference to an assembly.
     let inline assemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) = state.AssemblyRef.GetToken ref
-    let inline classDef (def: ClassDef) (state: MetadataBuilderState) = ClassDef def |> state.TypeDef.GetToken
-    let inline delegateDef (def: DelegateDef) (state: MetadataBuilderState) = DelegateDef def |> state.TypeDef.GetToken
-    let inline enumDef (def: EnumDef) (state: MetadataBuilderState) = EnumDef def |> state.TypeDef.GetToken
-    let inline interfaceDef (def: InterfaceDef) (state: MetadataBuilderState) = InterfaceDef def |> state.TypeDef.GetToken
-    let inline structDef (def: StructDef) (state: MetadataBuilderState) = StructDef def |> state.TypeDef.GetToken
+    let inline classDef (def: ClassDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
+    let inline delegateDef (def: DelegateDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
+    let inline enumDef (def: EnumDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
+    let inline interfaceDef (def: InterfaceDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
+    let inline structDef (def: StructDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
     let inline typeRef (ref: TypeRef) (state: MetadataBuilderState) = state.TypeRef.GetToken ref
