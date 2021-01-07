@@ -2,12 +2,11 @@
 
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
-type NonEmptyName =
+type NonEmptyName = // TODO: Rename to Identifier.
     internal
     | NonEmptyName of string
 
-    override this.ToString() =
-        let (NonEmptyName name) = this in name
+    override this.ToString() = let (NonEmptyName name) = this in name
 
 [<RequireQualifiedAccess>]
 module NonEmptyName =

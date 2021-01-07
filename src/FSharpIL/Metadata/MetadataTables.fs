@@ -185,19 +185,20 @@ type ClassDef =
 /// Defines a delegate type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Delegate"/>.
 /// </summary>
 type DelegateDef =
-    { TypeName: NonEmptyName
+    { Flags: DelegateFlags
+      TypeName: NonEmptyName
       TypeNamespace: string }
 
 /// <summary>
 /// Defines an enumeration, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Enum"/>.
 /// </summary>
 type EnumDef =
-  { Flags: unit
-    TypeName: NonEmptyName
-    TypeNamespace: string }
+  { TypeName: NonEmptyName
+    TypeNamespace: string
+    ValueList: unit }
 
 type InterfaceDef =
-    { Flags: unit
+    { Flags: InterfaceFlags
       TypeName: NonEmptyName
       TypeNamespace: string
       FieldList: unit // NOTE: Apparently static fields are allowed in interfaces?
@@ -213,6 +214,7 @@ type StructDef =
      FieldList: unit
      MethodList: unit }
 
+// TODO: Should this type be a class instead to make the constructor internal?
 /// <summary>
 /// Represents a row in the <see cref="FSharpIL.Metadata.TypeDefTable"/> (II.22.37). Do not construct this type directly.
 /// </summary>
@@ -247,8 +249,8 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
     member _.ToImmutable() = defs.ToImmutable()
 
+    // TODO: How will accessibility modifiers work? It needs to be different for nested types.
     // TODO: Enforce CLS checks and warnings.
-    // TODO: Figure out how the value of the Extends field will be determined for Enums, Structs, Delegates, etc. while writing the metadata. Should everything be converted to an intermediate type first?
     member _.GetToken({ Flags = ClassFlags flags } as def: ClassDef) =
         { Flags = flags
           TypeName = def.TypeName
@@ -258,10 +260,10 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
           MethodList = () }
         |> defs.GetToken
 
-    member _.GetToken(def: DelegateDef) =
+    member _.GetToken({ Flags = DelegateFlags flags } as def: DelegateDef) =
         match owner.FindType SystemType.Delegate with
         | Some super ->
-            { Flags = invalidOp "What flags?"
+            { Flags = flags
               TypeName = def.TypeName
               TypeNamespace = def.TypeNamespace
               Extends = Extends.TypeRef super
@@ -274,7 +276,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
     member _.GetToken(def: EnumDef) =
         match owner.FindType SystemType.Enum with
         | Some super ->
-            { Flags = invalidOp "What flags?"
+            { Flags = enum 0x2100 // Sealed ||| Serializable
               TypeName = def.TypeName
               TypeNamespace = def.TypeNamespace
               Extends = Extends.TypeRef super
@@ -284,8 +286,8 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
         | None -> MissingType SystemType.Enum |> Error
         |> Result.bind defs.GetToken
 
-    member _.GetToken(def: InterfaceDef) =
-        { Flags = invalidOp "What flags?"
+    member _.GetToken({ Flags = InterfaceFlags flags } as def: InterfaceDef) =
+        { Flags = flags
           TypeName = def.TypeName
           TypeNamespace = def.TypeNamespace
           Extends = Extends.Null

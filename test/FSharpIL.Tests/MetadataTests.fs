@@ -104,7 +104,7 @@ let tests =
                               TypeName = NonEmptyName.ofStr "ValueType"
                               TypeNamespace = "System" }
                         structDef
-                            { Flags = StructFlags.Default
+                            { Flags = structFlags { BeforeFieldInit }
                               TypeName = NonEmptyName.ofStr "Thing"
                               TypeNamespace = "Thing"
                               FieldList = ()

@@ -3,25 +3,25 @@
 open System.Reflection
 open System.Runtime.CompilerServices
 
-[<Struct; IsReadOnly>] type SpecialName = SpecialName
-[<Struct; IsReadOnly>] type RTSpecialName = RTSpecialName
+type SpecialName = SpecialName
+type RTSpecialName = RTSpecialName
 
 [<AbstractClass>]
 type FlagsBuilder<'Flags, 'T> internal (case: 'Flags -> 'T) =
     member inline _.Combine(one: unit -> _, two: unit -> _) = fun() -> one() ||| two()
     member inline _.Delay(expr: unit -> unit -> 'Flags) = fun() -> expr () ()
-    member _.Run(expr: unit -> 'Flags) = expr() |> case
+    abstract member Run: (unit -> 'Flags) -> 'T
+    default _.Run(expr: unit -> 'Flags) = expr() |> case
     member inline _.Zero() = fun() -> Unchecked.defaultof<'Flags>
 
-[<Struct; IsReadOnly>]
 type LayoutFlag = // TODO: For these two flags, have equality and comparison functions always return the same value.
     /// Used as the default layout for structs by the C# compiler.
     | SequentialLayout
     | ExplicitLayout
 
-[<Struct; IsReadOnly>] type Sealed = Sealed
-[<Struct; IsReadOnly>] type Import = Import
-[<Struct; IsReadOnly>] type Serializable = Serializable
+type Sealed = Sealed
+type Import = Import
+type Serializable = Serializable
 
 [<Struct; IsReadOnly>]
 type StringFormattingFlag =
@@ -29,7 +29,15 @@ type StringFormattingFlag =
     | AutoClass
     // | CustomFormatClass
 
-[<Struct; IsReadOnly>] type BeforeFieldInit = BeforeFieldInit
+type BeforeFieldInit = BeforeFieldInit
+
+[<AbstractClass>]
+type BaseTypeFlagsBuilder<'T> internal (case) =
+    inherit FlagsBuilder<TypeAttributes, 'T>(case)
+
+    member inline _.Yield(_: SpecialName) = fun() -> TypeAttributes.SpecialName
+    member inline _.Yield(_: Import) = fun() -> TypeAttributes.Import
+    member inline _.Yield(_: RTSpecialName) = fun() -> TypeAttributes.RTSpecialName
 
 type TypeFlagsBuilder<'T> internal (case) =
     inherit FlagsBuilder<TypeAttributes, 'T>(case)
@@ -39,8 +47,6 @@ type TypeFlagsBuilder<'T> internal (case) =
             match layout with
             | SequentialLayout -> TypeAttributes.SequentialLayout
             | ExplicitLayout -> TypeAttributes.ExplicitLayout
-    member inline _.Yield(_: SpecialName) = fun() -> TypeAttributes.SpecialName
-    member inline _.Yield(_: Import) = fun() -> TypeAttributes.Import
     member inline _.Yield(_: Serializable) = fun() -> TypeAttributes.Serializable
     member inline _.Yield(charSet: StringFormattingFlag) =
         fun() ->
@@ -48,7 +54,11 @@ type TypeFlagsBuilder<'T> internal (case) =
             | UnicodeClass -> TypeAttributes.UnicodeClass
             | AutoClass -> TypeAttributes.AutoClass
     member inline _.Yield(_: BeforeFieldInit) = fun() -> TypeAttributes.BeforeFieldInit
-    member inline _.Yield(_: RTSpecialName) = fun() -> TypeAttributes.RTSpecialName
+
+type SealedTypeFlagsBuilder<'T> internal (case) =
+    inherit TypeFlagsBuilder<'T>(case)
+
+    override _.Run expr = base.Run(fun() -> expr() ||| TypeAttributes.Sealed)
 
 [<Struct; IsReadOnly>]
 type ClassFlags =
@@ -64,19 +74,35 @@ type ClassFlagsBuilder internal () =
     member inline _.Yield(_: Sealed) = fun() -> TypeAttributes.Sealed
 
 [<Struct; IsReadOnly>]
+type DelegateFlags =
+    internal
+    | DelegateFlags of TypeAttributes
+
+    static member Default = DelegateFlags TypeAttributes.Sealed
+
+[<Struct; IsReadOnly>]
+type InterfaceFlags =
+    internal
+    | InterfaceFlags of TypeAttributes
+
+    static member Default = TypeAttributes.Abstract ||| TypeAttributes.Interface |> InterfaceFlags
+
+[<Sealed>]
+type InterfaceFlagsBuilder internal() =
+    inherit BaseTypeFlagsBuilder<InterfaceFlags>(InterfaceFlags)
+
+    override _.Run expr = base.Run(fun() -> expr() ||| TypeAttributes.Abstract ||| TypeAttributes.Interface)
+
+[<Struct; IsReadOnly>]
 type StructFlags =
     internal
     | StructFlags of TypeAttributes
 
     static member Default = TypeAttributes.BeforeFieldInit ||| TypeAttributes.SequentialLayout ||| TypeAttributes.Sealed |> StructFlags
 
-[<Sealed>]
-type StructFlagsBuilder internal () =
-    inherit TypeFlagsBuilder<StructFlags>(StructFlags)
-
-    member inline _.Zero() = fun() -> TypeAttributes.Sealed
-
 [<AutoOpen>]
 module FlagBuilders =
     let classFlags = ClassFlagsBuilder()
-    let structFlags = StructFlagsBuilder()
+    let delegateFlags = SealedTypeFlagsBuilder<DelegateFlags> DelegateFlags
+    let interfaceFlags = InterfaceFlagsBuilder()
+    let structFlags = SealedTypeFlagsBuilder<StructFlags> StructFlags
