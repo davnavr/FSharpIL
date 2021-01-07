@@ -26,7 +26,7 @@ let tests =
                     { Version = Version(2, 0, 0, 0)
                       Flags = ()
                       PublicKeyOrToken = PublicKeyOrToken.NoPublicKey
-                      Name = AssemblyName.ofStr "mscorlib" |> Option.get
+                      Name = AssemblyName.ofStr "mscorlib"
                       Culture = AssemblyCulture.NullCulture
                       HashValue = None }
                 let metadata =
@@ -34,7 +34,7 @@ let tests =
                         let! token = assemblyRef expected
                         typeRef
                             { ResolutionScope = ResolutionScope.AssemblyRef token
-                              TypeName = NonEmptyName.ofStr "Test" |> Option.get
+                              TypeName = NonEmptyName.ofStr "Test"
                               TypeNamespace = "" }
                     }
                     |> ValidationResult.get
@@ -59,7 +59,7 @@ let tests =
                     metadataBuilder {
                         structDef
                             { Flags = StructFlags.Default
-                              TypeName = NonEmptyName.ofStr "MyStruct" |> Option.get
+                              TypeName = NonEmptyName.ofStr "MyStruct"
                               TypeNamespace = "Testing"
                               FieldList = ()
                               MethodList = () }
@@ -75,7 +75,7 @@ let tests =
                                     Sealed
                                     BeforeFieldInit
                                 }
-                              TypeName = NonEmptyName.ofStr "MyClass" |> Option.get
+                              TypeName = NonEmptyName.ofStr "MyClass"
                               TypeNamespace = ""
                               Extends = Extends.Null
                               FieldList = ()
@@ -96,16 +96,16 @@ let tests =
                                 { Version = Version(5, 0, 0, 0)
                                   Flags = ()
                                   PublicKeyOrToken = NoPublicKey
-                                  Name = AssemblyName.ofStr "System.Private.CoreLib" |> Option.get // TODO: Add functions that throw exceptions instead of returning None.
+                                  Name = AssemblyName.ofStr "System.Private.CoreLib"
                                   Culture = NullCulture
                                   HashValue = None }
                         typeRef
                             { ResolutionScope = ResolutionScope.AssemblyRef mscorlib
-                              TypeName = NonEmptyName.ofStr "ValueType" |> Option.get
+                              TypeName = NonEmptyName.ofStr "ValueType"
                               TypeNamespace = "System" }
                         structDef
                             { Flags = StructFlags.Default
-                              TypeName = NonEmptyName.ofStr "Thing" |> Option.get
+                              TypeName = NonEmptyName.ofStr "Thing"
                               TypeNamespace = "Thing"
                               FieldList = ()
                               MethodList = () }

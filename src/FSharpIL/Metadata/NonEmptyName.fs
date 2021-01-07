@@ -11,10 +11,16 @@ type NonEmptyName =
 
 [<RequireQualifiedAccess>]
 module NonEmptyName =
-    let ofStr str =
+    let tryOfStr str =
         match str with
+        | null
         | "" -> None
         | _ -> NonEmptyName str |> Some
+
+    let ofStr str =
+        match tryOfStr str with
+        | Some name -> name
+        | None -> invalidArg "str" "The name cannot be empty."
 
 [<AutoOpen>]
 module NonEmptyNamePatterns =
