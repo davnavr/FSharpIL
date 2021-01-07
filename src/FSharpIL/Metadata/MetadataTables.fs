@@ -179,6 +179,8 @@ type ClassDef =
       FieldList: unit
       MethodList: unit }
 
+// TODO: Create type for abstract class.
+
 /// <summary>
 /// Defines a delegate type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Delegate"/>.
 /// </summary>
@@ -248,7 +250,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
     // TODO: Enforce CLS checks and warnings.
     // TODO: Figure out how the value of the Extends field will be determined for Enums, Structs, Delegates, etc. while writing the metadata. Should everything be converted to an intermediate type first?
     member _.GetToken({ Flags = ClassFlags flags } as def: ClassDef) =
-        { Flags = invalidOp "What flags?"
+        { Flags = flags
           TypeName = def.TypeName
           TypeNamespace = def.TypeNamespace
           Extends = def.Extends
@@ -291,10 +293,10 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
           MethodList = () }
         |> defs.GetToken
 
-    member _.GetToken(def: StructDef) =
+    member _.GetToken({ Flags = StructFlags flags } as def: StructDef) =
         match owner.FindType SystemType.ValueType with
         | Some super ->
-            { Flags = invalidOp "What flags?"
+            { Flags = flags
               TypeName = def.TypeName
               TypeNamespace = def.TypeNamespace
               Extends = Extends.TypeRef super

@@ -96,7 +96,7 @@ let tests =
                                 { Version = Version(5, 0, 0, 0)
                                   Flags = ()
                                   PublicKeyOrToken = NoPublicKey
-                                  Name = AssemblyName.ofStr "System.Private.CoreLib" |> Option.get
+                                  Name = AssemblyName.ofStr "System.Private.CoreLib" |> Option.get // TODO: Add functions that throw exceptions instead of returning None.
                                   Culture = NullCulture
                                   HashValue = None }
                         typeRef

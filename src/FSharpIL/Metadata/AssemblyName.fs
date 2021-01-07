@@ -10,6 +10,6 @@ type AssemblyName =
 [<RequireQualifiedAccess>]
 module AssemblyName =
     let ofStr (str: string) =
-        if String.IsNullOrEmpty str || str.IndexOfAny [| ':'; '\\'; '/'; '.' |] > -1
+        if String.IsNullOrEmpty str || str.IndexOfAny [| ':'; '\\'; '/' |] > -1
         then None
         else AssemblyName str |> Some
