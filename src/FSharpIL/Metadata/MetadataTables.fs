@@ -4,6 +4,8 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
+type IsReadOnlyAttribute = System.Runtime.CompilerServices.IsReadOnlyAttribute
+
 [<AutoOpen>]
 module internal Helpers =
     let inline (|Handle|) (handle: #IHandle) = handle :> IHandle
@@ -171,8 +173,33 @@ type Extends =
     /// </summary>
     | Null
 
+[<Struct; IsReadOnly>]
+[<StructuralComparison; StructuralEquality>]
+type LayoutFlag = // TODO: For these two flags, have equality and comparison functions always return the same value.
+    | SequentialLayout
+    | ExplicitLayout
+
+[<Struct; IsReadOnly>]
+[<StructuralComparison; StructuralEquality>]
+type StringFormattingFlags =
+    | UnicodeClass
+    | AutoClass
+    // | CustomFormatClass
+
+[<StructuralComparison; StructuralEquality>]
+type ClassFlag =
+    | ClassLayout of LayoutFlag
+    | ClassSealed
+    | ClassSpecialName
+    | ClassImport
+    | ClassSerializable
+    | ClassCharSet of StringFormattingFlags
+    | ClassBeforeFieldInit
+    | ClassRTSpecialName
+    | ClassIsTypeForwarder
+
 type ClassDef =
-    { Flags: unit
+    { Flags: Set<ClassFlag> // TODO: Instead of a set, maybe use a computation expression to create the flags for a class.
       TypeName: NonEmptyName
       TypeNamespace: string
       Extends: Extends
