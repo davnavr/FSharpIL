@@ -3,6 +3,8 @@
 open System.Reflection
 open System.Runtime.CompilerServices
 
+/// Marks a class as both abstract and sealed, or specifies that a member is static.
+type Static = Static
 type SpecialName = SpecialName
 type RTSpecialName = RTSpecialName
 
@@ -71,6 +73,7 @@ type ClassFlags =
 type ClassFlagsBuilder internal () =
     inherit TypeFlagsBuilder<ClassFlags>(ClassFlags)
 
+    member inline _.Yield(_: Static) = fun() -> TypeAttributes.Sealed ||| TypeAttributes.Abstract
     member inline _.Yield(_: Sealed) = fun() -> TypeAttributes.Sealed
 
 [<Struct; IsReadOnly>]

@@ -171,35 +171,79 @@ type Extends =
     /// </summary>
     | Null
 
+[<RequireQualifiedAccess>]
+type TypeAccess =
+    | NotPublic
+    | Public
+    | NestedPublic of Handle<TypeDef>
+    | NestedPrivate of Handle<TypeDef>
+    /// <summary>Equivalent to the C# <see langword="protected"/> keyword.</summary>
+    | NestedFamily of Handle<TypeDef>
+    /// <summary>Equivalent to the C# <see langword="internal"/> keyword.</summary>
+    | NestedAssembly of Handle<TypeDef>
+    /// <summary>Equivalent to the C# <see langword="private protected"/> keyword.</summary>
+    | NestedFamilyAndAssembly of Handle<TypeDef>
+    /// <summary>Equivalent to the C# <see langword="protected internal"/> keyword.</summary>
+    | NestedFamilyOrAssembly of Handle<TypeDef>
+
+    /// <summary>Retrieves the enclosing class of this nested class.</summary>
+    /// <remarks>In the actual metadata, nested type information is actually stored in the NestedClass table (II.22.32).</remarks>
+    member this.EnclosingClass =
+        match this with
+        | NotPublic
+        | Public -> None
+        | NestedPublic parent
+        | NestedPrivate parent
+        | NestedFamily parent
+        | NestedAssembly parent
+        | NestedFamilyAndAssembly parent
+        | NestedFamilyOrAssembly parent -> Some parent
+
+    member this.Flags =
+        match this with
+        | NotPublic -> 0
+        | Public -> 1
+        | NestedPublic _ -> 2
+        | NestedPrivate _ -> 3
+        | NestedFamily _ -> 4
+        | NestedAssembly _ -> 5
+        | NestedFamilyAndAssembly _ -> 6
+        | NestedFamilyOrAssembly _ -> 7
+        |> enum<System.Reflection.TypeAttributes>
+
 type ClassDef =
-    { Flags: ClassFlags
-      TypeName: NonEmptyName
+    { Access: TypeAccess
+      Flags: ClassFlags
+      ClassName: NonEmptyName
       TypeNamespace: string
       Extends: Extends
       FieldList: unit
       MethodList: unit }
 
-// TODO: Create type for abstract class.
+// TODO: Create types for abstract classes and nested types. Maybe make the 5 types generic, with the parameter being an access modifier?
 
 /// <summary>
 /// Defines a delegate type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Delegate"/>.
 /// </summary>
 type DelegateDef =
-    { Flags: DelegateFlags
-      TypeName: NonEmptyName
+    { Access: TypeAccess
+      Flags: DelegateFlags
+      DelegateName: NonEmptyName
       TypeNamespace: string }
 
 /// <summary>
-/// Defines an enumeration, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Enum"/>.
+/// Defines an enumeration type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Enum"/>.
 /// </summary>
 type EnumDef =
-  { TypeName: NonEmptyName
+  { Access: TypeAccess
+    EnumName: NonEmptyName
     TypeNamespace: string
     ValueList: unit }
 
 type InterfaceDef =
-    { Flags: InterfaceFlags
-      TypeName: NonEmptyName
+    { Access: TypeAccess
+      Flags: InterfaceFlags
+      InterfaceName: NonEmptyName
       TypeNamespace: string
       FieldList: unit // NOTE: Apparently static fields are allowed in interfaces?
       MethodList: unit }
@@ -208,8 +252,9 @@ type InterfaceDef =
 /// Defines a struct, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.ValueType"/>.
 /// </summary>
 type StructDef =
-   { Flags: StructFlags
-     TypeName: NonEmptyName
+   { Access: TypeAccess
+     Flags: StructFlags
+     StructName: NonEmptyName
      TypeNamespace: string
      FieldList: unit
      MethodList: unit }
@@ -230,7 +275,8 @@ type TypeDef =
       TypeNamespace: string
       Extends: Extends
       FieldList: unit
-      MethodList: unit }
+      MethodList: unit
+      EnclosingClass: Handle<TypeDef> option }
 
     interface IEquatable<TypeDef> with
         member this.Equals other =
@@ -238,10 +284,16 @@ type TypeDef =
 
     interface IHandleValue with
         member this.Handles =
-            match this.Extends with
-            | Extends.TypeDef (Handle handle)
-            | Extends.TypeRef (Handle handle) -> Seq.singleton handle
-            | Extends.Null -> Seq.empty
+            seq {
+                match this.Extends with
+                | Extends.TypeDef (Handle handle)
+                | Extends.TypeRef (Handle handle) -> handle
+                | Extends.Null -> ()
+
+                match this.EnclosingClass with
+                | Some(Handle parent) -> parent
+                | None -> ()
+            }
 
 [<Sealed>]
 type TypeDefTable internal (owner: MetadataBuilderState) =
@@ -249,26 +301,28 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
     member _.ToImmutable() = defs.ToImmutable()
 
-    // TODO: How will accessibility modifiers work? It needs to be different for nested types.
+    // TODO: Add functions for adding abstract classes and nested types.
     // TODO: Enforce CLS checks and warnings.
     member _.GetToken({ Flags = ClassFlags flags } as def: ClassDef) =
-        { Flags = flags
-          TypeName = def.TypeName
+        { Flags = flags ||| def.Access.Flags
+          TypeName = def.ClassName
           TypeNamespace = def.TypeNamespace
           Extends = def.Extends
           FieldList = ()
-          MethodList = () }
+          MethodList = ()
+          EnclosingClass = def.Access.EnclosingClass }
         |> defs.GetToken
 
     member _.GetToken({ Flags = DelegateFlags flags } as def: DelegateDef) =
         match owner.FindType SystemType.Delegate with
         | Some super ->
             { Flags = flags
-              TypeName = def.TypeName
+              TypeName = def.DelegateName
               TypeNamespace = def.TypeNamespace
               Extends = Extends.TypeRef super
               FieldList = ()
-              MethodList = () }
+              MethodList = ()
+              EnclosingClass = def.Access.EnclosingClass }
             |> Ok
         | None -> MissingType SystemType.Delegate |> Error
         |> Result.bind defs.GetToken
@@ -277,33 +331,36 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
         match owner.FindType SystemType.Enum with
         | Some super ->
             { Flags = enum 0x2100 // Sealed ||| Serializable
-              TypeName = def.TypeName
+              TypeName = def.EnumName
               TypeNamespace = def.TypeNamespace
               Extends = Extends.TypeRef super
               FieldList = ()
-              MethodList = () }
+              MethodList = ()
+              EnclosingClass = def.Access.EnclosingClass }
             |> Ok
         | None -> MissingType SystemType.Enum |> Error
         |> Result.bind defs.GetToken
 
     member _.GetToken({ Flags = InterfaceFlags flags } as def: InterfaceDef) =
         { Flags = flags
-          TypeName = def.TypeName
+          TypeName = def.InterfaceName
           TypeNamespace = def.TypeNamespace
           Extends = Extends.Null
           FieldList = ()
-          MethodList = () }
+          MethodList = ()
+          EnclosingClass = def.Access.EnclosingClass }
         |> defs.GetToken
 
     member _.GetToken({ Flags = StructFlags flags } as def: StructDef) =
         match owner.FindType SystemType.ValueType with
         | Some super ->
             { Flags = flags
-              TypeName = def.TypeName
+              TypeName = def.StructName
               TypeNamespace = def.TypeNamespace
               Extends = Extends.TypeRef super
               FieldList = ()
-              MethodList = () }
+              MethodList = ()
+              EnclosingClass = def.Access.EnclosingClass }
             |> Ok
         | None -> MissingType SystemType.ValueType |> Error
         |> Result.bind defs.GetToken
@@ -315,7 +372,7 @@ type Field = // TODO: How to enforce that fields only have one owner?
       Signature: unit }
 
     // NOTE: Equality is based on name, signature, and the owning type.
-    // TODO: See if all equality code can be moved to a FieldTable class and that the equality constraint on Handle items can be removed.
+    // NOTE: Fields and methods may not need a corresponding Table type.
 
 /// II.22.2
 type Assembly =

@@ -58,8 +58,9 @@ let tests =
                 let result =
                     metadataBuilder {
                         structDef
-                            { Flags = StructFlags.Default
-                              TypeName = NonEmptyName.ofStr "MyStruct"
+                            { Access = TypeAccess.Public
+                              Flags = StructFlags.Default
+                              StructName = NonEmptyName.ofStr "MyStruct"
                               TypeNamespace = "Testing"
                               FieldList = ()
                               MethodList = () }
@@ -70,12 +71,13 @@ let tests =
                 let metadata =
                     metadataBuilder {
                         classDef
-                            { Flags =
+                            { Access = TypeAccess.Public
+                              Flags =
                                 classFlags {
                                     Sealed
                                     BeforeFieldInit
                                 }
-                              TypeName = NonEmptyName.ofStr "MyClass"
+                              ClassName = NonEmptyName.ofStr "MyClass"
                               TypeNamespace = ""
                               Extends = Extends.Null
                               FieldList = ()
@@ -85,7 +87,7 @@ let tests =
                 let def = metadata.TypeDef |> Seq.head
                 Expect.equal
                     def.Flags
-                    (TypeAttributes.Sealed ||| TypeAttributes.BeforeFieldInit)
+                    (TypeAttributes.Sealed ||| TypeAttributes.BeforeFieldInit ||| TypeAttributes.Public)
                     "flags should match"
 
             testCase "structs are sealed" <| fun() ->
@@ -104,8 +106,9 @@ let tests =
                               TypeName = NonEmptyName.ofStr "ValueType"
                               TypeNamespace = "System" }
                         structDef
-                            { Flags = structFlags { BeforeFieldInit }
-                              TypeName = NonEmptyName.ofStr "Thing"
+                            { Access = TypeAccess.NotPublic
+                              Flags = structFlags { BeforeFieldInit }
+                              StructName = NonEmptyName.ofStr "Thing"
                               TypeNamespace = "Thing"
                               FieldList = ()
                               MethodList = () }
