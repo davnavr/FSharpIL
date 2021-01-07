@@ -424,19 +424,6 @@ type MetadataTables internal (state: MetadataBuilderState) =
 
     static member val Default = MetadataBuilderState() |> MetadataTables
 
-[<RequireQualifiedAccess>]
-module MetadataTables =
-    let ofBuilder (expr: MetadataBuilderState -> _): ValidationResult<MetadataTables> =
-        let state = MetadataBuilderState()
-        match expr state with
-        | Ok _ ->
-            let tables = MetadataTables state
-            if state.Warnings.Count > 0 then
-                ValidationWarning(tables, tables.ClsChecks, tables.Warnings)
-            else
-                ValidationSuccess(tables, tables.ClsChecks)
-        | Error err -> ValidationError err
-
 [<Sealed>]
 type MetadataBuilder internal () =
     member inline _.Combine(one: MetadataBuilderState -> Result<_, _>, two: MetadataBuilderState -> Result<_, ValidationError>) =
@@ -458,6 +445,16 @@ type MetadataBuilder internal () =
         fun state ->
             for item in items do
                 body item state |> ignore
+    member _.Run(expr: MetadataBuilderState -> _): ValidationResult<MetadataTables> =
+        let state = MetadataBuilderState()
+        match expr state with
+        | Ok _ ->
+            let tables = MetadataTables state
+            if state.Warnings.Count > 0 then
+                ValidationWarning(tables, tables.ClsChecks, tables.Warnings)
+            else
+                ValidationSuccess(tables, tables.ClsChecks)
+        | Error err -> ValidationError err
     member inline _.Yield(expr: MetadataBuilderState -> Handle<_>) = fun state -> expr state |> Result<_, ValidationError>.Ok
     member inline _.Yield(expr: MetadataBuilderState -> Result<_, ValidationError>) = expr
     member inline _.Zero() = fun _ -> Result<_, ValidationError>.Ok()

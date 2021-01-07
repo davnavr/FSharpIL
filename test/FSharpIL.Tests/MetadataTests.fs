@@ -36,7 +36,6 @@ let tests =
                               TypeName = NonEmptyName.ofStr "Test" |> Option.get
                               TypeNamespace = "" }
                     }
-                    |> MetadataTables.ofBuilder
                     |> ValidationResult.get
                 let actual =
                     let testType = metadata.TypeRef |> Seq.head
@@ -44,6 +43,15 @@ let tests =
                     | ResolutionScope.AssemblyRef assm -> assm.Item
                     | _ -> Unchecked.defaultof<_>
                 Expect.equal actual expected "The assembly references should match"
+
+            testCase "error skips rest of expression" <| fun() ->
+                let mutable run = false
+                metadataBuilder {
+                    fun _ -> MissingType("", Unchecked.defaultof<NonEmptyName>) |> Error
+                    run <- true
+                }
+                |> ignore
+                Expect.isFalse run "An error should mean that the rest of the expression should not be evaluated"
 
             testCase "struct definition results in error when System.ValueType is missing" <| fun() ->
                 let result =
@@ -55,7 +63,6 @@ let tests =
                               FieldList = ()
                               MethodList = () }
                     }
-                    |> MetadataTables.ofBuilder
                 ValidationExpect.isError result "Result should be error when System.ValueType cannot be found"
         ]
     ]
