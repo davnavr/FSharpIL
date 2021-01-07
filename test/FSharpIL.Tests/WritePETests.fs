@@ -22,7 +22,7 @@ let tests =
 
     testList "write PE" [
         testPE "default PE has metadata" PEFile.Default <| fun reader ->
-            Expect.isTrue reader.HasMetadata "Generated PE should contain metadata"
+            Expect.isTrue reader.HasMetadata "generated PE should contain metadata"
 
         testPE "default PE sections have correct names" PEFile.Default <| fun reader ->
             let names =
@@ -32,8 +32,8 @@ let tests =
             Expect.sequenceEqual
                 names
                 [| ".text"; ".rsrc"; ".reloc" |]
-                "Default section headers are missing one or more sections"
+                "default section headers are missing one or more sections"
 
         testMetadata "default metadata is an assembly" PEFile.Default <| fun metadata ->
-            Expect.isTrue metadata.IsAssembly "Generated CLI metadata should be an assembly"
+            Expect.isTrue metadata.IsAssembly "generated CLI metadata should be an assembly"
     ]

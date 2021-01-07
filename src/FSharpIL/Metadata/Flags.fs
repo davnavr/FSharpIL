@@ -15,6 +15,7 @@ type FlagsBuilder<'Flags, 'T> internal (case: 'Flags -> 'T) =
 
 [<Struct; IsReadOnly>]
 type LayoutFlag = // TODO: For these two flags, have equality and comparison functions always return the same value.
+    /// Used as the default layout for structs by the C# compiler.
     | SequentialLayout
     | ExplicitLayout
 
@@ -54,11 +55,28 @@ type ClassFlags =
     internal
     | ClassFlags of TypeAttributes
 
+    static member Default = ClassFlags TypeAttributes.BeforeFieldInit
+
+[<Sealed>]
 type ClassFlagsBuilder internal () =
     inherit TypeFlagsBuilder<ClassFlags>(ClassFlags)
 
     member inline _.Yield(_: Sealed) = fun() -> TypeAttributes.Sealed
 
+[<Struct; IsReadOnly>]
+type StructFlags =
+    internal
+    | StructFlags of TypeAttributes
+
+    static member Default = TypeAttributes.BeforeFieldInit ||| TypeAttributes.SequentialLayout ||| TypeAttributes.Sealed |> StructFlags
+
+[<Sealed>]
+type StructFlagsBuilder internal () =
+    inherit TypeFlagsBuilder<StructFlags>(StructFlags)
+
+    member inline _.Zero() = fun() -> TypeAttributes.Sealed
+
 [<AutoOpen>]
 module FlagBuilders =
-    let classFlags =ClassFlagsBuilder()
+    let classFlags = ClassFlagsBuilder()
+    let structFlags = StructFlagsBuilder()

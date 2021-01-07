@@ -180,14 +180,14 @@ type ClassDef =
       MethodList: unit }
 
 /// <summary>
-/// Defines a delegate type, which derives from <see cref="System.Delegate"/>.
+/// Defines a delegate type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Delegate"/>.
 /// </summary>
 type DelegateDef =
     { TypeName: NonEmptyName
       TypeNamespace: string }
 
 /// <summary>
-/// Defines an enumeration, which is a class that derives from <see cref="System.Enum"/>.
+/// Defines an enumeration, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Enum"/>.
 /// </summary>
 type EnumDef =
   { Flags: unit
@@ -202,10 +202,10 @@ type InterfaceDef =
       MethodList: unit }
 
 /// <summary>
-/// Defines a struct, which is a class that derives from <see cref="System.ValueType"/>.
+/// Defines a struct, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.ValueType"/>.
 /// </summary>
 type StructDef =
-   { Flags: unit
+   { Flags: StructFlags
      TypeName: NonEmptyName
      TypeNamespace: string
      FieldList: unit
@@ -247,7 +247,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
     // TODO: Enforce CLS checks and warnings.
     // TODO: Figure out how the value of the Extends field will be determined for Enums, Structs, Delegates, etc. while writing the metadata. Should everything be converted to an intermediate type first?
-    member _.GetToken(def: ClassDef) =
+    member _.GetToken({ Flags = ClassFlags flags } as def: ClassDef) =
         { Flags = invalidOp "What flags?"
           TypeName = def.TypeName
           TypeNamespace = def.TypeNamespace

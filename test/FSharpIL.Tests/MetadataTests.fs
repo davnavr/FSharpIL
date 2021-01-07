@@ -18,7 +18,7 @@ let tests =
             Expect.equal
                 actual
                 [| 0x76uy; 0x34uy; 0x2Euy; 0x30uy; 0x2Euy; 0x33uy; 0x30uy; 0x33uy; 0x31uy; 0x39uy; 0uy; 0uy |]
-                "The byte representation of the metadata version should match"
+                "the byte representation of the metadata version should match"
 
         testList "computation expression" [
             testCase "variable can be used" <| fun() ->
@@ -43,7 +43,7 @@ let tests =
                     match testType.ResolutionScope with
                     | ResolutionScope.AssemblyRef assm -> assm.Item
                     | _ -> Unchecked.defaultof<_>
-                Expect.equal actual expected "The assembly references should match"
+                Expect.equal actual expected "the assembly references should match"
 
             testCase "error skips rest of expression" <| fun() ->
                 let mutable run = false
@@ -52,19 +52,19 @@ let tests =
                     run <- true
                 }
                 |> ignore
-                Expect.isFalse run "An error should mean that the rest of the expression should not be evaluated"
+                Expect.isFalse run "an error should mean that the rest of the expression should not be evaluated"
 
             testCase "struct definition results in error when System.ValueType is missing" <| fun() ->
                 let result =
                     metadataBuilder {
                         structDef
-                            { Flags = ()
+                            { Flags = StructFlags.Default
                               TypeName = NonEmptyName.ofStr "MyStruct" |> Option.get
                               TypeNamespace = "Testing"
                               FieldList = ()
                               MethodList = () }
                     }
-                ValidationExpect.isError result "Result should be error when System.ValueType cannot be found"
+                ValidationExpect.isError result "result should be error when System.ValueType cannot be found"
 
             testCase "class flags are declared correctly" <| fun() ->
                 let metadata =
@@ -86,6 +86,35 @@ let tests =
                 Expect.equal
                     def.Flags
                     (TypeAttributes.Sealed ||| TypeAttributes.BeforeFieldInit)
-                    "Flags should match"
+                    "flags should match"
+
+            testCase "structs are sealed" <| fun() ->
+                let metadata =
+                    metadataBuilder {
+                        let! mscorlib =
+                            assemblyRef
+                                { Version = Version(5, 0, 0, 0)
+                                  Flags = ()
+                                  PublicKeyOrToken = NoPublicKey
+                                  Name = AssemblyName.ofStr "System.Private.CoreLib" |> Option.get
+                                  Culture = NullCulture
+                                  HashValue = None }
+                        typeRef
+                            { ResolutionScope = ResolutionScope.AssemblyRef mscorlib
+                              TypeName = NonEmptyName.ofStr "ValueType" |> Option.get
+                              TypeNamespace = "System" }
+                        structDef
+                            { Flags = StructFlags.Default
+                              TypeName = NonEmptyName.ofStr "Thing" |> Option.get
+                              TypeNamespace = "Thing"
+                              FieldList = ()
+                              MethodList = () }
+                    }
+                    |> ValidationResult.get
+                let def = metadata.TypeDef |> Seq.head
+                Expect.equal
+                    (def.Flags &&& TypeAttributes.Sealed)
+                    TypeAttributes.Sealed
+                    "user-defined value types should always have the Sealed flag"
         ]
     ]
