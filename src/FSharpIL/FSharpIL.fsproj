@@ -15,6 +15,7 @@
     <Compile Include="Round.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\MiscTypes.fs" />
+    <Compile Include="Metadata\Flags.fs" />
     <Compile Include="Metadata\NonEmptyName.fs" />
     <Compile Include="Metadata\AssemblyName.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />

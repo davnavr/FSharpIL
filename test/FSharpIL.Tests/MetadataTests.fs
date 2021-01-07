@@ -3,6 +3,7 @@
 open Expecto
 
 open System
+open System.Reflection
 
 open FSharpIL.Metadata
 
@@ -64,5 +65,27 @@ let tests =
                               MethodList = () }
                     }
                 ValidationExpect.isError result "Result should be error when System.ValueType cannot be found"
+
+            testCase "class flags are declared correctly" <| fun() ->
+                let metadata =
+                    metadataBuilder {
+                        classDef
+                            { Flags =
+                                classFlags {
+                                    Sealed
+                                    BeforeFieldInit
+                                }
+                              TypeName = NonEmptyName.ofStr "MyClass" |> Option.get
+                              TypeNamespace = ""
+                              Extends = Extends.Null
+                              FieldList = ()
+                              MethodList = () }
+                    }
+                    |> ValidationResult.get
+                let def = metadata.TypeDef |> Seq.head
+                Expect.equal
+                    def.Flags
+                    (TypeAttributes.Sealed ||| TypeAttributes.BeforeFieldInit)
+                    "Flags should match"
         ]
     ]
