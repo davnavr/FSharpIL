@@ -61,6 +61,8 @@ type Handle<'Value> =
         member this.Owner = let (Handle (owner, _)) = this in owner
         member this.ValueType = this.Item.GetType()
 
+// TODO: Create new handle type containing an index and the item?
+
 type Table<'Value when 'Value :> IHandleValue> internal (owner: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
     let set = ImmutableHashSet.CreateBuilder<'Value> comparer
 
@@ -365,6 +367,10 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
         | None -> MissingType SystemType.ValueType |> Error
         |> Result.bind defs.GetToken
 
+    interface IEnumerable<TypeDef> with
+        member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
+        member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
+
 /// II.22.15
 type Field = // TODO: How to enforce that fields only have one owner?
     { Flags: unit
@@ -417,9 +423,15 @@ type AssemblyRefTable internal (owner: MetadataBuilderState) =
             DuplicateAssemblyRef assemblyRef |> owner.Warnings.Add
         Handle(owner, assemblyRef)
 
+// II.22.32
+[<Struct; System.Runtime.CompilerServices.IsReadOnly>]
+type NestedClass =
+    { NestedClass: Handle<TypeDef>
+      EnclosingClass: Handle<TypeDef> }
+
 [<Sealed>]
 type MetadataBuilderState () as this =
-    let typeRef = TypeRefTable this
+    let typeRef = TypeRefTable this // TODO: Remove "as this" and assign them in properties?
     let typeDef = TypeDefTable this
 
     let assemblyRef = AssemblyRefTable this
@@ -441,14 +453,26 @@ type MetadataBuilderState () as this =
     member _.TypeRef = typeRef
     /// (0x02)
     member _.TypeDef = typeDef
-    /// (0x04)
-
+    // (0x04)
+    // Field
 
     /// (0x20)
     member val Assembly = None with get, set // 0x20 // TODO: Figure out if None is a good default value.
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
+    /// (0x23)
     member _.AssemblyRef = assemblyRef
+
+    /// (0x29)
+    member val NestedClass =
+        Seq.choose
+            (function
+            | { TypeDef.EnclosingClass = Some parent } as tdef ->
+                { NestedClass = Handle(this, tdef)
+                  EnclosingClass = parent }
+                |> Some
+            | _ -> None)
+            typeDef
 
     member internal _.FindType t =
         // TODO: Search in the TypeDefTable as well.
@@ -472,10 +496,13 @@ type MetadataTables internal (state: MetadataBuilderState) =
     member val MajorVersion = state.MajorVersion
     member val MinorVersion = state.MinorVersion
     member val Module = state.Module
-    member val TypeRef = state.TypeRef.ToImmutable() :> IImmutableSet<_>
+    member val TypeRef = state.TypeRef.ToImmutable() :> IImmutableSet<_> // TODO: Maybe use dictionaries for the TypeRef and TypeDef tables that map the type to an index?
     member val TypeDef = state.TypeDef.ToImmutable() :> IImmutableSet<_>
 
+    member val Assembly = state.Assembly
     member val AssemblyRef = state.AssemblyRef.ToImmutable() :> IImmutableSet<_>
+
+    // member val NestedClass = state.NestedClass.
 
     /// Gets a bit vector that indicates which tables are present.
     member val Valid: uint64 =
