@@ -58,7 +58,7 @@ let tests =
                 let result =
                     metadataBuilder {
                         structDef
-                            { Access = TypeAccess.Public
+                            { Access = TypeVisibility.Public
                               Flags = StructFlags.Default
                               StructName = NonEmptyName.ofStr "MyStruct"
                               TypeNamespace = "Testing"
@@ -71,7 +71,7 @@ let tests =
                 let metadata =
                     metadataBuilder {
                         classDef
-                            { Access = TypeAccess.Public
+                            { Access = TypeVisibility.Public
                               Flags =
                                 classFlags {
                                     Sealed
@@ -106,7 +106,7 @@ let tests =
                               TypeName = NonEmptyName.ofStr "ValueType"
                               TypeNamespace = "System" }
                         structDef
-                            { Access = TypeAccess.NotPublic
+                            { Access = TypeVisibility.NotPublic
                               Flags = structFlags { BeforeFieldInit }
                               StructName = NonEmptyName.ofStr "Thing"
                               TypeNamespace = "Thing"

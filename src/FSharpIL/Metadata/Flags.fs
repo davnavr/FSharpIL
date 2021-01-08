@@ -121,6 +121,55 @@ type StructFlags =
 
     static member Default = TypeAttributes.BeforeFieldInit ||| TypeAttributes.SequentialLayout ||| TypeAttributes.Sealed |> StructFlags
 
+type Visibility =
+    | CompilerControlled
+    | Private
+    | FamilyAndAssembly
+    | Assembly
+    | Family
+    | FamilyOrAssembly
+    | Public
+
+type InitOnly = InitOnly
+
+[<Struct; IsReadOnly>]
+type InstanceFieldFlags =
+    internal
+    | InstanceFieldFlags of FieldAttributes
+
+    static member Default = invalidOp "bad"
+
+    interface IFlags<FieldAttributes> with
+        override this.Flags = let (InstanceFieldFlags flags) = this in flags
+
+[<AbstractClass>]
+type FieldFlagsBuilder<'T> internal(case) =
+    inherit FlagsBuilder<FieldAttributes, 'T>(case)
+
+    member inline _.Yield(_: RTSpecialName, _: SpecialName) = fun() -> FieldAttributes.RTSpecialName ||| FieldAttributes.SpecialName
+    member inline this.Yield(x: SpecialName, y: RTSpecialName) = this.Yield(y, x)
+
+type InitOnlyFieldFlagsBuilder<'T> internal(case) =
+    inherit FieldFlagsBuilder<'T>(case)
+
+    member inline _.Yield(_: InitOnly) = fun() -> FieldAttributes.InitOnly
+
+[<Struct; IsReadOnly>]
+type StaticFieldFlags =
+    internal
+    | StaticFieldFlags of FieldAttributes
+
+    static member Default = invalidOp "bad"
+
+    interface IFlags<FieldAttributes> with
+        override this.Flags = let (StaticFieldFlags flags) = this in flags
+
+[<Sealed>]
+type StaticFieldFlagsBuilder internal() =
+    inherit InitOnlyFieldFlagsBuilder<StaticFieldFlags>(StaticFieldFlags)
+
+    override _.Run expr = base.Run(fun() -> expr() ||| FieldAttributes.Static)
+
 [<AutoOpen>]
 module FlagBuilders =
     let classFlags = ClassFlagsBuilder<ClassFlags> ClassFlags
@@ -128,3 +177,6 @@ module FlagBuilders =
     let delegateFlags = SealedTypeFlagsBuilder<DelegateFlags> DelegateFlags
     let interfaceFlags = InterfaceFlagsBuilder()
     let structFlags = SealedTypeFlagsBuilder<StructFlags> StructFlags
+
+    let instanceFieldFlags = InitOnlyFieldFlagsBuilder<InstanceFieldFlags>(InstanceFieldFlags)
+    let staticFieldFlags = StaticFieldFlagsBuilder()

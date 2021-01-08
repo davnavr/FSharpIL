@@ -4,6 +4,9 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Collections.ObjectModel
+open System.Reflection
+
+open FSharpIL.Metadata
 
 [<RequireQualifiedAccess>]
 module internal SystemType =
@@ -14,7 +17,7 @@ module internal SystemType =
 /// <summary>
 /// Represents a violation of a Common Language Specification rule (I.7).
 /// </summary>
-type ClsCheck = // TODO: Rename to CLSViolation
+type ClsViolation = // TODO: Rename to CLSViolation
     | PointerTypeUsage // of
 
 type ValidationWarning =
@@ -36,7 +39,7 @@ type ValidationError =
             | _ -> sprintf "%s.%A" ns name
             |> sprintf "Unable to find type \"%s\", perhaps a TypeDef or TypeRef is missing"
 
-type ValidationResult<'Result> = ValidationResult<'Result, ClsCheck, ValidationWarning, ValidationError>
+type ValidationResult<'Result> = ValidationResult<'Result, ClsViolation, ValidationWarning, ValidationError>
 
 type internal ITable<'Value> =
     inherit IReadOnlyCollection<'Value>
@@ -154,7 +157,7 @@ type Extends =
     | Null
 
 [<RequireQualifiedAccess>]
-type TypeAccess =
+type TypeVisibility =
     | NotPublic
     | Public
     | NestedPublic of Handle<TypeDef>
@@ -183,22 +186,21 @@ type TypeAccess =
 
     member this.Flags =
         match this with
-        | NotPublic -> 0
-        | Public -> 1
-        | NestedPublic _ -> 2
-        | NestedPrivate _ -> 3
-        | NestedFamily _ -> 4
-        | NestedAssembly _ -> 5
-        | NestedFamilyAndAssembly _ -> 6
-        | NestedFamilyOrAssembly _ -> 7
-        |> enum<System.Reflection.TypeAttributes>
+        | NotPublic -> TypeAttributes.NotPublic
+        | Public -> TypeAttributes.Public
+        | NestedPublic _ -> TypeAttributes.NestedPublic
+        | NestedPrivate _ -> TypeAttributes.NestedPrivate
+        | NestedFamily _ -> TypeAttributes.NestedFamily
+        | NestedAssembly _ -> TypeAttributes.NestedAssembly
+        | NestedFamilyAndAssembly _ -> TypeAttributes.NestedFamANDAssem
+        | NestedFamilyOrAssembly _ -> TypeAttributes.NestedFamORAssem
 
-type ClassDef<'Flags, 'Method when 'Flags :> IFlags<System.Reflection.TypeAttributes>> =
-    { Access: TypeAccess
+type ClassDef<'Flags, 'Method when 'Flags :> IFlags<TypeAttributes>> =
+    { Access: TypeVisibility
       Flags: 'Flags
       ClassName: NonEmptyName
       TypeNamespace: string
-      Extends: Extends
+      Extends: Extends // TODO: How to ensure that the base class is not sealed?
       FieldList: unit
       MethodList: 'Method }
 
@@ -209,7 +211,7 @@ type AbstractClassDef = ClassDef<AbstractClassFlags, unit>
 /// Defines a delegate type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Delegate"/>.
 /// </summary>
 type DelegateDef =
-    { Access: TypeAccess
+    { Access: TypeVisibility
       Flags: DelegateFlags
       DelegateName: NonEmptyName
       TypeNamespace: string }
@@ -218,13 +220,13 @@ type DelegateDef =
 /// Defines an enumeration type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Enum"/>.
 /// </summary>
 type EnumDef =
-  { Access: TypeAccess
+  { Access: TypeVisibility
     EnumName: NonEmptyName
     TypeNamespace: string
     ValueList: unit }
 
 type InterfaceDef =
-    { Access: TypeAccess
+    { Access: TypeVisibility
       Flags: InterfaceFlags
       InterfaceName: NonEmptyName
       TypeNamespace: string
@@ -235,14 +237,14 @@ type InterfaceDef =
 /// Defines a struct, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.ValueType"/>.
 /// </summary>
 type StructDef =
-   { Access: TypeAccess
+   { Access: TypeVisibility
      Flags: StructFlags
      StructName: NonEmptyName
      TypeNamespace: string
      FieldList: unit
      MethodList: unit }
 
-// TODO: Should this type be a class instead to make the constructor internal?
+// TODO: Make this record a class instead to make the constructor internal?
 /// <summary>
 /// Represents a row in the <see cref="FSharpIL.Metadata.TypeDefTable"/> (II.22.37). Do not construct this type directly.
 /// </summary>
@@ -282,6 +284,8 @@ type TypeDef =
 type TypeDefTable internal (owner: MetadataBuilderState) =
     let defs = Table<TypeDef> owner
 
+    // TODO: Add the <Module> class used for global variables and functions.
+
     // TODO: Add functions for adding abstract classes and nested types.
     // TODO: Enforce CLS checks and warnings.
     member _.GetHandle({ Flags = flags } as def: ClassDef<_, _>) =
@@ -311,7 +315,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
     member _.GetHandle(def: EnumDef) =
         match owner.FindType SystemType.Enum with
         | Some super ->
-            { Flags = enum 0x2100 // Sealed ||| Serializable
+            { Flags = TypeAttributes.Sealed ||| TypeAttributes.Serializable
               TypeName = def.EnumName
               TypeNamespace = def.TypeNamespace
               Extends = Extends.TypeRef super
@@ -352,14 +356,51 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
         member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
 
-/// II.22.15
-type Field = // TODO: How to enforce that fields only have one owner?
-    { Flags: unit
+type Field<'Flags when 'Flags :> IFlags<FieldAttributes>> =
+    { Flags: 'Flags
       Name: NonEmptyName
       Signature: unit }
 
-    // NOTE: Equality is based on name, signature, and the owning type.
-    // NOTE: Fields and methods may not need a corresponding Table type.
+/// <summary>
+/// Represents a non-static <see cref="FSharpIL.Metadata.FieldRow"/>.
+/// </summary>
+type InstanceField = Field<InstanceFieldFlags>
+
+type StaticField = Field<StaticFieldFlags>
+
+/// <summary>
+/// Represents a <see cref="FSharpIL.Metadata.FieldRow"/> defined inside of the `<Module>` pseudo-class.
+/// </summary>
+type GlobalField = unit
+
+/// <summary>Represents a row in the Field table (II.22.15).</summary>
+[<Sealed>]
+type FieldRow internal (flags: FieldAttributes, name: NonEmptyName, signature: unit) =
+    member val Flags = flags
+    member val Name = name
+    member val Signature = signature
+
+    interface IEquatable<FieldRow> with
+        member this.Equals other =
+            if this.Flags &&& FieldAttributes.FieldAccessMask = FieldAttributes.PrivateScope
+            then false
+            else
+                this.Name = other.Name && this.Signature = other.Signature
+
+/// <summary>Represents a set of fields owned by a <see cref="FSharpIL.Metadata.FieldRow"/>.</summary>
+[<Sealed>]
+type FieldSet<'Flags when 'Flags :> IFlags<FieldAttributes>> (capacity: int) =
+    let fields = HashSet<FieldRow> capacity
+
+    new() = FieldSet(1)
+
+    member _.Add(field: Field<'Flags>) =
+        let field' = FieldRow(field.Flags.Flags, field.Name, field.Signature)
+        if fields.Add field'
+        then Ok()
+        else Error field
+
+    member _.ToImmutable() = fields.ToImmutableArray()
 
 /// II.22.2
 type Assembly =
@@ -417,7 +458,7 @@ type MetadataBuilderState () as this =
     let typeDef = TypeDefTable this
 
     member val internal Warnings: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
-    member val internal ClsChecks: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ClsCheck>()
+    member val internal ClsViolations: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ClsViolation>()
 
     // Reserved: uint32
     member val MajorVersion: byte = 2uy
@@ -437,7 +478,7 @@ type MetadataBuilderState () as this =
     // Field
 
     /// (0x20)
-    member val Assembly = None with get, set // 0x20 // TODO: Figure out if None is a good default value.
+    member val Assembly: Assembly option = None with get, set // 0x20 // TODO: Figure out if None is a good default value.
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// (0x23)
@@ -476,83 +517,3 @@ type MetadataBuilderState () as this =
                     handle.ValueType.Name
                     (value.GetType().Name)
                 |> invalidArg "item"
-
-[<Sealed>]
-type MetadataTables internal (state: MetadataBuilderState) =
-    /// A collection of warnings produced while creating the metadata.
-    member val Warnings = state.Warnings.ToImmutable()
-    member val ClsChecks = state.ClsChecks.ToImmutable()
-
-    member val MajorVersion = state.MajorVersion
-    member val MinorVersion = state.MinorVersion
-    member val Module = state.Module
-    member val TypeRef = state.CreateTable state.TypeRef
-    member val TypeDef = state.CreateTable state.TypeDef
-
-    member val Assembly = state.Assembly
-    member val AssemblyRef = state.CreateTable state.AssemblyRef
-
-    // member val NestedClass = state.NestedClass.
-
-    /// Gets a bit vector that indicates which tables are present.
-    member val Valid: uint64 =
-        // TODO: Update this based on the tables.
-        /// NOTE: Bit zero appears to be the right-most bit.
-        0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000001UL
-
-    static member val Default = MetadataBuilderState() |> MetadataTables
-
-[<Sealed>]
-type MetadataBuilder internal () =
-    member inline _.Combine(one: MetadataBuilderState -> Result<_, _>, two: MetadataBuilderState -> Result<_, ValidationError>) =
-        fun state ->
-            match one state with
-            | Ok _ -> two state
-            | Error err -> Error err
-    member inline _.Bind(expr: MetadataBuilderState -> 'T, body: 'T -> MetadataBuilderState -> Result<_, ValidationError>) =
-        fun state ->
-            let result = expr state
-            body result state
-    member inline _.Bind(expr: MetadataBuilderState -> Result<'T, ValidationError>, body: 'T -> MetadataBuilderState -> _) =
-        fun state ->
-            match expr state with
-            | Ok result -> body result state
-            | Error err -> Error err
-    member inline _.Delay(f: unit -> MetadataBuilderState -> Result<_, ValidationError>) = fun state -> f () state
-    member inline _.For(items: seq<'T>, body: 'T -> MetadataBuilderState -> _) =
-        fun state ->
-            for item in items do
-                body item state |> ignore
-    member _.Run(expr: MetadataBuilderState -> _): ValidationResult<MetadataTables> =
-        let state = MetadataBuilderState()
-        match expr state with
-        | Ok _ ->
-            let tables = MetadataTables state
-            if state.Warnings.Count > 0 then
-                ValidationWarning(tables, tables.ClsChecks, tables.Warnings)
-            else
-                ValidationSuccess(tables, tables.ClsChecks)
-        | Error err -> ValidationError err
-    member inline _.Yield(expr: MetadataBuilderState -> Handle<_>) = fun state -> expr state |> Result<_, ValidationError>.Ok
-    member inline _.Yield(expr: MetadataBuilderState -> Result<_, ValidationError>) = expr
-    member inline _.Zero() = fun _ -> Result<_, ValidationError>.Ok()
-
-/// <summary>
-/// Contains functions for use within the <see cref="FSharpIL.Metadata.MetadataBuilder"/> computation expression.
-/// </summary>
-[<AutoOpen>]
-module MetadataBuilder =
-    /// Sets the module information of the metadata.
-    let inline mdle (mdle: ModuleTable) (state: MetadataBuilderState) = state.Module <- mdle
-    /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
-    let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly
-    /// Adds a reference to an assembly.
-    let inline assemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) = state.AssemblyRef.GetHandle ref
-    let inline classDef (def: ConcreteClassDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    let inline abstractClassDef (def: AbstractClassDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    let inline delegateDef (def: DelegateDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    let inline enumDef (def: EnumDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    let inline interfaceDef (def: InterfaceDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    /// <summary>Defines a value type, which inherits from <see cref="System.ValueType"/>.</summary>
-    let inline structDef (def: StructDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    let inline typeRef (ref: TypeRef) (state: MetadataBuilderState) = state.TypeRef.GetHandle ref

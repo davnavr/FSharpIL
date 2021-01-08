@@ -3,9 +3,9 @@
 open System.Collections.Immutable
 
 /// II.22.1
-type ValidationResult<'Result, 'ClsCheck, 'Warning, 'Error> =
-    | ValidationSuccess of 'Result * IImmutableList<'ClsCheck>
-    | ValidationWarning of 'Result * IImmutableList<'ClsCheck> * IImmutableList<'Warning>
+type ValidationResult<'Result, 'ClsViolation, 'Warning, 'Error> =
+    | ValidationSuccess of 'Result * IImmutableList<'ClsViolation>
+    | ValidationWarning of 'Result * IImmutableList<'ClsViolation> * IImmutableList<'Warning>
     | ValidationError of 'Error
 
     member this.Warnings =
