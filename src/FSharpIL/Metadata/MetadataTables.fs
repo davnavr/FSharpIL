@@ -213,16 +213,17 @@ type TypeAccess =
         | NestedFamilyOrAssembly _ -> 7
         |> enum<System.Reflection.TypeAttributes>
 
-type ClassDef =
+type ClassDef<'Flags, 'Method when 'Flags :> IFlags<System.Reflection.TypeAttributes>> =
     { Access: TypeAccess
-      Flags: ClassFlags
+      Flags: 'Flags
       ClassName: NonEmptyName
       TypeNamespace: string
       Extends: Extends
       FieldList: unit
-      MethodList: unit }
+      MethodList: 'Method }
 
-// TODO: Create types for abstract classes and nested types. Maybe make the 5 types generic, with the parameter being an access modifier?
+type ConcreteClassDef = ClassDef<ClassFlags, unit>
+type AbstractClassDef = ClassDef<AbstractClassFlags, unit>
 
 /// <summary>
 /// Defines a delegate type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Delegate"/>.
@@ -305,8 +306,8 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
     // TODO: Add functions for adding abstract classes and nested types.
     // TODO: Enforce CLS checks and warnings.
-    member _.GetToken({ Flags = ClassFlags flags } as def: ClassDef) =
-        { Flags = flags ||| def.Access.Flags
+    member _.GetToken({ Flags = flags } as def: ClassDef<_, _>) =
+        { Flags = flags.Flags ||| def.Access.Flags
           TypeName = def.ClassName
           TypeNamespace = def.TypeNamespace
           Extends = def.Extends
@@ -558,7 +559,8 @@ module MetadataBuilder =
     let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly
     /// Adds a reference to an assembly.
     let inline assemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) = state.AssemblyRef.GetToken ref
-    let inline classDef (def: ClassDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
+    let inline classDef (def: ConcreteClassDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
+    let inline abstractClassDef (def: AbstractClassDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
     let inline delegateDef (def: DelegateDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
     let inline enumDef (def: EnumDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
     let inline interfaceDef (def: InterfaceDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def

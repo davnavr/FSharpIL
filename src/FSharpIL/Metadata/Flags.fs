@@ -3,8 +3,9 @@
 open System.Reflection
 open System.Runtime.CompilerServices
 
-/// Marks a class as both abstract and sealed, or specifies that a member is static.
-type Static = Static
+type IFlags<'T when 'T :> System.Enum> =
+    abstract Flags : 'T
+
 type SpecialName = SpecialName
 type RTSpecialName = RTSpecialName
 
@@ -69,12 +70,29 @@ type ClassFlags =
 
     static member Default = ClassFlags TypeAttributes.BeforeFieldInit
 
-[<Sealed>]
-type ClassFlagsBuilder internal () =
-    inherit TypeFlagsBuilder<ClassFlags>(ClassFlags)
+    interface IFlags<TypeAttributes> with
+        override this.Flags = let (ClassFlags flags) = this in flags
 
-    member inline _.Yield(_: Static) = fun() -> TypeAttributes.Sealed ||| TypeAttributes.Abstract
+type ClassFlagsBuilder<'T> internal (case) =
+    inherit TypeFlagsBuilder<'T>(case)
+
     member inline _.Yield(_: Sealed) = fun() -> TypeAttributes.Sealed
+
+[<Struct; IsReadOnly>]
+type AbstractClassFlags =
+    internal
+    | AbstractClassFlags of TypeAttributes
+
+    static member Default = TypeAttributes.Abstract ||| TypeAttributes.BeforeFieldInit |> AbstractClassFlags
+
+    interface IFlags<TypeAttributes> with
+        override this.Flags = let (AbstractClassFlags flags) = this in flags
+
+[<Sealed>]
+type AbstractClassFlagsBuilder internal () =
+    inherit ClassFlagsBuilder<AbstractClassFlags>(AbstractClassFlags)
+
+    override _.Run expr = base.Run(fun() -> expr() ||| TypeAttributes.Abstract)
 
 [<Struct; IsReadOnly>]
 type DelegateFlags =
@@ -105,7 +123,8 @@ type StructFlags =
 
 [<AutoOpen>]
 module FlagBuilders =
-    let classFlags = ClassFlagsBuilder()
+    let classFlags = ClassFlagsBuilder<ClassFlags> ClassFlags
+    let abstractClassFlags = AbstractClassFlagsBuilder()
     let delegateFlags = SealedTypeFlagsBuilder<DelegateFlags> DelegateFlags
     let interfaceFlags = InterfaceFlagsBuilder()
     let structFlags = SealedTypeFlagsBuilder<StructFlags> StructFlags
