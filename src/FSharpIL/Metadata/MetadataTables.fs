@@ -3,6 +3,7 @@
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Collections.ObjectModel
 
 [<RequireQualifiedAccess>]
 module internal SystemType =
@@ -37,14 +38,15 @@ type ValidationError =
 
 type ValidationResult<'Result> = ValidationResult<'Result, ClsCheck, ValidationWarning, ValidationError>
 
-// TODO: Create new handle type containing an index and the item?
+type internal ITable<'Value> =
+    inherit IReadOnlyCollection<'Value>
+
+    abstract Comparer : IEqualityComparer<'Value>
 
 type Table<'Value when 'Value :> IHandleValue> internal (state: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
-    let set = ImmutableHashSet.CreateBuilder<'Value> comparer
+    let set = HashSet<'Value> comparer
 
     new(state: MetadataBuilderState) = Table(state, EqualityComparer.Default)
-
-    member _.ToImmutable() = set.ToImmutable() // TODO: Should ToImmutable return an IImmutableDictionary<'Value, uint32>?
 
     abstract member GetHandle : 'Value -> Result<Handle<'Value>, ValidationError>
     default _.GetHandle(value: 'Value) =
@@ -53,7 +55,9 @@ type Table<'Value when 'Value :> IHandleValue> internal (state: MetadataBuilderS
         then value :> IHandleValue |> DuplicateValue |> Error
         else state.CreateHandle value |> Ok
 
-    interface IEnumerable<'Value> with
+    interface ITable<'Value> with
+        member _.Comparer = comparer
+        member _.Count = set.Count
         member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
 
@@ -95,8 +99,8 @@ type TypeRef =
     interface IHandleValue with
         member this.Handles =
             match this.ResolutionScope with
-            | ResolutionScope.AssemblyRef (Handle handle)
-            | ResolutionScope.TypeRef (Handle handle) -> handle |> Seq.singleton
+            | ResolutionScope.AssemblyRef (IHandle handle)
+            | ResolutionScope.TypeRef (IHandle handle) -> handle |> Seq.singleton
             | _ -> Seq.empty
 
 [<Sealed>]
@@ -265,20 +269,18 @@ type TypeDef =
         member this.Handles =
             seq {
                 match this.Extends with
-                | Extends.TypeDef (Handle handle)
-                | Extends.TypeRef (Handle handle) -> handle
+                | Extends.TypeDef (IHandle handle)
+                | Extends.TypeRef (IHandle handle) -> handle
                 | Extends.Null -> ()
 
                 match this.EnclosingClass with
-                | Some(Handle parent) -> parent
+                | Some(IHandle parent) -> parent
                 | None -> ()
             }
 
 [<Sealed>]
 type TypeDefTable internal (owner: MetadataBuilderState) =
     let defs = Table<TypeDef> owner
-
-    member _.ToImmutable() = defs.ToImmutable()
 
     // TODO: Add functions for adding abstract classes and nested types.
     // TODO: Enforce CLS checks and warnings.
@@ -344,7 +346,9 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
         | None -> MissingType SystemType.ValueType |> Error
         |> Result.bind defs.GetHandle
 
-    interface IEnumerable<TypeDef> with
+    interface ITable<TypeDef> with
+        member _.Comparer = (defs :> ITable<_>).Comparer
+        member _.Count = (defs :> ITable<_>).Count
         member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
 
@@ -367,7 +371,7 @@ type Assembly =
       Culture: AssemblyCulture }
 
 /// II.22.5
-[<ReferenceEquality; NoComparison>]
+[<CustomEquality; NoComparison>]
 type AssemblyRef =
     { Version: Version
       Flags: unit
@@ -376,29 +380,29 @@ type AssemblyRef =
       Culture: AssemblyCulture
       HashValue: unit option }
 
+    interface IEquatable<AssemblyRef> with
+        member this.Equals other =
+            this.Version = other.Version
+            && this.PublicKeyOrToken = other.PublicKeyOrToken
+            && this.Name = other.Name
+            && this.Culture = other.Culture
+
     interface IHandleValue with member _.Handles = Seq.empty
 
 [<Sealed>]
 type AssemblyRefTable internal (state: MetadataBuilderState) =
-    let set = ImmutableHashSet.CreateBuilder<AssemblyRef>()
-    let cls =
-        { new IEqualityComparer<AssemblyRef> with
-            member _.GetHashCode assemblyRef =
-                hash (assemblyRef.Version, assemblyRef.PublicKeyOrToken, assemblyRef.Name, assemblyRef.Culture)
-            member _.Equals(x, y) =
-                x.Version = y.Version
-                && x.PublicKeyOrToken = y.PublicKeyOrToken
-                && x.Name = y.Name
-                && x.Culture = y.Culture }
-        |> HashSet
-
-    member _.ToImmutable() = set.ToImmutable()
+    let set = HashSet()
 
     member _.GetHandle assemblyRef =
-        set.Add assemblyRef |> ignore
-        if cls.Add assemblyRef |> not then
+        if set.Add assemblyRef |> not then
             DuplicateAssemblyRef assemblyRef |> state.Warnings.Add
         state.CreateHandle assemblyRef
+
+    interface ITable<AssemblyRef> with
+        member _.Comparer = EqualityComparer<_>.Default :> IEqualityComparer<_>
+        member _.Count = set.Count
+        member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
+        member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
 
 // II.22.32
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
@@ -456,6 +460,14 @@ type MetadataBuilderState () as this =
 
     member internal _.CreateHandle<'T> (value: 'T): Handle<'T> = Handle(owner, value)
 
+    member internal this.CreateTable<'T> (table: ITable<'T>): ReadOnlyDictionary<Handle<'T>, uint32> =
+        let mutable i = 0u
+        let dict = Dictionary<_, _>(table.Count, HandleEqualityComparer table.Comparer)
+        for value in table do
+            dict.Item <- this.CreateHandle value, i
+            i <- i + 1u
+        ReadOnlyDictionary dict
+
     member internal _.EnsureOwner(value: IHandleValue) =
         for handle in value.Handles do
             if handle.Owner <> owner then
@@ -474,11 +486,11 @@ type MetadataTables internal (state: MetadataBuilderState) =
     member val MajorVersion = state.MajorVersion
     member val MinorVersion = state.MinorVersion
     member val Module = state.Module
-    member val TypeRef = state.TypeRef.ToImmutable() :> IImmutableSet<_> // TODO: Maybe use dictionaries for the TypeRef and TypeDef tables that map the type to an index?
-    member val TypeDef = state.TypeDef.ToImmutable() :> IImmutableSet<_>
+    member val TypeRef = state.CreateTable state.TypeRef
+    member val TypeDef = state.CreateTable state.TypeDef
 
     member val Assembly = state.Assembly
-    member val AssemblyRef = state.AssemblyRef.ToImmutable() :> IImmutableSet<_>
+    member val AssemblyRef = state.CreateTable state.AssemblyRef
 
     // member val NestedClass = state.NestedClass.
 

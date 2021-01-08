@@ -39,8 +39,8 @@ let tests =
                     }
                     |> ValidationResult.get
                 let actual =
-                    let testType = metadata.TypeRef |> Seq.head
-                    match testType.ResolutionScope with
+                    let (KeyValue (testType, _)) = metadata.TypeRef |> Seq.head
+                    match testType.Item.ResolutionScope with
                     | ResolutionScope.AssemblyRef assm -> assm.Item
                     | _ -> Unchecked.defaultof<_>
                 Expect.equal actual expected "the assembly references should match"
@@ -84,9 +84,9 @@ let tests =
                               MethodList = () }
                     }
                     |> ValidationResult.get
-                let def = metadata.TypeDef |> Seq.head
+                let (KeyValue (def, _)) = metadata.TypeDef |> Seq.head
                 Expect.equal
-                    def.Flags
+                    def.Item.Flags
                     (TypeAttributes.Sealed ||| TypeAttributes.BeforeFieldInit ||| TypeAttributes.Public)
                     "flags should match"
 
@@ -114,9 +114,9 @@ let tests =
                               MethodList = () }
                     }
                     |> ValidationResult.get
-                let def = metadata.TypeDef |> Seq.head
+                let (KeyValue (def, _)) = metadata.TypeDef |> Seq.head
                 Expect.equal
-                    (def.Flags &&& TypeAttributes.Sealed)
+                    (def.Item.Flags &&& TypeAttributes.Sealed)
                     TypeAttributes.Sealed
                     "user-defined value types should always have the Sealed flag"
         ]
