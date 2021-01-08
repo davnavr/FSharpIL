@@ -4,10 +4,6 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
-[<AutoOpen>]
-module internal Helpers =
-    let inline (|Handle|) (handle: #IHandle) = handle :> IHandle
-
 [<RequireQualifiedAccess>]
 module internal SystemType =
     let Delegate = "System", NonEmptyName "Delegate"
@@ -41,41 +37,21 @@ type ValidationError =
 
 type ValidationResult<'Result> = ValidationResult<'Result, ClsCheck, ValidationWarning, ValidationError>
 
-type IHandle =
-    abstract Owner : MetadataBuilderState
-    abstract ValueType : Type
-
-type IHandleValue =
-    abstract Handles: seq<IHandle>
-
-/// <summary>
-/// Guarantees that values originate from the same <see cref="FSharpIL.Metadata.MetadataBuilderState"/>.
-/// </summary>
-type Handle<'Value> =
-    private
-    | Handle of MetadataBuilderState * 'Value
-
-    member this.Item = let (Handle (_, item)) = this in item
-
-    interface IHandle with
-        member this.Owner = let (Handle (owner, _)) = this in owner
-        member this.ValueType = this.Item.GetType()
-
 // TODO: Create new handle type containing an index and the item?
 
-type Table<'Value when 'Value :> IHandleValue> internal (owner: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
+type Table<'Value when 'Value :> IHandleValue> internal (state: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
     let set = ImmutableHashSet.CreateBuilder<'Value> comparer
 
-    new(owner: MetadataBuilderState) = Table(owner, EqualityComparer.Default)
+    new(state: MetadataBuilderState) = Table(state, EqualityComparer.Default)
 
-    member _.ToImmutable() = set.ToImmutable()
+    member _.ToImmutable() = set.ToImmutable() // TODO: Should ToImmutable return an IImmutableDictionary<'Value, uint32>?
 
-    abstract member GetToken : 'Value -> Result<Handle<'Value>, ValidationError>
-    default _.GetToken(value: 'Value) =
-        owner.EnsureOwner value
+    abstract member GetHandle : 'Value -> Result<Handle<'Value>, ValidationError>
+    default _.GetHandle(value: 'Value) =
+        state.EnsureOwner value
         if set.Add value |> not
         then value :> IHandleValue |> DuplicateValue |> Error
-        else Handle (owner, value) |> Ok
+        else state.CreateHandle value |> Ok
 
     interface IEnumerable<'Value> with
         member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
@@ -124,8 +100,8 @@ type TypeRef =
             | _ -> Seq.empty
 
 [<Sealed>]
-type TypeRefTable internal (owner: MetadataBuilderState) = // NOTE: First type in this should be the <Module> pseudo-class
-    inherit Table<TypeRef>(owner)
+type TypeRefTable internal (state: MetadataBuilderState) = // NOTE: First type in this should be the <Module> pseudo-class
+    inherit Table<TypeRef>(state)
 
     let search = Dictionary<string * NonEmptyName, TypeRef> 8
 
@@ -135,25 +111,25 @@ type TypeRefTable internal (owner: MetadataBuilderState) = // NOTE: First type i
     /// </summary>
     member internal this.FindType((ns, name) as t) =
         match search.TryGetValue(t) with
-        | (true, existing) -> Handle(owner, existing) |> Some
+        | (true, existing) -> state.CreateHandle existing |> Some
         | (false, _) ->
             Seq.tryPick
                 (function
                 | { ResolutionScope = ResolutionScope.AssemblyRef _ } as t' when t'.TypeName = name && t'.TypeNamespace = ns ->
                     search.Item <- (ns, name), t'
-                    Handle(owner, t') |> Some
+                    state.CreateHandle t' |> Some
                 | _ -> None)
                 this
 
-    override _.GetToken typeRef =
-        let token = base.GetToken typeRef
+    override _.GetHandle typeRef =
+        let token = base.GetHandle typeRef
 
         match token with
         | Ok _ ->
             // TODO: Check that the name is a "valid CLS identifier".
 
             match typeRef.ResolutionScope with
-            | ResolutionScope.Module -> TypeRefUsesModuleResolutionScope typeRef |> owner.Warnings.Add
+            | ResolutionScope.Module -> TypeRefUsesModuleResolutionScope typeRef |> state.Warnings.Add
             | _ -> ()
         | _ -> ()
 
@@ -306,7 +282,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
     // TODO: Add functions for adding abstract classes and nested types.
     // TODO: Enforce CLS checks and warnings.
-    member _.GetToken({ Flags = flags } as def: ClassDef<_, _>) =
+    member _.GetHandle({ Flags = flags } as def: ClassDef<_, _>) =
         { Flags = flags.Flags ||| def.Access.Flags
           TypeName = def.ClassName
           TypeNamespace = def.TypeNamespace
@@ -314,9 +290,9 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
           FieldList = ()
           MethodList = ()
           EnclosingClass = def.Access.EnclosingClass }
-        |> defs.GetToken
+        |> defs.GetHandle
 
-    member _.GetToken({ Flags = DelegateFlags flags } as def: DelegateDef) =
+    member _.GetHandle({ Flags = DelegateFlags flags } as def: DelegateDef) =
         match owner.FindType SystemType.Delegate with
         | Some super ->
             { Flags = flags
@@ -328,9 +304,9 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
               EnclosingClass = def.Access.EnclosingClass }
             |> Ok
         | None -> MissingType SystemType.Delegate |> Error
-        |> Result.bind defs.GetToken
+        |> Result.bind defs.GetHandle
 
-    member _.GetToken(def: EnumDef) =
+    member _.GetHandle(def: EnumDef) =
         match owner.FindType SystemType.Enum with
         | Some super ->
             { Flags = enum 0x2100 // Sealed ||| Serializable
@@ -342,9 +318,9 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
               EnclosingClass = def.Access.EnclosingClass }
             |> Ok
         | None -> MissingType SystemType.Enum |> Error
-        |> Result.bind defs.GetToken
+        |> Result.bind defs.GetHandle
 
-    member _.GetToken({ Flags = InterfaceFlags flags } as def: InterfaceDef) =
+    member _.GetHandle({ Flags = InterfaceFlags flags } as def: InterfaceDef) =
         { Flags = flags
           TypeName = def.InterfaceName
           TypeNamespace = def.TypeNamespace
@@ -352,9 +328,9 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
           FieldList = ()
           MethodList = ()
           EnclosingClass = def.Access.EnclosingClass }
-        |> defs.GetToken
+        |> defs.GetHandle
 
-    member _.GetToken({ Flags = StructFlags flags } as def: StructDef) =
+    member _.GetHandle({ Flags = StructFlags flags } as def: StructDef) =
         match owner.FindType SystemType.ValueType with
         | Some super ->
             { Flags = flags
@@ -366,7 +342,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
               EnclosingClass = def.Access.EnclosingClass }
             |> Ok
         | None -> MissingType SystemType.ValueType |> Error
-        |> Result.bind defs.GetToken
+        |> Result.bind defs.GetHandle
 
     interface IEnumerable<TypeDef> with
         member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
@@ -403,7 +379,7 @@ type AssemblyRef =
     interface IHandleValue with member _.Handles = Seq.empty
 
 [<Sealed>]
-type AssemblyRefTable internal (owner: MetadataBuilderState) =
+type AssemblyRefTable internal (state: MetadataBuilderState) =
     let set = ImmutableHashSet.CreateBuilder<AssemblyRef>()
     let cls =
         { new IEqualityComparer<AssemblyRef> with
@@ -418,11 +394,11 @@ type AssemblyRefTable internal (owner: MetadataBuilderState) =
 
     member _.ToImmutable() = set.ToImmutable()
 
-    member _.GetToken assemblyRef =
+    member _.GetHandle assemblyRef =
         set.Add assemblyRef |> ignore
         if cls.Add assemblyRef |> not then
-            DuplicateAssemblyRef assemblyRef |> owner.Warnings.Add
-        Handle(owner, assemblyRef)
+            DuplicateAssemblyRef assemblyRef |> state.Warnings.Add
+        state.CreateHandle assemblyRef
 
 // II.22.32
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
@@ -432,10 +408,9 @@ type NestedClass =
 
 [<Sealed>]
 type MetadataBuilderState () as this =
-    let typeRef = TypeRefTable this // TODO: Remove "as this" and assign them in properties?
-    let typeDef = TypeDefTable this
+    let owner = Object()
 
-    let assemblyRef = AssemblyRefTable this
+    let typeDef = TypeDefTable this
 
     member val internal Warnings: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
     member val internal ClsChecks: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ClsCheck>()
@@ -451,7 +426,7 @@ type MetadataBuilderState () as this =
     /// (0x00)
     member val Module = ModuleTable.Default with get, set
     /// (0x01)
-    member _.TypeRef = typeRef
+    member val TypeRef = TypeRefTable this
     /// (0x02)
     member _.TypeDef = typeDef
     // (0x04)
@@ -462,26 +437,28 @@ type MetadataBuilderState () as this =
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// (0x23)
-    member _.AssemblyRef = assemblyRef
+    member val AssemblyRef = AssemblyRefTable this
 
     /// (0x29)
     member val NestedClass =
         Seq.choose
             (function
             | { TypeDef.EnclosingClass = Some parent } as tdef ->
-                { NestedClass = Handle(this, tdef)
+                { NestedClass = this.CreateHandle tdef
                   EnclosingClass = parent }
                 |> Some
             | _ -> None)
             typeDef
 
-    member internal _.FindType t =
+    member internal this.FindType t =
         // TODO: Search in the TypeDefTable as well.
-        typeRef.FindType t
+        this.TypeRef.FindType t
 
-    member internal this.EnsureOwner(value: IHandleValue) =
+    member internal _.CreateHandle<'T> (value: 'T): Handle<'T> = Handle(owner, value)
+
+    member internal _.EnsureOwner(value: IHandleValue) =
         for handle in value.Handles do
-            if handle.Owner <> this then
+            if handle.Owner <> owner then
                 sprintf
                     "A handle to a %s owned by another state was incorrectly referenced by an %s."
                     handle.ValueType.Name
@@ -558,12 +535,12 @@ module MetadataBuilder =
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
     let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly
     /// Adds a reference to an assembly.
-    let inline assemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) = state.AssemblyRef.GetToken ref
-    let inline classDef (def: ConcreteClassDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
-    let inline abstractClassDef (def: AbstractClassDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
-    let inline delegateDef (def: DelegateDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
-    let inline enumDef (def: EnumDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
-    let inline interfaceDef (def: InterfaceDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
+    let inline assemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) = state.AssemblyRef.GetHandle ref
+    let inline classDef (def: ConcreteClassDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
+    let inline abstractClassDef (def: AbstractClassDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
+    let inline delegateDef (def: DelegateDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
+    let inline enumDef (def: EnumDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
+    let inline interfaceDef (def: InterfaceDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
     /// <summary>Defines a value type, which inherits from <see cref="System.ValueType"/>.</summary>
-    let inline structDef (def: StructDef) (state: MetadataBuilderState) = state.TypeDef.GetToken def
-    let inline typeRef (ref: TypeRef) (state: MetadataBuilderState) = state.TypeRef.GetToken ref
+    let inline structDef (def: StructDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
+    let inline typeRef (ref: TypeRef) (state: MetadataBuilderState) = state.TypeRef.GetHandle ref
