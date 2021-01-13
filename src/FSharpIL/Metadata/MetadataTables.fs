@@ -204,7 +204,7 @@ type ClassDef<'Flags, 'Method when 'Flags :> IFlags<TypeAttributes>> =
       FieldList: unit
       MethodList: 'Method }
 
-type ConcreteClassDef = ClassDef<ClassFlags, unit>
+type ConcreteClassDef = ClassDef<ConcreteClassFlags, unit>
 type AbstractClassDef = ClassDef<AbstractClassFlags, unit>
 
 /// <summary>
@@ -288,8 +288,8 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
     // TODO: Add functions for adding abstract classes and nested types.
     // TODO: Enforce CLS checks and warnings.
-    member _.GetHandle({ Flags = flags } as def: ClassDef<_, _>) =
-        { Flags = flags.Flags ||| def.Access.Flags
+    member _.GetHandle({ Flags = Flags flags } as def: ClassDef<_, _>) =
+        { Flags = flags ||| def.Access.Flags
           TypeName = def.ClassName
           TypeNamespace = def.TypeNamespace
           Extends = def.Extends
@@ -298,7 +298,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
           EnclosingClass = def.Access.EnclosingClass }
         |> defs.GetHandle
 
-    member _.GetHandle({ Flags = DelegateFlags flags } as def: DelegateDef) =
+    member _.GetHandle({ Flags = Flags flags } as def: DelegateDef) =
         match owner.FindType SystemType.Delegate with
         | Some super ->
             { Flags = flags
@@ -326,7 +326,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
         | None -> MissingType SystemType.Enum |> Error
         |> Result.bind defs.GetHandle
 
-    member _.GetHandle({ Flags = InterfaceFlags flags } as def: InterfaceDef) =
+    member _.GetHandle({ Flags = Flags flags } as def: InterfaceDef) =
         { Flags = flags
           TypeName = def.InterfaceName
           TypeNamespace = def.TypeNamespace
@@ -336,7 +336,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
           EnclosingClass = def.Access.EnclosingClass }
         |> defs.GetHandle
 
-    member _.GetHandle({ Flags = StructFlags flags } as def: StructDef) =
+    member _.GetHandle({ Flags = Flags flags } as def: StructDef) =
         match owner.FindType SystemType.ValueType with
         | Some super ->
             { Flags = flags
@@ -361,15 +361,14 @@ type Field<'Flags when 'Flags :> IFlags<FieldAttributes>> =
       Name: NonEmptyName
       Signature: unit }
 
-/// <summary>
-/// Represents a non-static <see cref="FSharpIL.Metadata.FieldRow"/>.
-/// </summary>
+/// <summary>Represents a non-static <see cref="FSharpIL.Metadata.FieldRow"/>.</summary>
 type InstanceField = Field<InstanceFieldFlags>
 
+/// <summary>Represents a static <see cref="FSharpIL.Metadata.FieldRow"/>.</summary>
 type StaticField = Field<StaticFieldFlags>
 
 /// <summary>
-/// Represents a <see cref="FSharpIL.Metadata.FieldRow"/> defined inside of the `<Module>` pseudo-class.
+/// Represents a static <see cref="FSharpIL.Metadata.FieldRow"/> defined inside of the `<Module>` pseudo-class.
 /// </summary>
 type GlobalField = unit
 

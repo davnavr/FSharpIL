@@ -1,125 +1,101 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Reflection
-open System.Runtime.CompilerServices
 
-type IFlags<'T when 'T :> System.Enum> =
-    abstract Flags : 'T
+type private IsReadOnly = System.Runtime.CompilerServices.IsReadOnlyAttribute
 
-type SpecialName = SpecialName
-type RTSpecialName = RTSpecialName
+type IFlags<'Flags when 'Flags :> System.Enum> =
+    abstract Flags: 'Flags
 
-[<AbstractClass>]
-type FlagsBuilder<'Flags, 'T> internal (case: 'Flags -> 'T) =
-    member inline _.Combine(one: unit -> _, two: unit -> _) = fun() -> one() ||| two()
-    member inline _.Delay(expr: unit -> unit -> 'Flags) = fun() -> expr () ()
-    abstract member Run: (unit -> 'Flags) -> 'T
-    default _.Run(expr: unit -> 'Flags) = expr() |> case
-    member inline _.Zero() = fun() -> Unchecked.defaultof<'Flags>
-
-type LayoutFlag = // TODO: For these two flags, have equality and comparison functions always return the same value.
-    /// Used as the default layout for structs by the C# compiler.
+type LayoutFlag =
+    | AutoLayout
+    /// Used as the default layout for structs by the C# and F# compilers.
     | SequentialLayout
     | ExplicitLayout
 
-type Sealed = Sealed
-type Import = Import
-type Serializable = Serializable
+    member this.Flags =
+        match this with
+        | AutoLayout -> TypeAttributes.AutoLayout
+        | SequentialLayout -> TypeAttributes.SequentialLayout
+        | ExplicitLayout -> TypeAttributes.ExplicitLayout
 
-[<Struct; IsReadOnly>]
+    static member Zero = AutoLayout
+
 type StringFormattingFlag =
+    | AnsiClass
     | UnicodeClass
     | AutoClass
     // | CustomFormatClass
 
-type BeforeFieldInit = BeforeFieldInit
+    member this.Flags =
+        match this with
+        | AnsiClass -> TypeAttributes.AnsiClass
+        | UnicodeClass -> TypeAttributes.UnicodeClass
+        | AutoClass -> TypeAttributes.AutoClass
 
-[<AbstractClass>]
-type BaseTypeFlagsBuilder<'T> internal (case) =
-    inherit FlagsBuilder<TypeAttributes, 'T>(case)
+    static member Zero = AnsiClass
 
-    member inline _.Yield(_: SpecialName) = fun() -> TypeAttributes.SpecialName
-    member inline _.Yield(_: Import) = fun() -> TypeAttributes.Import
-    member inline _.Yield(_: RTSpecialName) = fun() -> TypeAttributes.RTSpecialName
-
-type TypeFlagsBuilder<'T> internal (case) =
-    inherit FlagsBuilder<TypeAttributes, 'T>(case)
-
-    member inline _.Yield(layout: LayoutFlag) =
-        fun() ->
-            match layout with
-            | SequentialLayout -> TypeAttributes.SequentialLayout
-            | ExplicitLayout -> TypeAttributes.ExplicitLayout
-    member inline _.Yield(_: Serializable) = fun() -> TypeAttributes.Serializable
-    member inline _.Yield(charSet: StringFormattingFlag) =
-        fun() ->
-            match charSet with
-            | UnicodeClass -> TypeAttributes.UnicodeClass
-            | AutoClass -> TypeAttributes.AutoClass
-    member inline _.Yield(_: BeforeFieldInit) = fun() -> TypeAttributes.BeforeFieldInit
-
-type SealedTypeFlagsBuilder<'T> internal (case) =
-    inherit TypeFlagsBuilder<'T>(case)
-
-    override _.Run expr = base.Run(fun() -> expr() ||| TypeAttributes.Sealed)
-
-[<Struct; IsReadOnly>]
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type ClassFlags =
-    internal
-    | ClassFlags of TypeAttributes
+    { Layout: LayoutFlag
+      SpecialName: bool
+      Import: bool
+      Serializable: bool
+      StringFormat: StringFormattingFlag
+      BeforeFieldInit: bool
+      RTSpecialName: bool }
 
-    static member Default = ClassFlags TypeAttributes.BeforeFieldInit
+    member this.Flags =
+        let mutable flags = this.Layout.Flags ||| this.StringFormat.Flags
+        if this.SpecialName then flags <- flags ||| TypeAttributes.SpecialName
+        if this.Import then flags <- flags ||| TypeAttributes.Import
+        if this.Serializable then flags <- flags ||| TypeAttributes.Serializable
+        if this.BeforeFieldInit then flags <- flags ||| TypeAttributes.BeforeFieldInit
+        if this.RTSpecialName then flags <- flags ||| TypeAttributes.RTSpecialName
+        flags
 
-    interface IFlags<TypeAttributes> with
-        override this.Flags = let (ClassFlags flags) = this in flags
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type ConcreteClassFlags private (flags: TypeAttributes) =
+    new (flags: ClassFlags) = ConcreteClassFlags(flags.Flags)
+    interface IFlags<TypeAttributes> with member _.Flags = flags
 
-type ClassFlagsBuilder<'T> internal (case) =
-    inherit TypeFlagsBuilder<'T>(case)
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type AbstractClassFlags private (flags: TypeAttributes) =
+    new (flags: ClassFlags) = AbstractClassFlags(flags.Flags ||| TypeAttributes.Abstract)
+    interface IFlags<TypeAttributes> with member _.Flags = flags
 
-    member inline _.Yield(_: Sealed) = fun() -> TypeAttributes.Sealed
+// type SealedClassFlags
 
 [<Struct; IsReadOnly>]
-type AbstractClassFlags =
-    internal
-    | AbstractClassFlags of TypeAttributes
-
-    static member Default = TypeAttributes.Abstract ||| TypeAttributes.BeforeFieldInit |> AbstractClassFlags
-
-    interface IFlags<TypeAttributes> with
-        override this.Flags = let (AbstractClassFlags flags) = this in flags
-
-[<Sealed>]
-type AbstractClassFlagsBuilder internal () =
-    inherit ClassFlagsBuilder<AbstractClassFlags>(AbstractClassFlags)
-
-    override _.Run expr = base.Run(fun() -> expr() ||| TypeAttributes.Abstract)
-
-[<Struct; IsReadOnly>]
+[<RequireQualifiedAccess>]
 type DelegateFlags =
-    internal
-    | DelegateFlags of TypeAttributes
+    { Serializable: bool }
 
-    static member Default = DelegateFlags TypeAttributes.Sealed
+    interface IFlags<TypeAttributes> with
+        member this.Flags =
+            let mutable flags = TypeAttributes.Sealed
+            if this.Serializable then flags <- flags ||| TypeAttributes.Serializable
+            flags
 
 [<Struct; IsReadOnly>]
+[<RequireQualifiedAccess>]
 type InterfaceFlags =
-    internal
-    | InterfaceFlags of TypeAttributes
+    { Import: bool }
 
-    static member Default = TypeAttributes.Abstract ||| TypeAttributes.Interface |> InterfaceFlags
+    interface IFlags<TypeAttributes> with
+        member this.Flags =
+            let mutable flags = TypeAttributes.Abstract ||| TypeAttributes.Interface
+            if this.Import then flags <- flags ||| TypeAttributes.Import
+            flags
 
-[<Sealed>]
-type InterfaceFlagsBuilder internal() =
-    inherit BaseTypeFlagsBuilder<InterfaceFlags>(InterfaceFlags)
-
-    override _.Run expr = base.Run(fun() -> expr() ||| TypeAttributes.Abstract ||| TypeAttributes.Interface)
-
-[<Struct; IsReadOnly>]
-type StructFlags =
-    internal
-    | StructFlags of TypeAttributes
-
-    static member Default = TypeAttributes.BeforeFieldInit ||| TypeAttributes.SequentialLayout ||| TypeAttributes.Sealed |> StructFlags
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type StructFlags private (flags: TypeAttributes) =
+    new (flags: ClassFlags) = StructFlags(flags.Flags ||| TypeAttributes.Sealed)
+    interface IFlags<TypeAttributes> with member _.Flags = flags
 
 type Visibility =
     | CompilerControlled
@@ -132,51 +108,16 @@ type Visibility =
 
 type InitOnly = InitOnly
 
-[<Struct; IsReadOnly>]
+[<IsReadOnly; Struct>]
 type InstanceFieldFlags =
-    internal
-    | InstanceFieldFlags of FieldAttributes
+    interface IFlags<FieldAttributes> with member this.Flags = invalidOp "bad"
 
-    static member Default = invalidOp "bad"
-
-    interface IFlags<FieldAttributes> with
-        override this.Flags = let (InstanceFieldFlags flags) = this in flags
-
-[<AbstractClass>]
-type FieldFlagsBuilder<'T> internal(case) =
-    inherit FlagsBuilder<FieldAttributes, 'T>(case)
-
-    member inline _.Yield(_: RTSpecialName, _: SpecialName) = fun() -> FieldAttributes.RTSpecialName ||| FieldAttributes.SpecialName
-    member inline this.Yield(x: SpecialName, y: RTSpecialName) = this.Yield(y, x)
-
-type InitOnlyFieldFlagsBuilder<'T> internal(case) =
-    inherit FieldFlagsBuilder<'T>(case)
-
-    member inline _.Yield(_: InitOnly) = fun() -> FieldAttributes.InitOnly
-
-[<Struct; IsReadOnly>]
+[<IsReadOnly; Struct>]
 type StaticFieldFlags =
-    internal
-    | StaticFieldFlags of FieldAttributes
+    interface IFlags<FieldAttributes> with member this.Flags = invalidOp "bad"
 
-    static member Default = invalidOp "bad"
-
-    interface IFlags<FieldAttributes> with
-        override this.Flags = let (StaticFieldFlags flags) = this in flags
-
-[<Sealed>]
-type StaticFieldFlagsBuilder internal() =
-    inherit InitOnlyFieldFlagsBuilder<StaticFieldFlags>(StaticFieldFlags)
-
-    override _.Run expr = base.Run(fun() -> expr() ||| FieldAttributes.Static)
+// NOTE: For both methods and fields, RTSpecialName is set if SpecialName is set
 
 [<AutoOpen>]
-module FlagBuilders =
-    let classFlags = ClassFlagsBuilder<ClassFlags> ClassFlags
-    let abstractClassFlags = AbstractClassFlagsBuilder()
-    let delegateFlags = SealedTypeFlagsBuilder<DelegateFlags> DelegateFlags
-    let interfaceFlags = InterfaceFlagsBuilder()
-    let structFlags = SealedTypeFlagsBuilder<StructFlags> StructFlags
-
-    let instanceFieldFlags = InitOnlyFieldFlagsBuilder<InstanceFieldFlags>(InstanceFieldFlags)
-    let staticFieldFlags = StaticFieldFlagsBuilder()
+module Flags =
+    let inline (|Flags|) (flags: IFlags<_>) = flags.Flags

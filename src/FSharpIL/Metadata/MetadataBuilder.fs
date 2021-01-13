@@ -74,6 +74,7 @@ module MetadataBuilder =
     /// Adds a reference to an assembly.
     let inline assemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) = state.AssemblyRef.GetHandle ref
 
+    /// TODO: Make these functions as static Add methods in TypeDef
     let inline classDef (def: ConcreteClassDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
     let inline abstractClassDef (def: AbstractClassDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
     let inline delegateDef (def: DelegateDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
@@ -85,4 +86,4 @@ module MetadataBuilder =
 
     let inline instanceField (field: InstanceField) = invalidOp "bad"
     let inline staticField (field: StaticField) = invalidOp "bad"
-    let inline literalField (field: LiteralField) = invalidOp "bad"
+    //let inline literalField (field: LiteralField) = invalidOp "bad"
