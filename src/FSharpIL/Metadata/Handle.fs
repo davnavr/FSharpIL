@@ -10,7 +10,7 @@ type IHandleValue =
     abstract Handles: seq<IHandle>
 
 /// <summary>
-/// Guarantees that values originate from the same <see cref="FSharpIL.Metadata.MetadataBuilderState"/>.
+/// Guarantees that values originate from the same <see cref="T:T:FSharpIL.Metadata.MetadataBuilderState"/>.
 /// </summary>
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 // TODO: See if this being a struct is a performance advantage.

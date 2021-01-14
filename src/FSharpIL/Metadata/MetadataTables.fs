@@ -114,7 +114,7 @@ type TypeRefTable internal (state: MetadataBuilderState) =
 
     /// <summary>
     /// Searches for a type with the specified name and namespace, with a resolution scope
-    /// of <see cref="FSharpIL.Metadata.ResolutionScope.AssemblyRef"/>.
+    /// of <see cref="T:T:FSharpIL.Metadata.ResolutionScope.AssemblyRef"/>.
     /// </summary>
     member internal this.FindType((ns, name) as t) =
         match search.TryGetValue(t) with
@@ -143,7 +143,7 @@ type TypeRefTable internal (state: MetadataBuilderState) =
         token
 
 /// <summary>
-/// Specifies which type a <see cref="FSharpIL.Metadata.TypeDef"/> extends.
+/// Specifies which type a <see cref="T:T:FSharpIL.Metadata.TypeDef"/> extends.
 /// </summary>
 [<NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]
@@ -152,7 +152,7 @@ type Extends =
     | TypeRef of Handle<TypeRef>
     // | TypeSpec of Handle<?>
     /// <summary>
-    /// Indicates that a class does not extend another class, used by <see cref="System.Object"/> and interfaces.
+    /// Indicates that a class does not extend another class, used by <see cref="T:T:System.Object"/> and interfaces.
     /// </summary>
     | Null
 
@@ -196,7 +196,7 @@ type TypeVisibility =
         | NestedFamilyOrAssembly _ -> TypeAttributes.NestedFamORAssem
 
 /// <summary>
-/// Represents a <see cref="FSharpIL.Metadata.TypeDef"/> that is neither a delegate, enumeration, interface, or user-defined value type.
+/// Represents a <see cref="T:T:FSharpIL.Metadata.TypeDef"/> that is neither a delegate, enumeration, interface, or user-defined value type.
 /// </summary>
 type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 'Field :> IField> =
     { Access: TypeVisibility
@@ -216,7 +216,7 @@ type SealedClassDef = ClassDef<SealedClassFlags, FieldChoice, unit>
 type StaticClassDef = ClassDef<StaticClassFlags, StaticField, unit>
 
 /// <summary>
-/// Represents a delegate type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Delegate"/>.
+/// Represents a delegate type, which is a <see cref="T:T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:T:System.Delegate"/>.
 /// </summary>
 type DelegateDef =
     { Access: TypeVisibility
@@ -225,7 +225,7 @@ type DelegateDef =
       TypeNamespace: string }
 
 /// <summary>
-/// Represents an enumeration type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Enum"/>.
+/// Represents an enumeration type, which is a <see cref="T:T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:T:System.Enum"/>.
 /// </summary>
 type EnumDef =
   { Access: TypeVisibility
@@ -242,9 +242,9 @@ type InterfaceDef =
       Methods: unit }
 
 /// <summary>
-/// Represents a user-defined value type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.ValueType"/>.
+/// Represents a user-defined value type, which is a <see cref="T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:System.ValueType"/>.
 /// </summary>
-/// <seealso cref="FSharpIL.Metadata.EnumDef"/>
+/// <seealso cref="T:FSharpIL.Metadata.EnumDef"/>
 type StructDef =
    { Access: TypeVisibility
      Flags: StructFlags
@@ -255,13 +255,13 @@ type StructDef =
 
 // TODO: Make this record a class instead to make the constructor internal?
 /// <summary>
-/// Represents a row in the <see cref="FSharpIL.Metadata.TypeDefTable"/> (II.22.37). Do not construct this type directly.
+/// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37). Do not construct this type directly.
 /// </summary>
-/// <seealso cref="FSharpIL.Metadata.ClassDef"/>
-/// <seealso cref="FSharpIL.Metadata.DelegateDef"/>
-/// <seealso cref="FSharpIL.Metadata.EnumDef"/>
-/// <seealso cref="FSharpIL.Metadata.InterfaceDef"/>
-/// <seealso cref="FSharpIL.Metadata.StructDef"/>
+/// <seealso cref="T:FSharpIL.Metadata.ClassDef"/>
+/// <seealso cref="T:FSharpIL.Metadata.DelegateDef"/>
+/// <seealso cref="T:FSharpIL.Metadata.EnumDef"/>
+/// <seealso cref="T:FSharpIL.Metadata.InterfaceDef"/>
+/// <seealso cref="T:FSharpIL.Metadata.StructDef"/>
 [<CustomEquality; NoComparison>]
 type TypeDef =
     { Flags: TypeAttributes
@@ -390,10 +390,10 @@ type Field<'Flags when 'Flags :> IFlags<FieldAttributes>> =
     interface IField with
         member this.Row() = FieldRow(this.Flags.Flags, this.Name, this.Signature)
 
-/// <summary>Represents a non-static <see cref="FSharpIL.Metadata.FieldRow"/>.</summary>
+/// <summary>Represents a non-static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
 type InstanceField = Field<InstanceFieldFlags>
 
-/// <summary>Represents a static <see cref="FSharpIL.Metadata.FieldRow"/>.</summary>
+/// <summary>Represents a static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
 type StaticField = Field<StaticFieldFlags>
 
 // TODO: Come up with a better name for the type.
@@ -409,11 +409,11 @@ type FieldChoice =
             | StaticField (Field field) -> field.Row()
 
 /// <summary>
-/// Represents a static <see cref="FSharpIL.Metadata.FieldRow"/> defined inside of the `<Module>` pseudo-class.
+/// Represents a static <see cref="T:FSharpIL.Metadata.FieldRow"/> defined inside of the <c>&lt;Module&gt;</c> pseudo-class.
 /// </summary>
 type GlobalField = Field<GlobalFieldFlags>
 
-/// <summary>Represents a set of fields owned by a <see cref="FSharpIL.Metadata.TypeDef"/>.</summary>
+/// <summary>Represents a set of fields owned by a <see cref="T:FSharpIL.Metadata.TypeDef"/>.</summary>
 [<Sealed>]
 type FieldSet<'Field when 'Field :> IField> (capacity: int) =
     let fields = HashSet<FieldRow> capacity

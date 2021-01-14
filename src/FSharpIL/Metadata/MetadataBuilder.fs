@@ -63,7 +63,7 @@ type MetadataBuilder internal () =
     member inline _.Zero() = fun _ -> Result<_, ValidationError>.Ok()
 
 /// <summary>
-/// Contains functions for use within the <see cref="FSharpIL.Metadata.MetadataBuilder"/> computation expression.
+/// Contains functions for use within the <see cref="T:T:FSharpIL.Metadata.MetadataBuilder"/> computation expression.
 /// </summary>
 [<AutoOpen>]
 module MetadataBuilder =
@@ -80,7 +80,7 @@ module MetadataBuilder =
     let inline delegateDef (def: DelegateDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
     let inline enumDef (def: EnumDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
     let inline interfaceDef (def: InterfaceDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    /// <summary>Defines a value type, which inherits from <see cref="System.ValueType"/>.</summary>
+    /// <summary>Defines a value type, which inherits from <see cref="T:T:System.ValueType"/>.</summary>
     let inline structDef (def: StructDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
     let inline typeRef (ref: TypeRef) (state: MetadataBuilderState) = state.TypeRef.GetHandle ref
 

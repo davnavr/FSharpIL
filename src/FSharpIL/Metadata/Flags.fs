@@ -139,7 +139,7 @@ type Visibility =
             | Public -> FieldAttributes.Public
 
 /// <summary>
-/// Visibility for fields and methods defined in the `<Module>` pseudo-class.
+/// Visibility for fields and methods defined in the <c>&lt;Module&gt;</c> pseudo-class.
 /// </summary>
 [<RequireQualifiedAccess>]
 type GlobalVisibility =
