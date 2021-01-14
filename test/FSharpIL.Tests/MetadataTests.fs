@@ -62,8 +62,8 @@ let tests =
                               Flags = StructFlags.Zero
                               StructName = NonEmptyName.ofStr "MyStruct"
                               TypeNamespace = "Testing"
-                              FieldList = ()
-                              MethodList = () }
+                              Fields = FieldSet()
+                              Methods = () }
                     }
                 ValidationExpect.isError result "result should be error when System.ValueType cannot be found"
 
@@ -80,8 +80,8 @@ let tests =
                               ClassName = NonEmptyName.ofStr "MyClass"
                               TypeNamespace = ""
                               Extends = Extends.Null
-                              FieldList = ()
-                              MethodList = () }
+                              Fields = FieldSet()
+                              Methods = () }
                     }
                     |> ValidationResult.get
                 let (KeyValue (def, _)) = metadata.TypeDef |> Seq.head
@@ -110,8 +110,8 @@ let tests =
                               Flags = StructFlags { ClassFlags.Zero with BeforeFieldInit = true }
                               StructName = NonEmptyName.ofStr "Thing"
                               TypeNamespace = "Thing"
-                              FieldList = ()
-                              MethodList = () }
+                              Fields = FieldSet()
+                              Methods = () }
                     }
                     |> ValidationResult.get
                 let (KeyValue (def, _)) = metadata.TypeDef |> Seq.head

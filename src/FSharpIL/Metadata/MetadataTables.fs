@@ -204,8 +204,8 @@ type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 
       ClassName: NonEmptyName
       TypeNamespace: string
       Extends: Extends // TODO: How to ensure that the base class is not sealed?
-      FieldList: FieldSet<'Field>
-      MethodList: 'Method }
+      Fields: FieldSet<'Field> // TODO: Rename from FieldList to Fields
+      Methods: 'Method } // TODO: Rename from MethodList to Methods
 
 /// Represents an unsealed class.
 type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, unit>
@@ -213,7 +213,7 @@ type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, unit>
 type AbstractClassDef = ClassDef<AbstractClassFlags, FieldChoice, unit>
 type SealedClassDef = ClassDef<SealedClassFlags, FieldChoice, unit>
 /// Represents a sealed and abstract class, meaning that it can only contain static members.
-type StaticClassDef = unit
+type StaticClassDef = ClassDef<StaticClassFlags, StaticField, unit>
 
 /// <summary>
 /// Represents a delegate type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Delegate"/>.
@@ -231,15 +231,15 @@ type EnumDef =
   { Access: TypeVisibility
     EnumName: NonEmptyName
     TypeNamespace: string
-    ValueList: unit }
+    Values: unit }
 
 type InterfaceDef =
     { Access: TypeVisibility
       Flags: InterfaceFlags
       InterfaceName: NonEmptyName
       TypeNamespace: string
-      FieldList: unit // NOTE: Apparently static fields are allowed in interfaces?
-      MethodList: unit }
+      Fields: FieldSet<StaticField>
+      Methods: unit }
 
 /// <summary>
 /// Represents a user-defined value type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.ValueType"/>.
@@ -250,8 +250,8 @@ type StructDef =
      Flags: StructFlags
      StructName: NonEmptyName
      TypeNamespace: string
-     FieldList: unit
-     MethodList: unit }
+     Fields: FieldSet<FieldChoice>
+     Methods: unit }
 
 // TODO: Make this record a class instead to make the constructor internal?
 /// <summary>
@@ -268,7 +268,7 @@ type TypeDef =
       TypeName: NonEmptyName
       TypeNamespace: string
       Extends: Extends
-      FieldList: unit
+      FieldList: ImmutableArray<FieldRow>
       MethodList: unit
       EnclosingClass: Handle<TypeDef> option }
 
@@ -302,7 +302,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
           TypeName = def.ClassName
           TypeNamespace = def.TypeNamespace
           Extends = def.Extends
-          FieldList = ()
+          FieldList = def.Fields.ToImmutable()
           MethodList = ()
           EnclosingClass = def.Access.EnclosingClass }
         |> defs.GetHandle
@@ -314,7 +314,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
               TypeName = def.DelegateName
               TypeNamespace = def.TypeNamespace
               Extends = Extends.TypeRef super
-              FieldList = ()
+              FieldList = ImmutableArray.Empty
               MethodList = ()
               EnclosingClass = def.Access.EnclosingClass }
             |> Ok
@@ -328,7 +328,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
               TypeName = def.EnumName
               TypeNamespace = def.TypeNamespace
               Extends = Extends.TypeRef super
-              FieldList = ()
+              FieldList = ImmutableArray.Empty // TODO: Add enum values.
               MethodList = ()
               EnclosingClass = def.Access.EnclosingClass }
             |> Ok
@@ -340,7 +340,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
           TypeName = def.InterfaceName
           TypeNamespace = def.TypeNamespace
           Extends = Extends.Null
-          FieldList = ()
+          FieldList = def.Fields.ToImmutable()
           MethodList = ()
           EnclosingClass = def.Access.EnclosingClass }
         |> defs.GetHandle
@@ -352,7 +352,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
               TypeName = def.StructName
               TypeNamespace = def.TypeNamespace
               Extends = Extends.TypeRef super
-              FieldList = ()
+              FieldList = def.Fields.ToImmutable()
               MethodList = ()
               EnclosingClass = def.Access.EnclosingClass }
             |> Ok
@@ -364,6 +364,20 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
         member _.Count = (defs :> ITable<_>).Count
         member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
+
+/// <summary>Represents a row in the Field table (II.22.15).</summary>
+[<Sealed>]
+type FieldRow internal (flags: FieldAttributes, name: NonEmptyName, signature: unit) =
+    member val Flags = flags
+    member val Name = name
+    member val Signature = signature
+
+    interface IEquatable<FieldRow> with
+        member this.Equals other =
+            if this.Flags &&& FieldAttributes.FieldAccessMask = FieldAttributes.PrivateScope
+            then false
+            else
+                this.Name = other.Name && this.Signature = other.Signature
 
 type IField =
     abstract Row : unit -> FieldRow
@@ -397,21 +411,7 @@ type FieldChoice =
 /// <summary>
 /// Represents a static <see cref="FSharpIL.Metadata.FieldRow"/> defined inside of the `<Module>` pseudo-class.
 /// </summary>
-type GlobalField = unit
-
-/// <summary>Represents a row in the Field table (II.22.15).</summary>
-[<Sealed>]
-type FieldRow internal (flags: FieldAttributes, name: NonEmptyName, signature: unit) =
-    member val Flags = flags
-    member val Name = name
-    member val Signature = signature
-
-    interface IEquatable<FieldRow> with
-        member this.Equals other =
-            if this.Flags &&& FieldAttributes.FieldAccessMask = FieldAttributes.PrivateScope
-            then false
-            else
-                this.Name = other.Name && this.Signature = other.Signature
+type GlobalField = Field<GlobalFieldFlags>
 
 /// <summary>Represents a set of fields owned by a <see cref="FSharpIL.Metadata.TypeDef"/>.</summary>
 [<Sealed>]
@@ -426,7 +426,7 @@ type FieldSet<'Field when 'Field :> IField> (capacity: int) =
         then Ok()
         else Error field
 
-    member _.ToImmutable() = fields.ToImmutableArray()
+    member _.ToImmutable(): ImmutableArray<FieldRow> = fields.ToImmutableArray()
 
 /// II.22.2
 type Assembly =
@@ -527,7 +527,7 @@ type MetadataBuilderState () as this =
 
     member internal _.CreateHandle<'T> (value: 'T): Handle<'T> = Handle(owner, value)
 
-    member internal this.CreateTable<'T> (table: ITable<'T>): ReadOnlyDictionary<Handle<'T>, uint32> =
+    member internal this.CreateTable<'T> (table: ITable<'T>): ReadOnlyDictionary<Handle<'T>, uint32> = // TODO: Use immutable dictionary instead?
         let mutable i = 0u
         let dict = Dictionary<_, _>(table.Count, HandleEqualityComparer table.Comparer)
         for value in table do

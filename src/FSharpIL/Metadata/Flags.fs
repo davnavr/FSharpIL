@@ -79,7 +79,13 @@ type AbstractClassFlags private (flags: TypeAttributes) =
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type SealedClassFlags private (flags: TypeAttributes) =
-   new (flags: ClassFlags) = SealedClassFlags(flags.Flags ||| TypeAttributes.Abstract ||| TypeAttributes.Sealed)
+   new (flags: ClassFlags) = SealedClassFlags(flags.Flags||| TypeAttributes.Sealed)
+   interface IFlags<TypeAttributes> with member _.Flags = flags
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type StaticClassFlags private (flags: TypeAttributes) =
+   new (flags: ClassFlags) = StaticClassFlags(flags.Flags ||| TypeAttributes.Abstract ||| TypeAttributes.Sealed)
    interface IFlags<TypeAttributes> with member _.Flags = flags
 
 [<Struct; IsReadOnly>]
@@ -121,15 +127,64 @@ type Visibility =
     | FamilyOrAssembly
     | Public
 
-type InitOnly = InitOnly
+    interface IFlags<FieldAttributes> with
+        member this.Flags =
+            match this with
+            | CompilerControlled -> FieldAttributes.PrivateScope
+            | Private -> FieldAttributes.Private
+            | FamilyAndAssembly -> FieldAttributes.FamANDAssem
+            | Assembly -> FieldAttributes.Assembly
+            | Family -> FieldAttributes.Family
+            | FamilyOrAssembly -> FieldAttributes.FamORAssem
+            | Public -> FieldAttributes.Public
+
+/// <summary>
+/// Visibility for fields and methods defined in the `<Module>` pseudo-class.
+/// </summary>
+[<RequireQualifiedAccess>]
+type GlobalVisibility =
+    | Public
+    | CompilerControlled
+    | Private
+
+    interface IFlags<FieldAttributes> with
+        member this.Flags =
+            match this with
+            | Public -> FieldAttributes.Public
+            | CompilerControlled -> FieldAttributes.PrivateScope
+            | Private -> FieldAttributes.Private
 
 [<IsReadOnly; Struct>]
-type InstanceFieldFlags =
-    interface IFlags<FieldAttributes> with member this.Flags = invalidOp "bad"
+[<StructuralComparison; StructuralEquality>]
+type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> =
+    { Visibility: 'Visibility
+      NotSerialized: bool
+      /// Sets the `SpecialName` and `RTSpecialName` flags.
+      SpecialName: bool }
+
+    member this.Flags =
+        let mutable flags = this.Visibility.Flags
+        if this.NotSerialized then flags <- flags ||| FieldAttributes.NotSerialized
+        if this.SpecialName then flags <- flags ||| FieldAttributes.SpecialName
+        flags
 
 [<IsReadOnly; Struct>]
-type StaticFieldFlags =
-    interface IFlags<FieldAttributes> with member this.Flags = invalidOp "bad"
+[<StructuralComparison; StructuralEquality>]
+type InstanceFieldFlags private (flags: FieldAttributes) =
+    new (flags: FieldFlags<Visibility>) = InstanceFieldFlags(flags.Flags)
+    interface IFlags<FieldAttributes> with member _.Flags = flags
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type StaticFieldFlags private (flags: FieldAttributes) =
+    new (flags: FieldFlags<Visibility>) = StaticFieldFlags(flags.Flags)
+    interface IFlags<FieldAttributes> with member _.Flags = flags
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type GlobalFieldFlags private (flags: FieldAttributes) =
+    new (flags: FieldFlags<GlobalVisibility>) = GlobalFieldFlags(flags.Flags)
+    interface IFlags<FieldAttributes> with member _.Flags = flags
 
 // NOTE: For both methods and fields, RTSpecialName is set if SpecialName is set
 
