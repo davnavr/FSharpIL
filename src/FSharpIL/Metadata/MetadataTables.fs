@@ -107,7 +107,7 @@ type TypeRef =
             | _ -> Seq.empty
 
 [<Sealed>]
-type TypeRefTable internal (state: MetadataBuilderState) = // NOTE: First type in this should be the <Module> pseudo-class
+type TypeRefTable internal (state: MetadataBuilderState) =
     inherit Table<TypeRef>(state)
 
     let search = Dictionary<string * NonEmptyName, TypeRef> 8
@@ -195,20 +195,28 @@ type TypeVisibility =
         | NestedFamilyAndAssembly _ -> TypeAttributes.NestedFamANDAssem
         | NestedFamilyOrAssembly _ -> TypeAttributes.NestedFamORAssem
 
-type ClassDef<'Flags, 'Method when 'Flags :> IFlags<TypeAttributes>> =
+/// <summary>
+/// Represents a <see cref="FSharpIL.Metadata.TypeDef"/> that is neither a delegate, enumeration, interface, or user-defined value type.
+/// </summary>
+type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 'Field :> IField> =
     { Access: TypeVisibility
       Flags: 'Flags
       ClassName: NonEmptyName
       TypeNamespace: string
       Extends: Extends // TODO: How to ensure that the base class is not sealed?
-      FieldList: unit
+      FieldList: FieldSet<'Field>
       MethodList: 'Method }
 
-type ConcreteClassDef = ClassDef<ConcreteClassFlags, unit>
-type AbstractClassDef = ClassDef<AbstractClassFlags, unit>
+/// Represents an unsealed class.
+type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, unit>
+/// Represents an abstract class.
+type AbstractClassDef = ClassDef<AbstractClassFlags, FieldChoice, unit>
+type SealedClassDef = ClassDef<SealedClassFlags, FieldChoice, unit>
+/// Represents a sealed and abstract class, meaning that it can only contain static members.
+type StaticClassDef = unit
 
 /// <summary>
-/// Defines a delegate type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Delegate"/>.
+/// Represents a delegate type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Delegate"/>.
 /// </summary>
 type DelegateDef =
     { Access: TypeVisibility
@@ -217,7 +225,7 @@ type DelegateDef =
       TypeNamespace: string }
 
 /// <summary>
-/// Defines an enumeration type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Enum"/>.
+/// Represents an enumeration type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.Enum"/>.
 /// </summary>
 type EnumDef =
   { Access: TypeVisibility
@@ -234,8 +242,9 @@ type InterfaceDef =
       MethodList: unit }
 
 /// <summary>
-/// Defines a struct, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.ValueType"/>.
+/// Represents a user-defined value type, which is a <see cref="FSharpIL.Metadata.TypeDef"/> that derives from <see cref="System.ValueType"/>.
 /// </summary>
+/// <seealso cref="FSharpIL.Metadata.EnumDef"/>
 type StructDef =
    { Access: TypeVisibility
      Flags: StructFlags
@@ -255,7 +264,7 @@ type StructDef =
 /// <seealso cref="FSharpIL.Metadata.StructDef"/>
 [<CustomEquality; NoComparison>]
 type TypeDef =
-    { Flags: System.Reflection.TypeAttributes
+    { Flags: TypeAttributes
       TypeName: NonEmptyName
       TypeNamespace: string
       Extends: Extends
@@ -284,11 +293,11 @@ type TypeDef =
 type TypeDefTable internal (owner: MetadataBuilderState) =
     let defs = Table<TypeDef> owner
 
-    // TODO: Add the <Module> class used for global variables and functions.
+    // TODO: Add the <Module> class used for global variables and functions, which should be the first entry.
 
     // TODO: Add functions for adding abstract classes and nested types.
     // TODO: Enforce CLS checks and warnings.
-    member _.GetHandle({ Flags = Flags flags } as def: ClassDef<_, _>) =
+    member _.GetHandle({ Flags = Flags flags } as def: ClassDef<_, _, _>) =
         { Flags = flags ||| def.Access.Flags
           TypeName = def.ClassName
           TypeNamespace = def.TypeNamespace
@@ -356,16 +365,34 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
         member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
 
+type IField =
+    abstract Row : unit -> FieldRow
+
 type Field<'Flags when 'Flags :> IFlags<FieldAttributes>> =
     { Flags: 'Flags
       Name: NonEmptyName
       Signature: unit }
+
+    interface IField with
+        member this.Row() = FieldRow(this.Flags.Flags, this.Name, this.Signature)
 
 /// <summary>Represents a non-static <see cref="FSharpIL.Metadata.FieldRow"/>.</summary>
 type InstanceField = Field<InstanceFieldFlags>
 
 /// <summary>Represents a static <see cref="FSharpIL.Metadata.FieldRow"/>.</summary>
 type StaticField = Field<StaticFieldFlags>
+
+// TODO: Come up with a better name for the type.
+type FieldChoice =
+    | InstanceField of InstanceField
+    | StaticField of StaticField
+
+    interface IField with
+        member this.Row() =
+            let inline (|Field|) (f: #IField) = f :> IField
+            match this with
+            | InstanceField (Field field)
+            | StaticField (Field field) -> field.Row()
 
 /// <summary>
 /// Represents a static <see cref="FSharpIL.Metadata.FieldRow"/> defined inside of the `<Module>` pseudo-class.
@@ -386,15 +413,15 @@ type FieldRow internal (flags: FieldAttributes, name: NonEmptyName, signature: u
             else
                 this.Name = other.Name && this.Signature = other.Signature
 
-/// <summary>Represents a set of fields owned by a <see cref="FSharpIL.Metadata.FieldRow"/>.</summary>
+/// <summary>Represents a set of fields owned by a <see cref="FSharpIL.Metadata.TypeDef"/>.</summary>
 [<Sealed>]
-type FieldSet<'Flags when 'Flags :> IFlags<FieldAttributes>> (capacity: int) =
+type FieldSet<'Field when 'Field :> IField> (capacity: int) =
     let fields = HashSet<FieldRow> capacity
 
     new() = FieldSet(1)
 
-    member _.Add(field: Field<'Flags>) =
-        let field' = FieldRow(field.Flags.Flags, field.Name, field.Signature)
+    member _.Add(field: 'Field) =
+        let field' = field.Row()
         if fields.Add field'
         then Ok()
         else Error field

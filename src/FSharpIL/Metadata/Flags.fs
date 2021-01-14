@@ -55,6 +55,15 @@ type ClassFlags =
         if this.RTSpecialName then flags <- flags ||| TypeAttributes.RTSpecialName
         flags
 
+    static member Zero =
+        { Layout = LayoutFlag.Zero
+          SpecialName = false
+          Import = false
+          Serializable = false
+          StringFormat = StringFormattingFlag.Zero
+          BeforeFieldInit = false
+          RTSpecialName = false }
+
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type ConcreteClassFlags private (flags: TypeAttributes) =
@@ -67,7 +76,11 @@ type AbstractClassFlags private (flags: TypeAttributes) =
     new (flags: ClassFlags) = AbstractClassFlags(flags.Flags ||| TypeAttributes.Abstract)
     interface IFlags<TypeAttributes> with member _.Flags = flags
 
-// type SealedClassFlags
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type SealedClassFlags private (flags: TypeAttributes) =
+   new (flags: ClassFlags) = SealedClassFlags(flags.Flags ||| TypeAttributes.Abstract ||| TypeAttributes.Sealed)
+   interface IFlags<TypeAttributes> with member _.Flags = flags
 
 [<Struct; IsReadOnly>]
 [<RequireQualifiedAccess>]
@@ -96,6 +109,8 @@ type InterfaceFlags =
 type StructFlags private (flags: TypeAttributes) =
     new (flags: ClassFlags) = StructFlags(flags.Flags ||| TypeAttributes.Sealed)
     interface IFlags<TypeAttributes> with member _.Flags = flags
+
+    static member Zero = { ClassFlags.Zero with Layout = LayoutFlag.SequentialLayout } |> StructFlags
 
 type Visibility =
     | CompilerControlled

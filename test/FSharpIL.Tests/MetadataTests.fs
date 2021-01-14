@@ -59,7 +59,7 @@ let tests =
                     metadataBuilder {
                         structDef
                             { Access = TypeVisibility.Public
-                              Flags = StructFlags.Default
+                              Flags = StructFlags.Zero
                               StructName = NonEmptyName.ofStr "MyStruct"
                               TypeNamespace = "Testing"
                               FieldList = ()
@@ -73,10 +73,10 @@ let tests =
                         classDef
                             { Access = TypeVisibility.Public
                               Flags =
-                                classFlags {
-                                    Sealed
-                                    BeforeFieldInit
-                                }
+                                { ClassFlags.Zero with
+                                    BeforeFieldInit = true
+                                    StringFormat = UnicodeClass }
+                                |> ConcreteClassFlags
                               ClassName = NonEmptyName.ofStr "MyClass"
                               TypeNamespace = ""
                               Extends = Extends.Null
@@ -87,7 +87,7 @@ let tests =
                 let (KeyValue (def, _)) = metadata.TypeDef |> Seq.head
                 Expect.equal
                     def.Item.Flags
-                    (TypeAttributes.Sealed ||| TypeAttributes.BeforeFieldInit ||| TypeAttributes.Public)
+                    (TypeAttributes.UnicodeClass ||| TypeAttributes.BeforeFieldInit ||| TypeAttributes.Public)
                     "flags should match"
 
             testCase "structs are sealed" <| fun() ->
@@ -107,7 +107,7 @@ let tests =
                               TypeNamespace = "System" }
                         structDef
                             { Access = TypeVisibility.NotPublic
-                              Flags = structFlags { BeforeFieldInit }
+                              Flags = StructFlags { ClassFlags.Zero with BeforeFieldInit = true }
                               StructName = NonEmptyName.ofStr "Thing"
                               TypeNamespace = "Thing"
                               FieldList = ()
