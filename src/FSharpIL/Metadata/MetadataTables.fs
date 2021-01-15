@@ -106,6 +106,8 @@ type TypeRef =
             | ResolutionScope.TypeRef (IHandle handle) -> handle |> Seq.singleton
             | _ -> Seq.empty
 
+    static member Add (t: TypeRef) (state: MetadataBuilderState) = state.TypeRef.GetHandle t
+
 [<Sealed>]
 type TypeRefTable internal (state: MetadataBuilderState) =
     inherit Table<TypeRef>(state)
@@ -253,41 +255,119 @@ type StructDef =
      Fields: FieldSet<FieldChoice>
      Methods: unit }
 
-// TODO: Make this record a class instead to make the constructor internal?
 /// <summary>
-/// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37). Do not construct this type directly.
+/// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
 /// </summary>
 /// <seealso cref="T:FSharpIL.Metadata.ClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.DelegateDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.EnumDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.InterfaceDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.StructDef"/>
-[<CustomEquality; NoComparison>]
-type TypeDef =
-    { Flags: TypeAttributes
-      TypeName: NonEmptyName
-      TypeNamespace: string
-      Extends: Extends
-      FieldList: ImmutableArray<FieldRow>
-      MethodList: unit
-      EnclosingClass: Handle<TypeDef> option }
+[<Sealed>]
+type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
+    member _.Flags: TypeAttributes = flags
+    member _.TypeName: NonEmptyName = name
+    member _.TypeNamespace: string = ns
+    member _.Extends: Extends = extends
+    member _.FieldList: ImmutableArray<FieldRow> = fields
+    member _.MethodList = methods
+    member _.EnclosingClass: Handle<TypeDef> option = parent
+
+    override this.Equals obj =
+        match obj with
+        | :? TypeDef as other -> (this :> IEquatable<_>).Equals other
+        | _ -> false
+
+    override _.GetHashCode() = hash(name, ns)
 
     interface IEquatable<TypeDef> with
-        member this.Equals other =
-            this.TypeNamespace = other.TypeNamespace && this.TypeName = other.TypeName
+        member _.Equals other =
+            ns = other.TypeNamespace && name = other.TypeName
 
     interface IHandleValue with
-        member this.Handles =
+        member _.Handles =
             seq {
-                match this.Extends with
+                match extends with
                 | Extends.TypeDef (IHandle handle)
                 | Extends.TypeRef (IHandle handle) -> handle
                 | Extends.Null -> ()
 
-                match this.EnclosingClass with
-                | Some(IHandle parent) -> parent
+                match parent with
+                | Some(IHandle parent') -> parent'
                 | None -> ()
             }
+
+    // TODO: Add functions for adding nested types.
+    // TODO: Enforce CLS checks and warnings.
+    static member AddClass({ Flags = Flags flags } as def: ClassDef<_, _, _>) (state: MetadataBuilderState) =
+        TypeDef (
+            flags ||| def.Access.Flags,
+            def.ClassName,
+            def.TypeNamespace,
+            def.Extends,
+            def.Fields.ToImmutable(),
+            (),
+            def.Access.EnclosingClass
+        )
+        |> state.TypeDef.GetHandle
+
+    static member AddDelegate({ Flags = Flags flags } as def: DelegateDef) (state: MetadataBuilderState) =
+        match state.FindType SystemType.Delegate with
+        | Some super ->
+            TypeDef (
+                flags ||| def.Access.Flags,
+                def.DelegateName,
+                def.TypeNamespace,
+                Extends.TypeRef super,
+                ImmutableArray.Empty,
+                (),
+                def.Access.EnclosingClass
+            )
+            |> state.TypeDef.GetHandle
+        | None -> MissingType SystemType.Delegate |> Error
+
+    static member AddEnum(def: EnumDef) (state: MetadataBuilderState) =
+        match state.FindType SystemType.Enum with
+        | Some super ->
+            TypeDef (
+                def.Access.Flags ||| TypeAttributes.Sealed ||| TypeAttributes.Serializable,
+                def.EnumName,
+                def.TypeNamespace,
+                Extends.TypeRef super,
+                ImmutableArray.Empty, // TODO: Add enum values.
+                (),
+                def.Access.EnclosingClass
+            )
+            |> state.TypeDef.GetHandle
+        | None -> MissingType SystemType.Enum |> Error
+
+    static member AddInterface({ Flags = Flags flags } as def: InterfaceDef) (state: MetadataBuilderState) =
+        TypeDef (
+            flags ||| def.Access.Flags,
+            def.InterfaceName,
+            def.TypeNamespace,
+            Extends.Null,
+            def.Fields.ToImmutable(),
+            (),
+            def.Access.EnclosingClass
+        )
+        |> state.TypeDef.GetHandle
+
+    /// <summary>Defines a value type, which is a class that inherits from <see cref="T:System.ValueType"/>.</summary>
+    static member AddStruct({ Flags = Flags flags } as def: StructDef) (state: MetadataBuilderState) =
+        match state.FindType SystemType.ValueType with
+        | Some super ->
+            TypeDef (
+                flags ||| def.Access.Flags,
+                def.StructName,
+                def.TypeNamespace,
+                Extends.TypeRef super,
+                def.Fields.ToImmutable(),
+                (),
+                def.Access.EnclosingClass
+            )
+            |> state.TypeDef.GetHandle
+        | None -> MissingType SystemType.ValueType |> Error
 
 [<Sealed>]
 type TypeDefTable internal (owner: MetadataBuilderState) =
@@ -295,69 +375,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
     // TODO: Add the <Module> class used for global variables and functions, which should be the first entry.
 
-    // TODO: Add functions for adding abstract classes and nested types.
-    // TODO: Enforce CLS checks and warnings.
-    member _.GetHandle({ Flags = Flags flags } as def: ClassDef<_, _, _>) =
-        { Flags = flags ||| def.Access.Flags
-          TypeName = def.ClassName
-          TypeNamespace = def.TypeNamespace
-          Extends = def.Extends
-          FieldList = def.Fields.ToImmutable()
-          MethodList = ()
-          EnclosingClass = def.Access.EnclosingClass }
-        |> defs.GetHandle
-
-    member _.GetHandle({ Flags = Flags flags } as def: DelegateDef) =
-        match owner.FindType SystemType.Delegate with
-        | Some super ->
-            { Flags = flags
-              TypeName = def.DelegateName
-              TypeNamespace = def.TypeNamespace
-              Extends = Extends.TypeRef super
-              FieldList = ImmutableArray.Empty
-              MethodList = ()
-              EnclosingClass = def.Access.EnclosingClass }
-            |> Ok
-        | None -> MissingType SystemType.Delegate |> Error
-        |> Result.bind defs.GetHandle
-
-    member _.GetHandle(def: EnumDef) =
-        match owner.FindType SystemType.Enum with
-        | Some super ->
-            { Flags = TypeAttributes.Sealed ||| TypeAttributes.Serializable
-              TypeName = def.EnumName
-              TypeNamespace = def.TypeNamespace
-              Extends = Extends.TypeRef super
-              FieldList = ImmutableArray.Empty // TODO: Add enum values.
-              MethodList = ()
-              EnclosingClass = def.Access.EnclosingClass }
-            |> Ok
-        | None -> MissingType SystemType.Enum |> Error
-        |> Result.bind defs.GetHandle
-
-    member _.GetHandle({ Flags = Flags flags } as def: InterfaceDef) =
-        { Flags = flags
-          TypeName = def.InterfaceName
-          TypeNamespace = def.TypeNamespace
-          Extends = Extends.Null
-          FieldList = def.Fields.ToImmutable()
-          MethodList = ()
-          EnclosingClass = def.Access.EnclosingClass }
-        |> defs.GetHandle
-
-    member _.GetHandle({ Flags = Flags flags } as def: StructDef) =
-        match owner.FindType SystemType.ValueType with
-        | Some super ->
-            { Flags = flags
-              TypeName = def.StructName
-              TypeNamespace = def.TypeNamespace
-              Extends = Extends.TypeRef super
-              FieldList = def.Fields.ToImmutable()
-              MethodList = ()
-              EnclosingClass = def.Access.EnclosingClass }
-            |> Ok
-        | None -> MissingType SystemType.ValueType |> Error
-        |> Result.bind defs.GetHandle
+    member internal _.GetHandle(t: TypeDef) = defs.GetHandle t
 
     interface ITable<TypeDef> with
         member _.Comparer = (defs :> ITable<_>).Comparer
@@ -367,17 +385,24 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
 /// <summary>Represents a row in the Field table (II.22.15).</summary>
 [<Sealed>]
-type FieldRow internal (flags: FieldAttributes, name: NonEmptyName, signature: unit) =
-    member val Flags = flags
-    member val Name = name
-    member val Signature = signature
+type FieldRow internal (flags, name, signature) =
+    member _.Flags: FieldAttributes = flags
+    member _.Name: NonEmptyName = name
+    member _.Signature = signature
+
+    override this.Equals obj =
+        match obj with
+        | :? FieldRow as other -> (this :> IEquatable<_>).Equals other
+        | _ -> false
+
+    override _.GetHashCode() = hash(name, signature)
 
     interface IEquatable<FieldRow> with
-        member this.Equals other =
-            if this.Flags &&& FieldAttributes.FieldAccessMask = FieldAttributes.PrivateScope
+        member _.Equals other =
+            if flags &&& FieldAttributes.FieldAccessMask = FieldAttributes.PrivateScope
             then false
             else
-                this.Name = other.Name && this.Signature = other.Signature
+                name = other.Name && signature = other.Signature
 
 type IField =
     abstract Row : unit -> FieldRow
@@ -497,9 +522,9 @@ type MetadataBuilderState () as this =
     /// (0x00)
     member val Module = ModuleTable.Default with get, set
     /// (0x01)
-    member val TypeRef = TypeRefTable this
+    member val TypeRef: TypeRefTable = TypeRefTable this
     /// (0x02)
-    member _.TypeDef = typeDef
+    member _.TypeDef: TypeDefTable = typeDef
     // (0x04)
     // Field
 
@@ -513,15 +538,16 @@ type MetadataBuilderState () as this =
     /// (0x29)
     member val NestedClass =
         Seq.choose
-            (function
-            | { TypeDef.EnclosingClass = Some parent } as tdef ->
-                { NestedClass = this.CreateHandle tdef
-                  EnclosingClass = parent }
-                |> Some
-            | _ -> None)
+            (fun (tdef: TypeDef) ->
+                match tdef.EnclosingClass with
+                | Some parent ->
+                    { NestedClass = this.CreateHandle tdef
+                      EnclosingClass = parent }
+                    |> Some
+                | _ -> None)
             typeDef
 
-    member internal this.FindType t =
+    member internal this.FindType t: Handle<_> option =
         // TODO: Search in the TypeDefTable as well.
         this.TypeRef.FindType t
 

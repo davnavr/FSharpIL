@@ -63,7 +63,7 @@ type MetadataBuilder internal () =
     member inline _.Zero() = fun _ -> Result<_, ValidationError>.Ok()
 
 /// <summary>
-/// Contains functions for use within the <see cref="T:T:FSharpIL.Metadata.MetadataBuilder"/> computation expression.
+/// Contains functions for use within the <see cref="T:FSharpIL.Metadata.MetadataBuilder"/> computation expression.
 /// </summary>
 [<AutoOpen>]
 module MetadataBuilder =
@@ -73,16 +73,6 @@ module MetadataBuilder =
     let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly
     /// Adds a reference to an assembly.
     let inline assemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) = state.AssemblyRef.GetHandle ref
-
-    /// TODO: Make these functions as static Add methods in TypeDef
-    let inline classDef (def: ConcreteClassDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    let inline abstractClassDef (def: AbstractClassDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    let inline delegateDef (def: DelegateDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    let inline enumDef (def: EnumDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    let inline interfaceDef (def: InterfaceDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    /// <summary>Defines a value type, which inherits from <see cref="T:T:System.ValueType"/>.</summary>
-    let inline structDef (def: StructDef) (state: MetadataBuilderState) = state.TypeDef.GetHandle def
-    let inline typeRef (ref: TypeRef) (state: MetadataBuilderState) = state.TypeRef.GetHandle ref
 
     let inline instanceField (field: InstanceField) = invalidOp "bad"
     let inline staticField (field: StaticField) = invalidOp "bad"

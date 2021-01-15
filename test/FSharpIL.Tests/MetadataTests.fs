@@ -32,7 +32,7 @@ let tests =
                 let metadata =
                     metadataBuilder {
                         let! token = assemblyRef expected
-                        typeRef
+                        TypeRef.Add
                             { ResolutionScope = ResolutionScope.AssemblyRef token
                               TypeName = NonEmptyName.ofStr "Test"
                               TypeNamespace = "" }
@@ -57,7 +57,7 @@ let tests =
             testCase "struct definition results in error when System.ValueType is missing" <| fun() ->
                 let result =
                     metadataBuilder {
-                        structDef
+                        TypeDef.AddStruct
                             { Access = TypeVisibility.Public
                               Flags = StructFlags.Zero
                               StructName = NonEmptyName.ofStr "MyStruct"
@@ -70,7 +70,7 @@ let tests =
             testCase "class flags are declared correctly" <| fun() ->
                 let metadata =
                     metadataBuilder {
-                        classDef
+                        TypeDef.AddClass
                             { Access = TypeVisibility.Public
                               Flags =
                                 { ClassFlags.Zero with
@@ -101,11 +101,11 @@ let tests =
                                   Name = AssemblyName.ofStr "System.Private.CoreLib"
                                   Culture = NullCulture
                                   HashValue = None }
-                        typeRef
+                        TypeRef.Add
                             { ResolutionScope = ResolutionScope.AssemblyRef mscorlib
                               TypeName = NonEmptyName.ofStr "ValueType"
                               TypeNamespace = "System" }
-                        structDef
+                        TypeDef.AddStruct
                             { Access = TypeVisibility.NotPublic
                               Flags = StructFlags { ClassFlags.Zero with BeforeFieldInit = true }
                               StructName = NonEmptyName.ofStr "Thing"
