@@ -2,6 +2,7 @@
 
 open System.Collections.Immutable
 
+/// II.24.2.6
 [<Sealed>]
 type MetadataTables internal (state: MetadataBuilderState) =
     /// A collection of warnings produced while creating the metadata.

@@ -590,17 +590,63 @@ type MetadataBuilderState () as this =
     /// (0x02)
     member _.TypeDef: TypeDefTable = typeDef
     // (0x04)
-    // Field
+    // member Field
     // (0x06)
-    // Method
-
+    // member Method
+    // (0x08)
+    // member Param
+    // (0x09)
+    // member InterfaceImpl
+    // (0x0A)
+    // member MemberRef
+    // (0x0B)
+    // member Constant
+    // (0x0C)
+    // member CustomAttribute
+    // (0x0D)
+    // member FieldMarshal
+    // (0x0E)
+    // member DeclSecurity
+    // (0x0F)
+    // member ClassLayout
+    // (0x10)
+    // member FieldLayout
+    // (0x11)
+    // member StandAloneSig
+    // (0x12)
+    // member EventMap
+    // (0x14)
+    // member Event
+    // (0x15)
+    // member PropertyMap
+    // (0x17)
+    // member Property
+    // (0x18)
+    // member MethodSemantics
+    // (0x19)
+    // member MethodImpl
+    // (0x1A)
+    // member ModuleRef
+    // (0x1B)
+    // member TypeSpec
+    // (0x1C)
+    // member ImplMap
+    // (0x1D)
+    // member FieldRva
     /// (0x20)
     member val Assembly: Assembly option = None with get, set // 0x20 // TODO: Figure out if None is a good default value.
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// (0x23)
     member val AssemblyRef = AssemblyRefTable this
-
+    // AssemblyRefProcessor // 0x24 // Not used when writing a PE file
+    // AssemblyRefOS // 0x25 // Not used when writing a PE file
+    // (0x26)
+    // member File
+    // (0x27)
+    // member ExportedType
+    // (0x28)
+    // member ManifestResource
     /// (0x29)
     member val NestedClass =
         Seq.choose
@@ -612,6 +658,12 @@ type MetadataBuilderState () as this =
                     |> Some
                 | _ -> None)
             typeDef
+    // (0x2A)
+    // member GenericParam
+    // (0x2B)
+    // member MethodSpec
+    // (0x2C)
+    // member GenericParamConstraint
 
     member internal this.FindType t: Handle<_> option =
         // TODO: Search in the TypeDefTable as well.
