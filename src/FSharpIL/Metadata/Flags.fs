@@ -1,8 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Reflection
-
-type private IsReadOnly = System.Runtime.CompilerServices.IsReadOnlyAttribute
+open System.Runtime.CompilerServices
 
 type IFlags<'Flags when 'Flags :> System.Enum> =
     abstract Flags: 'Flags

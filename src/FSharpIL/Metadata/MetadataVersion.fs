@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Text
+open System.Runtime.CompilerServices
 
 open FSharpIL
 

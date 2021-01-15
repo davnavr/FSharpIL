@@ -5,6 +5,7 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.Collections.ObjectModel
 open System.Reflection
+open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 
@@ -271,6 +272,10 @@ type TypeHandle<'Type> private (owner: obj, t: 'Type, row: TypeDef) =
         member _.Owner = owner
         member _.ValueType = typeof<'Type>
 
+[<Struct; IsReadOnly>]
+type AMuchBetterReplacementForTypeHandle<'Type> internal (handle: Handle<TypeDef>) =
+    member _.Handle = handle
+
 /// <summary>
 /// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
 /// </summary>
@@ -410,7 +415,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
 /// <summary>Represents a row in the Field table (II.22.15).</summary>
 [<Sealed>]
-type FieldRow internal (flags, name, signature) =
+type FieldRow internal (flags, name, signature) = // TODO: How to allow different types for signature.
     member _.Flags: FieldAttributes = flags
     member _.Name: Identifier = name
     member _.Signature = signature
@@ -432,19 +437,20 @@ type FieldRow internal (flags, name, signature) =
 type IField =
     abstract Row : unit -> FieldRow
 
-type Field<'Flags when 'Flags :> IFlags<FieldAttributes>> =
+type Field<'Flags, 'Signature when 'Flags :> IFlags<FieldAttributes> and 'Signature :> IHandleValue and 'Signature : equality> =
     { Flags: 'Flags
       FieldName: Identifier
-      Signature: unit }
+      Signature: 'Signature }
 
-    interface IField with
-        member this.Row() = FieldRow(this.Flags.Flags, this.FieldName, this.Signature)
+    interface IField with member this.Row() = FieldRow(this.Flags.Flags, this.FieldName, ())
+
+    interface IHandleValue with member this.Handles = this.Signature.Handles
 
 /// <summary>Represents a non-static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
-type InstanceField = Field<InstanceFieldFlags>
+type InstanceField = Field<InstanceFieldFlags, FieldSignature>
 
 /// <summary>Represents a static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
-type StaticField = Field<StaticFieldFlags>
+type StaticField = Field<StaticFieldFlags, FieldSignature>
 
 // TODO: Come up with a better name for the type.
 type FieldChoice =
@@ -461,7 +467,7 @@ type FieldChoice =
 /// <summary>
 /// Represents a static <see cref="T:FSharpIL.Metadata.FieldRow"/> defined inside of the <c>&lt;Module&gt;</c> pseudo-class.
 /// </summary>
-type GlobalField = Field<GlobalFieldFlags>
+type GlobalField = Field<GlobalFieldFlags, FieldSignature>
 
 // TODO: Make computation expressions for fields and methods.
 /// <summary>Represents a set of fields owned by a <see cref="T:FSharpIL.Metadata.TypeDef"/>.</summary>
@@ -561,10 +567,87 @@ type AssemblyRefTable internal (state: MetadataBuilderState) =
         member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
 
 // II.22.32
-[<Struct; System.Runtime.CompilerServices.IsReadOnly>]
+[<Struct; IsReadOnly>]
 type NestedClass =
     { NestedClass: Handle<TypeDef>
       EnclosingClass: Handle<TypeDef> }
+
+/// Represents the signature of a method or global function (II.23.2.1).
+type MethodDefSignature =
+    { HasThis: bool }
+
+/// Captures the definition of a field or global variable (II.23.2.4).
+[<Struct; IsReadOnly>]
+type FieldSignature =
+    { CustomMod: ImmutableArray<CustomModifier>
+      FieldType: ReturnType }
+
+    interface IHandleValue with
+        member this.Handles =
+            let modifiers = this.CustomMod
+            let ftype = this.FieldType
+            seq {
+                for { ModifierType = t } in modifiers do
+                    match t with
+                    | TypeDef (IHandle handle)
+                    | TypeRef (IHandle handle) -> handle
+
+                // ftype
+            }
+
+/// II.23.2.7
+[<Struct; IsReadOnly>]
+type CustomModifier =
+    { Required: bool
+      ModifierType: TypeDefOrRefOrSpecEncoded }
+
+/// II.23.2.8
+type TypeDefOrRefOrSpecEncoded =
+    | TypeDef of Handle<TypeDef>
+    | TypeRef of Handle<TypeRef>
+    // TypeSpec // of ?
+
+/// II.23.2.11
+[<RequireQualifiedAccess>]
+type ReturnType =
+    /// <summary>Represents the <see cref="T:System.Boolean"/> type.</summary>
+    | Boolean
+    /// <summary>Represents the <see cref="T:System.Char"/> type.</summary>
+    | Char
+    /// <summary>Represents the <see cref="T:System.SByte"/> type.</summary>
+    | I1
+    /// <summary>Represents the <see cref="T:System.Byte"/> type.</summary>
+    | U1
+    /// <summary>Represents the <see cref="T:System.Int16"/> type.</summary>
+    | I2
+    /// <summary>Represents the <see cref="T:System.UInt16"/> type.</summary>
+    | U2
+    /// <summary>Represents the <see cref="T:System.Int32"/> type.</summary>
+    | I4
+    /// <summary>Represents the <see cref="T:System.UInt32"/> type.</summary>
+    | U4
+    /// <summary>Represents the <see cref="T:System.Int64"/> type.</summary>
+    | I8
+    /// <summary>Represents the <see cref="T:System.UInt64"/> type.</summary>
+    | U8
+    | R4
+    | R8
+    | I
+    | U
+    | Array // of ?
+    | FunctionPointer // of MethodDefSig
+    //| FunctionPointer // of MethodRefSig
+    | GenericInstantiation // of ?
+    //| MVAR // of ?
+    /// <summary>Represents the <see cref="T:System.Object"/> type.</summary>
+    | Object
+    //| PTR // of ?
+    //| PTR // of ?
+    /// <summary>Represents the <see cref="T:System.String"/> type.</summary>
+    | String
+    | SZArray // of ?
+    | ValueType // of TypeDefOrRefOrSpecEncoded
+    //| Var // of ?
 
 [<Sealed>]
 type MetadataBuilderState () as this =
@@ -689,5 +772,9 @@ type MetadataBuilderState () as this =
                 |> invalidArg "item"
 
 [<AutoOpen>]
-module ExtraHandlePatterns =
+module ExtraPatterns =
+    let (|OptionalModifier|RequiredModifier|) (cmod: CustomModifier) =
+        if cmod.Required then RequiredModifier cmod else OptionalModifier cmod
+
+    // [<System.Obsolete>]
     let (|TypeHandle|) (handle: TypeHandle<_>) = handle.Type, handle.Row
