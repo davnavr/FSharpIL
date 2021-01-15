@@ -1,30 +1,41 @@
 ﻿namespace FSharpIL.Metadata
 
-open System
 open System.Text
 
+open FSharpIL
+
+[<Struct; IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
 type MetadataVersion =
     internal
-    | MetadataVersion of string
+    | MetadataVersion of byte * byte[]
 
     override this.ToString() =
-        let (MetadataVersion version) = this in version
+        let (MetadataVersion (len, bytes)) = this
+        Array.take (int len) bytes |> Encoding.UTF8.GetString
 
-    // NOTE: Should always be <= 255, and the length should include the null terminator.
-    member this.Length =
-        let length = uint32 (this.ToString().Length) + 1u
-        (length - 1u) - ((length - 1u) % 4u) + 4u
+    /// The length of the version string including the null terminator, rounded up to a multiple of 4.
+    member this.Length = let (MetadataVersion (_, bytes)) = this in uint32 bytes.Length
 
 [<RequireQualifiedAccess>]
 module MetadataVersion =
-    let ofString (str: string) =
-        if str.Length < 255
-        then MetadataVersion str |> Some
+    let tryOfStr (str: string) =
+        let str' = Encoding.UTF8.GetBytes str
+        let len = Round.upTo 4 (str'.Length + 1)
+        if len < 256 then
+            let bytes =
+                Array.init
+                    len
+                    (fun i ->
+                        if i < str'.Length
+                        then Array.get str' i
+                        else 0uy)
+            MetadataVersion(byte str'.Length, bytes) |> Some
         else None
 
-    let toArray (MetadataVersion str as version) =
-        let bytes = int version.Length |> Array.zeroCreate<byte>
-        let str' = Encoding.UTF8.GetBytes str
-        Array.Copy(str', bytes, str'.Length)
-        bytes
+    let ofStr (str: string) =
+        match tryOfStr str with
+        | Some ver -> ver
+        | None -> invalidArg "str" "Version strings are limited to a length of 255 bytes."
+
+    let toArray (MetadataVersion (_, bytes)) = bytes

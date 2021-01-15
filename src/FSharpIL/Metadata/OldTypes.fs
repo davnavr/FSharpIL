@@ -215,7 +215,7 @@ type MetadataRoot =
     static member Default =
         { MajorVersion = 1us
           MinorVersion = 1us
-          Version = MetadataVersion "v4.0.30319"
+          Version = MetadataVersion.ofStr "v4.0.30319"
           Streams = MetadataStreams.Default }
 
 // II.25.3.3.1

@@ -10,15 +10,32 @@ open FSharpIL.Metadata
 [<Tests>]
 let tests =
     testList "metadata" [
-        testCase "metadata version is valid" <| fun() ->
-            let actual =
-                MetadataVersion.ofString "v4.0.30319"
-                |> Option.get
-                |> MetadataVersion.toArray
-            Expect.equal
-                actual
-                [| 0x76uy; 0x34uy; 0x2Euy; 0x30uy; 0x2Euy; 0x33uy; 0x30uy; 0x33uy; 0x31uy; 0x39uy; 0uy; 0uy |]
-                "the byte representation of the metadata version should match"
+        ftestList "version" [
+            let testVersion name body =
+                testPropertyWithConfig
+                    Generate.config
+                    name
+                    (fun (VersionString ver) -> body ver)
+
+            testVersion "byte length is a multiple of 4" <| fun ver ->
+                (MetadataVersion.ofStr ver |> MetadataVersion.toArray |> Array.length) % 4 = 0
+
+            testVersion "byte length is greater than or equal to string length" <| fun ver ->
+                let bytes = MetadataVersion.ofStr ver |> MetadataVersion.toArray
+                bytes.Length >= ver.Length
+
+            testVersion "string representation as version equals original" <| fun ver ->
+                let ver' = MetadataVersion.ofStr ver
+                (string ver' |> MetadataVersion.ofStr) = ver'
+
+            testVersion "version as string matches original string" <| fun expected ->
+                let ver = MetadataVersion.ofStr expected
+                let actual = string ver
+                actual = expected
+
+            testVersion "last byte of version string bytes is null" <| fun ver ->
+                (MetadataVersion.ofStr ver |> MetadataVersion.toArray |> Array.last) = 0uy
+        ]
 
         testList "computation expression" [
             testCase "variable can be used" <| fun() ->
