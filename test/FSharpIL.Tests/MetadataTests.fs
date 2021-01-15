@@ -10,7 +10,7 @@ open FSharpIL.Metadata
 [<Tests>]
 let tests =
     testList "metadata" [
-        ftestList "version" [
+        testList "version" [
             let testVersion name body =
                 testPropertyWithConfig
                     Generate.config
@@ -51,7 +51,7 @@ let tests =
                         let! token = assemblyRef expected
                         TypeRef.Add
                             { ResolutionScope = ResolutionScope.AssemblyRef token
-                              TypeName = NonEmptyName.ofStr "Test"
+                              TypeName = Identifier.ofStr "Test"
                               TypeNamespace = "" }
                     }
                     |> ValidationResult.get
@@ -65,7 +65,7 @@ let tests =
             testCase "error skips rest of expression" <| fun() ->
                 let mutable run = false
                 metadataBuilder {
-                    fun _ -> MissingType("", Unchecked.defaultof<NonEmptyName>) |> Error
+                    fun _ -> MissingType("", Unchecked.defaultof<Identifier>) |> Error
                     run <- true
                 }
                 |> ignore
@@ -77,7 +77,7 @@ let tests =
                         TypeDef.AddStruct
                             { Access = TypeVisibility.Public
                               Flags = StructFlags.Zero
-                              StructName = NonEmptyName.ofStr "MyStruct"
+                              StructName = Identifier.ofStr "MyStruct"
                               TypeNamespace = "Testing"
                               Fields = FieldSet()
                               Methods = () }
@@ -94,7 +94,7 @@ let tests =
                                     BeforeFieldInit = true
                                     StringFormat = UnicodeClass }
                                 |> ConcreteClassFlags
-                              ClassName = NonEmptyName.ofStr "MyClass"
+                              ClassName = Identifier.ofStr "MyClass"
                               TypeNamespace = ""
                               Extends = Extends.Null
                               Fields = FieldSet()
@@ -120,12 +120,12 @@ let tests =
                                   HashValue = None }
                         TypeRef.Add
                             { ResolutionScope = ResolutionScope.AssemblyRef mscorlib
-                              TypeName = NonEmptyName.ofStr "ValueType"
+                              TypeName = Identifier.ofStr "ValueType"
                               TypeNamespace = "System" }
                         TypeDef.AddStruct
                             { Access = TypeVisibility.NotPublic
                               Flags = StructFlags { ClassFlags.Zero with BeforeFieldInit = true }
-                              StructName = NonEmptyName.ofStr "Thing"
+                              StructName = Identifier.ofStr "Thing"
                               TypeNamespace = "Thing"
                               Fields = FieldSet()
                               Methods = () }
@@ -136,5 +136,43 @@ let tests =
                     (def.Item.Flags &&& TypeAttributes.Sealed)
                     TypeAttributes.Sealed
                     "user-defined value types should always have the Sealed flag"
+
+            testCase "nested classes work" <| fun() ->
+                let metadata =
+                    metadataBuilder {
+                        let! mscorlib =
+                            assemblyRef
+                                { Version = Version(5, 0, 0, 0)
+                                  Flags = ()
+                                  PublicKeyOrToken = NoPublicKey
+                                  Name = AssemblyName.ofStr "System.Private.CoreLib"
+                                  Culture = NullCulture
+                                  HashValue = None }
+                        let! (object: Handle<_>) =
+                            TypeRef.Add
+                                { ResolutionScope = ResolutionScope.AssemblyRef mscorlib
+                                  TypeName = Identifier.ofStr "Object"
+                                  TypeNamespace = "System" }
+                        let! (TypeHandle (parent, parent')) =
+                            TypeDef.AddClass
+                                { Access = TypeVisibility.Public
+                                  Extends = Extends.TypeRef object
+                                  Flags = ConcreteClassFlags ClassFlags.Zero
+                                  ClassName = Identifier.ofStr "Parent"
+                                  TypeNamespace = ""
+                                  Fields = FieldSet()
+                                  Methods = () }
+                        TypeDef.AddClass
+                            { Access = TypeVisibility.NestedPublic parent'
+                              Extends = Extends.ConcreteClass parent
+                              Flags = ConcreteClassFlags ClassFlags.Zero
+                              ClassName = Identifier.ofStr "Nested"
+                              TypeNamespace = ""
+                              Fields = FieldSet()
+                              Methods = () }
+                    }
+                    |> ValidationResult.get
+                let nested = Seq.head metadata.NestedClass
+                Expect.equal nested.NestedClass.Item.TypeName (Identifier.ofStr "Nested") "nested classes should have an entry in the NestedClass table"
         ]
     ]

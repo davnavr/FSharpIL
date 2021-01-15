@@ -34,6 +34,7 @@ type MetadataBuilder internal () =
             match one state with
             | Ok _ -> two state
             | Error err -> Error err
+    // TODO: Fix, this overload can make it difficult to distinguish which method should be used.
     member inline _.Bind(expr: MetadataBuilderState -> 'T, body: 'T -> MetadataBuilderState -> Result<_, ValidationError>) =
         fun state ->
             let result = expr state

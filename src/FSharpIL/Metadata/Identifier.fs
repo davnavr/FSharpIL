@@ -2,19 +2,19 @@
 
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
-type NonEmptyName = // TODO: Rename to Identifier.
+type Identifier = // TODO: Rename to Identifier.
     internal
-    | NonEmptyName of string
+    | Identifier of string
 
-    override this.ToString() = let (NonEmptyName name) = this in name
+    override this.ToString() = let (Identifier name) = this in name
 
 [<RequireQualifiedAccess>]
-module NonEmptyName =
+module Identifier =
     let tryOfStr str =
         match str with
         | null
         | "" -> None
-        | _ -> NonEmptyName str |> Some
+        | _ -> Identifier str |> Some
 
     let ofStr str =
         match tryOfStr str with
@@ -22,5 +22,5 @@ module NonEmptyName =
         | None -> invalidArg "str" "The name cannot be empty."
 
 [<AutoOpen>]
-module NonEmptyNamePatterns =
-    let (|NonEmptyName|) (NonEmptyName name) = name
+module IdentifierPatterns =
+    let (|Identifier|) (Identifier name) = name

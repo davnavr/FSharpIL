@@ -10,15 +10,15 @@ open FSharpIL.Metadata
 
 [<RequireQualifiedAccess>]
 module internal SystemType =
-    let Delegate = "System", NonEmptyName "Delegate"
-    let Enum = "System", NonEmptyName "Enum"
-    let ValueType = "System", NonEmptyName "ValueType"
+    let Delegate = "System", Identifier "Delegate"
+    let Enum = "System", Identifier "Enum"
+    let ValueType = "System", Identifier "ValueType"
 
 /// <summary>
 /// Represents a violation of a Common Language Specification rule (I.7).
 /// </summary>
 type ClsViolation =
-    /// A violation of rule 19 "CLS-compliant interfaces shall not define...fields".
+    /// A violation of rule 19, which states that "CLS-compliant interfaces shall not define...fields".
     | InterfaceContainsFields of InterfaceDef
 
 type ValidationWarning =
@@ -29,7 +29,7 @@ type ValidationWarning =
 
 type ValidationError =
     | DuplicateValue of IHandleValue
-    | MissingType of ns: string * NonEmptyName
+    | MissingType of ns: string * Identifier
 
     override this.ToString() =
         match this with
@@ -68,14 +68,14 @@ type Table<'Value when 'Value :> IHandleValue> internal (state: MetadataBuilderS
 /// II.22.30
 type ModuleTable =
     { // Generation
-      Name: NonEmptyName
+      Name: Identifier
       Mvid: Guid
       // EncId
       // EncBaseId
       }
 
     static member Default =
-        { Name = NonEmptyName "Default.dll"
+        { Name = Identifier "Default.dll"
           Mvid = Guid.Empty } // TODO: What should the default Mvid be?
 
 [<NoComparison; StructuralEquality>]
@@ -91,7 +91,7 @@ type ResolutionScope =
 [<NoComparison; CustomEquality>]
 type TypeRef =
     { ResolutionScope: ResolutionScope
-      TypeName: NonEmptyName
+      TypeName: Identifier
       TypeNamespace: string }
 
     interface IEquatable<TypeRef> with
@@ -113,7 +113,7 @@ type TypeRef =
 type TypeRefTable internal (state: MetadataBuilderState) =
     inherit Table<TypeRef>(state)
 
-    let search = Dictionary<string * NonEmptyName, TypeRef> 8
+    let search = Dictionary<string * Identifier, TypeRef> 8
 
     /// <summary>
     /// Searches for a type with the specified name and namespace, with a resolution scope
@@ -151,7 +151,11 @@ type TypeRefTable internal (state: MetadataBuilderState) =
 [<NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]
 type Extends =
-    | TypeDef of Handle<TypeDef>
+    /// Extend a class that is not sealed or abstract.
+    | ConcreteClass of Handle<ConcreteClassDef>
+    /// Extend an abstract class.
+    | AbstractClass of Handle<AbstractClassDef>
+    /// Extends a type referenced in another assembly.
     | TypeRef of Handle<TypeRef>
     // | TypeSpec of Handle<?>
     /// <summary>
@@ -204,13 +208,13 @@ type TypeVisibility =
 type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 'Field :> IField> =
     { Access: TypeVisibility
       Flags: 'Flags
-      ClassName: NonEmptyName
+      ClassName: Identifier
       TypeNamespace: string
       Extends: Extends // TODO: How to ensure that the base class is not sealed?
       Fields: FieldSet<'Field> // TODO: Rename from FieldList to Fields
       Methods: 'Method } // TODO: Rename from MethodList to Methods
 
-/// Represents an unsealed class.
+/// Represents a class that is not sealed or abstract.
 type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, unit>
 /// Represents an abstract class.
 type AbstractClassDef = ClassDef<AbstractClassFlags, FieldChoice, unit>
@@ -224,7 +228,7 @@ type StaticClassDef = ClassDef<StaticClassFlags, StaticField, unit>
 type DelegateDef =
     { Access: TypeVisibility
       Flags: DelegateFlags
-      DelegateName: NonEmptyName
+      DelegateName: Identifier
       TypeNamespace: string }
 
 /// <summary>
@@ -232,14 +236,14 @@ type DelegateDef =
 /// </summary>
 type EnumDef =
   { Access: TypeVisibility
-    EnumName: NonEmptyName
+    EnumName: Identifier
     TypeNamespace: string
     Values: unit }
 
 type InterfaceDef =
     { Access: TypeVisibility
       Flags: InterfaceFlags
-      InterfaceName: NonEmptyName
+      InterfaceName: Identifier
       TypeNamespace: string
       Fields: FieldSet<StaticField>
       Methods: unit } // TODO: Allow static methods in interfaces, though they violate CLS rules.
@@ -251,10 +255,21 @@ type InterfaceDef =
 type StructDef =
    { Access: TypeVisibility
      Flags: StructFlags
-     StructName: NonEmptyName
+     StructName: Identifier
      TypeNamespace: string
      Fields: FieldSet<FieldChoice>
      Methods: unit }
+
+[<Struct; IsReadOnly>]
+type TypeHandle<'Type> private (owner: obj, t: 'Type, row: TypeDef) =
+    internal new (t: 'Type, Handle(owner, row)) = TypeHandle<'Type>(owner, t, row)
+
+    member _.Type = Handle(owner, t)
+    member _.Row = Handle(owner, row)
+
+    interface IHandle with
+        member _.Owner = owner
+        member _.ValueType = typeof<'Type>
 
 /// <summary>
 /// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
@@ -267,7 +282,7 @@ type StructDef =
 [<Sealed>]
 type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
     member _.Flags: TypeAttributes = flags
-    member _.TypeName: NonEmptyName = name
+    member _.TypeName: Identifier = name
     member _.TypeNamespace: string = ns
     member _.Extends: Extends = extends
     member _.FieldList: ImmutableArray<FieldRow> = fields
@@ -289,7 +304,8 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
         member _.Handles =
             seq {
                 match extends with
-                | Extends.TypeDef (IHandle handle)
+                | Extends.ConcreteClass (IHandle handle)
+                | Extends.AbstractClass (IHandle handle)
                 | Extends.TypeRef (IHandle handle) -> handle
                 | Extends.Null -> ()
 
@@ -310,6 +326,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
             def.Access.EnclosingClass
         )
         |> state.TypeDef.GetHandle
+        |> Result.map (fun def' -> TypeHandle(def, def'))
 
     static member AddDelegate({ Flags = Flags flags } as def: DelegateDef) (state: MetadataBuilderState) =
         match state.FindType SystemType.Delegate with
@@ -324,6 +341,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.Access.EnclosingClass
             )
             |> state.TypeDef.GetHandle
+            |> Result.map (fun def' -> TypeHandle(def, def'))
         | None -> MissingType SystemType.Delegate |> Error
 
     static member AddEnum(def: EnumDef) (state: MetadataBuilderState) =
@@ -339,6 +357,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.Access.EnclosingClass
             )
             |> state.TypeDef.GetHandle
+            |> Result.map (fun def' -> TypeHandle(def, def'))
         | None -> MissingType SystemType.Enum |> Error
 
     static member AddInterface({ Flags = Flags flags } as def: InterfaceDef) (state: MetadataBuilderState) =
@@ -353,6 +372,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.Access.EnclosingClass
             )
             |> state.TypeDef.GetHandle
+            |> Result.map (fun def' -> TypeHandle(def, def'))
         if def.Fields.Count > 0 then InterfaceContainsFields def |> state.ClsViolations.Add
         intf
 
@@ -370,6 +390,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.Access.EnclosingClass
             )
             |> state.TypeDef.GetHandle
+            |> Result.map (fun def' -> TypeHandle(def, def'))
         | None -> MissingType SystemType.ValueType |> Error
 
 [<Sealed>]
@@ -391,7 +412,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 [<Sealed>]
 type FieldRow internal (flags, name, signature) =
     member _.Flags: FieldAttributes = flags
-    member _.Name: NonEmptyName = name
+    member _.Name: Identifier = name
     member _.Signature = signature
 
     override this.Equals obj =
@@ -413,7 +434,7 @@ type IField =
 
 type Field<'Flags when 'Flags :> IFlags<FieldAttributes>> =
     { Flags: 'Flags
-      Name: NonEmptyName
+      Name: Identifier
       Signature: unit }
 
     interface IField with
@@ -575,3 +596,7 @@ type MetadataBuilderState () as this =
                     handle.ValueType.Name
                     (value.GetType().Name)
                 |> invalidArg "item"
+
+[<AutoOpen>]
+module ExtraHandlePatterns =
+    let (|TypeHandle|) (handle: TypeHandle<_>) = handle.Type, handle.Row

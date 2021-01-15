@@ -19,10 +19,11 @@ type Handle<'Value> =
     private
     | Handle of obj * 'Value
 
+    member this.Owner = let (Handle (owner, _)) = this in owner
     member this.Item = let (Handle (_, value)) = this in value
 
     interface IHandle with
-        member this.Owner = let (Handle (owner, _)) = this in owner
+        member this.Owner = this.Owner
         member this.ValueType = this.Item.GetType()
 
 [<Sealed>]
