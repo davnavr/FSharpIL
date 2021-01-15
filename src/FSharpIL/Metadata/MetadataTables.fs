@@ -17,8 +17,9 @@ module internal SystemType =
 /// <summary>
 /// Represents a violation of a Common Language Specification rule (I.7).
 /// </summary>
-type ClsViolation = // TODO: Rename to CLSViolation
-    | PointerTypeUsage // of
+type ClsViolation =
+    /// A violation of rule 19 "CLS-compliant interfaces shall not define...fields".
+    | InterfaceContainsFields of InterfaceDef
 
 type ValidationWarning =
     /// 10
@@ -241,7 +242,7 @@ type InterfaceDef =
       InterfaceName: NonEmptyName
       TypeNamespace: string
       Fields: FieldSet<StaticField>
-      Methods: unit }
+      Methods: unit } // TODO: Allow static methods in interfaces, though they violate CLS rules.
 
 /// <summary>
 /// Represents a user-defined value type, which is a <see cref="T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:System.ValueType"/>.
@@ -297,7 +298,6 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 | None -> ()
             }
 
-    // TODO: Add functions for adding nested types.
     // TODO: Enforce CLS checks and warnings.
     static member AddClass({ Flags = Flags flags } as def: ClassDef<_, _, _>) (state: MetadataBuilderState) =
         TypeDef (
@@ -342,16 +342,19 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
         | None -> MissingType SystemType.Enum |> Error
 
     static member AddInterface({ Flags = Flags flags } as def: InterfaceDef) (state: MetadataBuilderState) =
-        TypeDef (
-            flags ||| def.Access.Flags,
-            def.InterfaceName,
-            def.TypeNamespace,
-            Extends.Null,
-            def.Fields.ToImmutable(),
-            (),
-            def.Access.EnclosingClass
-        )
-        |> state.TypeDef.GetHandle
+        let intf =
+            TypeDef (
+                flags ||| def.Access.Flags,
+                def.InterfaceName,
+                def.TypeNamespace,
+                Extends.Null,
+                def.Fields.ToImmutable(),
+                (),
+                def.Access.EnclosingClass
+            )
+            |> state.TypeDef.GetHandle
+        if def.Fields.Count > 0 then InterfaceContainsFields def |> state.ClsViolations.Add
+        intf
 
     /// <summary>Defines a value type, which is a class that inherits from <see cref="T:System.ValueType"/>.</summary>
     static member AddStruct({ Flags = Flags flags } as def: StructDef) (state: MetadataBuilderState) =
@@ -375,6 +378,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
     // TODO: Add the <Module> class used for global variables and functions, which should be the first entry.
 
+    // TODO: Enforce common CLS checks and warnings for types.
     member internal _.GetHandle(t: TypeDef) = defs.GetHandle t
 
     interface ITable<TypeDef> with
@@ -444,6 +448,8 @@ type FieldSet<'Field when 'Field :> IField> (capacity: int) =
     let fields = HashSet<FieldRow> capacity
 
     new() = FieldSet(1)
+
+    member _.Count: int = fields.Count
 
     member _.Add(field: 'Field) =
         let field' = field.Row()
