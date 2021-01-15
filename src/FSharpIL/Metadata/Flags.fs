@@ -165,7 +165,7 @@ type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> =
     member this.Flags =
         let mutable flags = this.Visibility.Flags
         if this.NotSerialized then flags <- flags ||| FieldAttributes.NotSerialized
-        if this.SpecialName then flags <- flags ||| FieldAttributes.SpecialName
+        if this.SpecialName then flags <- flags ||| FieldAttributes.SpecialName ||| FieldAttributes.RTSpecialName
         flags
 
 [<IsReadOnly; Struct>]
@@ -187,6 +187,7 @@ type GlobalFieldFlags private (flags: FieldAttributes) =
     interface IFlags<FieldAttributes> with member _.Flags = flags
 
 // NOTE: For both methods and fields, RTSpecialName is set if SpecialName is set
+// NOTE: For methods, RTSpecialName and SpecialName is set when it is a ctor or cctor
 
 [<AutoOpen>]
 module Flags =

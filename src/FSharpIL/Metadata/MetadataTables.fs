@@ -434,11 +434,11 @@ type IField =
 
 type Field<'Flags when 'Flags :> IFlags<FieldAttributes>> =
     { Flags: 'Flags
-      Name: Identifier
+      FieldName: Identifier
       Signature: unit }
 
     interface IField with
-        member this.Row() = FieldRow(this.Flags.Flags, this.Name, this.Signature)
+        member this.Row() = FieldRow(this.Flags.Flags, this.FieldName, this.Signature)
 
 /// <summary>Represents a non-static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
 type InstanceField = Field<InstanceFieldFlags>
@@ -463,12 +463,13 @@ type FieldChoice =
 /// </summary>
 type GlobalField = Field<GlobalFieldFlags>
 
+// TODO: Make computation expressions for fields and methods.
 /// <summary>Represents a set of fields owned by a <see cref="T:FSharpIL.Metadata.TypeDef"/>.</summary>
 [<Sealed>]
 type FieldSet<'Field when 'Field :> IField> (capacity: int) =
     let fields = HashSet<FieldRow> capacity
 
-    new() = FieldSet(1)
+    new() = FieldSet 1
 
     member _.Count: int = fields.Count
 
@@ -479,6 +480,42 @@ type FieldSet<'Field when 'Field :> IField> (capacity: int) =
         else Error field
 
     member _.ToImmutable(): ImmutableArray<FieldRow> = fields.ToImmutableArray()
+
+[<Sealed>]
+type MethodDef internal (iflags, attr, name, signature, paramList) =
+    member _.ImplFlags = iflags // TODO: Open System.Runtime.CompilerServices
+    member _.Flags: MethodAttributes = attr
+    member _.Name: Identifier = name
+    member _.Signature = signature
+    member _.ParamList: ImmutableArray<_> = paramList
+
+type IMethod =
+    abstract Def : unit -> MethodDef
+
+type Method<'Flags when 'Flags :> IFlags<MethodAttributes>> =
+    { ImplFlags: unit
+      Flags: 'Flags
+      MethodName: Identifier
+      Signature: unit // TODO: How to use generic parameters?
+      ParamList: unit }
+
+type InstanceMethod = unit
+type AbstractMethod = unit
+type StaticMethod = unit
+type Constructor = unit
+type ClassConstructor = unit
+
+[<Sealed>]
+type MethodSet<'Method> (capacity: int) =
+    let methods = HashSet<_> capacity
+
+    new() = MethodSet 1
+
+    member _.Count: int = methods.Count
+
+    member _.Add(method: 'Method) = invalidOp "bad"
+
+    member _.ToImmutable(): ImmutableArray<FieldRow> = methods.ToImmutableArray()
 
 /// II.22.2
 type Assembly =
@@ -554,6 +591,8 @@ type MetadataBuilderState () as this =
     member _.TypeDef: TypeDefTable = typeDef
     // (0x04)
     // Field
+    // (0x06)
+    // Method
 
     /// (0x20)
     member val Assembly: Assembly option = None with get, set // 0x20 // TODO: Figure out if None is a good default value.
