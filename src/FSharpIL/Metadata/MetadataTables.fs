@@ -212,8 +212,8 @@ type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 
       TypeNamespace: string
       Extends: Extends
       /// <summary>Corresponds to the fields of the type declared in the <c>Field</c> table.</summary>
-      Fields: FieldSet<'Field> // TODO: Rename from FieldList to Fields
-      Methods: 'Method } // TODO: Rename from MethodList to Methods
+      Fields: FieldList<'Field>
+      Methods: unit } // TODO: Rename from MethodList to Methods
 
 /// Represents a class that is not sealed or abstract.
 type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, unit>
@@ -246,7 +246,7 @@ type InterfaceDef =
       Flags: InterfaceFlags
       InterfaceName: Identifier
       TypeNamespace: string
-      Fields: FieldSet<StaticField>
+      Fields: FieldList<StaticField>
       Methods: unit } // TODO: Allow static methods in interfaces, though they violate CLS rules.
 
 /// <summary>
@@ -258,7 +258,7 @@ type StructDef =
      Flags: StructFlags
      StructName: Identifier
      TypeNamespace: string
-     Fields: FieldSet<FieldChoice>
+     Fields: FieldList<FieldChoice>
      Methods: unit }
 
 [<Struct; IsReadOnly>]
@@ -323,7 +323,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
             def.ClassName,
             def.TypeNamespace,
             def.Extends,
-            def.Fields.ToImmutable(),
+            def.Fields.ToImmutableArray(),
             (),
             def.Access.EnclosingClass
         )
@@ -369,7 +369,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.InterfaceName,
                 def.TypeNamespace,
                 Extends.Null,
-                def.Fields.ToImmutable(),
+                def.Fields.ToImmutableArray(),
                 (),
                 def.Access.EnclosingClass
             )
@@ -387,7 +387,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.StructName,
                 def.TypeNamespace,
                 Extends.TypeRef super,
-                def.Fields.ToImmutable(),
+                def.Fields.ToImmutableArray(),
                 (),
                 def.Access.EnclosingClass
             )
@@ -435,6 +435,8 @@ type FieldRow internal (flags, name, signature) = // TODO: How to allow differen
 type IField =
     abstract Row : unit -> FieldRow
 
+type FieldList<'Field when 'Field :> IField> = MemberList<'Field, FieldRow>
+
 type Field<'Flags, 'Signature when 'Flags :> IFlags<FieldAttributes> and 'Signature :> IHandleValue and 'Signature : equality> =
     { Flags: 'Flags
       FieldName: Identifier
@@ -467,9 +469,11 @@ type FieldChoice =
 /// </summary>
 type GlobalField = Field<GlobalFieldFlags, FieldSignature>
 
+// TODO: Make FieldSet and MethodSet immutable collections?
 // TODO: Make computation expressions for fields and methods.
-/// <summary>Represents a set of fields owned by a <see cref="T:FSharpIL.Metadata.TypeDef"/>.</summary>
+/// <summary>Represents a set of fields owned by a <see cref="T:FSharpIL.Metadata.TypeDef"/> within the <c>Field</c> table.</summary>
 [<Sealed>]
+[<Obsolete>]
 type FieldSet<'Field when 'Field :> IField> (capacity: int) =
     let fields = HashSet<FieldRow> capacity
 
@@ -490,7 +494,7 @@ type MethodBody = unit
 
 [<Sealed>]
 type MethodDef internal (body, iflags, attr, name, signature, paramList) =
-    /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the method body</summary>
+    /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the method body.</summary>
     member _.Body = body
     member _.ImplFlags = iflags // TODO: Open System.Runtime.CompilerServices
     member _.Flags: MethodAttributes = attr
@@ -509,6 +513,8 @@ type MethodDef internal (body, iflags, attr, name, signature, paramList) =
 type IMethod =
     abstract Def : unit -> MethodDef
 
+type MethodList<'Method when 'Method :> IMethod> = MemberList<'Method, MethodDef>
+
 type Method<'Body, 'Flags when 'Flags :> IFlags<MethodAttributes>> =
     { Body: 'Body
       ImplFlags: unit
@@ -524,20 +530,6 @@ type StaticMethod = Method<MethodBody, StaticMethodFlags>
 type Constructor = Method<MethodBody, ConstructorFlags>
 /// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
 type ClassConstructor = Method<MethodBody, ClassConstructorFlags>
-
-[<Sealed>]
-type MethodSet<'Method when 'Method :> IMethod> (capacity: int) =
-    let methods = HashSet<_> capacity
-
-    new() = MethodSet 1
-
-    member _.Count: int = methods.Count
-
-    member _.Add(method: 'Method) =
-        
-        invalidOp "bad"
-
-    member _.ToImmutable(): ImmutableArray<FieldRow> = methods.ToImmutableArray()
 
 /// II.22.2
 type Assembly =

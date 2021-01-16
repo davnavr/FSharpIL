@@ -73,10 +73,10 @@ let tests =
                         { Access = TypeVisibility.Public
                           ClassName = Identifier.ofStr "Program"
                           Extends = Extends.TypeRef object
-                          Fields = FieldSet()
+                          Fields = FieldList.Empty
                           Flags = StaticClassFlags ClassFlags.Zero 
                           TypeNamespace = "HelloWorld"
-                          Methods = MethodSet() } // TODO: Add methods
+                          Methods = () } // TODO: Add methods
                 }
                 |> ValidationResult.get
             let pe = CliHeader.Default tables |> PEFile.ofMetadata IsExe

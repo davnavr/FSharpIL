@@ -71,3 +71,6 @@ type MetadataBuilder internal (mdle) =
 module MetadataBuilder =
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
     let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly
+
+    [<GeneralizableValue>]
+    let methods<'Method when 'Method :> IMethod> = MemberListBuilder<'Method, _> (fun mthd -> mthd.Def())
