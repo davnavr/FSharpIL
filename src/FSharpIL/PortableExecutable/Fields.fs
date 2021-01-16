@@ -151,19 +151,3 @@ type NTSpecificFields =
           HeapReserveSize = 0x100000u
           HeapCommitSize = 0x1000u
           LoaderFlags = 0u }
-
-type PEFile =
-    { FileHeader: CoffHeader
-      StandardFields: StandardFields
-      NTSpecificFields: NTSpecificFields
-      Sections: PESections }
-
-    member inline this.DataDirectories = this.Sections.DataDirectories
-    member inline this.SectionTable = this.Sections.SectionTable
-    member inline this.CliHeader = this.DataDirectories.CliHeader |> Option.map (fun header -> header.Header)
-
-    static member Default =
-        { FileHeader = CoffHeader.Default
-          StandardFields = StandardFields.Default
-          NTSpecificFields = NTSpecificFields.Default
-          Sections = PESections.Default }

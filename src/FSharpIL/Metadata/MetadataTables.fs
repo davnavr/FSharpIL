@@ -118,7 +118,7 @@ type TypeRefTable internal (state: MetadataBuilderState) =
 
     /// <summary>
     /// Searches for a type with the specified name and namespace, with a resolution scope
-    /// of <see cref="T:T:FSharpIL.Metadata.ResolutionScope.AssemblyRef"/>.
+    /// of <see cref="T:FSharpIL.Metadata.ResolutionScope.AssemblyRef"/>.
     /// </summary>
     member internal this.FindType((ns, name) as t) =
         match search.TryGetValue(t) with
@@ -147,7 +147,7 @@ type TypeRefTable internal (state: MetadataBuilderState) =
         token
 
 /// <summary>
-/// Specifies which type a <see cref="T:T:FSharpIL.Metadata.TypeDef"/> extends.
+/// Specifies which type a <see cref="T:FSharpIL.Metadata.TypeDef"/> extends.
 /// </summary>
 [<NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]
@@ -160,7 +160,7 @@ type Extends =
     | TypeRef of Handle<TypeRef>
     // | TypeSpec of Handle<?>
     /// <summary>
-    /// Indicates that a class does not extend another class, used by <see cref="T:T:System.Object"/> and interfaces.
+    /// Indicates that a class does not extend another class, used by <see cref="T:System.Object"/> and interfaces.
     /// </summary>
     | Null
 
@@ -204,7 +204,7 @@ type TypeVisibility =
         | NestedFamilyOrAssembly _ -> TypeAttributes.NestedFamORAssem
 
 /// <summary>
-/// Represents a <see cref="T:T:FSharpIL.Metadata.TypeDef"/> that is neither a delegate, enumeration, interface, or user-defined value type.
+/// Represents a <see cref="T:FSharpIL.Metadata.TypeDef"/> that is neither a delegate, enumeration, interface, or user-defined value type.
 /// </summary>
 type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 'Field :> IField> =
     { Access: TypeVisibility

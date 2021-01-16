@@ -132,9 +132,3 @@ type PESections(sections: ImmutableArray<Section>) as this =
         sections.Add { Kind = RsrcSection; Data = ImmutableArray.Empty }
         sections.Add { Kind = RelocSection; Data = ImmutableArray.Empty }
         sections.ToImmutable() |> PESections
-
-[<RequireQualifiedAccess>]
-module SectionTable =
-    // TODO: Create Computation Expression type for SectionTable.
-    let addSection (section: SectionHeader) (sections: PESections) =
-        invalidOp "bad"

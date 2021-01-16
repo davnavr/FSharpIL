@@ -16,7 +16,7 @@ type MetadataStreams =
     member _.Count = 1us
 
     static member Default =
-        { Tables = MetadataTables.Default }
+        { Tables = MetadataTables.Default } // TODO: Remove Default and replace with method/function that fills in default values except for the MetadataTables.
 
 // II.24.2.1
 type MetadataRoot =

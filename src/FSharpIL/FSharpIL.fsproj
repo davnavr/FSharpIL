@@ -26,7 +26,8 @@
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />
-    <Compile Include="PortableExecutable\Types.fs" />
+    <Compile Include="PortableExecutable\Fields.fs" />
+    <Compile Include="PortableExecutable\PEFile.fs" />
     <Compile Include="WriteCli.fs" />
     <Compile Include="WritePE.fsi" />
     <Compile Include="WritePE.fs" />
