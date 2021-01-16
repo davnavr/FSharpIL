@@ -33,6 +33,11 @@ type MetadataBuilder internal (mdle) =
             match one state with
             | Ok _ -> two state
             | Error err -> Error err
+    member inline _.Bind(members: Result<MemberList<'Member, _>, 'Member>, body: _ -> MetadataBuilderState -> Result<_, ValidationError>) =
+        fun state ->
+            match members with
+            | Ok members' -> body members' state
+            | Error dup -> DuplicateValue dup |> Error
     member inline _.Bind(expr: MetadataBuilderState -> unit, body: _ -> _ -> Result<_, ValidationError>) =
         fun state -> expr state; body () state
     member inline _.Bind(expr: MetadataBuilderState -> #IHandle, body: _ -> _ -> Result<_, ValidationError>) =
@@ -72,5 +77,10 @@ module MetadataBuilder =
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
     let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly
 
+    /// <summary>Computation Expression used for building the methods of a <see cref="T:FSharpIL.Metadata.TypeDef"/>.</summary>
     [<GeneralizableValue>]
     let methods<'Method when 'Method :> IMethod> = MemberListBuilder<'Method, _> (fun mthd -> mthd.Def())
+
+    /// <summary>Computation Expression used for building the fields of a <see cref="T:FSharpIL.Metadata.TypeDef"/>.</summary>
+    [<GeneralizableValue>]
+    let fields<'Field when 'Field :> IField> = MemberListBuilder<'Field, _> (fun field -> field.Row())

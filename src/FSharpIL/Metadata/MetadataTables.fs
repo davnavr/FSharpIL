@@ -29,12 +29,13 @@ type ValidationWarning =
     | TypeRefUsesModuleResolutionScope of TypeRef
 
 type ValidationError =
-    | DuplicateValue of IHandleValue
+    /// Error used when a duplicate object was added to a table, or when a duplicate method or field is added to a type.
+    | DuplicateValue of obj
     | MissingType of ns: string * Identifier
 
     override this.ToString() =
         match this with
-        | DuplicateValue value -> sprintf "Cannot add duplicate %s (%A) to the table" (value.GetType().Name) value
+        | DuplicateValue value -> value.GetType().Name |> sprintf "Cannot add duplicate %s to the table"
         | MissingType(ns, name) ->
             match ns with
             | "" -> string name
@@ -57,7 +58,7 @@ type Table<'Value when 'Value :> IHandleValue> internal (state: MetadataBuilderS
     default _.GetHandle(value: 'Value) =
         state.EnsureOwner value
         if set.Add value |> not
-        then value :> IHandleValue |> DuplicateValue |> Error
+        then DuplicateValue value |> Error
         else state.CreateHandle value |> Ok
 
     interface ITable<'Value> with
@@ -202,6 +203,10 @@ type TypeVisibility =
 /// <summary>
 /// Represents a <see cref="T:FSharpIL.Metadata.TypeDef"/> that is neither a delegate, enumeration, interface, or user-defined value type.
 /// </summary>
+/// <seealso cref="T:FSharpIL.Metadata.ConcreteClassDef"/>
+/// <seealso cref="T:FSharpIL.Metadata.AbstractClassDef"/>
+/// <seealso cref="T:FSharpIL.Metadata.SealedClassDef"/>
+/// <seealso cref="T:FSharpIL.Metadata.StaticClassDef"/>
 type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 'Field :> IField> =
     { /// <summary>
       /// Corresponds to the <c>VisibilityMask</c> flags of a type, as well as an entry in the <c>NestedClass</c> table if the current type is nested.
@@ -317,7 +322,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
             }
 
     // TODO: Enforce CLS checks and warnings.
-    static member AddClass({ Flags = Flags flags } as def: ClassDef<'Flags, 'Field, 'Method>) (state: MetadataBuilderState) =
+    static member private AddClassImpl({ Flags = Flags flags } as def: ClassDef<'Flags, 'Field, 'Method>) (state: MetadataBuilderState) =
         TypeDef (
             flags ||| def.Access.Flags,
             def.ClassName,
@@ -329,6 +334,11 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
         )
         |> state.TypeDef.GetHandle
         |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<ClassDef<'Flags, 'Field, 'Method>>)
+
+    static member AddClass(def: ConcreteClassDef) = TypeDef.AddClassImpl def
+    static member AddClass(def: AbstractClassDef) = TypeDef.AddClassImpl def
+    static member AddClass(def: SealedClassDef) = TypeDef.AddClassImpl def
+    static member AddClass(def: StaticClassDef) = TypeDef.AddClassImpl def
 
     static member AddDelegate({ Flags = Flags flags } as def: DelegateDef) (state: MetadataBuilderState) =
         match state.FindType SystemType.Delegate with
@@ -402,7 +412,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
     // TODO: Add the <Module> class used for global variables and functions, which should be the first entry.
 
     // TODO: Enforce common CLS checks and warnings for types.
-    member internal _.GetHandle(t: TypeDef) = defs.GetHandle t
+    member internal _.GetHandle(t: TypeDef): Result<Handle<TypeDef>, ValidationError> = defs.GetHandle t
 
     interface ITable<TypeDef> with
         member _.Comparer = (defs :> ITable<_>).Comparer

@@ -2,7 +2,6 @@
 
 open System.Collections.Generic
 
-// TODO: Rename to Reference instead of Handle.
 type IHandle =
     abstract Owner : obj
     abstract ValueType : System.Type

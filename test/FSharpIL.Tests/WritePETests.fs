@@ -69,6 +69,10 @@ let tests =
                             { TypeName = Identifier.ofStr "Object"
                               TypeNamespace = "System"
                               ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+                    let! methodList =
+                        methods {
+                            ()
+                        }
                     TypeDef.AddClass
                         { Access = TypeVisibility.Public
                           ClassName = Identifier.ofStr "Program"
