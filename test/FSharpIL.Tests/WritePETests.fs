@@ -20,7 +20,7 @@ let tests =
         testPE name pe <| fun reader ->
             reader.GetMetadataReader() |> body
 
-    testList "write PE" [
+    ptestList "write PE" [
         testPE "default PE has metadata" PEFile.Default <| fun reader ->
             Expect.isTrue reader.HasMetadata "generated PE should contain metadata"
 

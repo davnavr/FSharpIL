@@ -35,8 +35,7 @@ type MetadataBuilder internal () =
             match one state with
             | Ok _ -> two state
             | Error err -> Error err
-    // TODO: Fix, this overload can make it difficult to distinguish which method should be used.
-    member inline _.Bind(expr: MetadataBuilderState -> 'T, body: 'T -> MetadataBuilderState -> Result<_, ValidationError>) =
+    member inline _.Bind(expr: MetadataBuilderState -> #IHandle, body: _ -> _ -> Result<_, ValidationError>) =
         fun state ->
             let result = expr state
             body result state
@@ -73,9 +72,3 @@ module MetadataBuilder =
     let inline mdle (mdle: ModuleTable) (state: MetadataBuilderState) = state.Module <- mdle
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
     let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly
-    /// Adds a reference to an assembly.
-    let inline assemblyRef (ref: AssemblyRef) (state: MetadataBuilderState) = state.AssemblyRef.GetHandle ref
-
-    let inline instanceField (field: InstanceField) = invalidOp "bad"
-    let inline staticField (field: StaticField) = invalidOp "bad"
-    //let inline literalField (field: LiteralField) = invalidOp "bad"

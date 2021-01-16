@@ -153,9 +153,9 @@ type TypeRefTable internal (state: MetadataBuilderState) =
 [<RequireQualifiedAccess>]
 type Extends =
     /// Extend a class that is not sealed or abstract.
-    | ConcreteClass of Handle<ConcreteClassDef>
+    | ConcreteClass of TypeHandle<ConcreteClassDef>
     /// Extend an abstract class.
-    | AbstractClass of Handle<AbstractClassDef>
+    | AbstractClass of TypeHandle<AbstractClassDef>
     /// Extends a type referenced in another assembly.
     | TypeRef of Handle<TypeRef>
     // | TypeSpec of Handle<?>
@@ -224,7 +224,7 @@ type SealedClassDef = ClassDef<SealedClassFlags, FieldChoice, unit>
 type StaticClassDef = ClassDef<StaticClassFlags, StaticField, unit>
 
 /// <summary>
-/// Represents a delegate type, which is a <see cref="T:T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:T:System.Delegate"/>.
+/// Represents a delegate type, which is a <see cref="T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:System.Delegate"/>.
 /// </summary>
 type DelegateDef =
     { Access: TypeVisibility
@@ -233,7 +233,7 @@ type DelegateDef =
       TypeNamespace: string }
 
 /// <summary>
-/// Represents an enumeration type, which is a <see cref="T:T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:T:System.Enum"/>.
+/// Represents an enumeration type, which is a <see cref="T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:System.Enum"/>.
 /// </summary>
 type EnumDef =
   { Access: TypeVisibility
@@ -262,19 +262,16 @@ type StructDef =
      Methods: unit }
 
 [<Struct; IsReadOnly>]
-type TypeHandle<'Type> private (owner: obj, t: 'Type, row: TypeDef) =
-    internal new (t: 'Type, Handle(owner, row)) = TypeHandle<'Type>(owner, t, row)
+[<RequireQualifiedAccess>]
+type TypeHandle<'Type> =
+    internal { TypeHandle: Handle<TypeDef> }
 
-    member _.Type = Handle(owner, t)
-    member _.Row = Handle(owner, row)
+    member this.Handle = this.TypeHandle
+    member this.Item = this.TypeHandle.Item
 
     interface IHandle with
-        member _.Owner = owner
-        member _.ValueType = typeof<'Type>
-
-[<Struct; IsReadOnly>]
-type AMuchBetterReplacementForTypeHandle<'Type> internal (handle: Handle<TypeDef>) =
-    member _.Handle = handle
+        member this.Owner = this.TypeHandle.Owner
+        member this.ValueType = this.TypeHandle.ValueType
 
 /// <summary>
 /// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
@@ -320,7 +317,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
             }
 
     // TODO: Enforce CLS checks and warnings.
-    static member AddClass({ Flags = Flags flags } as def: ClassDef<_, _, _>) (state: MetadataBuilderState) =
+    static member AddClass({ Flags = Flags flags } as def: ClassDef<'Flags, 'Field, 'Method>) (state: MetadataBuilderState) =
         TypeDef (
             flags ||| def.Access.Flags,
             def.ClassName,
@@ -331,7 +328,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
             def.Access.EnclosingClass
         )
         |> state.TypeDef.GetHandle
-        |> Result.map (fun def' -> TypeHandle(def, def'))
+        |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<ClassDef<'Flags, 'Field, 'Method>>)
 
     static member AddDelegate({ Flags = Flags flags } as def: DelegateDef) (state: MetadataBuilderState) =
         match state.FindType SystemType.Delegate with
@@ -346,7 +343,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.Access.EnclosingClass
             )
             |> state.TypeDef.GetHandle
-            |> Result.map (fun def' -> TypeHandle(def, def'))
+            |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<DelegateDef>)
         | None -> MissingType SystemType.Delegate |> Error
 
     static member AddEnum(def: EnumDef) (state: MetadataBuilderState) =
@@ -362,7 +359,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.Access.EnclosingClass
             )
             |> state.TypeDef.GetHandle
-            |> Result.map (fun def' -> TypeHandle(def, def'))
+            |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<EnumDef>)
         | None -> MissingType SystemType.Enum |> Error
 
     static member AddInterface({ Flags = Flags flags } as def: InterfaceDef) (state: MetadataBuilderState) =
@@ -377,7 +374,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.Access.EnclosingClass
             )
             |> state.TypeDef.GetHandle
-            |> Result.map (fun def' -> TypeHandle(def, def'))
+            |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<InterfaceDef>)
         if def.Fields.Count > 0 then InterfaceContainsFields def |> state.ClsViolations.Add
         intf
 
@@ -395,7 +392,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.Access.EnclosingClass
             )
             |> state.TypeDef.GetHandle
-            |> Result.map (fun def' -> TypeHandle(def, def'))
+            |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<StructDef>)
         | None -> MissingType SystemType.ValueType |> Error
 
 [<Sealed>]
@@ -550,6 +547,20 @@ type AssemblyRef =
             && this.Culture = other.Culture
 
     interface IHandleValue with member _.Handles = Seq.empty
+
+    /// Adds a reference to an assembly.
+    static member Add(ref: AssemblyRef) = fun (state: MetadataBuilderState) -> state.AssemblyRef.GetHandle ref
+    static member Add(assembly: System.Reflection.Assembly) =
+        fun (state: MetadataBuilderState) ->
+            let name = assembly.GetName()
+            let ref =
+                { Version = name.Version
+                  Flags = ()
+                  PublicKeyOrToken = invalidOp "What public key?"
+                  Name = AssemblyName.ofStr name.Name
+                  Culture = name.CultureInfo |> invalidOp "What culture?"
+                  HashValue = None }
+            AssemblyRef.Add ref state
 
 [<Sealed>]
 type AssemblyRefTable internal (state: MetadataBuilderState) =
@@ -721,7 +732,7 @@ type MetadataBuilderState () as this =
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// (0x23)
-    member val AssemblyRef = AssemblyRefTable this
+    member val AssemblyRef: AssemblyRefTable = AssemblyRefTable this
     // AssemblyRefProcessor // 0x24 // Not used when writing a PE file
     // AssemblyRefOS // 0x25 // Not used when writing a PE file
     // (0x26)
@@ -775,6 +786,3 @@ type MetadataBuilderState () as this =
 module ExtraPatterns =
     let (|OptionalModifier|RequiredModifier|) (cmod: CustomModifier) =
         if cmod.Required then RequiredModifier cmod else OptionalModifier cmod
-
-    // [<System.Obsolete>]
-    let (|TypeHandle|) (handle: TypeHandle<_>) = handle.Type, handle.Row

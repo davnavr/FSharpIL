@@ -2,6 +2,7 @@
 
 open System.Collections.Generic
 
+// TODO: Rename to Reference instead of Handle.
 type IHandle =
     abstract Owner : obj
     abstract ValueType : System.Type
@@ -21,10 +22,11 @@ type Handle<'Value> =
 
     member this.Owner = let (Handle (owner, _)) = this in owner
     member this.Item = let (Handle (_, value)) = this in value
+    member this.ValueType = this.Item.GetType()
 
     interface IHandle with
         member this.Owner = this.Owner
-        member this.ValueType = this.Item.GetType()
+        member this.ValueType = this.ValueType
 
 [<Sealed>]
 type internal HandleEqualityComparer<'Value>(valueComparer: IEqualityComparer<'Value>) =

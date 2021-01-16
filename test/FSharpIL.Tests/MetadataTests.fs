@@ -48,7 +48,7 @@ let tests =
                       HashValue = None }
                 let metadata =
                     metadataBuilder {
-                        let! token = assemblyRef expected
+                        let! token = AssemblyRef.Add expected
                         TypeRef.Add
                             { ResolutionScope = ResolutionScope.AssemblyRef token
                               TypeName = Identifier.ofStr "Test"
@@ -111,7 +111,7 @@ let tests =
                 let metadata =
                     metadataBuilder {
                         let! mscorlib =
-                            assemblyRef
+                            AssemblyRef.Add
                                 { Version = Version(5, 0, 0, 0)
                                   Flags = ()
                                   PublicKeyOrToken = NoPublicKey
@@ -141,19 +141,19 @@ let tests =
                 let metadata =
                     metadataBuilder {
                         let! mscorlib =
-                            assemblyRef
+                            AssemblyRef.Add
                                 { Version = Version(5, 0, 0, 0)
                                   Flags = ()
                                   PublicKeyOrToken = NoPublicKey
                                   Name = AssemblyName.ofStr "System.Private.CoreLib"
                                   Culture = NullCulture
                                   HashValue = None }
-                        let! (object: Handle<_>) =
+                        let! object =
                             TypeRef.Add
                                 { ResolutionScope = ResolutionScope.AssemblyRef mscorlib
                                   TypeName = Identifier.ofStr "Object"
                                   TypeNamespace = "System" }
-                        let! (TypeHandle (parent, parent')) =
+                        let! parent =
                             TypeDef.AddClass
                                 { Access = TypeVisibility.Public
                                   Extends = Extends.TypeRef object
@@ -163,7 +163,7 @@ let tests =
                                   Fields = FieldSet()
                                   Methods = () }
                         TypeDef.AddClass
-                            { Access = TypeVisibility.NestedPublic parent'
+                            { Access = TypeVisibility.NestedPublic parent.Handle
                               Extends = Extends.ConcreteClass parent
                               Flags = ConcreteClassFlags ClassFlags.Zero
                               ClassName = Identifier.ofStr "Nested"
