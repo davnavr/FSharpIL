@@ -44,7 +44,7 @@ let tests =
             let tables =
                 metadataBuilder mdle {
                     assembly
-                        { Assembly.Name = AssemblyName.ofStr "HelloWorld"
+                        { Name = AssemblyName.ofStr "HelloWorld"
                           HashAlgId = ()
                           Version = Version()
                           Flags = ()
@@ -53,19 +53,17 @@ let tests =
                     let! mscorlib =
                         AssemblyRef.Add
                             { Version = Version(5, 0, 0, 0)
-                              Flags = AssemblyNameFlags.PublicKey
-                              PublicKeyOrToken = Array.map byte [| 0x7c; 0xec; 0x85; 0xd7; 0xbe; 0xa7; 0x79; 0x8e |] |> PublicKey
+                              PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
                               Name = AssemblyName.ofStr "System.Private.CoreLib"
                               Culture = NullCulture
-                              HashValue = None } // TODO: What hash value?
+                              HashValue = None }
                     let! console =
                         AssemblyRef.Add
                             { Version = Version(5, 0, 0, 0)
-                              Flags = AssemblyNameFlags.PublicKey
-                              PublicKeyOrToken = Array.map byte [| 0xb0; 0x3f; 0x5f; 0x7f; 0x11; 0xd5; 0x0a; 0x3a |] |> PublicKey
+                              PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
                               Name = AssemblyName.ofStr "System.Console"
                               Culture = NullCulture
-                              HashValue = None } // TODO: What hash value?
+                              HashValue = None }
                     let! object =
                         TypeRef.Add
                             { TypeName = Identifier.ofStr "Object"

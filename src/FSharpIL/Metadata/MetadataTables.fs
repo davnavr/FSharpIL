@@ -203,11 +203,15 @@ type TypeVisibility =
 /// Represents a <see cref="T:FSharpIL.Metadata.TypeDef"/> that is neither a delegate, enumeration, interface, or user-defined value type.
 /// </summary>
 type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 'Field :> IField> =
-    { Access: TypeVisibility
+    { /// <summary>
+      /// Corresponds to the <c>VisibilityMask</c> flags of a type, as well as an entry in the <c>NestedClass</c> table if the current type is nested.
+      /// </summary>
+      Access: TypeVisibility
       Flags: 'Flags
       ClassName: Identifier
       TypeNamespace: string
-      Extends: Extends // TODO: How to ensure that the base class is not sealed?
+      Extends: Extends
+      /// <summary>Corresponds to the fields of the type declared in the <c>Field</c> table.</summary>
       Fields: FieldSet<'Field> // TODO: Rename from FieldList to Fields
       Methods: 'Method } // TODO: Rename from MethodList to Methods
 
@@ -413,6 +417,8 @@ type FieldRow internal (flags, name, signature) = // TODO: How to allow differen
     member _.Name: Identifier = name
     member _.Signature = signature
 
+    member internal _.SkipDuplicateChecking = flags &&& FieldAttributes.FieldAccessMask = FieldAttributes.PrivateScope
+
     override this.Equals obj =
         match obj with
         | :? FieldRow as other -> (this :> IEquatable<_>).Equals other
@@ -421,11 +427,10 @@ type FieldRow internal (flags, name, signature) = // TODO: How to allow differen
     override _.GetHashCode() = hash(name, signature)
 
     interface IEquatable<FieldRow> with
-        member _.Equals other =
-            if flags &&& FieldAttributes.FieldAccessMask = FieldAttributes.PrivateScope
+        member this.Equals other =
+            if this.SkipDuplicateChecking || other.SkipDuplicateChecking
             then false
-            else
-                name = other.Name && signature = other.Signature
+            else name = other.Name && signature = other.Signature
 
 type IField =
     abstract Row : unit -> FieldRow
@@ -480,45 +485,63 @@ type FieldSet<'Field when 'Field :> IField> (capacity: int) =
 
     member _.ToImmutable(): ImmutableArray<FieldRow> = fields.ToImmutableArray()
 
+/// II.25.4
+type MethodBody = unit
+
 [<Sealed>]
-type MethodDef internal (iflags, attr, name, signature, paramList) =
+type MethodDef internal (body, iflags, attr, name, signature, paramList) =
+    /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the method body</summary>
+    member _.Body = body
     member _.ImplFlags = iflags // TODO: Open System.Runtime.CompilerServices
     member _.Flags: MethodAttributes = attr
     member _.Name: Identifier = name
     member _.Signature = signature
     member _.ParamList: ImmutableArray<_> = paramList
 
+    member internal _.SkipDuplicateChecking = attr &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
+
+    interface IEquatable<MethodDef> with
+        member this.Equals other =
+            if this.SkipDuplicateChecking || other.SkipDuplicateChecking
+            then false
+            else this.Name = other.Name && this.Signature = other.Signature
+
 type IMethod =
     abstract Def : unit -> MethodDef
 
-type Method<'Flags when 'Flags :> IFlags<MethodAttributes>> =
-    { ImplFlags: unit
+type Method<'Body, 'Flags when 'Flags :> IFlags<MethodAttributes>> =
+    { Body: 'Body
+      ImplFlags: unit
       Flags: 'Flags
       MethodName: Identifier
       Signature: unit // TODO: How to use generic parameters?
       ParamList: unit }
 
-type InstanceMethod = unit
-type AbstractMethod = unit
-type StaticMethod = unit
-type Constructor = unit
-type ClassConstructor = unit
+type InstanceMethod = Method<MethodBody, InstanceMethodFlags> // TODO: Create different method body types for different methods.
+type AbstractMethod = Method<unit, AbstractMethodFlags>
+type StaticMethod = Method<MethodBody, StaticMethodFlags>
+/// <summary>Represents a method named <c>.ctor</c>, which is an object constructor method.</summary>
+type Constructor = Method<MethodBody, ConstructorFlags>
+/// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
+type ClassConstructor = Method<MethodBody, ClassConstructorFlags>
 
 [<Sealed>]
-type MethodSet<'Method> (capacity: int) =
+type MethodSet<'Method when 'Method :> IMethod> (capacity: int) =
     let methods = HashSet<_> capacity
 
     new() = MethodSet 1
 
     member _.Count: int = methods.Count
 
-    member _.Add(method: 'Method) = invalidOp "bad"
+    member _.Add(method: 'Method) =
+        
+        invalidOp "bad"
 
     member _.ToImmutable(): ImmutableArray<FieldRow> = methods.ToImmutableArray()
 
 /// II.22.2
 type Assembly =
-    { HashAlgId: unit // II.23.1.1
+    { HashAlgId: unit
       Version: Version
       Flags: unit
       PublicKey: unit option
@@ -529,11 +552,15 @@ type Assembly =
 [<CustomEquality; NoComparison>]
 type AssemblyRef =
     { Version: Version
-      Flags: AssemblyNameFlags // NOTE: Apparently, only the PublicKey flag can be set here, all others should be zero.
       PublicKeyOrToken: PublicKeyOrToken
       Name: AssemblyName
       Culture: AssemblyCulture
       HashValue: unit option }
+
+    member this.Flags =
+        match this.PublicKeyOrToken with
+        | PublicKey _ -> 1u
+        | _ -> 0u
 
     interface IEquatable<AssemblyRef> with
         member this.Equals other =
@@ -551,7 +578,6 @@ type AssemblyRef =
             let name = assembly.GetName()
             let ref =
                 { Version = name.Version
-                  Flags = name.Flags
                   PublicKeyOrToken = invalidOp "What public key?"
                   Name = AssemblyName.ofStr name.Name
                   Culture = name.CultureInfo |> invalidOp "What culture?"

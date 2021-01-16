@@ -78,7 +78,7 @@ type AbstractClassFlags private (flags: TypeAttributes) =
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type SealedClassFlags private (flags: TypeAttributes) =
-   new (flags: ClassFlags) = SealedClassFlags(flags.Flags||| TypeAttributes.Sealed)
+   new (flags: ClassFlags) = SealedClassFlags(flags.Flags ||| TypeAttributes.Sealed)
    interface IFlags<TypeAttributes> with member _.Flags = flags
 
 [<IsReadOnly; Struct>]
@@ -137,6 +137,17 @@ type Visibility =
             | FamilyOrAssembly -> FieldAttributes.FamORAssem
             | Public -> FieldAttributes.Public
 
+    interface IFlags<MethodAttributes> with
+        member this.Flags =
+            match this with
+            | CompilerControlled -> MethodAttributes.PrivateScope
+            | Private -> MethodAttributes.Private
+            | FamilyAndAssembly -> MethodAttributes.FamANDAssem
+            | Assembly -> MethodAttributes.Assembly
+            | Family -> MethodAttributes.Family
+            | FamilyOrAssembly -> MethodAttributes.FamORAssem
+            | Public -> MethodAttributes.Public
+
 /// <summary>
 /// Visibility for fields and methods defined in the <c>&lt;Module&gt;</c> pseudo-class.
 /// </summary>
@@ -158,7 +169,7 @@ type GlobalVisibility =
 type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> =
     { Visibility: 'Visibility
       NotSerialized: bool
-      /// Sets the `SpecialName` and `RTSpecialName` flags.
+      /// Sets the `SpecialName` and `RTSpecialName` flags. // TODO: SpecialName is required to be set if RTSpecialName is set, so allow fields that set special name but don't set RTSpecialName.
       SpecialName: bool }
 
     member this.Flags =
@@ -177,16 +188,49 @@ type InstanceFieldFlags private (flags: FieldAttributes) =
 [<StructuralComparison; StructuralEquality>]
 type StaticFieldFlags private (flags: FieldAttributes) =
     new (flags: FieldFlags<Visibility>) = StaticFieldFlags(flags.Flags)
-    interface IFlags<FieldAttributes> with member _.Flags = flags
+    interface IFlags<FieldAttributes> with member _.Flags = flags // TODO: Set special flags.
 
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type GlobalFieldFlags private (flags: FieldAttributes) =
     new (flags: FieldFlags<GlobalVisibility>) = GlobalFieldFlags(flags.Flags)
-    interface IFlags<FieldAttributes> with member _.Flags = flags
+    interface IFlags<FieldAttributes> with member _.Flags = flags // TODO: Set special flags.
 
-// NOTE: For both methods and fields, RTSpecialName is set if SpecialName is set
+// NOTE: For methods, SpecialName has to be set if RTSpecialName is set.
 // NOTE: For methods, RTSpecialName and SpecialName is set when it is a ctor or cctor
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type MethodFlags<'Visibility when 'Visibility :> IFlags<MethodAttributes>> =
+    { Visibility: 'Visibility }
+
+    member this.Flags = this.Visibility.Flags
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type InstanceMethodFlags private (flags: MethodAttributes) =
+    interface IFlags<MethodAttributes> with member _.Flags = flags
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type AbstractMethodFlags private (flags: MethodAttributes) =
+    interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.Abstract ||| MethodAttributes.Virtual // TODO: Move setting of flags into a constructor.
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type StaticMethodFlags private (flags: MethodAttributes) =
+    new (flags: MethodFlags<Visibility>) = StaticMethodFlags(flags.Flags ||| MethodAttributes.Static)
+    interface IFlags<MethodAttributes> with member _.Flags = flags
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type ConstructorFlags private (flags: MethodAttributes) =
+    interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type ClassConstructorFlags private (flags: MethodAttributes) =
+    interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| MethodAttributes.Static
 
 [<AutoOpen>]
 module Flags =
