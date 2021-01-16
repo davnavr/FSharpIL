@@ -30,4 +30,3 @@ module PEFile =
         { PEFile.Default with
             FileHeader = { CoffHeader.Default with Characteristics = FileType fileType }
             Sections = (text' :: tail).ToImmutableArray() |> PESections }
-

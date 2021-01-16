@@ -7,6 +7,6 @@ type AssemblyCulture = // TODO: Add more cultures
     | Div_MV
 
 type PublicKeyOrToken =
-    | PublicKey // of ?
+    | PublicKey of byte[]
     | HashedToken // of ?
     | NoPublicKey

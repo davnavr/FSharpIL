@@ -26,15 +26,15 @@ type MetadataTables internal (state: MetadataBuilderState) =
         /// NOTE: Bit zero appears to be the right-most bit.
         0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000001UL
 
-    static member val Default = MetadataBuilderState() |> MetadataTables
-
 [<Sealed>]
-type MetadataBuilder internal () =
+type MetadataBuilder internal (mdle) =
     member inline _.Combine(one: MetadataBuilderState -> Result<_, _>, two: MetadataBuilderState -> Result<_, ValidationError>) =
         fun state ->
             match one state with
             | Ok _ -> two state
             | Error err -> Error err
+    member inline _.Bind(expr: MetadataBuilderState -> unit, body: _ -> _ -> Result<_, ValidationError>) =
+        fun state -> expr state; body () state
     member inline _.Bind(expr: MetadataBuilderState -> #IHandle, body: _ -> _ -> Result<_, ValidationError>) =
         fun state ->
             let result = expr state
@@ -50,7 +50,7 @@ type MetadataBuilder internal () =
             for item in items do
                 body item state |> ignore
     member _.Run(expr: MetadataBuilderState -> _): ValidationResult<MetadataTables> =
-        let state = MetadataBuilderState()
+        let state = MetadataBuilderState mdle
         match expr state with
         | Ok _ ->
             let tables = MetadataTables state
@@ -59,7 +59,8 @@ type MetadataBuilder internal () =
             else
                 ValidationSuccess(tables, tables.ClsViolations)
         | Error err -> ValidationError err
-    member inline _.Yield(expr: MetadataBuilderState -> Handle<_>) = fun state -> expr state |> Result<_, ValidationError>.Ok
+    member inline _.Yield(expr: MetadataBuilderState -> #IHandle) = fun state -> expr state |> Result<_, ValidationError>.Ok
+    member inline _.Yield(expr: MetadataBuilderState -> unit) = fun state -> expr state; Result<_, ValidationError>.Ok()
     member inline _.Yield(expr: MetadataBuilderState -> Result<_, ValidationError>) = expr
     member inline _.Zero() = fun _ -> Result<_, ValidationError>.Ok()
 
@@ -68,7 +69,5 @@ type MetadataBuilder internal () =
 /// </summary>
 [<AutoOpen>]
 module MetadataBuilder =
-    /// Sets the module information of the metadata.
-    let inline mdle (mdle: ModuleTable) (state: MetadataBuilderState) = state.Module <- mdle
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
     let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly

@@ -3,8 +3,8 @@
 open System
 
 type IsDll =
-    | Dll
-    | Exe
+    | IsDll
+    | IsExe
 
 // II.25.2.2.1
 /// Flags that specify file characteristics in the PE file header.
@@ -21,8 +21,8 @@ type FileCharacteristics =
 
     static member op_Implicit(characteristics: FileCharacteristics) =
         match characteristics with
-        | FileType Exe -> ImageFileFlags.FileExecutableImage
-        | FileType Dll -> ImageFileFlags.FileExecutableImage ||| ImageFileFlags.FileDll
+        | FileType IsExe -> ImageFileFlags.FileExecutableImage
+        | FileType IsDll -> ImageFileFlags.FileExecutableImage ||| ImageFileFlags.FileDll
         | FileFlags flags -> flags
         |> uint16
 
@@ -45,7 +45,7 @@ type CoffHeader =
           TimeDateStamp = 0u
           SymbolTablePointer = 0u
           SymbolCount = 0u
-          Characteristics = FileType Dll }
+          Characteristics = FileType IsDll }
 
 // II.25.2.3.1
 type StandardFields =

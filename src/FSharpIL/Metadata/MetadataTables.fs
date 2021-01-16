@@ -75,10 +75,6 @@ type ModuleTable =
       // EncBaseId
       }
 
-    static member Default =
-        { Name = Identifier "Default.dll"
-          Mvid = Guid.Empty } // TODO: What should the default Mvid be?
-
 [<NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]
 type ResolutionScope =
@@ -533,7 +529,7 @@ type Assembly =
 [<CustomEquality; NoComparison>]
 type AssemblyRef =
     { Version: Version
-      Flags: unit
+      Flags: AssemblyNameFlags // NOTE: Apparently, only the PublicKey flag can be set here, all others should be zero.
       PublicKeyOrToken: PublicKeyOrToken
       Name: AssemblyName
       Culture: AssemblyCulture
@@ -555,7 +551,7 @@ type AssemblyRef =
             let name = assembly.GetName()
             let ref =
                 { Version = name.Version
-                  Flags = ()
+                  Flags = name.Flags
                   PublicKeyOrToken = invalidOp "What public key?"
                   Name = AssemblyName.ofStr name.Name
                   Culture = name.CultureInfo |> invalidOp "What culture?"
@@ -661,7 +657,7 @@ type ReturnType =
     //| Var // of ?
 
 [<Sealed>]
-type MetadataBuilderState () as this =
+type MetadataBuilderState (mdle: ModuleTable) as this =
     let owner = Object()
 
     let typeDef = TypeDefTable this
@@ -678,7 +674,7 @@ type MetadataBuilderState () as this =
     // Sorted: uint64 // TODO: Figure out what Sorted is used for.
     // Rows
     /// (0x00)
-    member val Module = ModuleTable.Default with get, set
+    member val Module = mdle
     /// (0x01)
     member val TypeRef: TypeRefTable = TypeRefTable this
     /// (0x02)

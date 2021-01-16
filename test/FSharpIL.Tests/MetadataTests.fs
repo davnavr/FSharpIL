@@ -37,6 +37,7 @@ let tests =
                 (MetadataVersion.ofStr ver |> MetadataVersion.toArray |> Array.last) = 0uy
         ]
 
+        (*
         testList "computation expression" [
             testCase "variable can be used" <| fun() ->
                 let expected =
@@ -175,4 +176,5 @@ let tests =
                 let nested = Seq.head metadata.NestedClass
                 Expect.equal nested.NestedClass.Item.TypeName (Identifier.ofStr "Nested") "nested classes should have an entry in the NestedClass table"
         ]
+        *)
     ]

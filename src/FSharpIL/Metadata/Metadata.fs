@@ -15,9 +15,6 @@ type MetadataStreams =
 
     member _.Count = 1us
 
-    static member Default =
-        { Tables = MetadataTables.Default } // TODO: Remove Default and replace with method/function that fills in default values except for the MetadataTables.
-
 // II.24.2.1
 type MetadataRoot =
     { // Signature
@@ -28,11 +25,11 @@ type MetadataRoot =
       // Flags
       Streams: MetadataStreams }
 
-    static member Default =
+    static member Default tables =
         { MajorVersion = 1us
           MinorVersion = 1us
           Version = MetadataVersion.ofStr "v4.0.30319"
-          Streams = MetadataStreams.Default }
+          Streams = { Tables = tables } }
 
 // II.25.3.3.1
 [<Flags>]
@@ -61,10 +58,10 @@ type CliHeader =
 
     member this.EntryPointToken = Unchecked.defaultof<unit>
 
-    static member Default =
+    static member Default tables =
         { MajorRuntimeVersion = 2us
           MinorRuntimeVersion = 5us
-          Metadata = MetadataRoot.Default
+          Metadata = MetadataRoot.Default tables
           Flags = CorFlags.ILOnly // TODO: Figure out if this is an appropriate default.
           Resources = ()
           StrongNameSignature = ImmutableArray.Empty
