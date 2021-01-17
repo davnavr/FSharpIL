@@ -218,6 +218,11 @@ type AbstractMethodFlags private (flags: MethodAttributes) =
 
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
+type FinalMethodFlags private (flags: MethodAttributes) =
+    interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.Final ||| MethodAttributes.Virtual
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type StaticMethodFlags private (flags: MethodAttributes) =
     new (flags: MethodFlags<Visibility>) = StaticMethodFlags(flags.Flags ||| MethodAttributes.Static)
     interface IFlags<MethodAttributes> with member _.Flags = flags

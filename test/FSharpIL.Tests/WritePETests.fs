@@ -80,7 +80,7 @@ let tests =
                           Fields = FieldList.Empty
                           Flags = StaticClassFlags ClassFlags.Zero 
                           TypeNamespace = "HelloWorld"
-                          Methods = () } // TODO: Add methods
+                          Methods = methodList }
                 }
                 |> ValidationResult.get
             let pe = CliHeader.Default tables |> PEFile.ofMetadata IsExe

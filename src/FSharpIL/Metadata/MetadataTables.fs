@@ -207,7 +207,7 @@ type TypeVisibility =
 /// <seealso cref="T:FSharpIL.Metadata.AbstractClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.SealedClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.StaticClassDef"/>
-type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 'Field :> IField> =
+type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 'Field :> IField and 'Method :> IMethod> =
     { /// <summary>
       /// Corresponds to the <c>VisibilityMask</c> flags of a type, as well as an entry in the <c>NestedClass</c> table if the current type is nested.
       /// </summary>
@@ -218,15 +218,15 @@ type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 
       Extends: Extends
       /// <summary>Corresponds to the fields of the type declared in the <c>Field</c> table.</summary>
       Fields: FieldList<'Field>
-      Methods: unit } // TODO: Rename from MethodList to Methods
+      Methods: MethodList<'Method> }
 
 /// Represents a class that is not sealed or abstract.
-type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, unit>
+type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, ConcreteClassMethod>
 /// Represents an abstract class.
-type AbstractClassDef = ClassDef<AbstractClassFlags, FieldChoice, unit>
-type SealedClassDef = ClassDef<SealedClassFlags, FieldChoice, unit>
+type AbstractClassDef = ClassDef<AbstractClassFlags, FieldChoice, AbstractClassMethod>
+type SealedClassDef = ClassDef<SealedClassFlags, FieldChoice, SealedClassMethod>
 /// Represents a sealed and abstract class, meaning that it can only contain static members.
-type StaticClassDef = ClassDef<StaticClassFlags, StaticField, unit>
+type StaticClassDef = ClassDef<StaticClassFlags, StaticField, StaticClassMethod>
 
 /// <summary>
 /// Represents a delegate type, which is a <see cref="T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:System.Delegate"/>.
@@ -467,10 +467,10 @@ type FieldChoice =
 
     interface IField with
         member this.Row() =
-            let inline (|Field|) (f: #IField) = f :> IField
+            
             match this with
-            | InstanceField (Field field)
-            | StaticField (Field field) -> field.Row()
+            | InstanceField (FieldRow row)
+            | StaticField (FieldRow row) -> row
 
 /// <summary>
 /// Represents a static <see cref="T:FSharpIL.Metadata.FieldRow"/> defined inside of the <c>&lt;Module&gt;</c> pseudo-class.
@@ -503,12 +503,12 @@ type MethodBody = unit
 [<Sealed>]
 type MethodDef internal (body, iflags, attr, name, signature, paramList) =
     /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the method body.</summary>
-    member _.Body = body
+    member _.Body = body: obj
     member _.ImplFlags = iflags // TODO: Open System.Runtime.CompilerServices
     member _.Flags: MethodAttributes = attr
     member _.Name: Identifier = name
     member _.Signature = signature
-    member _.ParamList: ImmutableArray<_> = paramList
+    member _.ParamList = paramList
 
     member internal _.SkipDuplicateChecking = attr &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
 
@@ -519,7 +519,7 @@ type MethodDef internal (body, iflags, attr, name, signature, paramList) =
             else this.Name = other.Name && this.Signature = other.Signature
 
 type IMethod =
-    abstract Def : unit -> MethodDef
+    abstract Def : unit -> MethodDef // TODO: Rename to definition
 
 type MethodList<'Method when 'Method :> IMethod> = MemberList<'Method, MethodDef>
 
@@ -531,13 +531,78 @@ type Method<'Body, 'Flags when 'Flags :> IFlags<MethodAttributes>> =
       Signature: unit // TODO: How to use generic parameters?
       ParamList: unit }
 
-type InstanceMethod = Method<MethodBody, InstanceMethodFlags> // TODO: Create different method body types for different methods.
-type AbstractMethod = Method<unit, AbstractMethodFlags>
-type StaticMethod = Method<MethodBody, StaticMethodFlags>
+    interface IMethod with
+        member this.Def() = MethodDef(this.Body, this.ImplFlags, this.Flags.Flags, this.MethodName, this.Signature, this.ParamList)
+
+type InstanceMethodDef = Method<MethodBody, InstanceMethodFlags> // TODO: Create different method body types for different methods.
+type AbstractMethodDef = Method<unit, AbstractMethodFlags>
+type FinalMethodDef = Method<MethodBody, FinalMethodFlags>
+type StaticMethodDef = Method<MethodBody, StaticMethodFlags>
 /// <summary>Represents a method named <c>.ctor</c>, which is an object constructor method.</summary>
-type Constructor = Method<MethodBody, ConstructorFlags>
+type ConstructorDef = Method<MethodBody, ConstructorFlags>
 /// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
-type ClassConstructor = Method<MethodBody, ClassConstructorFlags>
+type ClassConstructorDef = Method<MethodBody, ClassConstructorFlags>
+
+// TODO: Figure out how to avoid having users type out the full name of the method type (ex: ConcreteClassMethod.Method)
+[<RequireQualifiedAccess>]
+type ConcreteClassMethod =
+    | Method of InstanceMethodDef
+    | StaticMethod of StaticMethodDef
+    | Constructor of ConstructorDef
+    | ClassConstructor of ClassConstructorDef
+
+    interface IMethod with
+        member this.Def() =
+            match this with
+            | Method (MethodDef def)
+            | StaticMethod (MethodDef def)
+            | Constructor (MethodDef def)
+            | ClassConstructor (MethodDef def) -> def
+
+[<RequireQualifiedAccess>]
+type AbstractClassMethod =
+    | Method of InstanceMethodDef
+    | AbstractMethod of AbstractMethodDef
+    | StaticMethod of StaticMethodDef
+    | Constructor of ConstructorDef
+    | ClassConstructor of ClassConstructorDef
+
+    interface IMethod with
+        member this.Def() =
+            match this with
+            | Method (MethodDef def)
+            | AbstractMethod (MethodDef def)
+            | StaticMethod (MethodDef def)
+            | Constructor (MethodDef def)
+            | ClassConstructor (MethodDef def) -> def
+
+[<RequireQualifiedAccess>]
+type SealedClassMethod =
+    | Method of InstanceMethodDef
+    | FinalMethod of FinalMethodDef
+    | StaticMethod of StaticMethodDef
+    | Constructor of ConstructorDef
+    | ClassConstructor of ClassConstructorDef
+
+    interface IMethod with
+        member this.Def() =
+            match this with
+            | Method (MethodDef def)
+            | FinalMethod (MethodDef def)
+            | StaticMethod (MethodDef def)
+            | Constructor (MethodDef def)
+            | ClassConstructor (MethodDef def) -> def
+
+[<RequireQualifiedAccess>]
+type StaticClassMethod =
+    | Method of StaticMethodDef
+    | ClassConstructor of ClassConstructorDef
+
+    interface IMethod with
+        member this.Def() =
+            match this with
+            | Method (MethodDef def)
+            | ClassConstructor (MethodDef def) -> def
 
 /// II.22.2
 type Assembly =
@@ -808,3 +873,6 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
 module ExtraPatterns =
     let (|OptionalModifier|RequiredModifier|) (cmod: CustomModifier) =
         if cmod.Required then RequiredModifier cmod else OptionalModifier cmod
+
+    let internal (|FieldRow|) (f: IField) = f.Row()
+    let internal (|MethodDef|) (mthd: IMethod) = mthd.Def()
