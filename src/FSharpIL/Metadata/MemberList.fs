@@ -3,6 +3,7 @@
 open System.Collections.Generic
 open System.Collections.Immutable
 
+/// Represents a list of methods or fields.
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 type MemberList<'Member, 'Row> internal (members: ImmutableArray<'Row>) =
     member _.Count = members.Length

@@ -267,7 +267,6 @@ type StructDef =
      Methods: unit }
 
 [<Struct; IsReadOnly>]
-[<RequireQualifiedAccess>]
 type TypeHandle<'Type> =
     internal { TypeHandle: Handle<TypeDef> }
 
@@ -321,6 +320,10 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 | None -> ()
             }
 
+    static member private GetHandle<'Type> (def: 'Type) (state: MetadataBuilderState) (row: TypeDef) =
+        state.TypeDef.GetHandle row
+        |> Result.map (fun def' -> { TypeHandle = def' }: TypeHandle<'Type>)
+
     // TODO: Enforce CLS checks and warnings.
     static member private AddClassImpl({ Flags = Flags flags } as def: ClassDef<'Flags, 'Field, 'Method>) (state: MetadataBuilderState) =
         TypeDef (
@@ -332,8 +335,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
             (),
             def.Access.EnclosingClass
         )
-        |> state.TypeDef.GetHandle
-        |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<ClassDef<'Flags, 'Field, 'Method>>)
+        |> TypeDef.GetHandle<ClassDef<'Flags, 'Field, 'Method>> def state
 
     static member AddClass(def: ConcreteClassDef) = TypeDef.AddClassImpl def
     static member AddClass(def: AbstractClassDef) = TypeDef.AddClassImpl def
@@ -352,8 +354,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 (),
                 def.Access.EnclosingClass
             )
-            |> state.TypeDef.GetHandle
-            |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<DelegateDef>)
+            |> TypeDef.GetHandle<DelegateDef> def state
         | None -> MissingType SystemType.Delegate |> Error
 
     static member AddEnum(def: EnumDef) (state: MetadataBuilderState) =
@@ -368,8 +369,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 (),
                 def.Access.EnclosingClass
             )
-            |> state.TypeDef.GetHandle
-            |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<EnumDef>)
+            |> TypeDef.GetHandle<EnumDef> def state
         | None -> MissingType SystemType.Enum |> Error
 
     static member AddInterface({ Flags = Flags flags } as def: InterfaceDef) (state: MetadataBuilderState) =
@@ -383,8 +383,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 (),
                 def.Access.EnclosingClass
             )
-            |> state.TypeDef.GetHandle
-            |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<InterfaceDef>)
+            |> TypeDef.GetHandle<InterfaceDef> def state
         if def.Fields.Count > 0 then InterfaceContainsFields def |> state.ClsViolations.Add
         intf
 
@@ -401,8 +400,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 (),
                 def.Access.EnclosingClass
             )
-            |> state.TypeDef.GetHandle
-            |> Result.map (fun def' -> { TypeHandle.TypeHandle = def' }: TypeHandle<StructDef>)
+            |> TypeDef.GetHandle<StructDef> def state
         | None -> MissingType SystemType.ValueType |> Error
 
 [<Sealed>]
