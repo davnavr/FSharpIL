@@ -292,7 +292,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
     member _.TypeNamespace: string = ns
     member _.Extends: Extends = extends
     member _.FieldList: ImmutableArray<FieldRow> = fields
-    member _.MethodList = methods
+    member _.MethodList: ImmutableArray<MethodDef> = methods
     member _.EnclosingClass: Handle<TypeDef> option = parent
 
     override this.Equals obj =
@@ -332,7 +332,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
             def.TypeNamespace,
             def.Extends,
             def.Fields.ToImmutableArray(),
-            (),
+            def.Methods.ToImmutableArray(),
             def.Access.EnclosingClass
         )
         |> TypeDef.GetHandle<ClassDef<'Flags, 'Field, 'Method>> def state
@@ -351,7 +351,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.TypeNamespace,
                 Extends.TypeRef super,
                 ImmutableArray.Empty,
-                (),
+                ImmutableArray.Empty, // TODO: Add delegate methods.
                 def.Access.EnclosingClass
             )
             |> TypeDef.GetHandle<DelegateDef> def state
@@ -366,7 +366,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.TypeNamespace,
                 Extends.TypeRef super,
                 ImmutableArray.Empty, // TODO: Add enum values.
-                (),
+                ImmutableArray.Empty, // TODO: Add enum methods, if any.
                 def.Access.EnclosingClass
             )
             |> TypeDef.GetHandle<EnumDef> def state
@@ -380,7 +380,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.TypeNamespace,
                 Extends.Null,
                 def.Fields.ToImmutableArray(),
-                (),
+                ImmutableArray.Empty, //def.Methods.ToImmutableArray(), // TODO: Add interface methods.
                 def.Access.EnclosingClass
             )
             |> TypeDef.GetHandle<InterfaceDef> def state
@@ -397,7 +397,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 def.TypeNamespace,
                 Extends.TypeRef super,
                 def.Fields.ToImmutableArray(),
-                (),
+                ImmutableArray.Empty, // def.Methods.ToImmutableArray(), // TODO: Add struct methods.
                 def.Access.EnclosingClass
             )
             |> TypeDef.GetHandle<StructDef> def state
@@ -519,25 +519,26 @@ type MethodDef internal (body, iflags, attr, name, signature, paramList) =
             else this.Name = other.Name && this.Signature = other.Signature
 
 type IMethod =
-    abstract Def : unit -> MethodDef // TODO: Rename to definition
+    abstract Definition : unit -> MethodDef
 
 type MethodList<'Method when 'Method :> IMethod> = MemberList<'Method, MethodDef>
 
 type Method<'Body, 'Flags when 'Flags :> IFlags<MethodAttributes>> =
     { Body: 'Body
-      ImplFlags: unit
+      ImplFlags: MethodImplFlags
       Flags: 'Flags
       MethodName: Identifier
-      Signature: unit // TODO: How to use generic parameters?
+      Signature: unit // MethodDefSignature // TODO: How to use generic parameters?
       ParamList: unit }
 
     interface IMethod with
-        member this.Def() = MethodDef(this.Body, this.ImplFlags, this.Flags.Flags, this.MethodName, this.Signature, this.ParamList)
+        member this.Definition() = MethodDef(this.Body, this.ImplFlags, this.Flags.Flags, this.MethodName, this.Signature, this.ParamList)
 
 type InstanceMethodDef = Method<MethodBody, InstanceMethodFlags> // TODO: Create different method body types for different methods.
 type AbstractMethodDef = Method<unit, AbstractMethodFlags>
 type FinalMethodDef = Method<MethodBody, FinalMethodFlags>
 type StaticMethodDef = Method<MethodBody, StaticMethodFlags>
+// TODO: Prevent constructors from having generic parameters (an entry in the GenericParam table).
 /// <summary>Represents a method named <c>.ctor</c>, which is an object constructor method.</summary>
 type ConstructorDef = Method<MethodBody, ConstructorFlags>
 /// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
@@ -552,7 +553,7 @@ type ConcreteClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
-        member this.Def() =
+        member this.Definition() =
             match this with
             | Method (MethodDef def)
             | StaticMethod (MethodDef def)
@@ -568,7 +569,7 @@ type AbstractClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
-        member this.Def() =
+        member this.Definition() =
             match this with
             | Method (MethodDef def)
             | AbstractMethod (MethodDef def)
@@ -585,7 +586,7 @@ type SealedClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
-        member this.Def() =
+        member this.Definition() =
             match this with
             | Method (MethodDef def)
             | FinalMethod (MethodDef def)
@@ -599,7 +600,7 @@ type StaticClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
-        member this.Def() =
+        member this.Definition() =
             match this with
             | Method (MethodDef def)
             | ClassConstructor (MethodDef def) -> def
@@ -670,6 +671,7 @@ type NestedClass =
     { NestedClass: Handle<TypeDef>
       EnclosingClass: Handle<TypeDef> }
 
+// TODO: Have different signature types for different kinds of methods.
 /// Represents the signature of a method or global function (II.23.2.1).
 type MethodDefSignature =
     { HasThis: bool }
@@ -875,4 +877,4 @@ module ExtraPatterns =
         if cmod.Required then RequiredModifier cmod else OptionalModifier cmod
 
     let internal (|FieldRow|) (f: IField) = f.Row()
-    let internal (|MethodDef|) (mthd: IMethod) = mthd.Def()
+    let internal (|MethodDef|) (mthd: IMethod) = mthd.Definition()

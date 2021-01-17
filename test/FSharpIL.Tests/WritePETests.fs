@@ -71,7 +71,16 @@ let tests =
                               ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
                     let! methodList =
                         methods {
-                            ()
+                            StaticClassMethod.Method
+                                { Body = invalidOp "Body?"
+                                  ImplFlags = MethodImplFlags.Zero
+                                  MethodName = Identifier.ofStr "Method"
+                                  Flags =
+                                    { Visibility = Public
+                                      HideBySig = true }
+                                    |> StaticMethodFlags
+                                  Signature = invalidOp "signature?"
+                                  ParamList = invalidOp "params?" }
                         }
                     TypeDef.AddClass
                         { Access = TypeVisibility.Public

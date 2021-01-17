@@ -199,22 +199,75 @@ type GlobalFieldFlags private (flags: FieldAttributes) =
 // NOTE: For methods, SpecialName has to be set if RTSpecialName is set.
 // NOTE: For methods, RTSpecialName and SpecialName is set when it is a ctor or cctor
 
+type VTableLayout =
+    | ReuseSlot
+    | NewSlot
+
+    interface IFlags<MethodAttributes> with
+        member this.Flags =
+            match this with
+            | ReuseSlot -> MethodAttributes.ReuseSlot
+            | NewSlot -> MethodAttributes.NewSlot
+
+    static member Zero = ReuseSlot
+
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
-type MethodFlags<'Visibility when 'Visibility :> IFlags<MethodAttributes>> =
-    { Visibility: 'Visibility }
+type StaticMethodDefFlags<'Visibility when 'Visibility :> IFlags<MethodAttributes>> =
+    { Visibility: 'Visibility
+      HideBySig: bool }
 
-    member this.Flags = this.Visibility.Flags
+    member this.Flags =
+        let flags = this.Visibility.Flags
+        if this.HideBySig
+        then flags ||| MethodAttributes.HideBySig
+        else flags
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type InstanceMethodDefFlags =
+    { Visibility: Visibility
+      HideBySig: bool
+      VTableLayout: VTableLayout }
+
+    member this.Flags =
+        let mutable flags = (this.Visibility :> IFlags<MethodAttributes>).Flags
+        if this.HideBySig then flags <- flags ||| MethodAttributes.HideBySig
+        flags ||| (this.VTableLayout :> IFlags<_>).Flags
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type MethodImplFlags =
+    { ForwardRef: bool
+      PreserveSig: bool
+      NoInlining: bool
+      NoOptimization: bool }
+
+    member this.Flags =
+        let mutable flags = enum<MethodImplAttributes > 0
+        if this.ForwardRef then flags <- flags ||| MethodImplAttributes.ForwardRef
+        if this.PreserveSig then flags <- flags ||| MethodImplAttributes.PreserveSig
+        if this.NoInlining then flags <- flags ||| MethodImplAttributes.NoInlining
+        if this.NoOptimization then flags <- flags ||| MethodImplAttributes.NoOptimization
+        flags
+
+    static member Zero =
+        { ForwardRef = false
+          PreserveSig = false
+          NoInlining = false
+          NoOptimization = false }
 
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type InstanceMethodFlags private (flags: MethodAttributes) =
+    new (flags: InstanceMethodDefFlags) = InstanceMethodFlags(flags.Flags)
     interface IFlags<MethodAttributes> with member _.Flags = flags
 
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type AbstractMethodFlags private (flags: MethodAttributes) =
-    interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.Abstract ||| MethodAttributes.Virtual // TODO: Move setting of flags into a constructor.
+    new (flags: InstanceMethodDefFlags) = AbstractMethodFlags(flags.Flags ||| MethodAttributes.Abstract ||| MethodAttributes.Virtual)
+    interface IFlags<MethodAttributes> with member _.Flags = flags
 
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
@@ -224,18 +277,23 @@ type FinalMethodFlags private (flags: MethodAttributes) =
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type StaticMethodFlags private (flags: MethodAttributes) =
-    new (flags: MethodFlags<Visibility>) = StaticMethodFlags(flags.Flags ||| MethodAttributes.Static)
+    new (flags: StaticMethodDefFlags<Visibility>) = StaticMethodFlags(flags.Flags ||| MethodAttributes.Static)
     interface IFlags<MethodAttributes> with member _.Flags = flags
 
+// type GlobalMethodFlags
+
+// NOTE: Constructors and Class Constructors cannot be marked CompilerControlled.
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type ConstructorFlags private (flags: MethodAttributes) =
-    interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName
+    interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName // TODO: Move setting of flags into a constructor.
 
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type ClassConstructorFlags private (flags: MethodAttributes) =
     interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| MethodAttributes.Static
+
+// TODO: Reduce number of struct types by using the records directly.
 
 [<AutoOpen>]
 module Flags =
