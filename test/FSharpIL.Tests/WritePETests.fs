@@ -81,7 +81,10 @@ let tests =
                                       HideBySig = true }
                                     |> StaticMethodFlags
                                   Signature =
-                                    let args = ImmutableArray.Empty
+                                    let args =
+                                        { CustomMod = ImmutableArray.Empty
+                                          ParamType = EncodedType.Array(EncodedType.String, ArrayShape.OneDimension) }
+                                        |> ImmutableArray.Create
                                     StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, args)
                                   ParamList = fun _ _ -> Param { Flags = ParamFlags.Zero; ParamName = "args" } }
                         }

@@ -771,7 +771,7 @@ type ParamItem =
       // ByRef: unit
       // TypedByRef: unit
       /// <summary>Corresponds to the <c>Type</c> of the parameter.</summary>
-      ParamType: unit }
+      ParamType: EncodedType }
 
 /// <summary>Represents a <c>RetType</c> used in a signature (II.23.2.11).</summary>
 [<IsReadOnly; Struct>]
@@ -820,7 +820,7 @@ type EncodedType =
     | R8
     | I
     | U
-    | Array // of ?
+    | Array of EncodedType * ArrayShape
     | FunctionPointer // of MethodDefSig
     //| FunctionPointer // of MethodRefSig
     | GenericInstantiation // of ?
@@ -834,6 +834,21 @@ type EncodedType =
     | SZArray // of ?
     | ValueType // of TypeDefOrRefOrSpecEncoded
     //| Var // of ?
+
+/// II.23.2.13
+[<IsReadOnly; Struct>]
+type ArrayShape =
+    { /// Specifies the number of dimensions in the array.
+      Rank: uint32 // TODO: How to prevent a value of zero?
+      /// <summary>Specifies the sizes of each dimension.</summary>
+      /// <remarks>Corresponds to the <c>NumSizes</c> item and <c>Size</c> items in the signature.</remarks>
+      Sizes: ImmutableArray<uint32> // NOTE: The two arrays containing information for each dimension can contain less items than Rank.
+      /// <summary>Specifies the lower bounds of each dimension.</summary>
+      /// <remarks>Corresponds to the <c>NumLoBounds</c> item and <c>LoBound</c> items in the signature.</remarks>
+      LowerBounds: ImmutableArray<int32> }
+
+    /// Describes the shape of a single-dimensional array.
+    static member OneDimension = { Rank = 1u; Sizes = ImmutableArray.Empty; LowerBounds = ImmutableArray.Empty }
 
 [<Sealed>]
 type MetadataBuilderState (mdle: ModuleTable) as this =
