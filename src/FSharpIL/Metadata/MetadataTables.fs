@@ -497,19 +497,22 @@ type FieldSet<'Field when 'Field :> IField> (capacity: int) =
 
     member _.ToImmutable(): ImmutableArray<FieldRow> = fields.ToImmutableArray()
 
-/// II.25.4
-type MethodBody = unit
-
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
 type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
-    /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the method body.</summary>
-    member _.Body = body: obj
+    /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the address of the method body.</summary>
+    member _.Body: MethodBody = body
     member _.ImplFlags = iflags // TODO: Open System.Runtime.CompilerServices
     member _.Flags: MethodAttributes = attr
     member _.Name: Identifier = name
-    member _.Signature = signature
-    //member _.ParamList = () // TODO: Iterate through params declared in signature and call the paramList function.
+    member _.Signature: MethodDefSignature = signature
+    member val ParamList =
+        let len = signature.Parameters.Length
+        let parameters = ImmutableArray.CreateBuilder<ParamRow> len
+        for i = 0 to len - 1 do
+            let item = signature.Parameters.Item i
+            paramList item i |> parameters.Add
+        parameters.ToImmutable()
 
     member internal _.SkipDuplicateChecking = attr &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
 
@@ -525,19 +528,20 @@ type IMethod =
 type MethodList<'Method when 'Method :> IMethod> = MemberList<'Method, MethodDef>
 
 type Method<'Body, 'Flags, 'Signature when 'Flags :> IFlags<MethodAttributes> and 'Signature :> IMethodSignature> =
-    { Body: 'Body
+    { Body: MethodBody
       ImplFlags: MethodImplFlags
       Flags: 'Flags
       MethodName: Identifier
       Signature: 'Signature
-      ParamList: unit (*ParamTypeAndOtherInformation*) -> int -> ParamRow }
+      ParamList: ParamItem -> int -> ParamRow }
 
     interface IMethod with
         member this.Definition() = MethodDef(this.Body, this.ImplFlags, this.Flags.Flags, this.MethodName, this.Signature.Signature(), this.ParamList)
 
 // TODO: Create different method body types for different methods.
 type InstanceMethodDef = Method<MethodBody, InstanceMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
-type AbstractMethodDef = Method<unit, AbstractMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+// TODO: Figure out how to make it so that abstract methods do not have a body.
+type AbstractMethodDef = Method<MethodBody (*unit*), AbstractMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 type FinalMethodDef = Method<MethodBody, FinalMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 type StaticMethodDef = Method<MethodBody, StaticMethodFlags, StaticMethodSignature>
 // TODO: Prevent constructors from having generic parameters (an entry in the GenericParam table).
@@ -706,7 +710,7 @@ type MethodDefSignature internal (hasThis: bool, explicitThis: bool, cconv: Meth
         if explicitThis then flags <- flags ||| CallingConventions.ExplicitThis
         flags
     member _.ReturnType = retType
-    member _.Parameters = parameters
+    member _.Parameters: ImmutableArray<ParamItem> = parameters
 
 type IMethodSignature =
     abstract Signature: unit -> MethodDefSignature
@@ -849,6 +853,37 @@ type ArrayShape =
 
     /// Describes the shape of a single-dimensional array.
     static member OneDimension = { Rank = 1u; Sizes = ImmutableArray.Empty; LowerBounds = ImmutableArray.Empty }
+
+type Opcode =
+    /// An instruction that does nothing (III.3.51).
+    | Nop
+    /// An instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been tripped" (III.3.16).
+    | Break
+    | Call of unit // TODO: Allow call to accept a MethodDef, MethodRef, or MethodSpec.
+    // | Calli
+    /// An instruction used to return from the current method (III.3.56).
+    | Ret
+    // TODO: Include other opcodes.
+
+    /// An instruction that loads a literl string (III.4.16).
+    | Ldstr of string
+
+    /// Returns the bytes that make up this opcode.
+    member this.Opcode =
+        match this with
+        | Nop -> [| 0uy |]
+        | Break -> [| 1uy |]
+        | Call _ -> [| 0x28uy |]
+
+        | Ret -> [| 0x2Auy |]
+
+        | Ldstr _ -> [| 0x72uy |]
+
+// TODO: Figure out how exception handling information will be included.
+// TODO: Figure out how to prevent (some) invalid method bodies.
+/// II.25.4
+type MethodBody =
+    ImmutableArray<Opcode>
 
 [<Sealed>]
 type MetadataBuilderState (mdle: ModuleTable) as this =

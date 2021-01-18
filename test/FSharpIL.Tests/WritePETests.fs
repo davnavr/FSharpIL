@@ -73,7 +73,13 @@ let tests =
                     let! methodList =
                         methods {
                             StaticClassMethod.Method
-                                { Body = invalidOp "Body?"
+                                { Body =
+                                    [|
+                                        Ldstr "Hello World!"
+                                        Call (invalidOp "System.Console::WriteLine(string)")
+                                        Ret
+                                    |]
+                                    |> ImmutableArray.Create<Opcode>
                                   ImplFlags = MethodImplFlags.Zero
                                   MethodName = Identifier.ofStr "Method"
                                   Flags =
@@ -93,7 +99,7 @@ let tests =
                           ClassName = Identifier.ofStr "Program"
                           Extends = Extends.TypeRef object
                           Fields = FieldList.Empty
-                          Flags = StaticClassFlags ClassFlags.Zero 
+                          Flags = StaticClassFlags ClassFlags.Zero
                           TypeNamespace = "HelloWorld"
                           Methods = methodList }
                 }
