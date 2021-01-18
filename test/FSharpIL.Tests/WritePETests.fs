@@ -112,14 +112,18 @@ let tests =
                                     StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, args)
                                   ParamList = fun _ _ -> Param { Flags = ParamFlags.Zero; ParamName = "args" } }
                         }
-                    TypeDef.AddClass
-                        { Access = TypeVisibility.Public
-                          ClassName = Identifier.ofStr "Program"
-                          Extends = Extends.TypeRef object
-                          Fields = FieldList.Empty
-                          Flags = StaticClassFlags ClassFlags.Zero
-                          TypeNamespace = "HelloWorld"
-                          Methods = methodList }
+                    let! program =
+                        TypeDef.AddClass
+                            { Access = TypeVisibility.Public
+                              ClassName = Identifier.ofStr "Program"
+                              Extends = Extends.TypeRef object
+                              Fields = FieldList.Empty
+                              Flags = StaticClassFlags ClassFlags.Zero
+                              TypeNamespace = "HelloWorld"
+                              Methods = methodList }
+                    entrypoint
+                        (fun _ -> true)
+                        program
                 }
                 |> ValidationResult.get
             let pe = CliHeader.Default tables |> PEFile.ofMetadata IsExe

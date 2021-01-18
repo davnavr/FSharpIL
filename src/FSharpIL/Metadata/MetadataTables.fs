@@ -275,7 +275,7 @@ type TypeHandle<'Type> = // TODO: Rename to TypeDefHandle
 
     interface IHandle with
         member this.Owner = this.TypeHandle.Owner
-        member this.ValueType = typeof<'Type>
+        member _.ValueType = typeof<'Type>
 
 /// <summary>
 /// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
@@ -502,7 +502,7 @@ type FieldSet<'Field when 'Field :> IField> (capacity: int) =
 type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
     /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the address of the method body.</summary>
     member _.Body: MethodBody = body
-    member _.ImplFlags = iflags // TODO: Open System.Runtime.CompilerServices
+    member _.ImplFlags: MethodImplFlags = iflags
     member _.Flags: MethodAttributes = attr
     member _.Name: Identifier = name
     member _.Signature: MethodDefSignature = signature
@@ -521,6 +521,9 @@ type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature
             if this.SkipDuplicateChecking || other.SkipDuplicateChecking
             then false
             else this.Name = other.Name && this.Signature = other.Signature
+
+    interface IHandleValue with
+        member this.Handles = Seq.empty // TODO: Return handles used by the MethodDef.
 
 type IMethod =
     abstract Definition : unit -> MethodDef
@@ -989,6 +992,8 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
 
     let typeDef = TypeDefTable this
 
+    let mutable entrypoint = None
+
     member val internal Warnings: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
     member val internal ClsViolations: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ClsViolation>()
 
@@ -1051,7 +1056,7 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     // (0x1D)
     // member FieldRva
     /// (0x20)
-    member val Assembly: Assembly option = None with get, set // 0x20 // TODO: Figure out if None is a good default value.
+    member val Assembly: Assembly option = None with get, set
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// (0x23)
@@ -1081,6 +1086,20 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     // member MethodSpec
     // (0x2C)
     // member GenericParamConstraint
+
+    // TODO: How to specify the entrypoint in a multi-file assembly?
+    /// <summary>Gets or sets the entrypoint of the assembly.</summary>
+    /// <remarks>The entrypoint of the assembly is specified by the <c>EntryPointToken</c> field of the CLI header (II.25.3.3).</remarks>
+    member this.EntryPoint
+        with get(): Handle<MethodDef> option = entrypoint
+        and set main =
+            match main with
+            | Some (main': Handle<_>) ->
+                if main'.Owner <> owner then
+                    invalidArg "main" "The specified entrypoint cannot be owned by another state."
+                this.EnsureOwner main'.Item
+                entrypoint <- Some main'
+            | None -> entrypoint <- None
 
     member internal this.FindType t: Handle<_> option =
         // TODO: Search in the TypeDefTable as well.

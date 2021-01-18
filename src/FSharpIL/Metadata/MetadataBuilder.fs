@@ -5,10 +5,6 @@ open System.Collections.Immutable
 /// II.24.2.6
 [<Sealed>]
 type MetadataTables internal (state: MetadataBuilderState) =
-    /// A collection of warnings produced while creating the metadata.
-    member val Warnings = state.Warnings.ToImmutable()
-    member val ClsViolations = state.ClsViolations.ToImmutable()
-
     member val MajorVersion = state.MajorVersion
     member val MinorVersion = state.MinorVersion
     member val Module = state.Module
@@ -59,10 +55,11 @@ type MetadataBuilder internal (mdle) =
         match expr state with
         | Ok _ ->
             let tables = MetadataTables state
+            let cls = state.ClsViolations.ToImmutable()
             if state.Warnings.Count > 0 then
-                ValidationWarning(tables, tables.ClsViolations, tables.Warnings)
+                ValidationWarning(tables, cls, state.Warnings.ToImmutable())
             else
-                ValidationSuccess(tables, tables.ClsViolations)
+                ValidationSuccess(tables, cls)
         | Error err -> ValidationError err
     member inline _.Yield(expr: MetadataBuilderState -> #IHandle) = fun state -> expr state |> Result<_, ValidationError>.Ok
     member inline _.Yield(expr: MetadataBuilderState -> unit) = fun state -> expr state; Result<_, ValidationError>.Ok()
@@ -76,6 +73,14 @@ type MetadataBuilder internal (mdle) =
 module MetadataBuilder =
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
     let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly
+
+    /// Sets the entrypoint of the assembly.
+    let entrypoint (predicate: MethodDef -> bool) (tdef: TypeHandle<_>) (state: MetadataBuilderState) =
+        Seq.tryFind
+            predicate
+            tdef.Item.MethodList
+        |> Option.iter
+            (fun main -> state.EntryPoint <- state.CreateHandle main |> Some)
 
     /// <summary>Computation Expression used for building the methods of a <see cref="T:FSharpIL.Metadata.TypeDef"/>.</summary>
     [<GeneralizableValue>]
