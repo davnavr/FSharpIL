@@ -502,7 +502,7 @@ type MethodBody = unit
 
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
-type MethodDef internal (body, iflags, attr, name, signature, paramList) =
+type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
     /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the method body.</summary>
     member _.Body = body: obj
     member _.ImplFlags = iflags // TODO: Open System.Runtime.CompilerServices
@@ -524,27 +524,27 @@ type IMethod =
 
 type MethodList<'Method when 'Method :> IMethod> = MemberList<'Method, MethodDef>
 
-type Method<'Body, 'Flags when 'Flags :> IFlags<MethodAttributes>> =
+type Method<'Body, 'Flags, 'Signature when 'Flags :> IFlags<MethodAttributes> and 'Signature :> IMethodSignature> =
     { Body: 'Body
       ImplFlags: MethodImplFlags
       Flags: 'Flags
       MethodName: Identifier
-      // NOTE: Parameter attributes and names stored in ParamList, method parameter types most likely stored in the signature.
-      Signature: unit // MethodDefSignature // TODO: How to use generic parameters?
+      Signature: 'Signature
       ParamList: unit (*ParamTypeAndOtherInformation*) -> int -> ParamRow }
 
     interface IMethod with
-        member this.Definition() = MethodDef(this.Body, this.ImplFlags, this.Flags.Flags, this.MethodName, this.Signature, this.ParamList)
+        member this.Definition() = MethodDef(this.Body, this.ImplFlags, this.Flags.Flags, this.MethodName, this.Signature.Signature(), this.ParamList)
 
-type InstanceMethodDef = Method<MethodBody, InstanceMethodFlags> // TODO: Create different method body types for different methods.
-type AbstractMethodDef = Method<unit, AbstractMethodFlags>
-type FinalMethodDef = Method<MethodBody, FinalMethodFlags>
-type StaticMethodDef = Method<MethodBody, StaticMethodFlags>
+// TODO: Create different method body types for different methods.
+type InstanceMethodDef = Method<MethodBody, InstanceMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type AbstractMethodDef = Method<unit, AbstractMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type FinalMethodDef = Method<MethodBody, FinalMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type StaticMethodDef = Method<MethodBody, StaticMethodFlags, StaticMethodSignature>
 // TODO: Prevent constructors from having generic parameters (an entry in the GenericParam table).
 /// <summary>Represents a method named <c>.ctor</c>, which is an object constructor method.</summary>
-type ConstructorDef = Method<MethodBody, ConstructorFlags>
+type ConstructorDef = Method<MethodBody, ConstructorFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 /// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
-type ClassConstructorDef = Method<MethodBody, ClassConstructorFlags>
+type ClassConstructorDef = Method<MethodBody, ClassConstructorFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 
 // TODO: Figure out how to avoid having users type out the full name of the method type (ex: ConcreteClassMethod.Method)
 [<RequireQualifiedAccess>]
@@ -695,20 +695,49 @@ type NestedClass =
 
 // TODO: Have different signature types for different kinds of methods.
 /// Represents the signature of a method or global function (II.23.2.1).
-[<Struct; IsReadOnly>]
-type MethodDefSignature internal (cconv: CallingConventions) =
-    member _.CallingConvention = cconv
+[<IsReadOnly; Struct>]
+type MethodDefSignature internal (hasThis: bool, explicitThis: bool, cconv: MethodCallingConventions, retType: ReturnTypeItem, parameters: ImmutableArray<ParamItem>) =
+    member _.CallingConventions: CallingConventions =
+        let mutable flags =
+            match cconv with
+            | Default -> enum 0
+            | VarArg -> CallingConventions.VarArgs
+        if hasThis then flags <- flags ||| CallingConventions.HasThis
+        if explicitThis then flags <- flags ||| CallingConventions.ExplicitThis
+        flags
+    member _.ReturnType = retType
+    member _.Parameters = parameters
 
-type MethodUnknownThingy =
+type IMethodSignature =
+    abstract Signature: unit -> MethodDefSignature
+
+type MethodCallingConventions =
     | Default
     | VarArg
-    | Generic // of count: int
+    // | Standard // TODO: Determine if this value is valid. See documentation for System.Reflection.CallingConventions
+    // | Generic // of count: int
+
+[<RequireQualifiedAccess>]
+type MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile =
+    | AAAAA
+
+    interface IMethodSignature with member _.Signature() = invalidOp "uh oh signature"
+
+type StaticMethodSignature =
+    | StaticMethodSignature of MethodCallingConventions * ReturnTypeItem * ImmutableArray<ParamItem>
+
+    interface IMethodSignature with
+        member this.Signature() =
+            let (StaticMethodSignature (cconv, rtype, parameters)) = this
+            MethodDefSignature(false, false, cconv, rtype, parameters)
+
+    // TODO: Implement IHandleValue.
 
 /// Captures the definition of a field or global variable (II.23.2.4).
-[<Struct; IsReadOnly>]
+[<IsReadOnly; Struct>]
 type FieldSignature =
     { CustomMod: ImmutableArray<CustomModifier>
-      FieldType: ReturnType }
+      FieldType: ReturnTypeItem }
 
     interface IHandleValue with
         member this.Handles =
@@ -720,11 +749,11 @@ type FieldSignature =
                     | TypeDef (IHandle handle)
                     | TypeRef (IHandle handle) -> handle
 
-                // ftype
+                // ftype // TODO: Include field type in handle validation.
             }
 
 /// II.23.2.7
-[<Struct; IsReadOnly>]
+[<IsReadOnly; Struct>]
 type CustomModifier =
     { Required: bool
       ModifierType: TypeDefOrRefOrSpecEncoded }
@@ -735,9 +764,38 @@ type TypeDefOrRefOrSpecEncoded =
     | TypeRef of Handle<TypeRef>
     // TypeSpec // of ?
 
-/// II.23.2.11
+/// <summary>Represents a <c>Param</c> item used in signatures (II.23.2.10).</summary>
+[<IsReadOnly; Struct>]
+type ParamItem =
+    { CustomMod: ImmutableArray<CustomModifier>
+      // ByRef: unit
+      // TypedByRef: unit
+      /// <summary>Corresponds to the <c>Type</c> of the parameter.</summary>
+      ParamType: unit }
+
+/// <summary>Represents a <c>RetType</c> used in a signature (II.23.2.11).</summary>
+[<IsReadOnly; Struct>]
+type ReturnTypeItem =
+    { CustomMod: ImmutableArray<CustomModifier>
+      ReturnType: ReturnType }
+
+    static member Void =
+        { CustomMod = ImmutableArray.Empty
+          ReturnType = ReturnType.Void }
+
+/// <summary>Represents all different possible return types encoded in a <c>RetType</c> (II.23.2.11).</summary>
+/// <seealso cref="T:FSharpIL.Metadata.ReturnTypeItem"/>
 [<RequireQualifiedAccess>]
 type ReturnType =
+    // | Type of byRef: bool * EncodedType
+    // | TypedByRef // of ?
+    | Void
+
+//type ReturnType = unit
+
+/// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
+[<RequireQualifiedAccess>]
+type EncodedType =
     /// <summary>Represents the <see cref="T:System.Boolean"/> type.</summary>
     | Boolean
     /// <summary>Represents the <see cref="T:System.Char"/> type.</summary>

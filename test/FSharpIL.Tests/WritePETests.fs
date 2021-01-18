@@ -3,6 +3,7 @@
 open Expecto
 
 open System
+open System.Collections.Immutable
 open System.IO
 open System.Reflection
 open System.Reflection.Metadata
@@ -79,7 +80,9 @@ let tests =
                                     { Visibility = Public
                                       HideBySig = true }
                                     |> StaticMethodFlags
-                                  Signature = invalidOp "signature?"
+                                  Signature =
+                                    let args = ImmutableArray.Empty
+                                    StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, args)
                                   ParamList = fun _ _ -> Param { Flags = ParamFlags.Zero; ParamName = "args" } }
                         }
                     TypeDef.AddClass
