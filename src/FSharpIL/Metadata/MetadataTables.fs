@@ -267,15 +267,15 @@ type StructDef =
      Methods: unit }
 
 [<Struct; IsReadOnly>]
-type TypeHandle<'Type> =
+type TypeHandle<'Type> = // TODO: Rename to TypeDefHandle
     internal { TypeHandle: Handle<TypeDef> }
 
     member this.Handle = this.TypeHandle
-    member this.Item = this.TypeHandle.Item
+    member this.Item = this.TypeHandle.Item // TODO: Rename to Type
 
     interface IHandle with
         member this.Owner = this.TypeHandle.Owner
-        member this.ValueType = this.TypeHandle.ValueType
+        member this.ValueType = typeof<'Type>
 
 /// <summary>
 /// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
@@ -527,7 +527,7 @@ type IMethod =
 
 type MethodList<'Method when 'Method :> IMethod> = MemberList<'Method, MethodDef>
 
-type Method<'Body, 'Flags, 'Signature when 'Flags :> IFlags<MethodAttributes> and 'Signature :> IMethodSignature> =
+type Method<'Body, 'Flags, 'Signature when 'Flags :> IFlags<MethodAttributes> and 'Signature :> IMethodDefSignature> =
     { Body: MethodBody
       ImplFlags: MethodImplFlags
       Flags: 'Flags
@@ -631,6 +631,74 @@ type ParamRow =
         match this with
         | Param { ParamName = name } -> name
 
+
+
+
+[<RequireQualifiedAccess>]
+type MemberRefParent =
+    // | MethodDef // of ?
+    // | ModuleRef // of ?
+    // | TypeDef // of ?
+    | TypeRef of Handle<TypeRef>
+    // | TypeSpec // of ?
+
+type MemberRef<'Signature when 'Signature :> IHandleValue> =
+    { Class: MemberRefParent
+      MemberName: Identifier
+      Signature: 'Signature }
+
+type MethodRef = MemberRef<MethodRefSignature>
+
+// type FieldRef = 
+
+/// <summary>Represents a row in the <c>MemberRef</c> table, which contains references to the methods and fields of a class (II.22.25).</summary>
+/// <seealso cref="T:FSharpIL.Metadata.MethodRef"/>
+/// <seealso cref="T:FSharpIL.Metadata.FieldRef"/>
+type MemberRefRow =
+    | MethodRef of MethodRef
+    // | FieldRef // of ?
+
+    interface IHandleValue with
+        member this.Handles =
+            match this with
+            | MethodRef { Signature = Handles handles } -> handles
+
+[<IsReadOnly; Struct>]
+type MemberRefHandle<'MemberRef> =
+    internal { MemberRefHandle: Handle<MemberRefRow> }
+
+    member this.Handle = this.MemberRefHandle
+    member this.Member = this.MemberRefHandle.Item
+
+    interface IHandle with
+        member this.Owner = this.MemberRefHandle.Owner
+        member _.ValueType = typeof<'MemberRef>
+
+[<Sealed>]
+type MemberRefTable internal (owner: MetadataBuilderState) =
+    let members = Table<MemberRefRow> owner // TODO: Have MemberRefRow implement IEquatable or create a comparer here.
+
+    // TODO: Enforce CLS checks.
+    // NOTE: Duplicates (based on owning class, name, and signature) are allowed, but produce a warning.
+    member private _.GetHandle<'MemberRef>(row: MemberRefRow) =
+        members.GetHandle row
+        |> Result.map (fun handle -> { MemberRefHandle = handle }: MemberRefHandle<'MemberRef>)
+
+    member this.GetHandle(method: MethodRef) = this.GetHandle<MethodRef>(MethodRef method)
+    // member this.GetHandle(field: FieldRef) = this.GetHandle<FieldRef>(FieldRef field)
+
+/// <summary>
+/// Contains methods for adding <see cref="T:FSharpIL.Metadata.MethodRef"/> and
+/// <see cref="T:FSharpIL.Metadata.FieldRef"/> instances to the <c>MemberRef</c> table.
+/// </summary>
+/// <seealso cref="T:FSharpIL.Metadata.MemberRefTable"/>
+[<AbstractClass; Sealed>]
+type MemberRef =
+    static member AddMethod(method: MethodRef) (state: MetadataBuilderState) = state.MemberRef.GetHandle method
+    // static member AddField
+
+
+
 /// II.22.2
 type Assembly =
     { HashAlgId: unit
@@ -698,7 +766,7 @@ type NestedClass =
       EnclosingClass: Handle<TypeDef> }
 
 // TODO: Have different signature types for different kinds of methods.
-/// Represents the signature of a method or global function (II.23.2.1).
+/// <summary>Represents a <c>MethodDefSig</c>, which captures the signature of a method or global function (II.23.2.1).</summary>
 [<IsReadOnly; Struct>]
 type MethodDefSignature internal (hasThis: bool, explicitThis: bool, cconv: MethodCallingConventions, retType: ReturnTypeItem, parameters: ImmutableArray<ParamItem>) =
     member _.CallingConventions: CallingConventions =
@@ -712,7 +780,7 @@ type MethodDefSignature internal (hasThis: bool, explicitThis: bool, cconv: Meth
     member _.ReturnType = retType
     member _.Parameters: ImmutableArray<ParamItem> = parameters
 
-type IMethodSignature =
+type IMethodDefSignature =
     abstract Signature: unit -> MethodDefSignature
 
 type MethodCallingConventions =
@@ -725,17 +793,37 @@ type MethodCallingConventions =
 type MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile =
     | AAAAA
 
-    interface IMethodSignature with member _.Signature() = invalidOp "uh oh signature"
+    interface IMethodDefSignature with member _.Signature() = invalidOp "uh oh signature"
 
 type StaticMethodSignature =
     | StaticMethodSignature of MethodCallingConventions * ReturnTypeItem * ImmutableArray<ParamItem>
 
-    interface IMethodSignature with
+    interface IMethodDefSignature with
         member this.Signature() =
             let (StaticMethodSignature (cconv, rtype, parameters)) = this
             MethodDefSignature(false, false, cconv, rtype, parameters)
 
     // TODO: Implement IHandleValue.
+
+/// <summary>Represents a <c>MethodRefSig</c>, which "provides the call site Signature for a method" (II.23.2.2).</summary>
+[<IsReadOnly; Struct>]
+type MethodRefSignature =
+    { HasThis: bool
+      ExplicitThis: bool
+      /// <summary>Corresponds to the <c>RetType</c> item, which specifies the return type of the method.</summary>
+      ReturnType: ReturnTypeItem
+      Parameters: ImmutableArray<ParamItem>
+      VarArgParameters: ImmutableArray<ParamItem> }
+
+    member this.CallingConventions =
+        let mutable flags = enum<CallingConventions> 0
+        if this.HasThis then flags <- flags ||| CallingConventions.HasThis
+        if this.ExplicitThis then flags <- flags ||| CallingConventions.ExplicitThis
+        if not this.VarArgParameters.IsEmpty then flags <- flags ||| CallingConventions.VarArgs
+        flags
+
+    interface IHandleValue with
+        member this.Handles = Seq.empty // TODO: Get handles used by the MethodRefSignature.
 
 /// Captures the definition of a field or global variable (II.23.2.4).
 [<IsReadOnly; Struct>]
@@ -854,12 +942,21 @@ type ArrayShape =
     /// Describes the shape of a single-dimensional array.
     static member OneDimension = { Rank = 1u; Sizes = ImmutableArray.Empty; LowerBounds = ImmutableArray.Empty }
 
+
+
+
+/// <summary>Specifies the method that is called by a <see cref="T:FSharpIL.Metadata.Opcode.Call"/> instruction.</summary>
+[<IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
+type Callee =
+    | MethodRef of MemberRefHandle<MethodRef>
+
 type Opcode =
     /// An instruction that does nothing (III.3.51).
     | Nop
     /// An instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been tripped" (III.3.16).
     | Break
-    | Call of unit // TODO: Allow call to accept a MethodDef, MethodRef, or MethodSpec.
+    | Call of Callee // TODO: Allow call to accept a MethodDef, MethodRef, or MethodSpec.
     // | Calli
     /// An instruction used to return from the current method (III.3.56).
     | Ret
@@ -881,6 +978,7 @@ type Opcode =
 
 // TODO: Figure out how exception handling information will be included.
 // TODO: Figure out how to prevent (some) invalid method bodies.
+// TODO: Ensure handles used in opcodes have the correct owner.
 /// II.25.4
 type MethodBody =
     ImmutableArray<Opcode>
@@ -917,7 +1015,7 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     // (0x09)
     // member InterfaceImpl
     // (0x0A)
-    // member MemberRef
+    member val MemberRef: MemberRefTable = MemberRefTable this
     // (0x0B)
     // member Constant
     // (0x0C)

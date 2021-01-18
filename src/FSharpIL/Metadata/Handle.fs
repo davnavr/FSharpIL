@@ -37,3 +37,4 @@ type internal HandleEqualityComparer<'Value>(valueComparer: IEqualityComparer<'V
 [<AutoOpen>]
 module internal HandlePatterns =
     let inline (|IHandle|) (handle: #IHandle) = handle :> IHandle
+    let inline (|Handles|) (value: #IHandleValue) = value.Handles

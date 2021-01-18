@@ -58,13 +58,31 @@ let tests =
                               Name = AssemblyName.ofStr "System.Private.CoreLib"
                               Culture = NullCulture
                               HashValue = None }
-                    let! console =
+                    let! consolelib =
                         AssemblyRef.Add
                             { Version = Version(5, 0, 0, 0)
                               PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
                               Name = AssemblyName.ofStr "System.Console"
                               Culture = NullCulture
                               HashValue = None }
+                    let! console =
+                        TypeRef.Add
+                            { TypeName = Identifier.ofStr "Console"
+                              TypeNamespace = "System"
+                              ResolutionScope = ResolutionScope.AssemblyRef consolelib }
+                    let! writeLine =
+                        MemberRef.AddMethod
+                            { Class = MemberRefParent.TypeRef console
+                              MemberName = Identifier.ofStr "WriteLine"
+                              Signature =
+                                { MethodRefSignature.HasThis = false
+                                  ExplicitThis = false
+                                  ReturnType = ReturnTypeItem.Void
+                                  Parameters =
+                                    { CustomMod = ImmutableArray.Empty
+                                      ParamType = EncodedType.String }
+                                    |> ImmutableArray.Create
+                                  VarArgParameters = ImmutableArray.Empty } }
                     let! object =
                         TypeRef.Add
                             { TypeName = Identifier.ofStr "Object"
@@ -76,7 +94,7 @@ let tests =
                                 { Body =
                                     [|
                                         Ldstr "Hello World!"
-                                        Call (invalidOp "System.Console::WriteLine(string)")
+                                        Call (Callee.MethodRef writeLine)
                                         Ret
                                     |]
                                     |> ImmutableArray.Create<Opcode>
