@@ -418,7 +418,7 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
         member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
 
-/// <summary>Represents a row in the Field table (II.22.15).</summary>
+/// <summary>Represents a row in the <c>Field</c> table (II.22.15).</summary>
 [<Sealed>]
 type FieldRow internal (flags, name, signature) = // TODO: How to allow different types for signature.
     member _.Flags: FieldAttributes = flags
@@ -500,6 +500,7 @@ type FieldSet<'Field when 'Field :> IField> (capacity: int) =
 /// II.25.4
 type MethodBody = unit
 
+/// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
 type MethodDef internal (body, iflags, attr, name, signature, paramList) =
     /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the method body.</summary>
@@ -508,7 +509,7 @@ type MethodDef internal (body, iflags, attr, name, signature, paramList) =
     member _.Flags: MethodAttributes = attr
     member _.Name: Identifier = name
     member _.Signature = signature
-    member _.ParamList = paramList
+    //member _.ParamList = () // TODO: Iterate through params declared in signature and call the paramList function.
 
     member internal _.SkipDuplicateChecking = attr &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
 
@@ -528,8 +529,9 @@ type Method<'Body, 'Flags when 'Flags :> IFlags<MethodAttributes>> =
       ImplFlags: MethodImplFlags
       Flags: 'Flags
       MethodName: Identifier
+      // NOTE: Parameter attributes and names stored in ParamList, method parameter types most likely stored in the signature.
       Signature: unit // MethodDefSignature // TODO: How to use generic parameters?
-      ParamList: unit }
+      ParamList: unit (*ParamTypeAndOtherInformation*) -> int -> ParamRow }
 
     interface IMethod with
         member this.Definition() = MethodDef(this.Body, this.ImplFlags, this.Flags.Flags, this.MethodName, this.Signature, this.ParamList)
@@ -605,6 +607,26 @@ type StaticClassMethod =
             | Method (MethodDef def)
             | ClassConstructor (MethodDef def) -> def
 
+/// Represents a parameter.
+[<IsReadOnly; Struct>]
+type Param =
+    { Flags: ParamFlags
+      /// The name of the parameter.
+      ParamName: string }
+
+/// <summary>Represents a row in the <c>Param</c> table (II.22.33)</summary>
+type ParamRow =
+    | Param of Param
+    // | SomeParamWithADefaultValueInTheConstantTable // of Param * ?
+
+    member this.Flags =
+        match this with
+        | Param { Flags = name } -> name
+
+    member this.ParamName =
+        match this with
+        | Param { ParamName = name } -> name
+
 /// II.22.2
 type Assembly =
     { HashAlgId: unit
@@ -673,8 +695,14 @@ type NestedClass =
 
 // TODO: Have different signature types for different kinds of methods.
 /// Represents the signature of a method or global function (II.23.2.1).
-type MethodDefSignature =
-    { HasThis: bool }
+[<Struct; IsReadOnly>]
+type MethodDefSignature internal (cconv: CallingConventions) =
+    member _.CallingConvention = cconv
+
+type MethodUnknownThingy =
+    | Default
+    | VarArg
+    | Generic // of count: int
 
 /// Captures the definition of a field or global variable (II.23.2.4).
 [<Struct; IsReadOnly>]

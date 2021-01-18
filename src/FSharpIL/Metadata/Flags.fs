@@ -295,6 +295,23 @@ type ClassConstructorFlags private (flags: MethodAttributes) =
 
 // TODO: Reduce number of struct types by using the records directly.
 
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type ParamFlags =
+    { In: bool
+      Out: bool
+      Optional: bool }
+
+    member this.Flags =
+        let mutable flags = ParameterAttributes.None
+        if this.In then flags <- flags ||| ParameterAttributes.In
+        if this.Out then flags <- flags ||| ParameterAttributes.Out
+        if this.Optional then flags <- flags ||| ParameterAttributes.Optional
+        flags
+
+    // TODO: Rename default flags from Zero to None
+    static member Zero = { In = false; Out = false; Optional = false }
+
 [<AutoOpen>]
 module Flags =
     let inline (|Flags|) (flags: IFlags<_>) = flags.Flags

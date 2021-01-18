@@ -80,7 +80,7 @@ let tests =
                                       HideBySig = true }
                                     |> StaticMethodFlags
                                   Signature = invalidOp "signature?"
-                                  ParamList = invalidOp "params?" }
+                                  ParamList = fun _ _ -> Param { Flags = ParamFlags.Zero; ParamName = "args" } }
                         }
                     TypeDef.AddClass
                         { Access = TypeVisibility.Public
