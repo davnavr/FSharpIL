@@ -2,10 +2,21 @@
 
 open System.Collections.Immutable
 
-/// II.24.2.6
+/// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
 [<Sealed>]
-type MetadataTables internal (state: MetadataBuilderState) =
+type CliMetadata internal (state: MetadataBuilderState) =
+    member val Header = state.Header
+    /// <summary>Corresponds to the <c>Flags</c> field of the CLI header (II.25.3.3).</summary>
+    member val HeaderFlags = state.HeaderFlags
+    /// <summary>Corresponds to the <c>EntryPointToken</c> field of the CLI header (II.25.3.3).</summary>
+    member val EntryPointToken = state.EntryPoint
+
+    /// <summary>Corresponds to the <c>Version</c> field of the metadata root (II.24.2.1)</summary>
+    member val MetadataVersion = state.MetadataVersion
+
+    /// <summary>Corresponds to the <c>MajorVersion</c> field of the <c>#~</c> stream header.</summary>
     member val MajorVersion = state.MajorVersion
+    /// <summary>Corresponds to the <c>MinorVersion</c> field of the <c>#~</c> stream header.</summary>
     member val MinorVersion = state.MinorVersion
     member val Module = state.Module
     member val TypeRef = state.CreateTable state.TypeRef
@@ -50,11 +61,11 @@ type MetadataBuilder internal (mdle) =
         fun state ->
             for item in items do
                 body item state |> ignore
-    member _.Run(expr: MetadataBuilderState -> _): ValidationResult<MetadataTables> =
+    member _.Run(expr: MetadataBuilderState -> _): ValidationResult<CliMetadata> =
         let state = MetadataBuilderState mdle
         match expr state with
         | Ok _ ->
-            let tables = MetadataTables state
+            let tables = CliMetadata state
             let cls = state.ClsViolations.ToImmutable()
             if state.Warnings.Count > 0 then
                 ValidationWarning(tables, cls, state.Warnings.ToImmutable())

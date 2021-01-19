@@ -1114,6 +1114,13 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
 
     let mutable entrypoint = None
 
+    member val Header = CliHeaderFields.Default with get, set
+
+    member _.HeaderFlags = CorFlags.ILOnly
+
+    /// The metadata version, contained in the metadata root (II.24.2.1).
+    member val MetadataVersion = MetadataVersion.ofStr "v4.0.30319" with get, set
+
     member val internal Warnings: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
     member val internal ClsViolations: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ClsViolation>()
 

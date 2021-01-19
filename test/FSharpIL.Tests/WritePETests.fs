@@ -152,11 +152,12 @@ let tests =
                 }
                 |> ValidationResult.get
             let pe =
-                CliHeader.Default tables
-                |> PEFile.ofMetadata IsExe
+                PEFile.ofMetadata IsExe tables
                 |> WritePE.toArray
                 |> ImmutableArray.Create<byte>
-            //use reader = new PEReader(pe)
-            //let metadata = reader.GetMetadataReader()
-            ()
+            use reader = new PEReader(pe)
+            let metadata = reader.GetMetadataReader()
+            Expect.isNonEmpty (metadata.GetAssemblyDefinition().GetCustomAttributes()) "assembly should contain target framework custom attribute"
+            Expect.isNonEmpty metadata.TypeDefinitions "assembly should contain types"
+            Expect.isNonEmpty metadata.MethodDefinitions "assembly should contain methods"
     ]

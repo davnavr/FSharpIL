@@ -24,7 +24,7 @@ type PEFile =
 
 [<RequireQualifiedAccess>]
 module PEFile =
-    let ofMetadata fileType (metadata: CliHeader) =
+    let ofMetadata fileType (metadata: CliMetadata) =
         let text :: tail = List.ofSeq PESections.Default.SectionTable
         let text' = { text with Data = [| ClrLoaderStub; CliHeader metadata |].ToImmutableArray() }
         { PEFile.Default with

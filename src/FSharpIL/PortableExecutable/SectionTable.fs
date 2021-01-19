@@ -10,7 +10,7 @@ type SectionData =
     | RawData of RawSectionData
     // First 8 bytes of the .text section
     | ClrLoaderStub
-    | CliHeader of CliHeader
+    | CliHeader of CliMetadata
     // TODO: Add cases for import table and import address table
 
 [<System.Flags>]
