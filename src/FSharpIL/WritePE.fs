@@ -295,7 +295,7 @@ let streams (info: PEInfo) (writer: Writer<_>) =
                 | RawData(Lazy bytes)-> writer.Write bytes
                 | CliHeader _ ->
                     let cli = info.CliMetadata.Item(sectionIndex, dataIndex)
-                    WriteCli.data cli writer
+                    WriteCli.metadata cli writer
                 | ClrLoaderStub -> empty 8UL writer // TODO: Write the loader stub
 
             empty (section.RoundedSize - section.ActualSize) writer

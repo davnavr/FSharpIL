@@ -20,13 +20,14 @@ type PEFile =
         { FileHeader = CoffHeader.Default
           StandardFields = StandardFields.Default
           NTSpecificFields = NTSpecificFields.Default
-          Sections = PESections.Default }
+          Sections = PESections.Empty }
 
 [<RequireQualifiedAccess>]
 module PEFile =
     let ofMetadata fileType (metadata: CliMetadata) =
-        let text :: tail = List.ofSeq PESections.Default.SectionTable
-        let text' = { text with Data = [| ClrLoaderStub; CliHeader metadata |].ToImmutableArray() }
+        let text =
+            { Kind = TextSection
+              Data = [| ClrLoaderStub; CliHeader metadata |].ToImmutableArray() }
         { PEFile.Default with
             FileHeader = { CoffHeader.Default with Characteristics = FileType fileType }
-            Sections = (text' :: tail).ToImmutableArray() |> PESections }
+            Sections = ImmutableArray.Create<Section> text |> PESections }

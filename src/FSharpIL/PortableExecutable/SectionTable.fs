@@ -124,9 +124,4 @@ type PESections(sections: ImmutableArray<Section>) as this =
             | (i, section) when section.Kind = kind -> Some(i, section)
             | _ -> None)
 
-    static member val Default = // TODO: Figure out if default should be an empty array instead.
-        let sections = ImmutableArray.CreateBuilder 3
-        sections.Add { Kind = TextSection; Data = ImmutableArray.Empty }
-        //sections.Add { Kind = RsrcSection; Data = ImmutableArray.Empty } // NOTE: .rsrc section can be omitted if not needed.
-        sections.Add { Kind = RelocSection; Data = ImmutableArray.Empty }
-        sections.ToImmutable() |> PESections
+    static member val Empty = PESections ImmutableArray.Empty

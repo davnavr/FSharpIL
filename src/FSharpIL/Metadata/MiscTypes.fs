@@ -5,8 +5,9 @@ open System.Collections.Immutable
 // II.25.3.3.1
 [<System.Flags>]
 type CorFlags =
-    | ILOnly = 0x1u
-    | Requires32Bit = 0x2u
+    | None = 0u
+    | ILOnly = 1u
+    | Requires32Bit = 2u
     | StrongNameSigned = 0x8u
     | NativeEntryPoint = 0x10u
     | TrackDebugData = 0x10000u

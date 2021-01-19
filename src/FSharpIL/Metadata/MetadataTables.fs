@@ -1116,7 +1116,12 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
 
     member val Header = CliHeaderFields.Default with get, set
 
-    member _.HeaderFlags = CorFlags.ILOnly
+    member this.HeaderFlags =
+        let signed =
+            if this.Header.StrongNameSignature.IsEmpty
+            then CorFlags.None
+            else CorFlags.StrongNameSigned
+        CorFlags.ILOnly ||| signed
 
     /// The metadata version, contained in the metadata root (II.24.2.1).
     member val MetadataVersion = MetadataVersion.ofStr "v4.0.30319" with get, set

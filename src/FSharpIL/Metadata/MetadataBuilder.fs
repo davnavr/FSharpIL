@@ -1,5 +1,6 @@
 ﻿namespace FSharpIL.Metadata
 
+open System.Collections.Generic
 open System.Collections.Immutable
 
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
@@ -21,6 +22,13 @@ type CliMetadata internal (state: MetadataBuilderState) =
     member val Module = state.Module
     member val TypeRef = state.CreateTable state.TypeRef
     member val TypeDef = state.CreateTable state.TypeDef
+
+    member val Method =
+        state.TypeDef
+        |> Seq.collect (fun tdef -> tdef.MethodList)
+        |> Seq.mapi (fun i method -> state.CreateHandle method, i)
+        // Use ImmutableDictionary class or readOnlyDict function?
+        |> readOnlyDict
 
     member val Assembly = state.Assembly
     member val AssemblyRef = state.CreateTable state.AssemblyRef
