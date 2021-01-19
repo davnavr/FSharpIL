@@ -44,13 +44,14 @@ let tests =
                   Mvid = mvid }
             let tables =
                 metadataBuilder mdle {
-                    assembly
-                        { Name = AssemblyName.ofStr "HelloWorld"
-                          HashAlgId = ()
-                          Version = Version()
-                          Flags = ()
-                          PublicKey = None
-                          Culture = NullCulture }
+                    let! assm =
+                        Assembly.Set
+                            { Name = AssemblyName.ofStr "HelloWorld"
+                              HashAlgId = ()
+                              Version = Version()
+                              Flags = ()
+                              PublicKey = None
+                              Culture = NullCulture }
                     let! mscorlib =
                         AssemblyRef.Add
                             { Version = Version(5, 0, 0, 0)
@@ -65,29 +66,53 @@ let tests =
                               Name = AssemblyName.ofStr "System.Console"
                               Culture = NullCulture
                               HashValue = None }
+
                     let! console =
                         TypeRef.Add
                             { TypeName = Identifier.ofStr "Console"
                               TypeNamespace = "System"
                               ResolutionScope = ResolutionScope.AssemblyRef consolelib }
-                    let! writeLine =
-                        MemberRef.AddMethod
-                            { Class = MemberRefParent.TypeRef console
-                              MemberName = Identifier.ofStr "WriteLine"
-                              Signature =
-                                { MethodRefSignature.HasThis = false
-                                  ExplicitThis = false
-                                  ReturnType = ReturnTypeItem.Void
-                                  Parameters =
-                                    { CustomMod = ImmutableArray.Empty
-                                      ParamType = EncodedType.String }
-                                    |> ImmutableArray.Create
-                                  VarArgParameters = ImmutableArray.Empty } }
                     let! object =
                         TypeRef.Add
                             { TypeName = Identifier.ofStr "Object"
                               TypeNamespace = "System"
                               ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+                    let! tfmAttr =
+                        TypeRef.Add
+                            { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
+                              TypeNamespace = "System.Runtime.Versioning"
+                              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+                    let string = { CustomMod = ImmutableArray.Empty; ParamType = EncodedType.String }
+
+                    let! writeLine =
+                        MemberRef.AddMethod
+                            { Class = MemberRefParent.TypeRef console
+                              MemberName = Identifier.ofStr "WriteLine"
+                              Signature =
+                                { HasThis = false
+                                  ExplicitThis = false
+                                  ReturnType = ReturnTypeItem.Void
+                                  Parameters = ImmutableArray.Create string
+                                  VarArgParameters = ImmutableArray.Empty } }
+                    let! tfmAttrCtor =
+                        MemberRef.AddMethod
+                            { Class = MemberRefParent.TypeRef tfmAttr
+                              MemberName = Identifier.ofStr ".ctor"
+                              Signature =
+                                { HasThis = true // TODO: Figure out flags.
+                                  ExplicitThis = false
+                                  ReturnType = ReturnTypeItem.Void
+                                  Parameters = ImmutableArray.Create string
+                                  VarArgParameters = ImmutableArray.Empty } }
+
+                    CustomAttribute.Add
+                        { Parent = CustomAttributeParent.Assembly assm
+                          Type = CustomAttributeType.MemberRef tfmAttrCtor
+                          Value =
+                            { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
+                              NamedArg = ImmutableArray.Empty (* FrameworkDisplayName = "" *) }
+                            |> Some }
+
                     let! methodList =
                         methods {
                             StaticClassMethod.Method
@@ -126,6 +151,12 @@ let tests =
                         program
                 }
                 |> ValidationResult.get
-            let pe = CliHeader.Default tables |> PEFile.ofMetadata IsExe
+            let pe =
+                CliHeader.Default tables
+                |> PEFile.ofMetadata IsExe
+                |> WritePE.toArray
+                |> ImmutableArray.Create<byte>
+            //use reader = new PEReader(pe)
+            //let metadata = reader.GetMetadataReader()
             ()
     ]

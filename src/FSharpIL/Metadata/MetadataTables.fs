@@ -225,6 +225,7 @@ type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, ConcreteClassM
 /// Represents an abstract class.
 type AbstractClassDef = ClassDef<AbstractClassFlags, FieldChoice, AbstractClassMethod>
 type SealedClassDef = ClassDef<SealedClassFlags, FieldChoice, SealedClassMethod>
+// TODO: Remove Extends field for static classes, and make them inherit from System.Object.
 /// Represents a sealed and abstract class, meaning that it can only contain static members.
 type StaticClassDef = ClassDef<StaticClassFlags, StaticField, StaticClassMethod>
 
@@ -497,6 +498,7 @@ type FieldSet<'Field when 'Field :> IField> (capacity: int) =
 
     member _.ToImmutable(): ImmutableArray<FieldRow> = fields.ToImmutableArray()
 
+// TODO: Create better way to get Handle<MethodDef> to allow easy use when setting the entrypoint or adding custom attributes.
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
 type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
@@ -702,6 +704,72 @@ type MemberRef =
 
 
 
+
+[<RequireQualifiedAccess>]
+type CustomAttributeParent =
+    // | MethodDef // of ?
+    // | Field // of ?
+    // | TypeRef // of ?
+    | TypeDef of Handle<TypeDef>
+    // | Param // of ?
+    // | InterfaceImpl // of ?
+    // | MemberRef of Handle<MemberRefRow>
+    // | Module // of Handle<?>
+    // | Permission // of ?
+    // | Property // of ?
+    // | Event // of ?
+    // | StandAloneSig // of ?
+    // | ModuleRef // of ?
+    // | TypeSpec // of ?
+    | Assembly of AssemblyHandle
+    // | AssemblyRef // of ?
+    // | File // of ?
+    // | ExportedType // of ?
+    // | ManifestResource // of ?
+    // | GenericParam // of ?
+    // | GenericParamConstraint // of ?
+    // | MethodSpec // of ?
+
+[<RequireQualifiedAccess>]
+type CustomAttributeType =
+    // | MethodDef // of ?
+    | MemberRef of MemberRefHandle<MethodRef>
+
+/// <summary>Represents a row in the <c>CustomAttribute</c> table (II.22.10).</summary>
+type CustomAttribute =
+    { Parent: CustomAttributeParent
+      /// Specifies the constructor method used to create the custom attribute.
+      Type: CustomAttributeType // TODO: How to ensure that the MethodRef points to a .ctor?
+      Value: CustomAttributeSignature option } // TODO: How to validate signature to ensure types of fixed arguments match method signature?
+
+    interface IHandleValue with
+        member this.Handles =
+            seq {
+                match this.Parent with
+                | CustomAttributeParent.TypeDef (IHandle parent)
+                | CustomAttributeParent.Assembly (IHandle parent) -> parent
+
+                match this.Type with
+                | CustomAttributeType.MemberRef (IHandle t) -> t
+
+                // TODO: Yield handles used in custom attribute signature.
+            }
+
+    static member Add (attr: CustomAttribute) (state: MetadataBuilderState) = state.CustomAttribute.Add attr
+
+[<Sealed>]
+type CustomAttributeTable internal (state: MetadataBuilderState) =
+    let attrs = List<CustomAttribute>()
+
+    member _.Count = attrs.Count
+
+    member _.Add(attr: CustomAttribute) =
+        state.EnsureOwner attr
+        attrs.Add attr
+
+
+
+
 /// II.22.2
 type Assembly =
     { HashAlgId: unit
@@ -710,6 +778,15 @@ type Assembly =
       PublicKey: unit option
       Name: AssemblyName
       Culture: AssemblyCulture }
+
+    /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
+    static member Set(assembly: Assembly) (state: MetadataBuilderState) = state.SetAssembly assembly
+
+[<Sealed>]
+type AssemblyHandle internal (owner: obj) =
+    interface IHandle with
+        member _.Owner = owner
+        member _.ValueType = typeof<Assembly>
 
 /// II.22.5
 [<CustomEquality; NoComparison>]
@@ -911,9 +988,13 @@ type EncodedType =
     | I8
     /// <summary>Represents the <see cref="T:System.UInt64"/> type.</summary>
     | U8
+    /// <summary>Represents the <see cref="T:System.Single"/> type.</summary>
     | R4
+    /// <summary>Represents the <see cref="T:System.Double"/> type.</summary>
     | R8
+    /// <summary>Represents the <see cref="T:System.IntPtr"/> type.</summary>
     | I
+    /// <summary>Represents the <see cref="T:System.UIntPtr"/> type.</summary>
     | U
     | Array of EncodedType * ArrayShape
     | FunctionPointer // of MethodDefSig
@@ -944,6 +1025,44 @@ type ArrayShape =
 
     /// Describes the shape of a single-dimensional array.
     static member OneDimension = { Rank = 1u; Sizes = ImmutableArray.Empty; LowerBounds = ImmutableArray.Empty }
+
+/// <summary>Represents a <c>FixedArg</c> item, which stores the arguments for a custom attribute's constructor method (II.23.3).</summary>
+[<RequireQualifiedAccess>]
+type FixedArg =
+    | Elem of Elem
+    | SZArray of ImmutableArray<Elem>
+
+[<RequireQualifiedAccess>]
+type NamedArg =
+    | Field // of FieldOrPropType * string * FixedArg
+    | Property // of FieldOrPropType * string * FixedArg
+
+/// <summary>Represents an <c>Elem</c> item, which is an argument in a custom attribute (II.23.3).</summary>
+type Elem =
+    | ValBool of bool
+    | ValChar of char
+    | ValR4 of float32
+    | ValR8 of System.Double
+    | ValI1 of int8
+    | ValU1 of uint8
+    | ValI2 of int16
+    | ValU2 of uint16
+    | ValI4 of int32
+    | ValU4 of uint32
+    | ValI8 of int64
+    | ValU8 of uint64
+    // | ValEnum // of SomehowGetTheEnumUnderlyingType?
+    | SerString of string
+    // | SerStringType // of SomehowGetTheCanonicalNameOfType.
+    // | BoxedObject of // underlying value.
+
+/// <summary>
+/// Represents a <c>CustomAttrib</c>, which stores the arguments provided to a custom attribute's constructor,
+/// as well as any values assigned to its fields or properties. (II.23.3).
+/// </summary>
+type CustomAttributeSignature =
+    { FixedArg: ImmutableArray<FixedArg>
+      NamedArg: ImmutableArray<NamedArg> }
 
 
 
@@ -991,6 +1110,7 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     let owner = Object()
 
     let typeDef = TypeDefTable this
+    let mutable assembly = None
 
     let mutable entrypoint = None
 
@@ -1019,12 +1139,12 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     // member Param
     // (0x09)
     // member InterfaceImpl
-    // (0x0A)
+    /// (0x0A)
     member val MemberRef: MemberRefTable = MemberRefTable this
     // (0x0B)
     // member Constant
-    // (0x0C)
-    // member CustomAttribute
+    /// (0x0C)
+    member val CustomAttribute: CustomAttributeTable = CustomAttributeTable this
     // (0x0D)
     // member FieldMarshal
     // (0x0E)
@@ -1056,7 +1176,7 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     // (0x1D)
     // member FieldRva
     /// (0x20)
-    member val Assembly: Assembly option = None with get, set
+    member _.Assembly: Assembly option = assembly
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// (0x23)
@@ -1100,6 +1220,10 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
                 this.EnsureOwner main'.Item
                 entrypoint <- Some main'
             | None -> entrypoint <- None
+
+    member _.SetAssembly(assm: Assembly) =
+        assembly <- Some assm
+        AssemblyHandle owner
 
     member internal this.FindType t: Handle<_> option =
         // TODO: Search in the TypeDefTable as well.

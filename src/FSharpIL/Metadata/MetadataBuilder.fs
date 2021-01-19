@@ -67,13 +67,10 @@ type MetadataBuilder internal (mdle) =
     member inline _.Zero() = fun _ -> Result<_, ValidationError>.Ok()
 
 /// <summary>
-/// Contains functions for use within the <see cref="T:FSharpIL.Metadata.MetadataBuilder"/> computation expression.
+/// Contains functions and computation expressions for use within the <see cref="T:FSharpIL.Metadata.MetadataBuilder"/> computation expression.
 /// </summary>
 [<AutoOpen>]
 module MetadataBuilder =
-    /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
-    let inline assembly (assembly: Assembly) (state: MetadataBuilderState) = state.Assembly <- Some assembly
-
     /// Sets the entrypoint of the assembly.
     let entrypoint (predicate: MethodDef -> bool) (tdef: TypeHandle<_>) (state: MetadataBuilderState) =
         Seq.tryFind
