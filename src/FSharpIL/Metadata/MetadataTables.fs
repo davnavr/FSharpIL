@@ -54,12 +54,16 @@ type Table<'Value when 'Value :> IHandleValue> internal (state: MetadataBuilderS
 
     new(state: MetadataBuilderState) = Table(state, EqualityComparer.Default)
 
+    member _.Count = set.Count
+
     abstract member GetHandle : 'Value -> Result<Handle<'Value>, ValidationError>
     default _.GetHandle(value: 'Value) =
         state.EnsureOwner value
         if set.Add value |> not
         then DuplicateValue value |> Error
         else state.CreateHandle value |> Ok
+
+    member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
 
     interface ITable<'Value> with
         member _.Comparer = comparer
@@ -410,12 +414,14 @@ type TypeDefTable internal (owner: MetadataBuilderState) =
 
     // TODO: Add the <Module> class used for global variables and functions, which should be the first entry.
 
+    member _.Count = defs.Count
+
     // TODO: Enforce common CLS checks and warnings for types.
     member internal _.GetHandle(t: TypeDef): Result<Handle<TypeDef>, ValidationError> = defs.GetHandle t
 
     interface ITable<TypeDef> with
         member _.Comparer = (defs :> ITable<_>).Comparer
-        member _.Count = (defs :> ITable<_>).Count
+        member _.Count = defs.Count
         member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
 
@@ -679,9 +685,12 @@ type MemberRefHandle<'MemberRef> =
         member this.Owner = this.MemberRefHandle.Owner
         member _.ValueType = typeof<'MemberRef>
 
+// TODO: Create an equality comparer for MemberRefRow or have MemberRefRow implement IEquatable.
 [<Sealed>]
 type MemberRefTable internal (owner: MetadataBuilderState) =
-    let members = Table<MemberRefRow> owner // TODO: Have MemberRefRow implement IEquatable or create a comparer here.
+    let members = Table<MemberRefRow> owner
+
+    member _.Count = members.Count
 
     // TODO: Enforce CLS checks.
     // NOTE: Duplicates (based on owning class, name, and signature) are allowed, but produce a warning.
@@ -691,6 +700,12 @@ type MemberRefTable internal (owner: MetadataBuilderState) =
 
     member this.GetHandle(method: MethodRef) = this.GetHandle<MethodRef>(MethodRef method)
     // member this.GetHandle(field: FieldRef) = this.GetHandle<FieldRef>(FieldRef field)
+
+    interface ITable<MemberRefRow> with
+        member _.Count = members.Count
+        member _.Comparer = (members :> ITable<_>).Comparer
+        member _.GetEnumerator() = members.GetEnumerator()
+        member _.GetEnumerator() = (members :> System.Collections.IEnumerable).GetEnumerator()
 
 /// <summary>
 /// Contains methods for adding <see cref="T:FSharpIL.Metadata.MethodRef"/> and
@@ -767,6 +782,10 @@ type CustomAttributeTable internal (state: MetadataBuilderState) =
         state.EnsureOwner attr
         attrs.Add attr
 
+    interface IReadOnlyCollection<CustomAttribute> with
+        member _.Count = attrs.Count
+        member _.GetEnumerator() = attrs.GetEnumerator() :> IEnumerator<_>
+        member _.GetEnumerator() = attrs.GetEnumerator() :> System.Collections.IEnumerator
 
 
 
@@ -827,6 +846,8 @@ type AssemblyRef =
 [<Sealed>]
 type AssemblyRefTable internal (state: MetadataBuilderState) =
     let set = HashSet()
+
+    member _.Count = set.Count
 
     member _.GetHandle assemblyRef =
         if set.Add assemblyRef |> not then

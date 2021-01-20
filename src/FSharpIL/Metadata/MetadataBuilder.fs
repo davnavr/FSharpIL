@@ -6,6 +6,20 @@ open System.Collections.Immutable
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
 [<Sealed>]
 type CliMetadata internal (state: MetadataBuilderState) =
+    let field =
+        state.TypeDef
+        |> Seq.collect (fun tdef -> tdef.FieldList)
+        |> Seq.mapi (fun i field -> state.CreateHandle field, i)
+        |> readOnlyDict
+    let method =
+        state.TypeDef
+        |> Seq.collect (fun tdef -> tdef.MethodList)
+        |> Seq.mapi (fun i method -> state.CreateHandle method, i)
+        // TODO: Use ImmutableDictionary class or readOnlyDict function?
+        |> readOnlyDict
+
+    let nestedClass = state.NestedClass |> ImmutableArray.CreateRange
+
     member val Header = state.Header
     /// <summary>Corresponds to the <c>Flags</c> field of the CLI header (II.25.3.3).</summary>
     member val HeaderFlags = state.HeaderFlags
@@ -19,27 +33,40 @@ type CliMetadata internal (state: MetadataBuilderState) =
     member val MajorVersion = state.MajorVersion
     /// <summary>Corresponds to the <c>MinorVersion</c> field of the <c>#~</c> stream header.</summary>
     member val MinorVersion = state.MinorVersion
+
     member val Module = state.Module
     member val TypeRef = state.CreateTable state.TypeRef
     member val TypeDef = state.CreateTable state.TypeDef
+    member _.Field = field
+    member _.Method = method
 
-    member val Method =
-        state.TypeDef
-        |> Seq.collect (fun tdef -> tdef.MethodList)
-        |> Seq.mapi (fun i method -> state.CreateHandle method, i)
-        // Use ImmutableDictionary class or readOnlyDict function?
-        |> readOnlyDict
+    member val MemberRef = state.CreateTable state.MemberRef
+
+    member val CustomAttribute = state.CustomAttribute.ToImmutableArray()
 
     member val Assembly = state.Assembly
     member val AssemblyRef = state.CreateTable state.AssemblyRef
 
-    member val NestedClass = state.NestedClass |> ImmutableArray.CreateRange
+    member _.NestedClass = nestedClass
 
-    /// Gets a bit vector that indicates which tables are present.
+    /// Gets a bit vector that indicates which tables are present (II.24.2.6).
     member val Valid: uint64 =
-        // TODO: Update this based on the tables.
-        /// NOTE: Bit zero appears to be the right-most bit.
-        0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000001UL
+        let mutable bits = 1UL
+        if state.TypeRef.Count > 0 then bits <- bits ||| (1UL <<< 1)
+        if state.TypeDef.Count > 0 then bits <- bits ||| (1UL <<< 2)
+        // if field.Count
+        if method.Count > 0 then bits <- bits ||| (1UL <<< 6)
+
+        if state.MemberRef.Count > 0 then bits <- bits ||| (1UL <<< 0xA)
+
+        if state.CustomAttribute.Count > 0 then bits <- bits ||| (1UL <<< 0xC)
+
+        if state.Assembly.IsSome then bits <- bits ||| (1UL <<< 0x20)
+        if state.AssemblyRef.Count > 0 then bits <- bits ||| (1UL <<< 0x23)
+
+        if nestedClass.Length > 0 then bits <- bits ||| (1UL <<< 0x29)
+
+        bits
 
 [<Sealed>]
 type MetadataBuilder internal (mdle) =
