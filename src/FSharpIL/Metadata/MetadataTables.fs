@@ -669,6 +669,10 @@ type MemberRefRow =
     | MethodRef of MethodRef
     // | FieldRef // of ?
 
+    member this.MemberName =
+        match this with
+        | MethodRef { MemberName = name } -> name
+
     interface IHandleValue with
         member this.Handles =
             match this with

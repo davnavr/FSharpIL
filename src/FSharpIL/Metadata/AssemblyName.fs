@@ -7,6 +7,8 @@ type AssemblyName =
     internal
     | AssemblyName of string
 
+    override this.ToString() = let (AssemblyName name) = this in name
+
 [<RequireQualifiedAccess>]
 module AssemblyName =
     let tryOfStr (str: string) =

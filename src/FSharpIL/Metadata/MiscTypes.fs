@@ -42,6 +42,13 @@ type AssemblyCulture = // TODO: Add more cultures
     | En_US
     | Div_MV
 
+    override this.ToString() =
+        match this with
+        | NullCulture -> ""
+        | Ar_SA -> "ar-SA"
+        | En_US -> "en-US"
+        | Div_MV -> "div-MV"
+
 type PublicKeyOrToken =
     /// Stores the full public key.
     | PublicKey of byte[]

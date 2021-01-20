@@ -2,6 +2,7 @@
 
 open FSharp.Core.Operators.Checked
 
+open System.Collections.Generic
 open System.Text
 
 open FSharpIL.Bytes
@@ -14,10 +15,86 @@ module Size =
     [<Literal>]
     let CliHeader = 0x48UL
 
-type TablesInfo internal (metadata: CliMetadata, rva: uint64) =
+/// <summary>Represents the <c>#Strings</c> metadata stream.</summary>
+[<Sealed>]
+type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply contain the strings with only null characters separating them.
+    let strings =
+        let assembly =
+            match metadata.Assembly with
+            | Some _ -> 2
+            | None -> 0
+
+        1 // Module
+        + (2 * metadata.TypeRef.Count)
+        + (2 * metadata.TypeDef.Count)
+        + metadata.Field.Count
+        + metadata.Method.Count
+
+        + metadata.MemberRef.Count
+
+        + assembly
+        + (2 * metadata.AssemblyRef.Count)
+
+        |> Dictionary<string, uint32>
+        // TODO: Determine if a Dictionary or ImmutableDictionary has faster lookup times.
+
+    do
+        let inline add str =
+            match str with
+            | null
+            | "" -> ()
+            | _ -> strings.TryAdd(str, uint32 strings.Count + 1u) |> ignore
+        string metadata.Module.Name |> add
+
+        for tref in metadata.TypeRef.Keys do
+            string tref.Item.TypeName |> add
+            string tref.Item.TypeNamespace |> add
+
+        for tdef in metadata.TypeDef.Keys do
+            string tdef.Item.TypeName |> add
+            string tdef.Item.TypeNamespace |> add
+
+        for field in metadata.Field.Keys do
+            string field.Item.Name |> add
+
+        for method in metadata.Method.Keys do
+            string method.Item.Name |> add
+
+
+
+        for mref in metadata.MemberRef.Keys do
+            string mref.Item.MemberName |> add
+
+
+
+        match metadata.Assembly with
+        | Some assembly ->
+            string assembly.Name |> add
+            string assembly.Culture |> add
+        | None -> ()
+
+        for assembly in metadata.AssemblyRef.Keys do
+            string assembly.Item.Name |> add
+            string assembly.Item.Culture |> add
+        ()
+
+    member _.Count = strings.Count
+
+    member _.ByteLength = 0UL
+
+    member _.Index str =
+        match str with
+        | null
+        | "" -> 0u
+        | _ -> strings.Item str
+
+type TablesInfo internal (metadata: CliMetadata, rva: uint64, strings: StringsHeap) =
     /// Size of the fields that make up the #~ stream, excluding the Rows and tables.
     [<Literal>]
     let FieldsSize = 24UL // Reserved, MajorVersion, MinorVersion, HeapSizes, Reserved, Valid, Sorted
+
+    [<Literal>]
+    let MaxSmallIndex = 0xFFFF
 
     let headerSize =
         let mutable size = FieldsSize + 4UL // Module
@@ -36,17 +113,33 @@ type TablesInfo internal (metadata: CliMetadata, rva: uint64) =
         if metadata.NestedClass.Length > 0 then size <- size + 4UL
         size
 
+    let heapSizes =
+        let mutable bits = 0uy
+        if strings.Count > MaxSmallIndex then bits <- bits ||| 1uy
+        // TODO: Set size flags for other streams.
+        bits
+
     let totalSize =
         headerSize
         // + metadata rows
 
     member _.Metadata = metadata
 
-    member _.HeapSizes = 0uy // TODO: Figure out what this should be.
+    /// Specifies the sizes of indexes into each stream.
+    /// If a corresponding bit for a stream is set, then indexes or 4 bytes long instead of 2.
+    member _.HeapSizes = heapSizes
     member _.Valid: uint64 = metadata.Valid
     member _.Sorted = 0UL
 
     member _.TotalSize = totalSize
+
+    member _.String str =
+        bytes {
+            let i = strings.Index str
+            if strings.Count > MaxSmallIndex
+            then uint64 i
+            else uint32 i
+        }
 
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 type StreamHeader =
@@ -59,11 +152,13 @@ type StreamsInfo internal (metadata: CliMetadata, headersRva: uint64) =
     let headersSize =
         12UL // #~
     let tablesRva = headersRva + headersSize
-    let tables = TablesInfo(metadata, tablesRva)
+    let strings = StringsHeap metadata
+    let tables = TablesInfo(metadata, tablesRva, strings)
 
     let totalSize =
         headersSize
         + tables.TotalSize
+        + strings.ByteLength
         // + other stuff
 
     member val Headers =
@@ -205,7 +300,16 @@ let tables (tables: TablesInfo) =
 
         if metadata.NestedClass.Length > 0 then uint32 metadata.NestedClass.Length
 
+        // Module
+        // 0us // Generation
+        // TODO: Determine size of indexes (HeapSizes)
+        // metadata.Module.Name
+        // metadata.Module.Mvid
+        // EncId
+        // Encbaseid
+
         // TODO: Write tables
+        // NOTE: Rows come right after each other. TypeDef EX: Flags, TypeName, Namespace, Extends, FieldList, MethodList
         ()
     }
 
