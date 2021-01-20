@@ -23,6 +23,7 @@
     <Compile Include="Metadata\MemberList.fs" />
     <Compile Include="Metadata\MetadataTables.fs" />
     <Compile Include="Metadata\MetadataBuilder.fs" />
+    <Compile Include="Metadata\Heaps.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />
