@@ -2,6 +2,7 @@
 
 open FSharp.Core.Operators.Checked
 
+open System
 open System.Collections.Generic
 open System.Text
 
@@ -9,12 +10,16 @@ open FSharpIL.Bytes
 open FSharpIL.Magic
 open FSharpIL.Metadata
 
+[<Literal>]
+let private MaxSmallIndex = 0xFFFF // TODO: Move this into a module.
+
 [<RequireQualifiedAccess>]
 module Size =
     /// The length of the CLI header, in bytes.
     [<Literal>]
     let CliHeader = 0x48UL
 
+// TODO: Moves heap classes into separate file.
 /// <summary>Represents the <c>#Strings</c> metadata stream.</summary>
 [<Sealed>]
 type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply contain the strings with only null characters separating them.
@@ -44,6 +49,7 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
             | null
             | "" -> ()
             | _ -> strings.TryAdd(str, uint32 strings.Count + 1u) |> ignore
+
         string metadata.Module.Name |> add
 
         for tref in metadata.TypeRef.Keys do
@@ -80,21 +86,57 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
 
     member _.Count = strings.Count
 
-    member _.ByteLength = 0UL
+    member _.ByteLength = 0UL // TODO: Calculate how many bytes the strings heap takes up.
 
-    member _.Index str =
+    member _.IndexOf str =
         match str with
         | null
         | "" -> 0u
         | _ -> strings.Item str
 
-type TablesInfo internal (metadata: CliMetadata, rva: uint64, strings: StringsHeap) =
+    member this.WriteIndex str =
+        bytes {
+            let i = this.IndexOf str
+            if strings.Count > MaxSmallIndex
+            then uint64 i
+            else uint32 i
+        }
+
+    member this.WriteIndex o = o.ToString() |> this.WriteIndex
+
+/// <summary>Represents the <c>#GUID</c> metadata stream.</summary>
+[<Sealed>]
+type GuidHeap internal (metadata: CliMetadata) =
+    let guids = Dictionary<Guid, uint32> 1
+
+    do
+        let inline add guid =
+            guids.TryAdd(guid, uint32 guids.Count + 1u) |> ignore
+
+        metadata.Module.Mvid |> add
+
+    member _.Count = guids.Count
+
+    member _.ByteLength = 16UL * uint64 guids.Count
+
+    member _.IndexOf guid =
+        if Guid.Empty = guid
+        then 0u
+        else guids.Item guid
+
+    member this.WriteIndex guid =
+        bytes {
+            let i = this.IndexOf guid
+            if guids.Count > MaxSmallIndex
+            then uint64 i
+            else uint32 i
+        }
+
+[<Sealed>]
+type TablesInfo internal (metadata: CliMetadata, rva: uint64, strings: StringsHeap, guids: GuidHeap) =
     /// Size of the fields that make up the #~ stream, excluding the Rows and tables.
     [<Literal>]
     let FieldsSize = 24UL // Reserved, MajorVersion, MinorVersion, HeapSizes, Reserved, Valid, Sorted
-
-    [<Literal>]
-    let MaxSmallIndex = 0xFFFF
 
     let headerSize =
         let mutable size = FieldsSize + 4UL // Module
@@ -116,6 +158,8 @@ type TablesInfo internal (metadata: CliMetadata, rva: uint64, strings: StringsHe
     let heapSizes =
         let mutable bits = 0uy
         if strings.Count > MaxSmallIndex then bits <- bits ||| 1uy
+        // #US
+        if guids.Count > MaxSmallIndex then bits <- bits ||| 2uy
         // TODO: Set size flags for other streams.
         bits
 
@@ -124,6 +168,10 @@ type TablesInfo internal (metadata: CliMetadata, rva: uint64, strings: StringsHe
         // + metadata rows
 
     member _.Metadata = metadata
+    member _.Strings = strings
+    // member _.Us
+    member _.Guid = guids
+
 
     /// Specifies the sizes of indexes into each stream.
     /// If a corresponding bit for a stream is set, then indexes or 4 bytes long instead of 2.
@@ -132,14 +180,6 @@ type TablesInfo internal (metadata: CliMetadata, rva: uint64, strings: StringsHe
     member _.Sorted = 0UL
 
     member _.TotalSize = totalSize
-
-    member _.String str =
-        bytes {
-            let i = strings.Index str
-            if strings.Count > MaxSmallIndex
-            then uint64 i
-            else uint32 i
-        }
 
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 type StreamHeader =
@@ -153,12 +193,15 @@ type StreamsInfo internal (metadata: CliMetadata, headersRva: uint64) =
         12UL // #~
     let tablesRva = headersRva + headersSize
     let strings = StringsHeap metadata
-    let tables = TablesInfo(metadata, tablesRva, strings)
+    let guids = GuidHeap metadata
+    let tables = TablesInfo(metadata, tablesRva, strings, guids)
 
     let totalSize =
         headersSize
         + tables.TotalSize
         + strings.ByteLength
+        // + US
+        + guids.ByteLength
         // + other stuff
 
     member val Headers =
@@ -166,6 +209,10 @@ type StreamsInfo internal (metadata: CliMetadata, headersRva: uint64) =
             { Offset = tablesRva
               Size = tables.TotalSize
               Name = "#~\000\000"B }
+
+            { Offset = UInt64.MaxValue // TODO: Calculate size and offset of #Strings
+              Size = UInt64.MaxValue
+              Name = "#Strings    "B }
         |]
     /// Size of all of the stream headers.
     member _.HeadersSize = headersSize
@@ -301,12 +348,11 @@ let tables (tables: TablesInfo) =
         if metadata.NestedClass.Length > 0 then uint32 metadata.NestedClass.Length
 
         // Module
-        // 0us // Generation
-        // TODO: Determine size of indexes (HeapSizes)
-        // metadata.Module.Name
-        // metadata.Module.Mvid
-        // EncId
-        // Encbaseid
+        0us // Generation
+        tables.Strings.WriteIndex metadata.Module.Name
+        tables.Guid.WriteIndex metadata.Module.Mvid
+        tables.Guid.WriteIndex Guid.Empty // EncId
+        tables.Guid.WriteIndex Guid.Empty // Encbaseid
 
         // TODO: Write tables
         // NOTE: Rows come right after each other. TypeDef EX: Flags, TypeName, Namespace, Extends, FieldList, MethodList
@@ -320,6 +366,8 @@ let streams (info: CliInfo) =
         tables streams.MetadataTables
 
         // TODO: Write #Strings, #US, #GUID, and #Blob streams.
+
+        // TODO: Use Guid.ToByteArray when writing #GUID.
     }
 
 /// Writes the entirety of the CLI metadata to the specified writer.
