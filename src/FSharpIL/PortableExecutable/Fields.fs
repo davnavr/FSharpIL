@@ -129,6 +129,9 @@ type NTSpecificFields =
       // NumberOfDataDirectories
       }
 
+    member this.FileAlignment = this.Alignment.FileAlignment
+    member this.SectionAlignment = this.Alignment.SectionAlignment
+
     static member Default =
         { ImageBase = ImageBase.Default
           Alignment = Alignment.Default

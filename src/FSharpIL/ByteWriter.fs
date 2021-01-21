@@ -4,47 +4,44 @@ open Microsoft.FSharp.Core.Operators.Checked
 
 open System
 
-[<System.Runtime.CompilerServices.IsByRefLike; Struct>]
-type internal ByteWriter =
-    struct
-        val mutable private bytes: byte[][]
-        val mutable private pos: uint64
-        val ChunkSize: int32
+type internal ByteWriter (chunkCount: int32, chunkSize: int32) =
+    do
+        if chunkCount <= 0 then
+            invalidArg (nameof chunkCount) "The number of chunks must be positive"
+        if chunkSize <= 0 then
+            invalidArg (nameof chunkSize) "The size of chunks must be positive"
 
-        new (chunkCount: int32, chunkSize: int32) =
-            if chunkCount <= 0 then
-                invalidArg (nameof chunkCount) "The number of chunks must be positive"
-            if chunkSize <= 0 then
-                invalidArg (nameof chunkSize) "The size of chunks must be positive"
+    let mutable bytes: byte[][] = Array.zeroCreate chunkSize |> Array.replicate chunkCount
+    let mutable pos = 0UL
 
-            { bytes = Array.zeroCreate chunkSize |> Array.replicate chunkCount
-              pos = 0UL
-              ChunkSize = chunkSize }
-    end
-
-type ByteWriter with
-    member this.ChunkCount = uint64 this.bytes.Length
-    member this.Position = this.pos
+    member _.ChunkSize = chunkSize
+    member _.ChunkCount = uint64 bytes.Length
+    member _.Position = pos
 
     /// Gets an index into the chunk array.
-    member private this.ChunkIndex = this.pos / this.ChunkCount |> int32
-    member private this.ChunkPosition = this.pos % this.ChunkCount |> int32
+    member private this.ChunkIndex = pos / this.ChunkCount |> int32
+    member private this.ChunkPosition = pos % this.ChunkCount |> int32
+    member private this.Chunk = bytes.[this.ChunkIndex]
 
     member this.WriteBytes(bytes: byte[]) =
         match bytes with
         | [||] -> ()
         | [| value |] -> this.WriteU1 value
         | _ ->
-            let bytes' = Span bytes
-            let destination = Span(this.bytes.[this.ChunkIndex], this.ChunkPosition, bytes.Length)
-            bytes'.CopyTo destination
+            try
+                let bytes' = Span bytes
+                let destination = Span(this.Chunk, this.ChunkPosition, bytes.Length)
+                bytes'.CopyTo destination
+            with
+            | ex ->
+                InvalidOperationException(sprintf "Unable to write array of length %i" bytes.Length, ex) |> raise
 
     member this.WriteU1(value: byte) =
         let index = this.ChunkIndex
-        if index >= this.bytes.Length then
+        if index >= bytes.Length then
             sprintf "Cannot write byte %i, reached the end of the byte array." value |> invalidOp
-        this.bytes.[index].[this.ChunkPosition] <- value
-        this.pos <- this.pos + 1UL
+        this.Chunk.[this.ChunkPosition] <- value
+        pos <- pos + 1UL
 
     /// Writes an unsigned 2-byte integer in little-endian format.
     member this.WriteU2 value =
@@ -77,4 +74,23 @@ type ByteWriter with
 
     /// Advances the writer to the next chunk.
     member this.NextChunk() =
-        this.pos <- this.pos + 1UL |> Round.upTo this.ChunkCount
+        pos <- pos + 1UL |> Round.upTo this.ChunkCount
+
+    member this.ToArray() =
+        let result = bytes.Length * this.ChunkSize |> Array.zeroCreate<byte>
+        for i = 0 to bytes.Length - 1 do
+            let chunk' = Span bytes.[i]
+            let destination = Span(result, i * this.ChunkSize, this.ChunkSize)
+            chunk'.CopyTo destination
+        result
+
+    member this.SpanCurrentChunk length =
+        let chunk = Span this.Chunk
+        let i = this.ChunkIndex
+        if i + length >= this.ChunkSize then
+            sprintf
+                "Unable to create span of length %i as there are only %i bytes left in the current chunk."
+                length
+                (this.ChunkSize - i)
+            |> invalidOp
+        chunk.Slice(this.ChunkPosition, length)
