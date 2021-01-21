@@ -1,8 +1,6 @@
 ﻿[<RequireQualifiedAccess>]
 module FSharpIL.WritePE
 
-// TODO: Important! Write to arrays instead of calculating lengths beforehand. This is necessary since calculating a hash for the assembly requires the file be written first.
-
 open FSharp.Core.Operators.Checked
 
 open System

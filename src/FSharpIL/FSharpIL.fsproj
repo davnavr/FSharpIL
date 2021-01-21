@@ -9,10 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="InternalException.fs" />
-    <Compile Include="Bytes.fs" />
-    <Compile Include="Magic.fs" />
     <Compile Include="Round.fs" />
+    <Compile Include="InternalException.fs" />
+    <Compile Include="ByteWriter.fs" />
+    <Compile Include="BytesOld.fs" />
+    <Compile Include="Magic.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\MiscTypes.fs" />
     <Compile Include="Metadata\Flags.fs" />
