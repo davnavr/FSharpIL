@@ -6,6 +6,7 @@ open FSharp.Core.Operators.Checked
 open System
 open System.Collections.Generic
 
+open FSharpIL.Bytes
 open FSharpIL.PortableExecutable
 
 [<RequireQualifiedAccess>]
@@ -37,109 +38,9 @@ module Size =
 
 type SectionInfo =
     { ActualSize: uint64
-      DataSizes: uint64[]
       FileOffset: uint64
-      /// The size of the section rounded up to a multiple of FileAlignment
-      RoundedSize: uint64
+      RawData: byte[]
       Section: Section }
-
-[<Sealed>]
-type PEInfoOld (pe: PEFile) =
-    let mutable codeSize = 0UL
-    let mutable initializedDataSize = 0UL
-    let mutable uninitializedDataSize = 0UL
-    let headerSizeActual =
-        Size.PEHeader
-        + Size.CoffHeader
-        + Size.StandardFields
-        + Size.NTSpecificFields
-        + Size.DataDirectories
-        + (uint64 pe.SectionTable.Length * Size.SectionHeader)
-    let headerSizeRounded =
-        Round.upTo
-            (uint64 pe.NTSpecificFields.Alignment.FileAlignment)
-            headerSizeActual
-    let cliMetadata = Dictionary<int * int, WriteCli.CliInfo> 1
-    let sections = Array.zeroCreate<SectionInfo> pe.SectionTable.Length
-
-    do // Calculate section size and location information.
-        for sectionIndex = 0 to pe.SectionTable.Length - 1 do
-            let section = pe.SectionTable.Item sectionIndex
-            let fileOffset =
-                if sectionIndex = 0
-                then headerSizeRounded
-                else
-                    let prevSection = Array.get sections (sectionIndex - 1)
-                    prevSection.FileOffset + prevSection.RoundedSize
-            let dataSizes =
-                let mutable pos = fileOffset
-                Array.init // TODO: Figure out if this is optimized to be a for loop.
-                    section.Data.Length
-                    (fun itemIndex ->
-                        let item = section.Data.Item itemIndex
-                        let size =
-                            match item with
-                            | CliHeader cli ->
-                                let info = WriteCli.CliInfo(cli, pos)
-                                cliMetadata.Item <- (sectionIndex, itemIndex), info
-                                info.TotalSize
-                            | ClrLoaderStub -> 8UL
-                            | RawData(Lazy data) -> uint64 data.Length
-                        pos <- pos + size
-                        size)
-            let actualSize = Array.sum dataSizes
-            { ActualSize = actualSize
-              DataSizes = dataSizes
-              FileOffset = fileOffset
-              RoundedSize = Round.upTo (uint64 pe.NTSpecificFields.Alignment.FileAlignment) actualSize 
-              Section = section }
-            |> Array.set sections sectionIndex
-
-    do // Calculates the values for sizes in the standard fields (II.25.2.3.1)
-        for { RoundedSize = rsize; Section = section } in sections do
-            let inline hasFlag flag = section.Header.Characteristics.HasFlag flag
-
-            if hasFlag SectionFlags.CntCode then
-                codeSize <- codeSize + rsize
-
-            if hasFlag SectionFlags.CntInitializedData then
-                initializedDataSize <- initializedDataSize + rsize
-
-            if hasFlag SectionFlags.CntUninitializedData then
-                uninitializedDataSize <- uninitializedDataSize + rsize
-
-    let totalLength =
-        let sections =
-            Array.sumBy
-                (fun { RoundedSize = rsize } -> rsize)
-                sections
-        headerSizeRounded + sections
-
-    member _.File = pe
-
-    member _.CodeSize = codeSize
-    member _.InitializedDataSize = initializedDataSize
-    member _.UninitializedDataSize = uninitializedDataSize
-
-    /// Gets the size of the headers rounded up to nearest multiple of FileAlignment.
-    member _.HeaderSizeActual = headerSizeActual
-    member _.HeaderSizeRounded = headerSizeRounded
-
-    member _.Sections = sections
-
-    member _.CliMetadata = cliMetadata
-    member val CliHeaderRva =
-        match pe.DataDirectories.CliHeader with
-        | Some header ->
-            let section = Array.get sections header.SectionIndex
-            let mutable offset = section.FileOffset
-            for i = 0 to header.DataIndex - 1 do
-                offset <- offset + (Array.get section.DataSizes i)
-            offset
-        | None -> 0UL
-
-    /// Gets the total length of the PE file.
-    member _.TotalLength = totalLength
 
 /// Stores the sizes and file offsets of the various objects and structs that make up a PE file.
 [<Sealed>]
@@ -147,50 +48,62 @@ type PEInfo (pe: PEFile) =
     let mutable codeSize = 0UL
     let mutable initializedDataSize = 0UL
     let mutable uninitializedDataSize = 0UL
+    let headersSize =
+        Size.PEHeader
+        + Size.CoffHeader
+        + Size.StandardFields
+        + Size.NTSpecificFields
+        + Size.DataDirectories
+        + (uint64 pe.SectionTable.Length * Size.SectionHeader)
+        |> Round.upTo (uint64 pe.NTSpecificFields.FileAlignment)
     let sections = Array.zeroCreate<SectionInfo> pe.SectionTable.Length
+    let mutable cliHeaderRva = 0UL
 
-    do // Calculate section size and location information.
+    do
+        let cliSectionIndex, cliDataIndex =
+            match pe.DataDirectories.CliHeader with
+            | Some header -> header.SectionIndex, header.DataIndex
+            | None -> -1, -1
+
         for sectionIndex = 0 to pe.SectionTable.Length - 1 do
             let section = pe.SectionTable.Item sectionIndex
+
             let fileOffset =
-                if sectionIndex = 0 then
-                    uint64 pe.NTSpecificFields.Alignment.FileAlignment
+                if sectionIndex = 0
+                then headersSize
                 else
-                    let prevSection = sectionIndex - 1 |> Array.get sections
-                    prevSection.FileOffset + prevSection.RoundedSize
-            let dataSizes =
-                let mutable pos = fileOffset
-                Array.init // TODO: Figure out if this is optimized to be a for loop.
-                    section.Data.Length
-                    (fun itemIndex ->
-                        let item = section.Data.Item itemIndex
-                        let size =
-                            match item with
-                            | CliHeader cli -> invalidOp "TODO: Calculate CLI header size"
-                            | ClrLoaderStub -> 8UL
-                            | RawData(Lazy data) -> uint64 data.Length
-                        pos <- pos + size
-                        size)
-            let actualSize = Array.sum dataSizes
-            { ActualSize = actualSize
-              DataSizes = dataSizes
-              FileOffset = fileOffset
-              RoundedSize = Round.upTo (uint64 pe.NTSpecificFields.Alignment.FileAlignment) actualSize 
-              Section = section }
-            |> Array.set sections sectionIndex
+                    let prevSection = Array.get sections (sectionIndex - 1)
+                    prevSection.FileOffset + uint64 prevSection.RawData.Length
 
-    do // Calculates the values for sizes in the standard fields (II.25.2.3.1)
-        for { RoundedSize = rsize; Section = section } in sections do
-            let inline hasFlag flag = section.Header.Characteristics.HasFlag flag
+            let writer = int32 pe.NTSpecificFields.FileAlignment |> ResizeByteWriter
+            for dataIndex = 0 to section.Data.Length - 1 do
+                match section.Data.Item dataIndex with
+                | CliHeader cli ->
+                    if sectionIndex = cliSectionIndex && dataIndex = cliDataIndex then
+                        cliHeaderRva <- fileOffset + writer.Position
+                    // TODO: Write CLI data.
+                    ()
+                | ClrLoaderStub -> () // TODO: Write the loader stub.
+                | RawData(Lazy data) ->
+                    writer.WriteBytes data
+            let actualSize = writer.Position
 
-            if hasFlag SectionFlags.CntCode then
-                codeSize <- codeSize + rsize
+            let data = writer.UnderlyingArray()
 
-            if hasFlag SectionFlags.CntInitializedData then
-                initializedDataSize <- initializedDataSize + rsize
+            // Calculates the values for sizes in the standard fields (II.25.2.3.1)
+            let len = uint64 data.Length
+            if section.Header.Characteristics.HasFlag SectionFlags.CntCode then
+                codeSize <- codeSize + len
+            if section.Header.Characteristics.HasFlag SectionFlags.CntInitializedData then
+                initializedDataSize <- initializedDataSize + len
+            if section.Header.Characteristics.HasFlag SectionFlags.CntUninitializedData then
+                uninitializedDataSize <- uninitializedDataSize + len
 
-            if hasFlag SectionFlags.CntUninitializedData then
-                uninitializedDataSize <- uninitializedDataSize + rsize
+            sections.[sectionIndex] <-
+                { ActualSize = actualSize
+                  FileOffset = fileOffset
+                  RawData = data
+                  Section = section }
 
     member _.File = pe
 
@@ -198,17 +111,11 @@ type PEInfo (pe: PEFile) =
     member _.InitializedDataSize = initializedDataSize
     member _.UninitializedDataSize = uninitializedDataSize
 
+    member _.HeadersSize = headersSize
+
     member _.Sections = sections
 
-    member val CliHeaderRva =
-        match pe.DataDirectories.CliHeader with
-        | Some header ->
-            let section = Array.get sections header.SectionIndex
-            let mutable offset = section.FileOffset
-            for i = 0 to header.DataIndex - 1 do
-                offset <- offset + (Array.get section.DataSizes i)
-            offset
-        | None -> 0UL
+    member val CliHeaderRva = cliHeaderRva
 
     /// Calculates the RVA of the specified section.
     member _.RvaOf (section: (int * Section) option) =
@@ -292,7 +199,7 @@ let dataDirectories (info: PEInfo, writer: ByteWriter) =
 
     writer.WriteU8 0UL // Reserved
 
-let headers (info: PEInfo, writer: ByteWriter) =
+let headers (info: PEInfo, writer: ChunkedByteWriter) =
     coffHeader(info.File, writer)
     standardFields(info, writer)
     ntSpecificFields(info.File, writer)
@@ -305,7 +212,7 @@ let headers (info: PEInfo, writer: ByteWriter) =
         writer.WriteU4 section.ActualSize
         // TODO: Figure out how to calculate these fields from the data
         writer.WriteU4 section.FileOffset // VirtualAddress
-        writer.WriteU4 section.RoundedSize
+        writer.WriteU4 section.RawData.Length
         writer.WriteU4 section.FileOffset // PointerToRawData
         writer.WriteU4 header.PointerToRelocations
         writer.WriteU4 0u // PointerToLineNumbers
@@ -317,14 +224,22 @@ let headers (info: PEInfo, writer: ByteWriter) =
 
 let write (pe: PEFile) =
     try
-        let chunks = 1 // + size of sections
+        let falignment = pe.NTSpecificFields.FileAlignment
         let info = PEInfo pe
-        let writer = ByteWriter(chunks, int32 pe.NTSpecificFields.FileAlignment)
+        let chunks =
+            int32 (info.HeadersSize / uint64 falignment)
+            + Array.sumBy
+                (fun section -> section.RawData.Length)
+                info.Sections
+        let writer = ChunkedByteWriter(chunks, int32 falignment)
 
         writer.WriteBytes Magic.DosStub
         writer.WriteBytes Magic.PESignature
 
         headers(info, writer)
+
+        for section in info.Sections do writer.WriteBytes section.RawData
+
         writer
     with
     | ex -> InternalException ex |> raise
