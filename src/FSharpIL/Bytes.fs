@@ -6,6 +6,8 @@ open System
 
 open FSharpIL
 
+// TODO: Maybe replace multiple byte writing classes with one class that uses a List<byte[]>?
+
 [<AbstractClass>]
 type internal ByteWriter() =
     abstract Position: uint64

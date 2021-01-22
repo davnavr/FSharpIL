@@ -3,9 +3,6 @@ module FSharpIL.WritePE
 
 open FSharp.Core.Operators.Checked
 
-open System
-open System.Collections.Generic
-
 open FSharpIL.Bytes
 open FSharpIL.PortableExecutable
 

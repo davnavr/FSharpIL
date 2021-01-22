@@ -82,13 +82,11 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         | "" -> 0u
         | _ -> strings.Item str
 
-    member this.WriteIndex str = invalidOp "bad"
-        //bytes {
-        //    let i = this.IndexOf str
-        //    if strings.Count > MaxSmallIndex
-        //    then uint64 i
-        //    else uint32 i
-        //}
+    member this.WriteIndex(str, writer: ByteWriter) =
+        let i = this.IndexOf str
+        if strings.Count > MaxSmallIndex
+        then writer.WriteU8 i
+        else writer.WriteU4 i
 
     member this.WriteIndex o = o.ToString() |> this.WriteIndex
 
@@ -120,11 +118,8 @@ type GuidHeap internal (metadata: CliMetadata) =
         then 0u
         else guids.Item guid
 
-    member this.WriteIndex guid =
-        //bytes {
-        //    let i = this.IndexOf guid
-        //    if guids.Count > MaxSmallIndex
-        //    then uint64 i
-        //    else uint32 i
-        //}
-        invalidOp "bad"
+    member this.WriteIndex(guid, writer: ByteWriter) =
+        let i = this.IndexOf guid
+        if guids.Count > MaxSmallIndex
+        then writer.WriteU8 i
+        else writer.WriteU4 i
