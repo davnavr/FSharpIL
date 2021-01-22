@@ -11,7 +11,7 @@
   <ItemGroup>
     <Compile Include="Round.fs" />
     <Compile Include="InternalException.fs" />
-    <Compile Include="Bytes.fs" />
+    <Compile Include="Writer.fs" />
     <Compile Include="Magic.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\MiscTypes.fs" />

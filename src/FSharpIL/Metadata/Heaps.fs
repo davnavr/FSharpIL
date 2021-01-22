@@ -3,7 +3,7 @@
 open System
 open System.Collections.Generic
 
-open FSharpIL.Bytes
+open FSharpIL
 
 [<Literal>]
 let MaxSmallIndex = 0xFFFF
@@ -82,7 +82,7 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         | "" -> 0u
         | _ -> strings.Item str
 
-    member this.WriteIndex(str, writer: ByteWriter) =
+    member this.WriteIndex(str, writer: Writer) =
         let i = this.IndexOf str
         if strings.Count > MaxSmallIndex
         then writer.WriteU8 i
@@ -118,7 +118,7 @@ type GuidHeap internal (metadata: CliMetadata) =
         then 0u
         else guids.Item guid
 
-    member this.WriteIndex(guid, writer: ByteWriter) =
+    member this.WriteIndex(guid, writer: Writer) =
         let i = this.IndexOf guid
         if guids.Count > MaxSmallIndex
         then writer.WriteU8 i

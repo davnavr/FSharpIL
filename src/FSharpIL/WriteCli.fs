@@ -5,8 +5,6 @@ open FSharp.Core.Operators.Checked
 open System
 open System.Text
 
-open FSharpIL.Bytes
-
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Heaps
 
@@ -28,7 +26,7 @@ type CliInfo (metadata: CliMetadata, headerRva: uint64) =
     member _.HeaderRva = headerRva
 
 /// Writes the CLI header (II.25.3.3).
-let header (info: CliInfo, writer: ResizeByteWriter) =
+let header (info: CliInfo, writer: Writer) =
     let header = info.Metadata.Header
     writer.WriteU8 Size.CliHeader
     writer.WriteU2 header.MajorRuntimeVersion
@@ -37,5 +35,5 @@ let header (info: CliInfo, writer: ResizeByteWriter) =
     ()
 
 /// Writes the entirety of the CLI metadata to the specified writer.
-let metadata (info: CliInfo, writer: ResizeByteWriter) =
+let metadata (info: CliInfo, writer: Writer) =
     ()
