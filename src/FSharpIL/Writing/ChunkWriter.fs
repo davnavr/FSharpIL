@@ -5,16 +5,17 @@ open System
 open Microsoft.FSharp.Core.Operators.Checked
 
 [<Sealed>]
-type internal ChunkWriter (chunk: Chunk, position: int) = // TODO: How to modify size stack in chunk list?
+type internal ChunkWriter (chunk: Chunk, position: int) =
     do
-        if position < 0 || position >= chunk.Data.Length then
+        if position < 0 || position > chunk.Data.Length then
             sprintf
                 "The initial position (%i) must be a valid index"
                 position
-            |> invalidArg (nameof position) 
+            |> invalidArg (nameof position)
 
     let mutable pos = position
     let mutable current = chunk
+    let mutable size = 0u
 
     new (chunk) = ChunkWriter(chunk, 0)
 
@@ -22,13 +23,15 @@ type internal ChunkWriter (chunk: Chunk, position: int) = // TODO: How to modify
     /// Gets the number of bytes remaining in the current chunk.
     member _.FreeBytes = current.Data.Length - pos
     member _.Position = pos
+    member _.Size = size
 
     member this.WriteU1 value =
         if pos >= current.Data.Length then
             current <- current.List.AddAfter(current, Array.zeroCreate<byte> current.Data.Length)
+            pos <- 0
         this.Chunk.Data.[pos] <- value
         pos <- pos + 1
-        chunk.List.IncrementSize 1u
+        size <- size + 1u
 
     /// Writes an unsigned 2-byte integer in little-endian format.
     member this.WriteU2 value =
@@ -64,12 +67,12 @@ type internal ChunkWriter (chunk: Chunk, position: int) = // TODO: How to modify
             let destination = Span(current.Data, pos, bytes.Length)
             Span(bytes).CopyTo destination
             pos <- pos + bytes.Length
-            chunk.List.IncrementSize (uint32 bytes.Length)
+            size <- size + uint32 bytes.Length
         else
             Array.toSeq bytes |> this.WriteBytes
 
     member this.WriteBytes(bytes: seq<byte>) = Seq.iter this.WriteU1 bytes
 
     member _.MoveToEnd() =
-        chunk.List.IncrementSize(current.Data.Length - pos |> uint32)
         pos <- current.Data.Length
+        size <- uint32 current.Data.Length

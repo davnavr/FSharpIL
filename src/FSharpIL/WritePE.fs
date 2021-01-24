@@ -165,8 +165,7 @@ let sections (info: PEInfo) (content: ChunkList) =
             | CliHeader cli ->
                 if sectioni = cliSectionIndex && datai = cliDataIndex then
                     info.CliHeaderRva <- virtualAddress
-                // WriteCli.metadata cli virtualAddress content
-                ()
+                WriteCli.metadata cli virtualAddress content
             | ClrLoaderStub -> () // TODO: Write loader stub.
             | RawData(Lazy bytes) ->
                 Span(bytes).ToArray() |> content.AddLast |> ignore
@@ -208,9 +207,9 @@ let write (pe: PEFile) =
               CliHeaderRva = Unchecked.defaultof<uint32>
               Sections = Array.zeroCreate<SectionInfo> pe.SectionTable.Length }
         let content = ChunkList()
-        let headers = content.AddFirst(Array.zeroCreate<byte> info.FileAlignment) |> ChunkWriter
-
         content.PushSize()
+
+        let headers = content.AddFirst(Array.zeroCreate<byte> info.FileAlignment) |> ChunkWriter
 
         // Since information about sections is needed in the header,
         // we write the sections before appending them after the headers.
@@ -242,7 +241,7 @@ let write (pe: PEFile) =
             headers.WriteU2 0us // NumberOfLineNumbers
             headers.WriteU4 header.Characteristics
 
-        headers.MoveToEnd() // Padding before sections
+        // headers.MoveToEnd() // Padding before sections
 
         content
     with
@@ -254,9 +253,18 @@ let toArray pe =
     let data = content.PopSize() |> int32 |> Array.zeroCreate<byte>
     let mutable i = 0
     for { Data = chunk } in content do
-        let length = chunk.Length
-        Span(chunk).CopyTo(Span(data, i, length))
-        i <- i + length
+        try
+            let length = chunk.Length
+            Span(chunk).CopyTo(Span(data, i, length))
+            i <- i + length
+        with
+        | ex ->
+            let msg =
+                sprintf
+                    "Unable to copy chunk of length %i to offset %i"
+                    chunk.Length
+                    i
+            InvalidOperationException(msg, ex) |> raise
     data
 
 // TODO: Add toStream and toImmutableArray functions.

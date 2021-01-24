@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="AssemblyVisibility.fs" />
     <Compile Include="Round.fs" />
     <Compile Include="InternalException.fs" />
     <Compile Include="Writing\ChunkList.fs" />
