@@ -242,6 +242,8 @@ let write (pe: PEFile) =
             headers.WriteU2 0us // NumberOfLineNumbers
             headers.WriteU4 header.Characteristics
 
+        headers.MoveToEnd() // Padding before sections
+
         content
     with
     | ex -> InternalException ex |> raise
@@ -251,9 +253,9 @@ let toArray pe =
     let content = write pe
     let data = content.PopSize() |> int32 |> Array.zeroCreate<byte>
     let mutable i = 0
-    for { Data = data } in content do
-        let length = data.Length
-        Span(data).CopyTo(Span(data, i, length))
+    for { Data = chunk } in content do
+        let length = chunk.Length
+        Span(chunk).CopyTo(Span(data, i, length))
         i <- i + length
     data
 

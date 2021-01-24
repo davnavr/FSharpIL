@@ -21,23 +21,23 @@ type internal Chunk =
 type internal ChunkListEnumerator =
     struct
         val mutable private current: Chunk option
-        val mutable private index: int32
+        val mutable private init: bool
         val private list: ChunkList
 
         new(list: ChunkList) =
             { current = None
-              index = -1
+              init = false
               list = list }
 
         member this.Current =
-            if this.index < 0 || uint32 this.index >= this.list.Count then
+            if not this.init then
                 invalidOp "The enumerator has either already finished iterating through all chunks, or has not yet started."
             this.current.Value
 
         member this.MoveNext() =
-            this.index <- this.index + 1
             match this.current with
-            | _ when this.index <= 0 ->
+            | _ when not this.init ->
+                this.init <- true
                 this.current <- this.list.Head
                 true
             | Some current' ->
@@ -46,7 +46,7 @@ type internal ChunkListEnumerator =
             | None -> false
 
         member this.Reset() =
-            this.index <- -1
+            this.init <- false
             this.current <- None
 
         interface IEnumerator<Chunk> with

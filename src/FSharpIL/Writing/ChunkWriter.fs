@@ -70,4 +70,6 @@ type internal ChunkWriter (chunk: Chunk, position: int) = // TODO: How to modify
 
     member this.WriteBytes(bytes: seq<byte>) = Seq.iter this.WriteU1 bytes
 
-    member _.MoveToEnd() = pos <- current.Data.Length
+    member _.MoveToEnd() =
+        chunk.List.IncrementSize(current.Data.Length - pos |> uint32)
+        pos <- current.Data.Length
