@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 
 open FSharpIL
+open FSharpIL.Writing
 
 [<Literal>]
 let MaxSmallIndex = 0xFFFF
@@ -82,7 +83,7 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         | "" -> 0u
         | _ -> strings.Item str
 
-    member this.WriteIndex(str, writer: Writer) =
+    member this.WriteIndex(str, writer: ChunkWriter) =
         let i = this.IndexOf str
         if strings.Count > MaxSmallIndex
         then writer.WriteU8 i
@@ -118,7 +119,7 @@ type GuidHeap internal (metadata: CliMetadata) =
         then 0u
         else guids.Item guid
 
-    member this.WriteIndex(guid, writer: Writer) =
+    member this.WriteIndex(guid, writer: ChunkWriter) =
         let i = this.IndexOf guid
         if guids.Count > MaxSmallIndex
         then writer.WriteU8 i

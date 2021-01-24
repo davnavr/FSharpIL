@@ -7,6 +7,7 @@ open System.Text
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Heaps
+open FSharpIL.Writing
 
 [<RequireQualifiedAccess>]
 module Size =
@@ -15,25 +16,10 @@ module Size =
     let CliHeader = 0x48UL
 
 type StreamHeader =
-    { Offset: uint64
-      Size: uint64
+    { Offset: uint32
+      Size: uint32
       Name: byte[] }
 
-[<Sealed>]
-type CliInfo (metadata: CliMetadata, headerRva: uint64) =
-    member _.Metadata = metadata
-
-    member _.HeaderRva = headerRva
-
-/// Writes the CLI header (II.25.3.3).
-let header (info: CliInfo, writer: Writer) =
-    let header = info.Metadata.Header
-    writer.WriteU8 Size.CliHeader
-    writer.WriteU2 header.MajorRuntimeVersion
-    writer.WriteU2 header.MinorRuntimeVersion
-
-    ()
-
 /// Writes the entirety of the CLI metadata to the specified writer.
-let metadata (info: CliInfo, writer: Writer) =
+let metadata (cli: CliMetadata) (writer: ChunkWriter) =
     ()

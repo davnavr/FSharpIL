@@ -1,9 +1,13 @@
 ﻿[<RequireQualifiedAccess>]
 module FSharpIL.WritePE
 
+open System
+open System.Collections.Generic
+
 open FSharp.Core.Operators.Checked
 
 open FSharpIL.PortableExecutable
+open FSharpIL.Writing
 
 [<RequireQualifiedAccess>]
 module Size =
@@ -57,7 +61,7 @@ type PEInfo =
         | None -> 0u
 
 // II.25.2.2
-let coffHeader pe (writer: Writer) =
+let coffHeader pe (writer: ChunkWriter) =
     let coff = pe.FileHeader
     writer.WriteU2 coff.Machine
     writer.WriteU2 pe.SectionTable.Length
@@ -68,7 +72,7 @@ let coffHeader pe (writer: Writer) =
     writer.WriteU2 coff.Characteristics
 
 // II.25.2.3.1
-let standardFields info (writer: Writer) =
+let standardFields info (writer: ChunkWriter) =
     let pe = info.File
     let standard = info.File.StandardFields
     writer.WriteU2 Magic.PE32
@@ -83,7 +87,7 @@ let standardFields info (writer: Writer) =
     info.RvaOf pe.Sections.RsrcSection |> writer.WriteU4 // BaseOfData, matches the RVA of the .rsrc section
 
 // II.25.2.3.2
-let ntSpecificFields pe (writer: Writer) =
+let ntSpecificFields pe (writer: ChunkWriter) =
     let nt = pe.NTSpecificFields
     writer.WriteU4 nt.ImageBase
     writer.WriteU2 nt.SectionAlignment
@@ -108,7 +112,7 @@ let ntSpecificFields pe (writer: Writer) =
     writer.WriteU4 0x10u // NumberOfDataDirectories
 
 // II.25.2.3.3
-let dataDirectories info (writer: Writer) =
+let dataDirectories info (writer: ChunkWriter) =
     writer.WriteU8 0UL // ExportTable
     writer.WriteU8 0UL // TEMPORARY // ImportTable
     writer.WriteU8 0UL // ResourceTable
@@ -132,8 +136,7 @@ let dataDirectories info (writer: Writer) =
 
     writer.WriteU8 0UL // Reserved
 
-let sections (info: PEInfo) =
-    let writer = Writer(None, info.FileAlignment)
+let sections (info: PEInfo) (content: LinkedList<byte[]>) =
     let pe = info.File
     let falignment = uint32 pe.NTSpecificFields.FileAlignment
     let salignment = uint32 pe.NTSpecificFields.SectionAlignment
@@ -149,29 +152,28 @@ let sections (info: PEInfo) =
 
     let mutable virtualAddress = salignment
 
+    let writer = new ChunkWriter(content.Last)
+    writer.MoveToEnd()
+
     let cliSectionIndex, cliDataIndex =
         match pe.DataDirectories.CliHeader with
         | Some header -> header.SectionIndex, header.DataIndex
         | None -> -1, -1
 
-    // TODO: When determining starting RVA of section, round up to nearest SectionAlignment.
     for sectioni = 0 to pe.SectionTable.Length - 1 do
         let section = pe.SectionTable.Item sectioni
-        let mutable size = 0u
+        writer.ResetSize()
         for datai = 0 to section.Data.Length - 1 do
-            let data =
-                match section.Data.Item datai with
-                | CliHeader cli ->
-                    if sectioni = cliSectionIndex && datai = cliDataIndex then
-                        info.CliHeaderRva <- virtualAddress
-                    // TODO: Write CLI data.
-                    [||]
-                | ClrLoaderStub -> [||] // TODO: Write loader stub.
-                | RawData(Lazy bytes) -> bytes
-            let len = uint32 data.Length
-            size <- size + len
-            virtualAddress <- virtualAddress + len
-            writer.WriteBytes data
+            match section.Data.Item datai with
+            | CliHeader cli ->
+                if sectioni = cliSectionIndex && datai = cliDataIndex then
+                    info.CliHeaderRva <- virtualAddress
+                // TODO: Write CLI data.
+                ()
+            | ClrLoaderStub -> () // TODO: Write loader stub.
+            | RawData(Lazy bytes) -> writer.WriteBytes bytes
+
+        let size = writer.Size
 
         // Calculates the values for sizes in the standard fields (II.25.2.3.1)
         if section.Header.Characteristics.HasFlag SectionFlags.CntCode then
@@ -182,7 +184,7 @@ let sections (info: PEInfo) =
             info.UninitializedDataSize <- info.UninitializedDataSize + size
 
         fileOffset <- fileOffset + (Round.upTo falignment size)
-        virtualAddress <- Round.upTo salignment virtualAddress
+        virtualAddress <- Round.upTo salignment (virtualAddress + size)
 
         info.Sections.[sectioni] <-
             { ActualSize = size
@@ -191,8 +193,6 @@ let sections (info: PEInfo) =
               Section = section }
 
         writer.MoveToEnd() // Padding before next section.
-
-    writer
 
 let write (pe: PEFile) =
     try
@@ -203,9 +203,15 @@ let write (pe: PEFile) =
               UninitializedDataSize = Unchecked.defaultof<uint32>
               CliHeaderRva = Unchecked.defaultof<uint32>
               Sections = Array.zeroCreate<SectionInfo> pe.SectionTable.Length }
-        let sectionWriter = sections info
+        let content = LinkedList<byte[]>()
+        let headers = content.AddFirst(Array.zeroCreate<byte> info.FileAlignment) |> ChunkWriter
 
-        let headers = Writer(None, info.FileAlignment)
+        // Since information about sections is needed in the header,
+        // we write the sections before appending them after the headers.
+        sections info content
+
+        // TODO: Implement writing of headers by writing directly to the underlying array of the first chunk, instead of using a writer.
+        // This would require integer writing (WriteU4, WriteU8, etc.) functions to be moved to an extension class.
         headers.WriteBytes Magic.DosStub
         headers.WriteBytes Magic.PESignature
         coffHeader pe headers
@@ -230,13 +236,22 @@ let write (pe: PEFile) =
             headers.WriteU2 0us // NumberOfLineNumbers
             headers.WriteU4 header.Characteristics
 
-        headers.MoveToEnd() // Padding before sections
-
-        sectionWriter.AppendToEnd headers
-        sectionWriter
+        content
     with
     | ex -> InternalException ex |> raise
 
-let toArray pe = write(pe).ToArray()
+let toArray pe =
+    let content = write(pe)
+    let rec inner (node: LinkedListNode<byte[]>) len cont =
+        match node with
+        | null -> Array.zeroCreate<byte> len |> cont 0
+        | _ ->
+            let len' = len + node.Value.Length
+            let cont' i destination =
+                Span(node.Value).CopyTo(Span(destination, i, len'))
+                let i' = i + len'
+                cont i' destination
+            inner node.Next len' cont'
+    inner content.First 0 (fun _ -> id)
 
-// TODO: Add toSpan, toStream and toImmutableArray functions.
+// TODO: Add toStream and toImmutableArray functions.
