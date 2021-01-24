@@ -20,6 +20,14 @@ type StreamHeader =
       Size: uint32
       Name: byte[] }
 
+type CliInfo =
+    { HeaderRva: uint32
+      Metadata: CliMetadata }
+
 /// Writes the entirety of the CLI metadata to the specified writer.
-let metadata (cli: CliMetadata) (writer: ChunkWriter) =
+let metadata (cli: CliMetadata) (headerRva: uint32) (writer: ChunkList) =
+    let info =
+        { HeaderRva = headerRva
+          Metadata = cli }
+
     ()

@@ -136,7 +136,7 @@ let dataDirectories info (writer: ChunkWriter) =
 
     writer.WriteU8 0UL // Reserved
 
-let sections (info: PEInfo) (content: LinkedList<byte[]>) =
+let sections (info: PEInfo) (content: ChunkList) =
     let pe = info.File
     let falignment = uint32 pe.NTSpecificFields.FileAlignment
     let salignment = uint32 pe.NTSpecificFields.SectionAlignment
@@ -152,9 +152,6 @@ let sections (info: PEInfo) (content: LinkedList<byte[]>) =
 
     let mutable virtualAddress = salignment
 
-    let writer = new ChunkWriter(content.Last)
-    writer.MoveToEnd()
-
     let cliSectionIndex, cliDataIndex =
         match pe.DataDirectories.CliHeader with
         | Some header -> header.SectionIndex, header.DataIndex
@@ -162,18 +159,20 @@ let sections (info: PEInfo) (content: LinkedList<byte[]>) =
 
     for sectioni = 0 to pe.SectionTable.Length - 1 do
         let section = pe.SectionTable.Item sectioni
-        writer.ResetSize()
+        content.PushSize()
         for datai = 0 to section.Data.Length - 1 do
             match section.Data.Item datai with
             | CliHeader cli ->
                 if sectioni = cliSectionIndex && datai = cliDataIndex then
                     info.CliHeaderRva <- virtualAddress
-                // TODO: Write CLI data.
+                // WriteCli.metadata cli virtualAddress content
                 ()
             | ClrLoaderStub -> () // TODO: Write loader stub.
-            | RawData(Lazy bytes) -> writer.WriteBytes bytes
+            | RawData(Lazy bytes) ->
+                Span(bytes).ToArray() |> content.AddLast |> ignore
 
-        let size = writer.Size
+        let size = content.PopSize()
+        let roundedSize = Round.upTo falignment size
 
         // Calculates the values for sizes in the standard fields (II.25.2.3.1)
         if section.Header.Characteristics.HasFlag SectionFlags.CntCode then
@@ -183,7 +182,7 @@ let sections (info: PEInfo) (content: LinkedList<byte[]>) =
         if section.Header.Characteristics.HasFlag SectionFlags.CntUninitializedData then
             info.UninitializedDataSize <- info.UninitializedDataSize + size
 
-        fileOffset <- fileOffset + (Round.upTo falignment size)
+        fileOffset <- fileOffset + roundedSize
         virtualAddress <- Round.upTo salignment (virtualAddress + size)
 
         info.Sections.[sectioni] <-
@@ -192,7 +191,12 @@ let sections (info: PEInfo) (content: LinkedList<byte[]>) =
               VirtualAddress = virtualAddress
               Section = section }
 
-        writer.MoveToEnd() // Padding before next section.
+        // Padding before next section.
+        let paddingSize = roundedSize - size |> int32
+        if paddingSize > 0 then
+            Array.zeroCreate<byte> paddingSize
+            |> content.AddLast
+            |> ignore
 
 let write (pe: PEFile) =
     try
@@ -203,8 +207,10 @@ let write (pe: PEFile) =
               UninitializedDataSize = Unchecked.defaultof<uint32>
               CliHeaderRva = Unchecked.defaultof<uint32>
               Sections = Array.zeroCreate<SectionInfo> pe.SectionTable.Length }
-        let content = LinkedList<byte[]>()
+        let content = ChunkList()
         let headers = content.AddFirst(Array.zeroCreate<byte> info.FileAlignment) |> ChunkWriter
+
+        content.PushSize()
 
         // Since information about sections is needed in the header,
         // we write the sections before appending them after the headers.
@@ -240,18 +246,15 @@ let write (pe: PEFile) =
     with
     | ex -> InternalException ex |> raise
 
+/// Builds a byte array containing the Portable Executable file.
 let toArray pe =
-    let content = write(pe)
-    let rec inner (node: LinkedListNode<byte[]>) len cont =
-        match node with
-        | null -> Array.zeroCreate<byte> len |> cont 0
-        | _ ->
-            let len' = len + node.Value.Length
-            let cont' i destination =
-                Span(node.Value).CopyTo(Span(destination, i, len'))
-                let i' = i + len'
-                cont i' destination
-            inner node.Next len' cont'
-    inner content.First 0 (fun _ -> id)
+    let content = write pe
+    let data = content.PopSize() |> int32 |> Array.zeroCreate<byte>
+    let mutable i = 0
+    for { Data = data } in content do
+        let length = data.Length
+        Span(data).CopyTo(Span(data, i, length))
+        i <- i + length
+    data
 
 // TODO: Add toStream and toImmutableArray functions.

@@ -1,39 +1,34 @@
 ﻿namespace FSharpIL.Writing
 
 open System
-open System.Collections.Generic
 
 open Microsoft.FSharp.Core.Operators.Checked
 
 [<Sealed>]
-type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int) =
+type internal ChunkWriter (chunk: Chunk, position: int) = // TODO: How to modify size stack in chunk list?
     do
-        if chunk = null then nameof chunk |> nullArg
-
-        if position < 0 || position >= chunk.Value.Length then
+        if position < 0 || position >= chunk.Data.Length then
             sprintf
                 "The initial position (%i) must be a valid index"
                 position
             |> invalidArg (nameof position) 
 
     let mutable pos = position
-    let mutable size = 0u
     let mutable current = chunk
 
     new (chunk) = ChunkWriter(chunk, 0)
 
     member _.Chunk = current
     /// Gets the number of bytes remaining in the current chunk.
-    member _.FreeBytes = current.Value.Length - pos
+    member _.FreeBytes = current.Data.Length - pos
     member _.Position = pos
-    member _.Size = size
 
     member this.WriteU1 value =
-        if pos >= current.Value.Length then
-            current <- current.List.AddAfter(current, Array.zeroCreate<byte> current.Value.Length)
-        this.Chunk.Value.[pos] <- value
+        if pos >= current.Data.Length then
+            current <- current.List.AddAfter(current, Array.zeroCreate<byte> current.Data.Length)
+        this.Chunk.Data.[pos] <- value
         pos <- pos + 1
-        size <- size + 1u
+        chunk.List.IncrementSize 1u
 
     /// Writes an unsigned 2-byte integer in little-endian format.
     member this.WriteU2 value =
@@ -66,15 +61,13 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int) =
 
     member this.WriteBytes(bytes: byte[]) =
         if this.FreeBytes >= bytes.Length then
-            let destination = Span(current.Value, pos, bytes.Length)
+            let destination = Span(current.Data, pos, bytes.Length)
             Span(bytes).CopyTo destination
             pos <- pos + bytes.Length
-            size <- size + uint32 bytes.Length
+            chunk.List.IncrementSize (uint32 bytes.Length)
         else
             Array.toSeq bytes |> this.WriteBytes
 
     member this.WriteBytes(bytes: seq<byte>) = Seq.iter this.WriteU1 bytes
 
-    member _.MoveToEnd() = pos <- current.Value.Length
-
-    member _.ResetSize() = size <- 0u
+    member _.MoveToEnd() = pos <- current.Data.Length
