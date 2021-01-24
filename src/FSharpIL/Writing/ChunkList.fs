@@ -58,8 +58,34 @@ type internal ChunkListEnumerator =
     end
 
 [<Sealed>]
+type private SizeStack() =
+    let mutable sizes = Array.zeroCreate<uint32> 1
+    let mutable i = 0
+
+    member _.Head
+        with get() =
+            if i < 0 then
+                sprintf "Unable to retrieve size, the stack is empty." |> invalidOp
+            sizes.[i]
+        and set value = sizes.[i] <- value
+
+    member this.Push() =
+        if i >= sizes.Length - 1 then
+            let old = sizes
+            sizes <- Array.zeroCreate<uint32>(sizes.Length * 2)
+            Array.blit old 0 sizes 0 old.Length
+        else i <- i + 1
+        this.Head <- 0u
+
+    member this.Pop() =
+        if i < 0 then invalidOp "The size stack was empty."
+        let size = this.Head
+        i <- i - 1
+        size
+
+[<Sealed>]
 type internal ChunkList () =
-    let sizes = System.Collections.Generic.Stack<uint32>()
+    let sizes = SizeStack()
     let mutable head: Chunk option = None
     let mutable count = 0u
 
@@ -108,16 +134,9 @@ type internal ChunkList () =
 
         tail
 
-    member _.PushSize() = sizes.Push 0u
-    member this.PopSize() =
-        let size = sizes.Pop()
-        this.IncrementSize size
-        size
-    member internal _.IncrementSize by =
-        // TODO: Figure out how to increment size without always having to pop and push.
-        if sizes.Count > 0 then
-            let size = sizes.Pop() + by
-            sizes.Push size
+    member _.PushSize() = sizes.Push()
+    member _.PopSize() = sizes.Pop()
+    member internal _.IncrementSize by = sizes.Head <- sizes.Head + by
 
     member this.GetEnumerator() = new ChunkListEnumerator(this)
 
