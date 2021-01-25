@@ -1,6 +1,5 @@
 ﻿namespace FSharpIL.Metadata
 
-open System.Collections.Generic
 open System.Collections.Immutable
 
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.

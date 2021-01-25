@@ -15,6 +15,18 @@ module Size =
     [<Literal>]
     let CliHeader = 0x48u
 
+[<RequireQualifiedAccess>]
+module private CodedIndex =
+    /// <summary>Calculates a coded index (II.24.2.5).</summary>
+    /// <param name="n">The number of bits needed to encode the tag.</param>
+    let inline private create n (index, tag): uint32 = (index <<< n) ||| tag
+
+    let resolutionScope (metadata: CliMetadata) scope =
+        match scope with
+        | ResolutionScope.AssemblyRef assm -> metadata.AssemblyRef.Item assm, 2u
+        | bad -> failwithf "Unsupported resolution scope %A" bad
+        |> create 2
+
 type StreamHeader =
     { Offset: uint32
       Size: uint32
@@ -96,6 +108,14 @@ let tables (info: CliInfo) (content: ChunkList) =
     // Tables
     let tables = info.Metadata
 
+    // Calculate how big coded indices should be
+    let resolutionScope =
+        // TODO: Include ModuleRef table when determine how big a ResolutionScope should be.
+        if (1 + tables.AssemblyRef.Count + tables.TypeRef.Count) > 65532
+        then 4
+        else 2
+
+    // Module (0x00)
     let mdle =
         let size = 2 + info.StringsStream.IndexSize + (3 * info.GuidStream.IndexSize)
         ChunkWriter.After(content.Tail.Value, size)
@@ -104,6 +124,20 @@ let tables (info: CliInfo) (content: ChunkList) =
     info.GuidStream.WriteIndex(tables.Module.Mvid, mdle)
     info.GuidStream.WriteZero mdle // EncId
     info.GuidStream.WriteZero mdle // Encbaseid
+
+    // TypeRef (0x01)
+    let typeRef =
+        let size = resolutionScope + (2 * info.StringsStream.IndexSize)
+        ChunkWriter.After(content.Tail.Value, size * tables.TypeRef.Count)
+
+    // TODO: Uh oh! How to ensure that the order of tables is preserved?
+    for KeyValue(HandleValue tref, _) in tables.TypeRef do
+        let rscope = CodedIndex.resolutionScope tables tref.ResolutionScope
+        if resolutionScope = 2
+        then typeRef.WriteU2 rscope
+        else typeRef.WriteU4 rscope
+        info.StringsStream.WriteIndex(tref.TypeName, typeRef)
+        info.StringsStream.WriteIndex(tref.TypeNamespace, typeRef)
 
     // TODO: Write more tables.
     // NOTE: Rows come right after each other. TypeDef EX: Flags, TypeName, Namespace, Extends, FieldList, MethodList.

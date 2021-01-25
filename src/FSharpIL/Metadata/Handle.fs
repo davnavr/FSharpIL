@@ -38,3 +38,4 @@ type internal HandleEqualityComparer<'Value>(valueComparer: IEqualityComparer<'V
 module internal HandlePatterns =
     let inline (|IHandle|) (handle: #IHandle) = handle :> IHandle
     let inline (|Handles|) (value: #IHandleValue) = value.Handles
+    let inline (|HandleValue|) (handle: Handle<'T>) = handle.Item
