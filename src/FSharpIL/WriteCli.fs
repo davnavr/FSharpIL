@@ -138,38 +138,39 @@ let tables (info: CliInfo) (content: ChunkList) =
     info.GuidStream.WriteZero mdle // Encbaseid
 
     // TypeRef (0x01)
-    let typeRef =
-        let size = indexResolutionScope + (2 * info.StringsStream.IndexSize)
-        ChunkWriter.After(content.Tail.Value, size * tables.TypeRef.Count)
+    if tables.TypeRef.Count > 0 then
+        let typeRef =
+            let size = indexResolutionScope + (2 * info.StringsStream.IndexSize)
+            ChunkWriter.After(content.Tail.Value, size * tables.TypeRef.Count)
 
-    for tref in tables.TypeRef.Items do
-        let resolutionScope = CodedIndex.resolutionScope tables tref.ResolutionScope
+        for tref in tables.TypeRef.Items do
+            let resolutionScope = CodedIndex.resolutionScope tables tref.ResolutionScope
 
-        if indexResolutionScope = 2 // ResolutionScope
-        then typeRef.WriteU2 resolutionScope
-        else typeRef.WriteU4 resolutionScope
+            if indexResolutionScope = 2 // ResolutionScope
+            then typeRef.WriteU2 resolutionScope
+            else typeRef.WriteU4 resolutionScope
 
-        info.StringsStream.WriteIndex(tref.TypeName, typeRef)
-        info.StringsStream.WriteIndex(tref.TypeNamespace, typeRef)
+            info.StringsStream.WriteIndex(tref.TypeName, typeRef)
+            info.StringsStream.WriteIndex(tref.TypeNamespace, typeRef)
 
     // TypeDef (0x02)
-    let typeDef =
-        let size =
-            4
-            + (2 * info.StringsStream.IndexSize)
-            + indexExtends
-            + tables.Field.SimpleIndexSize
-            + tables.Method.SimpleIndexSize
-        ChunkWriter.After(content.Tail.Value, size * tables.TypeDef.Count)
+    if tables.TypeDef.Count > 0 then
+        let typeDef =
+            let size =
+                4
+                + (2 * info.StringsStream.IndexSize)
+                + indexExtends
+                + tables.Field.SimpleIndexSize
+                + tables.MethodDef.SimpleIndexSize
+            ChunkWriter.After(content.Tail.Value, size * tables.TypeDef.Count)
 
-    do
         let mutable field = 1u
         let mutable method = 1u
 
         for tdef in tables.TypeDef.Items do
             typeDef.WriteU4 tdef.Flags
-            info.StringsStream.WriteIndex(tdef.TypeName, typeRef)
-            info.StringsStream.WriteIndex(tdef.TypeNamespace, typeRef)
+            info.StringsStream.WriteIndex(tdef.TypeName, typeDef)
+            info.StringsStream.WriteIndex(tdef.TypeNamespace, typeDef)
             () // Extends
 
             // Field
@@ -184,17 +185,35 @@ let tables (info: CliInfo) (content: ChunkList) =
             tables.Field.WriteSimpleIndex(method', typeDef)
 
     // Field (0x04)
-    let field =
-        let size =
-            2
-            + info.StringsStream.IndexSize
-            // + // TODO: How big are indices into the Blob heap?
-        ChunkWriter.After(content.Tail.Value, size * tables.Field.Count)
+    if tables.Field.Count > 0 then
+        let field =
+            let size =
+                2 // Flags
+                + info.StringsStream.IndexSize // Name
+                // + // TODO: How big are indices into the Blob heap?
+            ChunkWriter.After(content.Tail.Value, size * tables.Field.Count)
 
-    for row in tables.Field.Items do
-        field.WriteU2 row.Flags
-        info.StringsStream.WriteIndex(row.Name, field)
-        // TODO: Write index to signature.
+        for row in tables.Field.Items do
+            field.WriteU2 row.Flags
+            info.StringsStream.WriteIndex(row.Name, field)
+            invalidOp "TODO: Write index for field signatures."
+
+    // MethodDef (0x06)
+    if tables.MethodDef.Count > 0 then
+        let methodDef =
+            let size =
+                8 // RVA, ImplFlags, Flags
+                + info.StringsStream.IndexSize // Name
+                // +
+            ChunkWriter.After(content.Tail.Value, size * tables.MethodDef.Count)
+
+        for method in tables.MethodDef.Items do
+            methodDef.WriteU4 0u // RVA // TODO: Write the RVA to the method body.
+            methodDef.WriteU2 method.ImplFlags
+            methodDef.WriteU2 method.Flags
+            info.StringsStream.WriteIndex(method.Name, methodDef)
+            // Signature
+            // Param
 
     // TODO: Write more tables.
     // NOTE: Rows come right after each other. TypeDef EX: Flags, TypeName, Namespace, Extends, FieldList, MethodList.

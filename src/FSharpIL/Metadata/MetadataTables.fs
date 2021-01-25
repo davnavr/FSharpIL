@@ -510,7 +510,7 @@ type FieldSet<'Field when 'Field :> IField> (capacity: int) =
 type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
     /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the address of the method body.</summary>
     member _.Body: MethodBody = body
-    member _.ImplFlags: MethodImplFlags = iflags
+    member _.ImplFlags: MethodImplAttributes = iflags
     member _.Flags: MethodAttributes = attr
     member _.Name: Identifier = name
     member _.Signature: MethodDefSignature = signature
@@ -547,7 +547,7 @@ type Method<'Body, 'Flags, 'Signature when 'Flags :> IFlags<MethodAttributes> an
       ParamList: ParamItem -> int -> ParamRow }
 
     interface IMethod with
-        member this.Definition() = MethodDef(this.Body, this.ImplFlags, this.Flags.Flags, this.MethodName, this.Signature.Signature(), this.ParamList)
+        member this.Definition() = MethodDef(this.Body, this.ImplFlags.Flags, this.Flags.Flags, this.MethodName, this.Signature.Signature(), this.ParamList)
 
 // TODO: Create different method body types for different methods.
 type InstanceMethodDef = Method<MethodBody, InstanceMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>

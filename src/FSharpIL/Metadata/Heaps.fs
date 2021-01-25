@@ -9,7 +9,6 @@ open FSharpIL.Writing
 let MaxSmallIndex = 0xFFFF
 
 // TODO: Determine if adding strings first and then allowing retrieval of index is faster than assigning an index to each string as it is written.
-
 /// <summary>Represents the <c>#Strings</c> metadata stream (II.24.2.3).</summary>
 [<Sealed>]
 type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply contain the strings with only null characters separating them.
@@ -23,7 +22,7 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         + (2 * metadata.TypeRef.Count)
         + (2 * metadata.TypeDef.Count)
         + metadata.Field.Count
-        + metadata.Method.Count
+        + metadata.MethodDef.Count
 
         + metadata.MemberRef.Count
 
@@ -52,7 +51,7 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         for field in metadata.Field.Items do
             string field.Name |> add
 
-        for method in metadata.Method.Items do
+        for method in metadata.MethodDef.Items do
             string method.Name |> add
 
 
@@ -93,6 +92,7 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
 
     member this.WriteIndex(o, writer: ChunkWriter) = this.WriteIndex(o.ToString(), writer)
 
+/// <summary>Represents the <c>#US</c> metadata stream (II.24.2.4).</summary>
 [<Sealed>]
 type UserStringHeap internal (metadata: CliMetadata) =
     let strings =
@@ -130,3 +130,12 @@ type GuidHeap internal (metadata: CliMetadata) =
         else writer.WriteU2 i
 
     member this.WriteZero writer = this.WriteIndex(Guid.Empty, writer)
+
+// TODO: Determine if index of 0 means null for Blobs.
+/// <summary>Represents the <c>#Blob</c> metadata stream (II.24.2.4).</summary>
+[<Sealed>]
+type BlobHeap internal (metadata: CliMetadata) =
+    // let field = Dictionary<FieldSignature, uint32> metadata.Field.Count
+    let method = Dictionary<MethodDefSignature, uint32> metadata.MethodDef.Count
+
+    member _.Count = 0

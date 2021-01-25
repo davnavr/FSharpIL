@@ -12,7 +12,7 @@ type CliMetadata internal (state: MetadataBuilderState) =
             |> Seq.collect (fun tdef -> tdef.FieldList)
             |> Seq.toArray
         ImmutableTable(table, state.CreateHandle)
-    let method =
+    let methodDef =
         let table =
             state.TypeDef
             |> Seq.collect (fun tdef -> tdef.MethodList)
@@ -34,9 +34,9 @@ type CliMetadata internal (state: MetadataBuilderState) =
             bits <- bits ||| (1UL <<< 2)
             uint32 state.TypeDef.Count |> counts.Add
         // if field.Count
-        if method.Count > 0 then
+        if methodDef.Count > 0 then
             bits <- bits ||| (1UL <<< 6)
-            uint32 method.Count |> counts.Add
+            uint32 methodDef.Count |> counts.Add
 
         if state.MemberRef.Count > 0 then
             bits <- bits ||| (1UL <<< 0xA)
@@ -77,7 +77,7 @@ type CliMetadata internal (state: MetadataBuilderState) =
     member val TypeRef = state.CreateTable state.TypeRef
     member val TypeDef = state.CreateTable state.TypeDef
     member _.Field = field
-    member _.Method = method
+    member _.MethodDef = methodDef
 
     member val MemberRef = state.CreateTable state.MemberRef
 
