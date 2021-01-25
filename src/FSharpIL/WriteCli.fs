@@ -26,7 +26,8 @@ type CliInfo =
       Metadata: CliMetadata
       mutable MetadataSize: uint32
       mutable MethodBodiesSize: uint32
-      StringsStream: StringsHeap }
+      StringsStream: StringsHeap
+      GuidStream: GuidHeap }
 
     member this.MetadataRva = this.MethodBodiesRva + this.MethodBodiesSize
     member this.StrongNameSignatureRva = this.HeaderRva + Size.CliHeader
@@ -67,6 +68,47 @@ let header (info: CliInfo) (writer: ChunkWriter) =
 let bodies (info: CliInfo) (content: ChunkList) =
     ()
 
+/// Writes the contents of the #~ stream (II.24.2.6).
+let tables (info: CliInfo) (content: ChunkList) =
+    let headers = ChunkWriter.After(content.Tail.Value, 12)
+    headers.WriteU4 0u // Reserved
+    headers.WriteU1 2uy // MajorVersion
+    headers.WriteU1 0uy // MinorVersion
+
+    let heapSizes = // TODO: Move calculation of HeapSizes to CliMetadata class.
+        let mutable bits = 0uy
+        if info.StringsStream.IndexSize = 4 then bits <- bits ||| 1uy
+        // #US
+        if info.GuidStream.IndexSize = 4 then bits <- bits ||| 2uy
+        // TODO: Set size flags for other streams.
+        bits
+
+    headers.WriteU1 heapSizes
+    headers.WriteU1 1uy // Reserved
+    headers.WriteU8 info.Metadata.Valid
+    headers.WriteU8 0UL // Sorted
+
+    // Rows
+    for row in info.Metadata.RowCounts do
+        let size = ChunkWriter.After(content.Tail.Value, 4)
+        size.WriteU4 row
+
+    // Tables
+    let tables = info.Metadata
+
+    let mdle =
+        let size = 2 + info.StringsStream.IndexSize + (3 * info.GuidStream.IndexSize)
+        ChunkWriter.After(content.Tail.Value, size)
+    mdle.WriteU2 0us // Generation
+    info.StringsStream.WriteIndex(tables.Module.Name, mdle)
+    info.GuidStream.WriteIndex(tables.Module.Mvid, mdle)
+    info.GuidStream.WriteZero mdle // EncId
+    info.GuidStream.WriteZero mdle // Encbaseid
+
+    // TODO: Write more tables.
+    // NOTE: Rows come right after each other. TypeDef EX: Flags, TypeName, Namespace, Extends, FieldList, MethodList.
+    ()
+
 /// Writes the CLI metadata root (II.24.2.1) and the stream headers (II.24.2.2).
 let root (info: CliInfo) (content: ChunkList) =
     let version = MetadataVersion.toArray info.Metadata.MetadataVersion
@@ -93,20 +135,28 @@ let root (info: CliInfo) (content: ChunkList) =
     if writer.FreeBytes <> 0 then
         invalidOp "The metadata root did not fit in the current chunk."
 
-    let mutable rva = info.MetadataRva + uint32 fieldsSize
+    let mutable offset = uint32 fieldsSize
 
     // Stream headers
     let streamHeader name =
         if Array.length name % 4 <> 0 then
             invalidArg (nameof name) "The length of the stream header name must be a multiple of four."
-        let location = content.AddAfter(content.Tail.Value, Array.zeroCreate<byte> 8) // TODO: Fix, AddAfter does not work correctly.
+        let location = content.AddAfter(content.Tail.Value, Array.zeroCreate<byte> 8)
         content.AddAfter(location, name) |> ignore
-        rva <- rva + 8u + uint32 name.Length
-        location
+        offset <- offset + 8u + uint32 name.Length
+        ChunkWriter(location)
 
-    let tables = streamHeader "#~\000\000"B
+    let metadata = streamHeader "#~\000\000"B
     let strings = streamHeader "#Strings\000\000\000\000"B
     // TODO: Write other stream headers.
+
+    // #~ stream
+    content.PushSize()
+    tables info content
+    let metadataSize = content.PopSize()
+    offset <- offset + metadataSize
+    metadata.WriteU4 offset
+    metadata.WriteU4 metadataSize
 
     ()
 
@@ -117,7 +167,8 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (content: ChunkList) =
           Metadata = cli
           MetadataSize = Unchecked.defaultof<uint32>
           MethodBodiesSize = Unchecked.defaultof<uint32>
-          StringsStream = StringsHeap cli }
+          StringsStream = StringsHeap cli
+          GuidStream = GuidHeap cli }
     let tail = content.Tail.Value
 
     // Since header requires the calculations of sizes, we write the data first and prepend the header afterward.
@@ -134,7 +185,6 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (content: ChunkList) =
     // CLI metadata
     content.PushSize()
     root info content
-    // TODO: Write metadata here.
     info.MetadataSize <- content.PopSize()
 
     ChunkWriter.After(tail, int32 Size.CliHeader) |> header info

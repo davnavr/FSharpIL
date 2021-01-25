@@ -83,13 +83,15 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         | "" -> 0u
         | _ -> strings.Item str
 
+    member val IndexSize = if strings.Count > MaxSmallIndex then 4 else 2
+
     member this.WriteIndex(str, writer: ChunkWriter) =
         let i = this.IndexOf str
-        if strings.Count > MaxSmallIndex
-        then writer.WriteU8 i
-        else writer.WriteU4 i
+        if this.IndexSize = 4
+        then writer.WriteU4 i
+        else writer.WriteU2 i
 
-    member this.WriteIndex o = o.ToString() |> this.WriteIndex
+    member this.WriteIndex(o, writer: ChunkWriter) = this.WriteIndex(o.ToString(), writer)
 
 [<Sealed>]
 type UserStringHeap internal (metadata: CliMetadata) =
@@ -119,8 +121,12 @@ type GuidHeap internal (metadata: CliMetadata) =
         then 0u
         else guids.Item guid
 
+    member val IndexSize = if guids.Count > MaxSmallIndex then 4 else 2
+
     member this.WriteIndex(guid, writer: ChunkWriter) =
         let i = this.IndexOf guid
-        if guids.Count > MaxSmallIndex
-        then writer.WriteU8 i
-        else writer.WriteU4 i
+        if this.IndexSize = 4
+        then writer.WriteU4 i
+        else writer.WriteU2 i
+
+    member this.WriteZero writer = this.WriteIndex(Guid.Empty, writer)

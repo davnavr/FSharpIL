@@ -21,6 +21,44 @@ type CliMetadata internal (state: MetadataBuilderState) =
 
     let nestedClass = state.NestedClass |> ImmutableArray.CreateRange
 
+    let valid, rowCounts =
+        // Module table is always present
+        let mutable bits = 1UL
+        let counts = ImmutableArray.CreateBuilder 48
+        counts.Add 1u
+
+        if state.TypeRef.Count > 0 then
+            bits <- bits ||| (1UL <<< 1)
+            uint32 state.TypeRef.Count |> counts.Add
+        if state.TypeDef.Count > 0 then
+            bits <- bits ||| (1UL <<< 2)
+            uint32 state.TypeDef.Count |> counts.Add
+        // if field.Count
+        if method.Count > 0 then
+            bits <- bits ||| (1UL <<< 6)
+            uint32 method.Count |> counts.Add
+
+        if state.MemberRef.Count > 0 then
+            bits <- bits ||| (1UL <<< 0xA)
+            uint32 state.MemberRef.Count |> counts.Add
+
+        if state.CustomAttribute.Count > 0 then
+            bits <- bits ||| (1UL <<< 0xC)
+            uint32 state.CustomAttribute.Count |> counts.Add
+
+        if state.Assembly.IsSome then
+            bits <- bits ||| (1UL <<< 0x20)
+            counts.Add 1u
+        if state.AssemblyRef.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x23)
+            uint32 state.AssemblyRef.Count |> counts.Add
+
+        if nestedClass.Length > 0 then
+            bits <- bits ||| (1UL <<< 0x29)
+            uint32 nestedClass.Length |> counts.Add
+
+        bits, counts
+
     member val Header = state.Header
     /// <summary>Corresponds to the <c>Flags</c> field of the CLI header (II.25.3.3).</summary>
     member val HeaderFlags = state.HeaderFlags
@@ -51,23 +89,13 @@ type CliMetadata internal (state: MetadataBuilderState) =
     member _.NestedClass = nestedClass
 
     /// Gets a bit vector that indicates which tables are present (II.24.2.6).
-    member val Valid: uint64 =
-        let mutable bits = 1UL
-        if state.TypeRef.Count > 0 then bits <- bits ||| (1UL <<< 1)
-        if state.TypeDef.Count > 0 then bits <- bits ||| (1UL <<< 2)
-        // if field.Count
-        if method.Count > 0 then bits <- bits ||| (1UL <<< 6)
+    member _.Valid: uint64 = valid
 
-        if state.MemberRef.Count > 0 then bits <- bits ||| (1UL <<< 0xA)
-
-        if state.CustomAttribute.Count > 0 then bits <- bits ||| (1UL <<< 0xC)
-
-        if state.Assembly.IsSome then bits <- bits ||| (1UL <<< 0x20)
-        if state.AssemblyRef.Count > 0 then bits <- bits ||| (1UL <<< 0x23)
-
-        if nestedClass.Length > 0 then bits <- bits ||| (1UL <<< 0x29)
-
-        bits
+    /// <summary>
+    /// Corresponds to the <c>Rows</c> field of the <c>#~</c> stream header,
+    /// which specifies "the number of rows for each present table" (II.24.2.6).
+    /// </summary>
+    member _.RowCounts = rowCounts
 
 [<Sealed>]
 type MetadataBuilder internal (mdle) =

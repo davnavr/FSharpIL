@@ -182,14 +182,14 @@ let sections (info: PEInfo) (content: ChunkList) =
         if section.Header.Characteristics.HasFlag SectionFlags.CntUninitializedData then
             info.UninitializedDataSize <- info.UninitializedDataSize + size
 
-        fileOffset <- fileOffset + roundedSize
-        virtualAddress <- Round.upTo salignment (virtualAddress + size)
-
         info.Sections.[sectioni] <-
             { ActualSize = size
               FileOffset = fileOffset
               VirtualAddress = virtualAddress
               Section = section }
+
+        fileOffset <- fileOffset + roundedSize
+        virtualAddress <- Round.upTo salignment (virtualAddress + size)
 
         // Padding before next section.
         let paddingSize = roundedSize - size |> int32
@@ -241,8 +241,6 @@ let write (pe: PEFile) =
             headers.WriteU2 header.NumberOfRelocations
             headers.WriteU2 0us // NumberOfLineNumbers
             headers.WriteU4 header.Characteristics
-
-        // headers.MoveToEnd() // Padding before sections
 
         content
     with
