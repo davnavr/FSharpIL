@@ -23,7 +23,7 @@ module private CodedIndex =
 
     let resolutionScope (metadata: CliMetadata) scope =
         match scope with
-        | ResolutionScope.AssemblyRef assm -> metadata.AssemblyRef.Item assm, 2u
+        | ResolutionScope.AssemblyRef assm -> metadata.AssemblyRef.IndexOf assm, 2u
         | bad -> failwithf "Unsupported resolution scope %A" bad
         |> create 2
 
@@ -130,8 +130,7 @@ let tables (info: CliInfo) (content: ChunkList) =
         let size = resolutionScope + (2 * info.StringsStream.IndexSize)
         ChunkWriter.After(content.Tail.Value, size * tables.TypeRef.Count)
 
-    // TODO: Uh oh! How to ensure that the order of tables is preserved?
-    for KeyValue(HandleValue tref, _) in tables.TypeRef do
+    for tref in tables.TypeRef.Items do
         let rscope = CodedIndex.resolutionScope tables tref.ResolutionScope
         if resolutionScope = 2
         then typeRef.WriteU2 rscope

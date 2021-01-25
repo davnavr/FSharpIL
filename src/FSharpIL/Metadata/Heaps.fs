@@ -41,24 +41,24 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
 
         string metadata.Module.Name |> add
 
-        for tref in metadata.TypeRef.Keys do
-            string tref.Item.TypeName |> add
-            string tref.Item.TypeNamespace |> add
+        for tref in metadata.TypeRef.Items do
+            string tref.TypeName |> add
+            string tref.TypeNamespace |> add
 
-        for tdef in metadata.TypeDef.Keys do
-            string tdef.Item.TypeName |> add
-            string tdef.Item.TypeNamespace |> add
+        for tdef in metadata.TypeDef.Items do
+            string tdef.TypeName |> add
+            string tdef.TypeNamespace |> add
 
-        for field in metadata.Field.Keys do
-            string field.Item.Name |> add
+        for field in metadata.Field.Items do
+            string field.Name |> add
 
-        for method in metadata.Method.Keys do
-            string method.Item.Name |> add
+        for method in metadata.Method.Items do
+            string method.Name |> add
 
 
 
-        for mref in metadata.MemberRef.Keys do
-            string mref.Item.MemberName |> add
+        for mref in metadata.MemberRef.Items do
+            string mref.MemberName |> add
 
 
 
@@ -68,9 +68,9 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
             string assembly.Culture |> add
         | None -> ()
 
-        for assembly in metadata.AssemblyRef.Keys do
-            string assembly.Item.Name |> add
-            string assembly.Item.Culture |> add
+        for assembly in metadata.AssemblyRef.Items do
+            string assembly.Name |> add
+            string assembly.Culture |> add
         ()
 
     member _.Count = strings.Count

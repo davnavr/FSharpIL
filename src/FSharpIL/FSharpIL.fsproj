@@ -22,6 +22,7 @@
     <Compile Include="Metadata\AssemblyName.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\Handle.fs" />
+    <Compile Include="Metadata\ImmutableTable.fs" />
     <Compile Include="Metadata\MemberList.fs" />
     <Compile Include="Metadata\MetadataTables.fs" />
     <Compile Include="Metadata\MetadataBuilder.fs" />

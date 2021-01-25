@@ -7,16 +7,17 @@ open System.Collections.Immutable
 type CliMetadata internal (state: MetadataBuilderState) =
     // TODO: Determine if readOnlyDict or ImmutableDictionary has faster lookup times.
     let field =
-        state.TypeDef
-        |> Seq.collect (fun tdef -> tdef.FieldList)
-        |> Seq.mapi (fun i field -> state.CreateHandle field, i)
-        |> readOnlyDict
+        let table =
+            state.TypeDef
+            |> Seq.collect (fun tdef -> tdef.FieldList)
+            |> Seq.toArray
+        ImmutableTable(table, state.CreateHandle)
     let method =
-        state.TypeDef
-        |> Seq.collect (fun tdef -> tdef.MethodList)
-        |> Seq.mapi (fun i method -> state.CreateHandle method, i)
-        // TODO: Use ImmutableDictionary class or readOnlyDict function?
-        |> readOnlyDict
+        let table =
+            state.TypeDef
+            |> Seq.collect (fun tdef -> tdef.MethodList)
+            |> Seq.toArray
+        ImmutableTable(table, state.CreateHandle)
 
     let nestedClass = state.NestedClass |> ImmutableArray.CreateRange
 

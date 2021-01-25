@@ -1268,13 +1268,10 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
 
     member internal _.CreateHandle<'T> (value: 'T): Handle<'T> = Handle(owner, value)
 
-    member internal this.CreateTable<'T> (table: ITable<'T>): ReadOnlyDictionary<Handle<'T>, uint32> = // TODO: Use immutable dictionary instead?
-        let mutable i = 0u
-        let dict = Dictionary<_, _>(table.Count, HandleEqualityComparer table.Comparer)
-        for value in table do
-            dict.Item <- this.CreateHandle value, i
-            i <- i + 1u
-        ReadOnlyDictionary dict
+    member internal this.CreateTable<'T when 'T : equality> (table: ITable<'T>): ImmutableTable<'T> =
+        ImmutableTable(table :> IReadOnlyCollection<_>, this.CreateHandle)
+
+
 
     member internal _.EnsureOwner(value: IHandleValue) =
         for handle in value.Handles do
