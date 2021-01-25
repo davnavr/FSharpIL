@@ -18,6 +18,12 @@ type CliMetadata internal (state: MetadataBuilderState) =
             |> Seq.collect (fun tdef -> tdef.MethodList)
             |> Seq.toArray
         ImmutableTable(table, state.CreateHandle)
+    let parameters =
+        let table =
+            methodDef.Items
+            |> Seq.collect (fun method -> method.ParamList)
+            |> Seq.toArray
+        ImmutableTable(table, state.CreateHandle)
 
     let nestedClass = state.NestedClass |> ImmutableArray.CreateRange
 
@@ -78,6 +84,7 @@ type CliMetadata internal (state: MetadataBuilderState) =
     member val TypeDef = state.CreateTable state.TypeDef
     member _.Field = field
     member _.MethodDef = methodDef
+    member _.Param = parameters
 
     member val MemberRef = state.CreateTable state.MemberRef
 

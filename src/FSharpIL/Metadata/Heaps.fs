@@ -23,6 +23,7 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         + (2 * metadata.TypeDef.Count)
         + metadata.Field.Count
         + metadata.MethodDef.Count
+        + metadata.Param.Count
 
         + metadata.MemberRef.Count
 

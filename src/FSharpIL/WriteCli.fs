@@ -33,8 +33,13 @@ module private CodedIndex =
         | Extends.AbstractClass { TypeHandle = tdef }
         | Extends.ConcreteClass { TypeHandle = tdef } -> metadata.TypeDef.IndexOf tdef, 0u
         | Extends.TypeRef tref -> metadata.TypeRef.IndexOf tref, 1u
-        | bad -> failwithf "Unsupported value %A" bad
+        | bad -> failwithf "Unsupported extends %A" bad
         |> create 2
+
+    let memberRefParent (metadata: CliMetadata) parent =
+        match parent with
+        | MemberRefParent.TypeRef tref -> metadata.TypeRef.IndexOf tref, 1u
+        |> create 3
 
 type StreamHeader =
     { Offset: uint32
@@ -127,6 +132,10 @@ let tables (info: CliInfo) (content: ChunkList) =
         // TODO: Include TypeSpec table.
         if (tables.TypeDef.Count + tables.TypeRef.Count) > 65532 then 4 else 2
 
+    let indexMemberRefParent =
+        // TODO: Include ModuleRef and TypeSpec tables.
+        if (tables.TypeDef.Count + tables.TypeRef.Count + tables.MethodDef.Count) > 65528 then 4 else 2
+
     // Module (0x00)
     let mdle =
         let size = 2 + info.StringsStream.IndexSize + (3 * info.GuidStream.IndexSize)
@@ -207,16 +216,107 @@ let tables (info: CliInfo) (content: ChunkList) =
                 // +
             ChunkWriter.After(content.Tail.Value, size * tables.MethodDef.Count)
 
+        let mutable param = 1u
+
         for method in tables.MethodDef.Items do
             methodDef.WriteU4 0u // RVA // TODO: Write the RVA to the method body.
             methodDef.WriteU2 method.ImplFlags
             methodDef.WriteU2 method.Flags
             info.StringsStream.WriteIndex(method.Name, methodDef)
-            // Signature
-            // Param
+            () // Signature
+
+            let param' = if method.ParamList.IsEmpty then 0u else param // Param
+            param <- param + uint32 method.ParamList.Length
+            tables.Param.WriteSimpleIndex(param', methodDef)
+
+    // Param (0x08)
+    if tables.Param.Count > 0 then // TODO: How are return values represented by a row in the Param table represented?
+        let param =
+            let size = 4 + info.StringsStream.IndexSize // Name
+            ChunkWriter.After(content.Tail.Value, size * tables.Param.Count)
+
+        for row in tables.Param.Items do
+            param.WriteU2 row.Flags.Flags
+            param.WriteU2 (invalidOp "TODO: Calculate parameter sequence")
+            info.StringsStream.WriteIndex(row.ParamName, param)
+
+
+
+
+    // MemberRef (0x0A)
+    if tables.MemberRef.Count > 0 then
+        let memberRef =
+            let size =
+                indexMemberRefParent // Class
+                + info.StringsStream.IndexSize // Name
+                // + // Signature
+            ChunkWriter.After(content.Tail.Value, size * tables.MemberRef.Count)
+
+        for row in tables.MemberRef.Items do
+            let parent = CodedIndex.memberRefParent tables row.Class // Class
+            if indexMemberRefParent = 2
+            then memberRef.WriteU2 parent
+            else memberRef.WriteU4 parent
+
+            info.StringsStream.WriteIndex(row.MemberName, memberRef)
+            () // Signature
+
+
+
+
+    // CustomAttribute (0x0C)
+    if tables.CustomAttribute.Length > 0 then
+        ()
+
+    // Assembly (0x20)
+    if tables.Assembly.IsSome then
+        let writer =
+            let size =
+                16 // HashAlgId, MajorVersion, MinorVersion, BuildNumber, RevisionNumber, Flags
+                // + size of blob index
+                + info.StringsStream.IndexSize // Name
+            ChunkWriter.After(content.Tail.Value, size)
+
+        let assembly = tables.Assembly.Value
+        writer.WriteU4 0u // TODO: Determine what HashAlgId should be.
+        writer.WriteU2 assembly.Version.Major
+        writer.WriteU2 assembly.Version.Minor
+        writer.WriteU2 assembly.Version.Build
+        writer.WriteU2 assembly.Version.Revision
+        writer.WriteU4 0u // TODO: Determine what flags an assembly should have.
+        invalidOp "TODO: What value should the PublicKey of the assembly have?"
+        info.StringsStream.WriteIndex(assembly.Name, writer)
+
+    // AssemblyRef (0x23)
+    if tables.AssemblyRef.Count > 0 then
+        let assemblyRef =
+            let size =
+                12 // MajorVersion, MinorVersion, BuildNumber, RevisionNumber, Flags
+                // + (2 * size of blob index) // PublicKeyOrToken, HashValue
+                + (2 * info.StringsStream.IndexSize) // Name, Culture
+            ChunkWriter.After(content.Tail.Value, size * tables.AssemblyRef.Count)
+
+        for row in tables.AssemblyRef.Items do
+            assemblyRef.WriteU2 row.Version.Major
+            assemblyRef.WriteU2 row.Version.Minor
+            assemblyRef.WriteU2 row.Version.Build
+            assemblyRef.WriteU2 row.Version.Revision
+            assemblyRef.WriteU4 row.Flags
+            invalidOp "public key or token"
+            info.StringsStream.WriteIndex(row.Name, assemblyRef)
+            info.StringsStream.WriteIndex(row.Culture, assemblyRef)
+            invalidOp "hash value"
+
+    // NestedClass (0x29)
+    if tables.NestedClass.Length > 0 then
+        let nestedClass =
+            ChunkWriter.After(content.Tail.Value, 2 * tables.TypeDef.SimpleIndexSize * tables.NestedClass.Length)
+
+        for row in tables.NestedClass do
+            tables.TypeDef.WriteSimpleIndex(row.NestedClass, nestedClass)
+            tables.TypeDef.WriteSimpleIndex(row.EnclosingClass, nestedClass)
 
     // TODO: Write more tables.
-    // NOTE: Rows come right after each other. TypeDef EX: Flags, TypeName, Namespace, Extends, FieldList, MethodList.
     ()
 
 /// Writes the CLI metadata root (II.24.2.1) and the stream headers (II.24.2.2).

@@ -26,10 +26,12 @@ type ImmutableTable<'T when 'T : equality> internal (table: IReadOnlyCollection<
 
     member _.Count = items.Length
 
-    member internal this.WriteSimpleIndex (i: uint32, writer: ChunkWriter) =
+    member internal this.WriteSimpleIndex(i: uint32, writer: ChunkWriter) =
         if this.SimpleIndexSize = 2
         then writer.WriteU2 i
         else writer.WriteU4 i
+
+    member internal this.WriteSimpleIndex(handle, writer) = this.WriteSimpleIndex(this.IndexOf handle, writer)
 
     interface IReadOnlyDictionary<Handle<'T>, uint32> with
         member this.Count = this.Count

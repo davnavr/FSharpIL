@@ -3,7 +3,6 @@
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
-open System.Collections.ObjectModel
 open System.Reflection
 open System.Runtime.CompilerServices
 
@@ -668,6 +667,10 @@ type MethodRef = MemberRef<MethodRefSignature>
 type MemberRefRow =
     | MethodRef of MethodRef
     // | FieldRef // of ?
+
+    member this.Class =
+        match this with
+        | MethodRef { Class = parent } -> parent
 
     member this.MemberName =
         match this with
