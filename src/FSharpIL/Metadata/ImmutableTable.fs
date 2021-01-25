@@ -5,7 +5,8 @@ open System.Collections.Generic
 
 open Microsoft.FSharp.Core.Operators.Checked
 
-// TODO: How to remove equality constraint?
+open FSharpIL.Writing
+
 type ImmutableTable<'T when 'T : equality> internal (table: IReadOnlyCollection<'T>, own: 'T -> Handle<'T>) =
     let items = Array.zeroCreate<'T> table.Count
     let dict = Dictionary<Handle<'T>, uint32> table.Count
@@ -14,18 +15,24 @@ type ImmutableTable<'T when 'T : equality> internal (table: IReadOnlyCollection<
         let mutable i = 0
         for item in table do
             Array.set items i item
+            i <- i + 1 // TODO: Figure out if 1 refers to the first item for ALL tables.
             dict.Item <- own item, uint32 i
-            i <- i + 1
 
     member val Handles = dict.Keys :> IReadOnlyCollection<_>
     member val Items = Array.AsReadOnly items
+    member val internal SimpleIndexSize = if items.Length < 65536 then 2 else 4
 
     member _.IndexOf handle = dict.Item handle
 
-    member val Count = table.Count
+    member _.Count = items.Length
+
+    member internal this.WriteSimpleIndex (i: uint32, writer: ChunkWriter) =
+        if this.SimpleIndexSize = 2
+        then writer.WriteU2 i
+        else writer.WriteU4 i
 
     interface IReadOnlyDictionary<Handle<'T>, uint32> with
-        member _.Count = dict.Count
+        member this.Count = this.Count
         member this.Item with get handle = this.IndexOf handle
         member _.Keys = dict.Keys :> IEnumerable<_>
         member _.Values = dict.Values :> IEnumerable<_>

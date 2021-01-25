@@ -17,7 +17,7 @@ module Size =
 
 [<RequireQualifiedAccess>]
 module private CodedIndex =
-    /// <summary>Calculates a coded index (II.24.2.5).</summary>
+    /// <summary>Creates a coded index (II.24.2.6).</summary>
     /// <param name="n">The number of bits needed to encode the tag.</param>
     let inline private create n (index, tag): uint32 = (index <<< n) ||| tag
 
@@ -25,6 +25,15 @@ module private CodedIndex =
         match scope with
         | ResolutionScope.AssemblyRef assm -> metadata.AssemblyRef.IndexOf assm, 2u
         | bad -> failwithf "Unsupported resolution scope %A" bad
+        |> create 2
+
+    /// <summary>Encodes a <c>TypeDefOrRef</c> (II.24.2.6).</summary>
+    let extends (metadata: CliMetadata) extends =
+        match extends with
+        | Extends.AbstractClass { TypeHandle = tdef }
+        | Extends.ConcreteClass { TypeHandle = tdef } -> metadata.TypeDef.IndexOf tdef, 0u
+        | Extends.TypeRef tref -> metadata.TypeRef.IndexOf tref, 1u
+        | bad -> failwithf "Unsupported value %A" bad
         |> create 2
 
 type StreamHeader =
@@ -108,12 +117,15 @@ let tables (info: CliInfo) (content: ChunkList) =
     // Tables
     let tables = info.Metadata
 
-    // Calculate how big coded indices should be
-    let resolutionScope =
+    // Calculate how big indices and coded indices should be.
+    // TODO: Maybe store all of these sizes in a struct?
+    let indexResolutionScope =
         // TODO: Include ModuleRef table when determine how big a ResolutionScope should be.
-        if (1 + tables.AssemblyRef.Count + tables.TypeRef.Count) > 65532
-        then 4
-        else 2
+        if (1 + tables.AssemblyRef.Count + tables.TypeRef.Count) > 65532 then 4 else 2
+
+    let indexExtends =
+        // TODO: Include TypeSpec table.
+        if (tables.TypeDef.Count + tables.TypeRef.Count) > 65532 then 4 else 2
 
     // Module (0x00)
     let mdle =
@@ -127,16 +139,62 @@ let tables (info: CliInfo) (content: ChunkList) =
 
     // TypeRef (0x01)
     let typeRef =
-        let size = resolutionScope + (2 * info.StringsStream.IndexSize)
+        let size = indexResolutionScope + (2 * info.StringsStream.IndexSize)
         ChunkWriter.After(content.Tail.Value, size * tables.TypeRef.Count)
 
     for tref in tables.TypeRef.Items do
-        let rscope = CodedIndex.resolutionScope tables tref.ResolutionScope
-        if resolutionScope = 2
-        then typeRef.WriteU2 rscope
-        else typeRef.WriteU4 rscope
+        let resolutionScope = CodedIndex.resolutionScope tables tref.ResolutionScope
+
+        if indexResolutionScope = 2 // ResolutionScope
+        then typeRef.WriteU2 resolutionScope
+        else typeRef.WriteU4 resolutionScope
+
         info.StringsStream.WriteIndex(tref.TypeName, typeRef)
         info.StringsStream.WriteIndex(tref.TypeNamespace, typeRef)
+
+    // TypeDef (0x02)
+    let typeDef =
+        let size =
+            4
+            + (2 * info.StringsStream.IndexSize)
+            + indexExtends
+            + tables.Field.SimpleIndexSize
+            + tables.Method.SimpleIndexSize
+        ChunkWriter.After(content.Tail.Value, size * tables.TypeDef.Count)
+
+    do
+        let mutable field = 1u
+        let mutable method = 1u
+
+        for tdef in tables.TypeDef.Items do
+            typeDef.WriteU4 tdef.Flags
+            info.StringsStream.WriteIndex(tdef.TypeName, typeRef)
+            info.StringsStream.WriteIndex(tdef.TypeNamespace, typeRef)
+            () // Extends
+
+            // Field
+            let field' = if tdef.FieldList.IsEmpty then 0u else field
+            field <- uint32 tdef.FieldList.Length
+            tables.Field.WriteSimpleIndex(field', typeDef)
+
+            // Method
+            // NOTE: Rows in method and field table start at 1, an index of 0 means null!
+            let method' = if tdef.MethodList.IsEmpty then 0u else method
+            method <- uint32 tdef.MethodList.Length
+            tables.Field.WriteSimpleIndex(method', typeDef)
+
+    // Field (0x04)
+    let field =
+        let size =
+            2
+            + info.StringsStream.IndexSize
+            // + // TODO: How big are indices into the Blob heap?
+        ChunkWriter.After(content.Tail.Value, size * tables.Field.Count)
+
+    for row in tables.Field.Items do
+        field.WriteU2 row.Flags
+        info.StringsStream.WriteIndex(row.Name, field)
+        // TODO: Write index to signature.
 
     // TODO: Write more tables.
     // NOTE: Rows come right after each other. TypeDef EX: Flags, TypeName, Namespace, Extends, FieldList, MethodList.
