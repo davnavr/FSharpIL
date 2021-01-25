@@ -3,11 +3,12 @@
 open System
 open System.Collections.Generic
 
-open FSharpIL
 open FSharpIL.Writing
 
 [<Literal>]
 let MaxSmallIndex = 0xFFFF
+
+// TODO: Determine if adding strings first and then allowing retrieval of index is faster than assigning an index to each string as it is written.
 
 /// <summary>Represents the <c>#Strings</c> metadata stream (II.24.2.3).</summary>
 [<Sealed>]
@@ -30,7 +31,6 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         + (2 * metadata.AssemblyRef.Count)
 
         |> Dictionary<string, uint32>
-        // TODO: Determine if a Dictionary or ImmutableDictionary has faster lookup times.
 
     do
         let inline add str =

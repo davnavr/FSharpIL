@@ -106,7 +106,7 @@ type internal ChunkList () =
     member this.AddAfter(chunk: Chunk, data: byte[]) =
         if chunk.List <> this then
             "The chunk must belong to the current list" |> invalidArg (nameof chunk)
-        let toAppend = this.CreateChunk(data, chunk.Next, Some chunk)
+        let toAppend = this.CreateChunk(data, chunk.next, Some chunk)
         Option.iter (fun next -> next.previous <- Some toAppend) chunk.next
         chunk.next <- Some toAppend
         count <- count + 1u

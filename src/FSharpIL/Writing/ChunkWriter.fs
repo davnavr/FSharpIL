@@ -4,9 +4,16 @@ open System
 
 open Microsoft.FSharp.Core.Operators.Checked
 
+// TODO: Determine if this should be made into a struct or ref stuct, or should remain a reference type.
 [<Sealed>]
-type internal ChunkWriter (chunk: Chunk, position: int) =
+type internal ChunkWriter (chunk: Chunk, position: int, defaultCapacity: int32) =
     do
+        if defaultCapacity <= 0 then
+            sprintf
+                "The default capacity (%i) must be a positive integer"
+                defaultCapacity
+            |> invalidArg (nameof defaultCapacity)
+
         if position < 0 || position > chunk.Data.Length then
             sprintf
                 "The initial position (%i) must be a valid index"
@@ -17,6 +24,7 @@ type internal ChunkWriter (chunk: Chunk, position: int) =
     let mutable current = chunk
     let mutable size = 0u
 
+    new (chunk, position) = ChunkWriter(chunk, position, chunk.Data.Length)
     new (chunk) = ChunkWriter(chunk, 0)
 
     member _.Chunk = current
@@ -27,7 +35,7 @@ type internal ChunkWriter (chunk: Chunk, position: int) =
 
     member this.WriteU1 value =
         if pos >= current.Data.Length then
-            current <- current.List.AddAfter(current, Array.zeroCreate<byte> current.Data.Length)
+            current <- current.List.AddAfter(current, Array.zeroCreate<byte> defaultCapacity)
             pos <- 0
         this.Chunk.Data.[pos] <- value
         pos <- pos + 1
@@ -76,3 +84,5 @@ type internal ChunkWriter (chunk: Chunk, position: int) =
     member _.MoveToEnd() =
         pos <- current.Data.Length
         size <- uint32 current.Data.Length
+
+    static member After(chunk: Chunk, defaultCapacity: int32) = ChunkWriter(chunk, chunk.Data.Length, defaultCapacity)
