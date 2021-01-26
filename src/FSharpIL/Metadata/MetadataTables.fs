@@ -543,6 +543,7 @@ type Method<'Body, 'Flags, 'Signature when 'Flags :> IFlags<MethodAttributes> an
       Flags: 'Flags
       MethodName: Identifier
       Signature: 'Signature
+      // TODO: Add ParamRow to represent method return type, allowing custom attributes to be applied to the return type.
       ParamList: ParamItem -> int -> ParamRow }
 
     interface IMethod with

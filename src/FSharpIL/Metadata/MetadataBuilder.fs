@@ -19,11 +19,9 @@ type CliMetadata internal (state: MetadataBuilderState) =
             |> Seq.toArray
         ImmutableTable(table, state.CreateHandle)
     let parameters =
-        let table =
-            methodDef.Items
-            |> Seq.collect (fun method -> method.ParamList)
-            |> Seq.toArray
-        ImmutableTable(table, state.CreateHandle)
+        methodDef.Items
+        |> Seq.collect(fun method -> Seq.indexed method.ParamList)
+        |> ImmutableArray.CreateRange
 
     let nestedClass = state.NestedClass |> ImmutableArray.CreateRange
 

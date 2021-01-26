@@ -180,7 +180,11 @@ let tables (info: CliInfo) (content: ChunkList) =
             typeDef.WriteU4 tdef.Flags
             info.StringsStream.WriteIndex(tdef.TypeName, typeDef)
             info.StringsStream.WriteIndex(tdef.TypeNamespace, typeDef)
-            () // Extends
+
+            let extends = CodedIndex.extends tables tdef.Extends // Extends
+            if indexExtends = 2
+            then typeDef.WriteU2 extends
+            else typeDef.WriteU4 extends
 
             // Field
             let field' = if tdef.FieldList.IsEmpty then 0u else field
@@ -188,7 +192,6 @@ let tables (info: CliInfo) (content: ChunkList) =
             tables.Field.WriteSimpleIndex(field', typeDef)
 
             // Method
-            // NOTE: Rows in method and field table start at 1, an index of 0 means null!
             let method' = if tdef.MethodList.IsEmpty then 0u else method
             method <- uint32 tdef.MethodList.Length
             tables.Field.WriteSimpleIndex(method', typeDef)
@@ -223,21 +226,24 @@ let tables (info: CliInfo) (content: ChunkList) =
             methodDef.WriteU2 method.ImplFlags
             methodDef.WriteU2 method.Flags
             info.StringsStream.WriteIndex(method.Name, methodDef)
-            () // Signature
+            invalidOp "TODO: Write index to method signature" // Signature
 
             let param' = if method.ParamList.IsEmpty then 0u else param // Param
             param <- param + uint32 method.ParamList.Length
-            tables.Param.WriteSimpleIndex(param', methodDef)
+            // TODO: Since both the Param table (which is an ImmutableArray) and the ImmutableTable class have an implementation for writing an index, maybe make it an extension method?
+            if tables.Param.Length < 65536
+            then methodDef.WriteU2 param'
+            else methodDef.WriteU4 param'
 
     // Param (0x08)
-    if tables.Param.Count > 0 then // TODO: How are return values represented by a row in the Param table represented?
+    if tables.Param.Length > 0 then
         let param =
             let size = 4 + info.StringsStream.IndexSize // Name
-            ChunkWriter.After(content.Tail.Value, size * tables.Param.Count)
+            ChunkWriter.After(content.Tail.Value, size * tables.Param.Length)
 
-        for row in tables.Param.Items do
+        for sequence, row in tables.Param do
             param.WriteU2 row.Flags.Flags
-            param.WriteU2 (invalidOp "TODO: Calculate parameter sequence")
+            param.WriteU2(sequence + 1)
             info.StringsStream.WriteIndex(row.ParamName, param)
 
 
@@ -268,6 +274,9 @@ let tables (info: CliInfo) (content: ChunkList) =
     if tables.CustomAttribute.Length > 0 then
         ()
 
+
+
+
     // Assembly (0x20)
     if tables.Assembly.IsSome then
         let writer =
@@ -281,8 +290,8 @@ let tables (info: CliInfo) (content: ChunkList) =
         writer.WriteU4 0u // TODO: Determine what HashAlgId should be.
         writer.WriteU2 assembly.Version.Major
         writer.WriteU2 assembly.Version.Minor
-        writer.WriteU2 assembly.Version.Build
-        writer.WriteU2 assembly.Version.Revision
+        writer.WriteU2 (max assembly.Version.Build 0)
+        writer.WriteU2 (max assembly.Version.Revision 0)
         writer.WriteU4 0u // TODO: Determine what flags an assembly should have.
         invalidOp "TODO: What value should the PublicKey of the assembly have?"
         info.StringsStream.WriteIndex(assembly.Name, writer)

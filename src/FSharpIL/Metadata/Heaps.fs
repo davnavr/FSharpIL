@@ -23,7 +23,7 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         + (2 * metadata.TypeDef.Count)
         + metadata.Field.Count
         + metadata.MethodDef.Count
-        + metadata.Param.Count
+        + metadata.Param.Length
 
         + metadata.MemberRef.Count
 
@@ -54,7 +54,8 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
 
         for method in metadata.MethodDef.Items do
             string method.Name |> add
-
+            for param in method.ParamList do
+                add param.ParamName
 
 
         for mref in metadata.MemberRef.Items do
