@@ -3,6 +3,7 @@
 open FSharp.Core.Operators.Checked
 
 open System
+open System.Collections.Generic
 open System.Text
 
 open FSharpIL.Metadata
@@ -15,42 +16,21 @@ module Size =
     [<Literal>]
     let CliHeader = 0x48u
 
-[<RequireQualifiedAccess>]
-module private CodedIndex =
-    /// <summary>Creates a coded index (II.24.2.6).</summary>
-    /// <param name="n">The number of bits needed to encode the tag.</param>
-    let inline private create n (index, tag): uint32 = (index <<< n) ||| tag
+[<Sealed>]
+type private CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * uint32) =
+    let large = count > (65535 <<< n)
 
-    let resolutionScope (metadata: CliMetadata) scope =
-        match scope with
-        | ResolutionScope.AssemblyRef assm -> metadata.AssemblyRef.IndexOf assm, 2u
-        | bad -> failwithf "Unsupported resolution scope %A" bad
-        |> create 2
+    member val IndexSize = if large then 4 else 2
 
-    /// <summary>Encodes a <c>TypeDefOrRef</c> (II.24.2.6).</summary>
-    let extends (metadata: CliMetadata) extends =
-        match extends with
-        | Extends.AbstractClass { TypeHandle = tdef }
-        | Extends.ConcreteClass { TypeHandle = tdef } -> metadata.TypeDef.IndexOf tdef, 0u
-        | Extends.TypeRef tref -> metadata.TypeRef.IndexOf tref, 1u
-        | bad -> failwithf "Unsupported extends %A" bad
-        |> create 2
+    member _.IndexOf (item: 'T) =
+        let index, tag = indexer item
+        (index <<< n) ||| tag
+    
+    member this.WriteIndex(item, writer: ChunkWriter) =
+        let index = this.IndexOf item
+        if large then writer.WriteU2 index else writer.WriteU4 index
 
-    let memberRefParent (metadata: CliMetadata) parent =
-        match parent with
-        | MemberRefParent.TypeRef tref -> metadata.TypeRef.IndexOf tref, 1u
-        |> create 3
-
-    let customAttributeParent (metadata: CliMetadata) parent =
-        match parent with
-        | CustomAttributeParent.Assembly _ -> 1u, 14u
-        | bad -> failwithf "Unsupported custom attribute parent %A" bad
-        |> create 5
-
-type StreamHeader =
-    { Offset: uint32
-      Size: uint32
-      Name: byte[] }
+let private codedIndex count n indexer = CodedIndex<_>(count, n, indexer)
 
 [<ReferenceEquality; NoComparison>]
 type CliInfo =
@@ -131,20 +111,38 @@ let tables (info: CliInfo) (content: ChunkList) =
     let tables = info.Metadata
 
     // Calculate how big indices and coded indices should be.
-    // TODO: Maybe store all of these sizes in a struct or create a class/function that provides both index size and index calculations.
-    let indexResolutionScope =
+    let resolutionScope =
         // TODO: Include ModuleRef table when determine how big a ResolutionScope should be.
-        if (1 + tables.AssemblyRef.Count + tables.TypeRef.Count) > 65532 then 4 else 2
+        let total =
+            1 // Module
+            + tables.AssemblyRef.Count
+            + tables.TypeRef.Count
+        fun scope ->
+            match scope with
+            | ResolutionScope.AssemblyRef assm -> tables.AssemblyRef.IndexOf assm, 2u
+            | bad -> failwithf "Unsupported resolution scope %A" bad
+        |> codedIndex total 2
 
-    let indexExtends =
+    let extends =
         // TODO: Include TypeSpec table.
-        if (tables.TypeDef.Count + tables.TypeRef.Count) > 65532 then 4 else 2
+        let total = tables.TypeDef.Count + tables.TypeRef.Count
+        fun extends ->
+            match extends with
+            | Extends.AbstractClass { TypeHandle = tdef }
+            | Extends.ConcreteClass { TypeHandle = tdef } -> tables.TypeDef.IndexOf tdef, 0u
+            | Extends.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
+            | bad -> failwithf "Unsupported extends %A" bad
+        |> codedIndex total 2
 
-    let indexMemberRefParent =
+    let memberRefParent =
         // TODO: Include ModuleRef and TypeSpec tables.
-        if (tables.TypeDef.Count + tables.TypeRef.Count + tables.MethodDef.Count) > 65528 then 4 else 2
+        let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.MethodDef.Count
+        fun parent ->
+            match parent with
+            | MemberRefParent.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
+        |> codedIndex total 3
 
-    let indexCustomAttributeParent =
+    let customAttriuteParent =
         let total =
             tables.MethodDef.Count
             + tables.Field.Count
@@ -168,7 +166,11 @@ let tables (info: CliInfo) (content: ChunkList) =
             // GenericParam
             // GenericParamConstraint
             // MethodSpec
-        if total > 65504 then 4 else 2
+        fun parent ->
+            match parent with
+            | CustomAttributeParent.Assembly _ -> 1u, 14u
+            | bad -> failwithf "Unsupported custom attribute parent %A" bad
+        |> codedIndex total 5
 
     // Module (0x00)
     let mdle =
@@ -183,16 +185,11 @@ let tables (info: CliInfo) (content: ChunkList) =
     // TypeRef (0x01)
     if tables.TypeRef.Count > 0 then
         let typeRef =
-            let size = indexResolutionScope + (2 * info.StringsStream.IndexSize)
+            let size = resolutionScope.IndexSize + (2 * info.StringsStream.IndexSize)
             ChunkWriter.After(content.Tail.Value, size * tables.TypeRef.Count)
 
         for tref in tables.TypeRef.Items do
-            let resolutionScope = CodedIndex.resolutionScope tables tref.ResolutionScope
-
-            if indexResolutionScope = 2 // ResolutionScope
-            then typeRef.WriteU2 resolutionScope
-            else typeRef.WriteU4 resolutionScope
-
+            resolutionScope.WriteIndex(tref.ResolutionScope, typeRef)
             info.StringsStream.WriteIndex(tref.TypeName, typeRef)
             info.StringsStream.WriteIndex(tref.TypeNamespace, typeRef)
 
@@ -202,7 +199,7 @@ let tables (info: CliInfo) (content: ChunkList) =
             let size =
                 4
                 + (2 * info.StringsStream.IndexSize)
-                + indexExtends
+                + extends.IndexSize
                 + tables.Field.SimpleIndexSize
                 + tables.MethodDef.SimpleIndexSize
             ChunkWriter.After(content.Tail.Value, size * tables.TypeDef.Count)
@@ -214,11 +211,7 @@ let tables (info: CliInfo) (content: ChunkList) =
             typeDef.WriteU4 tdef.Flags
             info.StringsStream.WriteIndex(tdef.TypeName, typeDef)
             info.StringsStream.WriteIndex(tdef.TypeNamespace, typeDef)
-
-            let extends = CodedIndex.extends tables tdef.Extends // Extends
-            if indexExtends = 2
-            then typeDef.WriteU2 extends
-            else typeDef.WriteU4 extends
+            extends.WriteIndex(tdef.Extends, typeDef)
 
             // Field
             let field' = if tdef.FieldList.IsEmpty then 0u else field
@@ -289,17 +282,13 @@ let tables (info: CliInfo) (content: ChunkList) =
     if tables.MemberRef.Count > 0 then
         let memberRef =
             let size =
-                indexMemberRefParent // Class
+                memberRefParent.IndexSize // Class
                 + info.StringsStream.IndexSize // Name
                 + info.BlobStream.IndexSize // Signature
             ChunkWriter.After(content.Tail.Value, size * tables.MemberRef.Count)
 
         for row in tables.MemberRef.Items do
-            let parent = CodedIndex.memberRefParent tables row.Class // Class
-            if indexMemberRefParent = 2
-            then memberRef.WriteU2 parent
-            else memberRef.WriteU4 parent
-
+            memberRefParent.WriteIndex(row.Class, memberRef)
             info.StringsStream.WriteIndex(row.MemberName, memberRef)
 
             // Signature
@@ -313,21 +302,14 @@ let tables (info: CliInfo) (content: ChunkList) =
     if tables.CustomAttribute.Length > 0 then
         let writer =
             let size =
-                indexCustomAttributeParent // Parent
+                customAttriuteParent.IndexSize // Parent
                 // + // Type
                 + info.BlobStream.IndexSize
             ChunkWriter.After(content.Tail.Value, size * tables.CustomAttribute.Length)
 
         for row in tables.CustomAttribute do
-            // Parent
-            let parent = CodedIndex.customAttributeParent tables row.Parent
-            if indexCustomAttributeParent = 2
-            then writer.WriteU2 parent
-            else writer.WriteU4 parent
-
+            customAttriuteParent.WriteIndex(row.Parent, writer)
             // Type
-
-
             ()
 
 
