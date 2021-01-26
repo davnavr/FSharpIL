@@ -142,9 +142,21 @@ let tests =
                 PEFile.ofMetadata IsExe tables
                 |> WritePE.toArray
                 |> ImmutableArray.Create<byte>
+
             use reader = new PEReader(pe)
             let metadata = reader.GetMetadataReader()
-            Expect.isNonEmpty (metadata.GetAssemblyDefinition().GetCustomAttributes()) "assembly should contain target framework custom attribute"
+
             Expect.isNonEmpty metadata.TypeDefinitions "assembly should contain types"
             Expect.isNonEmpty metadata.MethodDefinitions "assembly should contain methods"
+            //Expect.equal
+            //    (metadata.GetModuleDefinition().Mvid |> metadata.GetGuid)
+            //    mvid
+            //    "modules should contain same mvid"
+            let assemblyattrs = metadata.GetAssemblyDefinition().GetCustomAttributes()
+            // let test_to_see_if_attribue_has_right_parent = metadata.CustomAttributes |> Seq.head |> metadata.GetCustomAttribute
+            Expect.isNonEmpty assemblyattrs "assembly should contain at least one custom attribute"
+            Expect.all
+                assemblyattrs
+                (fun handle -> metadata.GetCustomAttribute(handle).Parent.Kind = HandleKind.AssemblyDefinition)
+                "attributes should be parented to the assembly"
     ]

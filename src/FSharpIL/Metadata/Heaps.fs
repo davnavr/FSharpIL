@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open System.Text
 
 open FSharpIL.Writing
 
@@ -12,12 +13,8 @@ let MaxSmallIndex = 0xFFFF
 /// <summary>Represents the <c>#Strings</c> metadata stream (II.24.2.3).</summary>
 [<Sealed>]
 type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply contain the strings with only null characters separating them.
-    let strings =
-        let assembly =
-            match metadata.Assembly with
-            | Some _ -> 2
-            | None -> 0
-
+    // Estimated number of strings, actual count may be less.
+    let count =
         1 // Module
         + (2 * metadata.TypeRef.Count)
         + (2 * metadata.TypeDef.Count)
@@ -27,17 +24,25 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
 
         + metadata.MemberRef.Count
 
-        + assembly
+        + if metadata.Assembly.IsSome then 2 else 0
         + (2 * metadata.AssemblyRef.Count)
-
-        |> Dictionary<string, uint32>
+    let mutable size = 1
+    let strings = Array.zeroCreate<string> count
+    // TODO: Maybe create custom dictionary class to avoid keeping the strings in an array to preserve order.
+    let lookup = Dictionary<string, uint32> count
 
     do
-        let inline add str =
-            match str with
+        let mutable i = 0
+        let add =
+            function
             | null
             | "" -> ()
-            | _ -> strings.Item <- str, uint32 strings.Count + 1u
+            | existing when lookup.ContainsKey existing -> ()
+            | str ->
+                Array.set strings i str
+                i <- i + 1
+                lookup.Item <- str, uint32 i
+                size <- size + 1 + (Encoding.UTF8.GetByteCount str)
 
         string metadata.Module.Name |> add
 
@@ -54,8 +59,9 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
 
         for method in metadata.MethodDef.Items do
             string method.Name |> add
-            for param in method.ParamList do
-                add param.ParamName
+
+        for _, param in metadata.Param do
+            add param.ParamName
 
 
         for mref in metadata.MemberRef.Items do
@@ -72,19 +78,20 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         for assembly in metadata.AssemblyRef.Items do
             string assembly.Name |> add
             string assembly.Culture |> add
+
         ()
 
-    member val Count = strings.Count
+    member _.Count = lookup.Count
 
-    member _.ByteLength = 0UL // TODO: Calculate how many bytes the strings heap takes up.
+    member _.ByteLength = size
 
     member _.IndexOf str =
         match str with
         | null
         | "" -> 0u
-        | _ -> strings.Item str
+        | _ -> lookup.Item str
 
-    member val IndexSize = if strings.Count > MaxSmallIndex then 4 else 2
+    member val IndexSize = if count > MaxSmallIndex then 4 else 2
 
     member this.WriteIndex(str, writer: ChunkWriter) =
         let i = this.IndexOf str
@@ -93,6 +100,14 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
         else writer.WriteU2 i
 
     member this.WriteIndex(o, writer: ChunkWriter) = this.WriteIndex(o.ToString(), writer)
+
+    member this.WriteHeap(content: ChunkList) =
+        let writer = ChunkWriter.After(content.Tail.Value, size)
+        writer.WriteU1 0uy
+        for i = 0 to this.Count - 1 do
+            let str = Array.get strings i
+            Encoding.UTF8.GetBytes str |> writer.WriteBytes
+            writer.WriteU1 0uy
 
 /// <summary>Represents the <c>#US</c> metadata stream (II.24.2.4).</summary>
 [<Sealed>]

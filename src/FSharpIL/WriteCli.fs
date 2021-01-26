@@ -407,7 +407,7 @@ let root (info: CliInfo) (content: ChunkList) =
         ChunkWriter(location)
 
     let metadata = streamHeader "#~\000\000"B
-    // let strings = streamHeader "#Strings\000\000\000\000"B
+    let strings = streamHeader "#Strings\000\000\000\000"B
     // TODO: Write other stream headers.
 
     // #~ stream
@@ -417,6 +417,14 @@ let root (info: CliInfo) (content: ChunkList) =
     metadata.WriteU4 offset
     metadata.WriteU4 metadataSize
     offset <- offset + metadataSize
+
+    // #Strings
+    content.PushSize()
+    info.StringsStream.WriteHeap content
+    let stringsSize = content.PopSize()
+    strings.WriteU4 offset
+    strings.WriteU4 stringsSize
+    offset <- offset + stringsSize
 
     ()
 
