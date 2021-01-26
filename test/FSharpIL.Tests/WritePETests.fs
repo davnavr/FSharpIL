@@ -25,19 +25,6 @@ let tests =
             reader.GetMetadataReader() |> body
 
     testList "write PE" [
-        //testPE "default PE sections have correct names" PEFile.Default <| fun reader ->
-        //    let names =
-        //        reader.PEHeaders.SectionHeaders
-        //        |> Array.ofSeq
-        //        |> Array.map (fun header -> header.Name)
-        //    Expect.sequenceEqual
-        //        names
-        //        [| ".text"; ".rsrc"; ".reloc" |]
-        //        "default section headers are missing one or more sections"
-
-        //testMetadata "default metadata is an assembly" PEFile.Default <| fun metadata ->
-        //    Expect.isTrue metadata.IsAssembly "generated CLI metadata should be an assembly"
-
         testProperty "hello world is an assembly" <| fun mvid ->
             let mdle =
                 { Name = Identifier.ofStr "HelloWorld"
