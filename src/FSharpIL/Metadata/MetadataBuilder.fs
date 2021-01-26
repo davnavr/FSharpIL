@@ -41,6 +41,9 @@ type CliMetadata internal (state: MetadataBuilderState) =
         if methodDef.Count > 0 then
             bits <- bits ||| (1UL <<< 6)
             uint32 methodDef.Count |> counts.Add
+        if not parameters.IsEmpty then
+            bits <- bits ||| (1UL <<< 8)
+            uint32 parameters.Length |> counts.Add
 
         if state.MemberRef.Count > 0 then
             bits <- bits ||| (1UL <<< 0xA)

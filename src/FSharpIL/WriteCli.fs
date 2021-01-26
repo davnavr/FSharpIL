@@ -103,9 +103,10 @@ let tables (info: CliInfo) (content: ChunkList) =
     headers.WriteU8 0UL // Sorted
 
     // Rows
-    for row in info.Metadata.RowCounts do
-        let size = ChunkWriter.After(content.Tail.Value, 4)
-        size.WriteU4 row
+    do
+        let rows = ChunkWriter.After(content.Tail.Value, info.Metadata.RowCounts.Count * 4)
+        for row in info.Metadata.RowCounts do
+            rows.WriteU4 row
 
     // Tables
     let tables = info.Metadata
@@ -312,8 +313,8 @@ let tables (info: CliInfo) (content: ChunkList) =
 
         for row in tables.CustomAttribute do
             customAttriuteParent.WriteIndex(row.Parent, writer)
-            customAttributeType.WriteIndex(row.Type, writer) // Type
-            info.BlobStream.WriteIndex(row.Value, writer) // Value
+            customAttributeType.WriteIndex(row.Type, writer)
+            info.BlobStream.WriteIndex(row.Value, writer)
 
 
 
@@ -387,7 +388,7 @@ let root (info: CliInfo) (content: ChunkList) =
     writer.WriteU2 0us // Flags
 
     let streams =
-        let mutable count = 2u // #Strings and #GUID
+        let mutable count = 3u // #~, #Strings, #GUID
         // TODO: Include other streams in the count if they are not empty
         count
     writer.WriteU2 streams // Streams
@@ -406,11 +407,10 @@ let root (info: CliInfo) (content: ChunkList) =
         offset <- offset + 8u + uint32 name.Length
         ChunkWriter(location)
 
-    // NOTE: Apprently writing the GUID stream header before the metadata header avoids an error when being read by a MetadataReader.
-    let guid = streamHeader "#GUID\000\000\000"B
     let metadata = streamHeader "#~\000\000"B
     let strings = streamHeader "#Strings\000\000\000\000"B
     // US
+    let guid = streamHeader "#GUID\000\000\000"B
     // TODO: Write other stream headers.
 
     do // #~ stream
