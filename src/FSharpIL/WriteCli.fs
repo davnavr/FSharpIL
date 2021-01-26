@@ -41,6 +41,12 @@ module private CodedIndex =
         | MemberRefParent.TypeRef tref -> metadata.TypeRef.IndexOf tref, 1u
         |> create 3
 
+    let customAttributeParent (metadata: CliMetadata) parent =
+        match parent with
+        | CustomAttributeParent.Assembly _ -> 1u, 14u
+        | bad -> failwithf "Unsupported custom attribute parent %A" bad
+        |> create 5
+
 type StreamHeader =
     { Offset: uint32
       Size: uint32
@@ -53,7 +59,9 @@ type CliInfo =
       mutable MetadataSize: uint32
       mutable MethodBodiesSize: uint32
       StringsStream: StringsHeap
-      GuidStream: GuidHeap }
+      // US
+      GuidStream: GuidHeap
+      BlobStream: BlobHeap }
 
     member this.MetadataRva = this.MethodBodiesRva + this.MethodBodiesSize
     member this.StrongNameSignatureRva = this.HeaderRva + Size.CliHeader
@@ -123,7 +131,7 @@ let tables (info: CliInfo) (content: ChunkList) =
     let tables = info.Metadata
 
     // Calculate how big indices and coded indices should be.
-    // TODO: Maybe store all of these sizes in a struct?
+    // TODO: Maybe store all of these sizes in a struct or create a class/function that provides both index size and index calculations.
     let indexResolutionScope =
         // TODO: Include ModuleRef table when determine how big a ResolutionScope should be.
         if (1 + tables.AssemblyRef.Count + tables.TypeRef.Count) > 65532 then 4 else 2
@@ -135,6 +143,32 @@ let tables (info: CliInfo) (content: ChunkList) =
     let indexMemberRefParent =
         // TODO: Include ModuleRef and TypeSpec tables.
         if (tables.TypeDef.Count + tables.TypeRef.Count + tables.MethodDef.Count) > 65528 then 4 else 2
+
+    let indexCustomAttributeParent =
+        let total =
+            tables.MethodDef.Count
+            + tables.Field.Count
+            + tables.TypeRef.Count
+            + tables.TypeDef.Count
+            + tables.Param.Length
+            // InterfaceImpl
+            + tables.MemberRef.Count
+            + 1 // Module
+            // Permission
+            // Property
+            // Event
+            // StandAloneSig
+            // ModuleRef
+            // TypeSpec
+            + if tables.Assembly.IsSome then 1 else 0
+            + tables.AssemblyRef.Count
+            // File
+            // ExportedType
+            // ManifestResource
+            // GenericParam
+            // GenericParamConstraint
+            // MethodSpec
+        if total > 65504 then 4 else 2
 
     // Module (0x00)
     let mdle =
@@ -202,7 +236,7 @@ let tables (info: CliInfo) (content: ChunkList) =
             let size =
                 2 // Flags
                 + info.StringsStream.IndexSize // Name
-                // + // TODO: How big are indices into the Blob heap?
+                + info.BlobStream.IndexSize // Signature
             ChunkWriter.After(content.Tail.Value, size * tables.Field.Count)
 
         for row in tables.Field.Items do
@@ -216,7 +250,8 @@ let tables (info: CliInfo) (content: ChunkList) =
             let size =
                 8 // RVA, ImplFlags, Flags
                 + info.StringsStream.IndexSize // Name
-                // +
+                + info.BlobStream.IndexSize // Signature
+                + if tables.Param.Length < 65536 then 2 else 4 // ParamList
             ChunkWriter.After(content.Tail.Value, size * tables.MethodDef.Count)
 
         let mutable param = 1u
@@ -226,11 +261,12 @@ let tables (info: CliInfo) (content: ChunkList) =
             methodDef.WriteU2 method.ImplFlags
             methodDef.WriteU2 method.Flags
             info.StringsStream.WriteIndex(method.Name, methodDef)
-            invalidOp "TODO: Write index to method signature" // Signature
+            info.BlobStream.WriteIndex(method.Signature, methodDef) // Signature
 
             let param' = if method.ParamList.IsEmpty then 0u else param // Param
             param <- param + uint32 method.ParamList.Length
             // TODO: Since both the Param table (which is an ImmutableArray) and the ImmutableTable class have an implementation for writing an index, maybe make it an extension method?
+            // If doing the above, maybe add an extension member to allow retrieval of IndexSize as well.
             if tables.Param.Length < 65536
             then methodDef.WriteU2 param'
             else methodDef.WriteU4 param'
@@ -255,7 +291,7 @@ let tables (info: CliInfo) (content: ChunkList) =
             let size =
                 indexMemberRefParent // Class
                 + info.StringsStream.IndexSize // Name
-                // + // Signature
+                + info.BlobStream.IndexSize // Signature
             ChunkWriter.After(content.Tail.Value, size * tables.MemberRef.Count)
 
         for row in tables.MemberRef.Items do
@@ -265,14 +301,34 @@ let tables (info: CliInfo) (content: ChunkList) =
             else memberRef.WriteU4 parent
 
             info.StringsStream.WriteIndex(row.MemberName, memberRef)
-            () // Signature
+
+            // Signature
+            match row with
+            | MethodRef method -> info.BlobStream.WriteIndex(method.Signature, memberRef)
 
 
 
 
     // CustomAttribute (0x0C)
     if tables.CustomAttribute.Length > 0 then
-        ()
+        let writer =
+            let size =
+                indexCustomAttributeParent // Parent
+                // + // Type
+                + info.BlobStream.IndexSize
+            ChunkWriter.After(content.Tail.Value, size * tables.CustomAttribute.Length)
+
+        for row in tables.CustomAttribute do
+            // Parent
+            let parent = CodedIndex.customAttributeParent tables row.Parent
+            if indexCustomAttributeParent = 2
+            then writer.WriteU2 parent
+            else writer.WriteU4 parent
+
+            // Type
+
+
+            ()
 
 
 
@@ -387,7 +443,8 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (content: ChunkList) =
           MetadataSize = Unchecked.defaultof<uint32>
           MethodBodiesSize = Unchecked.defaultof<uint32>
           StringsStream = StringsHeap cli
-          GuidStream = GuidHeap cli }
+          GuidStream = GuidHeap cli
+          BlobStream = BlobHeap cli }
     let tail = content.Tail.Value
 
     // Since header requires the calculations of sizes, we write the data first and prepend the header afterward.

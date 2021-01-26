@@ -37,7 +37,7 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
             match str with
             | null
             | "" -> ()
-            | _ -> strings.TryAdd(str, uint32 strings.Count + 1u) |> ignore
+            | _ -> strings.Item <- str, uint32 strings.Count + 1u
 
         string metadata.Module.Name |> add
 
@@ -74,7 +74,7 @@ type StringsHeap internal (metadata: CliMetadata) = // NOTE: Appears to simply c
             string assembly.Culture |> add
         ()
 
-    member _.Count = strings.Count
+    member val Count = strings.Count
 
     member _.ByteLength = 0UL // TODO: Calculate how many bytes the strings heap takes up.
 
@@ -114,7 +114,7 @@ type GuidHeap internal (metadata: CliMetadata) =
 
         metadata.Module.Mvid |> add
 
-    member _.Count = guids.Count
+    member val Count = guids.Count
 
     member _.ByteLength = 16UL * uint64 guids.Count
 
@@ -133,11 +133,48 @@ type GuidHeap internal (metadata: CliMetadata) =
 
     member this.WriteZero writer = this.WriteIndex(Guid.Empty, writer)
 
-// TODO: Determine if index of 0 means null for Blobs.
 /// <summary>Represents the <c>#Blob</c> metadata stream (II.24.2.4).</summary>
 [<Sealed>]
 type BlobHeap internal (metadata: CliMetadata) =
     // let field = Dictionary<FieldSignature, uint32> metadata.Field.Count
-    let method = Dictionary<MethodDefSignature, uint32> metadata.MethodDef.Count
+    let methodDef = Dictionary<MethodDefSignature, uint32> metadata.MethodDef.Count
 
-    member _.Count = 0
+    // MemberRef
+    let methodRef = Dictionary<MethodRefSignature, uint32> metadata.MemberRef.Count
+    let fieldRef = ()
+
+    // Couldn't find documentation indicating what the first index of the first blob is, so it is assumed that index 0 corresponds to the empty blob.
+    do
+        let mutable i = 1u
+
+        // TODO: Add field signatures
+
+        for row in metadata.MethodDef.Items do
+            methodDef.Item <- row.Signature, i
+            i <- i + 1u
+
+
+
+        for row in metadata.MemberRef.Items do
+            match row with
+            | MethodRef method -> methodRef.Item <- method.Signature, i
+            i <- i + 1u
+
+        // TODO: Add other blobs.
+        ()
+
+    let count = methodDef.Count + methodRef.Count
+
+    member _.IndexOf signature = methodDef.Item signature
+    member _.IndexOf signature = methodRef.Item signature
+
+    member val Count = count
+    member val IndexSize = if count > MaxSmallIndex then 4 else 2
+
+    member private this.WriteIndex(i: uint32, writer: ChunkWriter) =
+        if this.IndexSize = 4
+        then writer.WriteU4 i
+        else writer.WriteU2 i
+
+    member this.WriteIndex(signature: MethodDefSignature, writer) = this.WriteIndex(this.IndexOf signature, writer)
+    member this.WriteIndex(signature: MethodRefSignature, writer) = this.WriteIndex(this.IndexOf signature, writer)
