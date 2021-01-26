@@ -143,6 +143,8 @@ type BlobHeap internal (metadata: CliMetadata) =
     let methodRef = Dictionary<MethodRefSignature, uint32> metadata.MemberRef.Count
     let fieldRef = ()
 
+    let attributes = Dictionary<CustomAttributeSignature, uint32> metadata.CustomAttribute.Length
+
     // Couldn't find documentation indicating what the first index of the first blob is, so it is assumed that index 0 corresponds to the empty blob.
     do
         let mutable i = 1u
@@ -155,10 +157,21 @@ type BlobHeap internal (metadata: CliMetadata) =
 
 
 
+
         for row in metadata.MemberRef.Items do
             match row with
             | MethodRef method -> methodRef.Item <- method.Signature, i
             i <- i + 1u
+
+
+
+
+        for row in metadata.CustomAttribute do
+            match row.Value with
+            | Some value ->
+                attributes.Item <- value, i
+                i <- i + 1u
+            | None -> ()
 
         // TODO: Add other blobs.
         ()
@@ -167,6 +180,7 @@ type BlobHeap internal (metadata: CliMetadata) =
 
     member _.IndexOf signature = methodDef.Item signature
     member _.IndexOf signature = methodRef.Item signature
+    member _.IndexOf signature = attributes.Item signature
 
     member val Count = count
     member val IndexSize = if count > MaxSmallIndex then 4 else 2
@@ -176,5 +190,12 @@ type BlobHeap internal (metadata: CliMetadata) =
         then writer.WriteU4 i
         else writer.WriteU2 i
 
+    member this.WriteEmpty writer = this.WriteIndex(0u, writer)
     member this.WriteIndex(signature: MethodDefSignature, writer) = this.WriteIndex(this.IndexOf signature, writer)
     member this.WriteIndex(signature: MethodRefSignature, writer) = this.WriteIndex(this.IndexOf signature, writer)
+    member this.WriteIndex(signature: CustomAttributeSignature option, writer) =
+        let index =
+            signature
+            |> Option.map this.IndexOf
+            |> Option.defaultValue 0u
+        this.WriteIndex(index, writer)

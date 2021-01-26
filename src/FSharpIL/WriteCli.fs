@@ -117,29 +117,26 @@ let tables (info: CliInfo) (content: ChunkList) =
             1 // Module
             + tables.AssemblyRef.Count
             + tables.TypeRef.Count
-        fun scope ->
-            match scope with
-            | ResolutionScope.AssemblyRef assm -> tables.AssemblyRef.IndexOf assm, 2u
-            | bad -> failwithf "Unsupported resolution scope %A" bad
+        function
+        | ResolutionScope.AssemblyRef assm -> tables.AssemblyRef.IndexOf assm, 2u
+        | bad -> failwithf "Unsupported resolution scope %A" bad
         |> codedIndex total 2
 
     let extends =
         // TODO: Include TypeSpec table.
         let total = tables.TypeDef.Count + tables.TypeRef.Count
-        fun extends ->
-            match extends with
-            | Extends.AbstractClass { TypeHandle = tdef }
-            | Extends.ConcreteClass { TypeHandle = tdef } -> tables.TypeDef.IndexOf tdef, 0u
-            | Extends.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
-            | bad -> failwithf "Unsupported extends %A" bad
+        function
+        | Extends.AbstractClass { TypeHandle = tdef }
+        | Extends.ConcreteClass { TypeHandle = tdef } -> tables.TypeDef.IndexOf tdef, 0u
+        | Extends.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
+        | bad -> failwithf "Unsupported extends %A" bad
         |> codedIndex total 2
 
     let memberRefParent =
         // TODO: Include ModuleRef and TypeSpec tables.
         let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.MethodDef.Count
-        fun parent ->
-            match parent with
-            | MemberRefParent.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
+        function
+        | MemberRefParent.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
         |> codedIndex total 3
 
     let customAttriuteParent =
@@ -166,12 +163,18 @@ let tables (info: CliInfo) (content: ChunkList) =
             // GenericParam
             // GenericParamConstraint
             // MethodSpec
-        fun parent ->
-            match parent with
-            | CustomAttributeParent.Assembly _ -> 1u, 14u
-            | bad -> failwithf "Unsupported custom attribute parent %A" bad
+        function
+        | CustomAttributeParent.Assembly _ -> 1u, 14u
+        | bad -> failwithf "Unsupported custom attribute parent %A" bad
         |> codedIndex total 5
 
+    let customAttributeType =
+        let total = tables.MethodDef.Count + tables.MemberRef.Count
+        function
+        | CustomAttributeType.MemberRef mref -> tables.MemberRef.IndexOf mref.Handle, 3u
+        |> codedIndex total 3
+
+    // TODO: Since we calculate the sizes of each chunk anyway, consider using one ChunkWriter for all of the metadata tables.
     // Module (0x00)
     let mdle =
         let size = 2 + info.StringsStream.IndexSize + (3 * info.GuidStream.IndexSize)
@@ -303,14 +306,14 @@ let tables (info: CliInfo) (content: ChunkList) =
         let writer =
             let size =
                 customAttriuteParent.IndexSize // Parent
-                // + // Type
-                + info.BlobStream.IndexSize
+                + customAttributeType.IndexSize // Type
+                + info.BlobStream.IndexSize // Value
             ChunkWriter.After(content.Tail.Value, size * tables.CustomAttribute.Length)
 
         for row in tables.CustomAttribute do
             customAttriuteParent.WriteIndex(row.Parent, writer)
-            // Type
-            ()
+            customAttributeType.WriteIndex(row.Type, writer) // Type
+            info.BlobStream.WriteIndex(row.Value, writer) // Value
 
 
 
@@ -320,7 +323,7 @@ let tables (info: CliInfo) (content: ChunkList) =
         let writer =
             let size =
                 16 // HashAlgId, MajorVersion, MinorVersion, BuildNumber, RevisionNumber, Flags
-                // + size of blob index
+                + info.BlobStream.IndexSize // PublicKey
                 + info.StringsStream.IndexSize // Name
             ChunkWriter.After(content.Tail.Value, size)
 
@@ -330,8 +333,8 @@ let tables (info: CliInfo) (content: ChunkList) =
         writer.WriteU2 assembly.Version.Minor
         writer.WriteU2 (max assembly.Version.Build 0)
         writer.WriteU2 (max assembly.Version.Revision 0)
-        writer.WriteU4 0u // TODO: Determine what flags an assembly should have.
-        invalidOp "TODO: What value should the PublicKey of the assembly have?"
+        writer.WriteU4 0u // Flags // TODO: Determine what flags an assembly should have.
+        info.BlobStream.WriteEmpty writer // PublicKey // TODO: Determine how to write the PublicKey into a blob.
         info.StringsStream.WriteIndex(assembly.Name, writer)
 
     // AssemblyRef (0x23)
@@ -339,7 +342,7 @@ let tables (info: CliInfo) (content: ChunkList) =
         let assemblyRef =
             let size =
                 12 // MajorVersion, MinorVersion, BuildNumber, RevisionNumber, Flags
-                // + (2 * size of blob index) // PublicKeyOrToken, HashValue
+                + (2 * info.BlobStream.IndexSize) // PublicKeyOrToken, HashValue
                 + (2 * info.StringsStream.IndexSize) // Name, Culture
             ChunkWriter.After(content.Tail.Value, size * tables.AssemblyRef.Count)
 
@@ -349,10 +352,10 @@ let tables (info: CliInfo) (content: ChunkList) =
             assemblyRef.WriteU2 row.Version.Build
             assemblyRef.WriteU2 row.Version.Revision
             assemblyRef.WriteU4 row.Flags
-            invalidOp "public key or token"
+            info.BlobStream.WriteEmpty assemblyRef // PublicKeyOrToken // TODO: Figure out how to write the PublicKeyOrToken into a blob.
             info.StringsStream.WriteIndex(row.Name, assemblyRef)
             info.StringsStream.WriteIndex(row.Culture, assemblyRef)
-            invalidOp "hash value"
+            info.BlobStream.WriteEmpty assemblyRef // HashValue // TODO: Figure out how to write the HashValue into a blob.
 
     // NestedClass (0x29)
     if tables.NestedClass.Length > 0 then
