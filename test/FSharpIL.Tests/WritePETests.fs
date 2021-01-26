@@ -148,12 +148,11 @@ let tests =
 
             Expect.isNonEmpty metadata.TypeDefinitions "assembly should contain types"
             Expect.isNonEmpty metadata.MethodDefinitions "assembly should contain methods"
-            //Expect.equal
-            //    (metadata.GetModuleDefinition().Mvid |> metadata.GetGuid)
-            //    mvid
-            //    "modules should contain same mvid"
+            Expect.equal
+                (metadata.GetModuleDefinition().Mvid |> metadata.GetGuid)
+                mvid
+                "modules should contain same mvid"
             let assemblyattrs = metadata.GetAssemblyDefinition().GetCustomAttributes()
-            // let test_to_see_if_attribue_has_right_parent = metadata.CustomAttributes |> Seq.head |> metadata.GetCustomAttribute
             Expect.isNonEmpty assemblyattrs "assembly should contain at least one custom attribute"
             Expect.all
                 assemblyattrs

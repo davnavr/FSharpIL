@@ -121,24 +121,28 @@ type UserStringHeap internal (metadata: CliMetadata) =
 /// <summary>Represents the <c>#GUID</c> metadata stream (II.24.2.5).</summary>
 [<Sealed>]
 type GuidHeap internal (metadata: CliMetadata) =
-    let guids = Dictionary<Guid, uint32> 1
+    let count = 1 // Module table is always present.
+    let guids = Array.zeroCreate<Guid> count
+    let lookup = Dictionary<Guid, uint32> count
 
     do
         let inline add guid =
-            guids.TryAdd(guid, uint32 guids.Count + 1u) |> ignore
+            if lookup.ContainsKey guid |> not then
+                Array.set guids lookup.Count guid
+                lookup.Item <- guid, (uint32 lookup.Count) + 1u
 
         metadata.Module.Mvid |> add
 
-    member val Count = guids.Count
+    member _.Count = lookup.Count
 
-    member _.ByteLength = 16UL * uint64 guids.Count
+    member _.ByteLength = 16 * lookup.Count
 
     member _.IndexOf guid =
         if Guid.Empty = guid
         then 0u
-        else guids.Item guid
+        else lookup.Item guid
 
-    member val IndexSize = if guids.Count > MaxSmallIndex then 4 else 2
+    member val IndexSize = if lookup.Count > MaxSmallIndex then 4 else 2
 
     member this.WriteIndex(guid, writer: ChunkWriter) =
         let i = this.IndexOf guid
@@ -147,6 +151,11 @@ type GuidHeap internal (metadata: CliMetadata) =
         else writer.WriteU2 i
 
     member this.WriteZero writer = this.WriteIndex(Guid.Empty, writer)
+
+    member this.WriteHeap (content: ChunkList) =
+        let writer = ChunkWriter.After(content.Tail.Value, this.ByteLength)
+        for guid in guids do
+            guid.ToByteArray() |> writer.WriteBytes
 
 /// <summary>Represents the <c>#Blob</c> metadata stream (II.24.2.4).</summary>
 [<Sealed>]

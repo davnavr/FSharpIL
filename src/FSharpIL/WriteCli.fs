@@ -406,25 +406,39 @@ let root (info: CliInfo) (content: ChunkList) =
         offset <- offset + 8u + uint32 name.Length
         ChunkWriter(location)
 
+    // NOTE: Apprently writing the GUID stream header before the metadata header avoids an error when being read by a MetadataReader.
+    let guid = streamHeader "#GUID\000\000\000"B
     let metadata = streamHeader "#~\000\000"B
     let strings = streamHeader "#Strings\000\000\000\000"B
+    // US
     // TODO: Write other stream headers.
 
-    // #~ stream
-    content.PushSize()
-    tables info content
-    let metadataSize = content.PopSize()
-    metadata.WriteU4 offset
-    metadata.WriteU4 metadataSize
-    offset <- offset + metadataSize
+    do // #~ stream
+        content.PushSize()
+        tables info content
+        let size = content.PopSize()
+        metadata.WriteU4 offset
+        metadata.WriteU4 size
+        offset <- offset + size
 
-    // #Strings
-    content.PushSize()
-    info.StringsStream.WriteHeap content
-    let stringsSize = content.PopSize()
-    strings.WriteU4 offset
-    strings.WriteU4 stringsSize
-    offset <- offset + stringsSize
+    do // #Strings
+        content.PushSize()
+        info.StringsStream.WriteHeap content
+        let size = content.PopSize()
+        strings.WriteU4 offset
+        strings.WriteU4 size
+        offset <- offset + size
+
+    // user string
+    // if info.
+
+    do // #GUID
+        content.PushSize()
+        info.GuidStream.WriteHeap content
+        let size = content.PopSize()
+        guid.WriteU4 offset
+        guid.WriteU4 size
+        offset <- offset + size
 
     ()
 
