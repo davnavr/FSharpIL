@@ -187,7 +187,7 @@ module private WriterExtensions =
         member this.WriteCompressed(value: uint32) =
             if value > MaxCompressedUnsigned then
                 sprintf
-                    "Unable to compress integer %x, the maximum value for compressed unsigned integers is %x"
+                    "Unable to compress integer %x, the maximum value for compressed unsigned integers is %x."
                     value
                     MaxCompressedUnsigned
                 |> invalidArg (nameof value)
@@ -200,7 +200,66 @@ module private WriterExtensions =
             else // 1 byte
                 // Bit 7 remains clear
                 this.WriteU1 value
+
         member inline this.WriteCompressed value = this.WriteCompressed(uint32 value)
+
+        member _.WriteCompressedSigned(value: int32) =
+            failwith "TODO: Implement writing of compressed integers"
+            ()
+
+        member inline this.WriteCompressedSigned value = this.WriteCompressedSigned(int32 value)
+
+        member this.WriteArrayShape(shape: ArrayShape) =
+            this.WriteCompressed shape.Rank
+            this.WriteCompressed shape.Sizes.Length // NumSizes
+            for size in shape.Sizes do this.WriteCompressed size
+            this.WriteCompressed shape.LowerBounds.Length // NumLoBounds
+            for bound in shape.LowerBounds do this.WriteCompressedSigned bound // LoBound
+
+        member this.WriteType(item: EncodedType) =
+            match item with
+            | EncodedType.Array(element, shape) ->
+                this.WriteU1 ElementType.Array
+                this.WriteType element
+                this.WriteArrayShape shape
+
+            | EncodedType.String -> this.WriteU1 ElementType.String
+
+            | bad -> failwithf "Unsupported type %A" bad
+
+        member _.WriteCustomMod(modifiers: #IReadOnlyCollection<CustomModifier>) =
+            if modifiers.Count > 0 then
+                failwith "TODO: Implement writing of custom modifiers"
+                ()
+
+        member this.WriteRetType(item: ReturnTypeItem) =
+            this.WriteCustomMod item.CustomMod
+            match item.ReturnType with
+            | ReturnType.Void -> this.WriteU1 ElementType.Void
+
+        member this.WriteParam(item: ParamItem) =
+            this.WriteCustomMod item.CustomMod
+            this.WriteType item.ParamType
+
+        member this.WriteParameters(items: System.Collections.Immutable.ImmutableArray<ParamItem>) =
+            for param in items do this.WriteParam param
+
+        member this.WriteElem(elem: Elem) =
+            match elem with
+            | ValBool true -> this.WriteU1 1uy
+            | ValBool false -> this.WriteU1 0uy
+            | SerString "" -> this.WriteCompressed 0u
+            | SerString null -> this.WriteCompressed 0xFFu
+            | SerString str ->
+                let bytes = Encoding.UTF8.GetBytes str
+                this.WriteCompressed bytes.Length // PackedLen
+                this.WriteBytes bytes
+            | bad -> failwithf "Unsupported element %A" bad
+
+        member this.WriteFixedArg(arg: FixedArg) =
+            match arg with
+            | FixedArg.Elem elem -> this.WriteElem elem
+            | FixedArg.SZArray _ -> failwith "TODO: Implement writing of SZArray for FixedArg"
 
 /// <summary>Represents the <c>#Blob</c> metadata stream (II.24.2.4).</summary>
 [<Sealed>]
@@ -260,6 +319,8 @@ type internal BlobHeap internal (metadata: CliMetadata) =
     member this.WriteIndex(signature: CustomAttributeSignature option, writer) =
         let index =
             signature
+            |> Option.filter
+                (fun signature' -> not signature'.FixedArg.IsEmpty && not signature'.NamedArg.IsEmpty)
             |> Option.map this.IndexOf
             |> Option.defaultValue 0u
         this.WriteIndex(index, writer)
@@ -269,15 +330,41 @@ type internal BlobHeap internal (metadata: CliMetadata) =
         let writer = ChunkWriter.After(content.Tail.Value, 32)
         writer.WriteU1 0uy // Empty
 
+        // Field
+
         for signature in methodDef do
             writer.WriteU1 signature.Flags
 
             // match signature.CallingConventions with
             // | MethodCallingConventions.Generic count -> invalidOp "TODO: Write number of generic parameters."
 
-            // TODO: Create extension methods/create subclass/create methods to write compressed integers and items such as Param.
+            writer.WriteCompressed signature.Parameters.Length // ParamCount
+            writer.WriteRetType signature.ReturnType
+            writer.WriteParameters signature.Parameters
 
-            writer.WriteCompressed signature.Parameters.Length
+        for signature in methodRef do
+            writer.WriteU1 signature.CallingConventions
+            writer.WriteCompressed signature.Parameters.Length // ParamCount
+            writer.WriteRetType signature.ReturnType
+            writer.WriteParameters signature.Parameters
+            // TODO: Write SENTINEL and extra parameters.
+            if not signature.VarArgParameters.IsEmpty then
+                failwith "TODO: Implement writing of VarArg parameters"
 
-            ()
+        // FieldRef
+
+
+
+
+        for signature in attributes do
+            if signature.FixedArg.IsEmpty && signature.NamedArg.IsEmpty then
+                invalidOp "Attributes without any fixed or named arguments should use the empty blob instead."
+            writer.WriteU2 1us // Prolog
+            for arg in signature.FixedArg do
+                writer.WriteFixedArg arg
+            writer.WriteU2 signature.NamedArg.Length // NumNamed
+            for arg in signature.NamedArg do
+                failwithf "TODO: Implement writing of named arguments for custom attributes"
+
+        // TODO: Write other blobs.
         ()

@@ -89,12 +89,12 @@ let tables (info: CliInfo) (content: ChunkList) =
     headers.WriteU1 2uy // MajorVersion
     headers.WriteU1 0uy // MinorVersion
 
-    let heapSizes = // TODO: Move calculation of HeapSizes to CliMetadata class.
+    let heapSizes =
         let mutable bits = 0uy
         if info.StringsStream.IndexSize = 4 then bits <- bits ||| 1uy
         // #US
         if info.GuidStream.IndexSize = 4 then bits <- bits ||| 2uy
-        // TODO: Set size flags for other streams.
+        if info.BlobStream.IndexSize = 4 then bits <- bits ||| 4uy
         bits
 
     headers.WriteU1 heapSizes
@@ -389,7 +389,8 @@ let root (info: CliInfo) (content: ChunkList) =
 
     let streams =
         let mutable count = 3u // #~, #Strings, #GUID
-        // TODO: Include other streams in the count if they are not empty
+        // TODO: Include #US stream in stream count.
+        if info.BlobStream.Count > 0 then count <- count + 1u
         count
     writer.WriteU2 streams // Streams
 

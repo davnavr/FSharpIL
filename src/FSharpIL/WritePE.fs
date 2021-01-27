@@ -260,7 +260,7 @@ let toArray pe =
         | ex ->
             let msg =
                 sprintf
-                    "Unable to copy chunk of length %i to offset %i"
+                    "Unable to copy chunk of length %i to offset %i."
                     chunk.Length
                     i
             InvalidOperationException(msg, ex) |> raise

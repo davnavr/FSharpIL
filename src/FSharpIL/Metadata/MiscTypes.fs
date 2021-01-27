@@ -1,9 +1,10 @@
 ﻿namespace FSharpIL.Metadata
 
+open System
 open System.Collections.Immutable
 
 // II.25.3.3.1
-[<System.Flags>]
+[<Flags>]
 type CorFlags =
     | None = 0u
     | ILOnly = 1u
@@ -60,3 +61,20 @@ type HashAlgorithmId =
     | None = 0u
     | MD5 = 0x8003u
     | SHA1 = 0x8004u
+
+[<Flags>]
+type internal CallingConvention =
+    | HasThis = 0x20uy
+    | ExplicitThis = 0x40uy
+    | Default = 0uy
+    | VarArg = 0x5uy
+    | Generic = 0x10uy
+
+/// Represents an element type used in a signature (II.23.1.16).
+type internal ElementType =
+    | End = 0uy
+    | Void = 0x1uy
+
+    | String = 0xEuy
+
+    | Array = 0x14uy

@@ -874,13 +874,7 @@ type NestedClass =
     { NestedClass: Handle<TypeDef>
       EnclosingClass: Handle<TypeDef> }
 
-[<Flags>]
-type internal CallingConvention =
-    | HasThis = 0x20uy
-    | ExplicitThis = 0x40uy
-    | Default = 0uy
-    | VarArg = 0x5uy
-    | Generic = 0x10uy
+
 
 // TODO: Have different signature types for different kinds of methods.
 /// <summary>Represents a <c>MethodDefSig</c>, which captures the signature of a method or global function (II.23.2.1).</summary>
@@ -932,11 +926,11 @@ type MethodRefSignature =
       Parameters: ImmutableArray<ParamItem>
       VarArgParameters: ImmutableArray<ParamItem> }
 
-    member this.CallingConventions =
-        let mutable flags = enum<CallingConventions> 0
-        if this.HasThis then flags <- flags ||| CallingConventions.HasThis
-        if this.ExplicitThis then flags <- flags ||| CallingConventions.ExplicitThis
-        if not this.VarArgParameters.IsEmpty then flags <- flags ||| CallingConventions.VarArgs
+    member internal this.CallingConventions =
+        let mutable flags = CallingConvention.Default
+        if this.HasThis then flags <- flags ||| CallingConvention.HasThis
+        if this.ExplicitThis then flags <- flags ||| CallingConvention.ExplicitThis
+        if not this.VarArgParameters.IsEmpty then flags <- flags ||| CallingConvention.VarArg
         flags
 
     interface IHandleValue with
@@ -1089,6 +1083,8 @@ type Elem =
     | ValI8 of int64
     | ValU8 of uint64
     // | ValEnum // of SomehowGetTheEnumUnderlyingType?
+    /// <summary>Represents a string used as an argument in a custom attribute.</summary>
+    /// <remarks>Empty strings and <see langword="null"/> strings are allowed values.</remarks>
     | SerString of string
     // | SerStringType // of SomehowGetTheCanonicalNameOfType.
     // | BoxedObject of // underlying value.
