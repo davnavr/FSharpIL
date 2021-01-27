@@ -874,17 +874,26 @@ type NestedClass =
     { NestedClass: Handle<TypeDef>
       EnclosingClass: Handle<TypeDef> }
 
+[<Flags>]
+type internal CallingConvention =
+    | HasThis = 0x20uy
+    | ExplicitThis = 0x40uy
+    | Default = 0uy
+    | VarArg = 0x5uy
+    | Generic = 0x10uy
+
 // TODO: Have different signature types for different kinds of methods.
 /// <summary>Represents a <c>MethodDefSig</c>, which captures the signature of a method or global function (II.23.2.1).</summary>
 [<IsReadOnly; Struct>]
 type MethodDefSignature internal (hasThis: bool, explicitThis: bool, cconv: MethodCallingConventions, retType: ReturnTypeItem, parameters: ImmutableArray<ParamItem>) =
-    member _.CallingConventions: CallingConventions =
+    member _.CallingConventions = cconv
+    member internal _.Flags =
         let mutable flags =
             match cconv with
-            | Default -> enum 0
-            | VarArg -> CallingConventions.VarArgs
-        if hasThis then flags <- flags ||| CallingConventions.HasThis
-        if explicitThis then flags <- flags ||| CallingConventions.ExplicitThis
+            | Default -> CallingConvention.Default
+            | VarArg -> CallingConvention.VarArg
+        if hasThis then flags <- flags ||| CallingConvention.HasThis
+        if explicitThis then flags <- flags ||| CallingConvention.ExplicitThis
         flags
     member _.ReturnType = retType
     member _.Parameters: ImmutableArray<ParamItem> = parameters
@@ -895,7 +904,6 @@ type IMethodDefSignature =
 type MethodCallingConventions =
     | Default
     | VarArg
-    // | Standard // TODO: Determine if this value is valid. See documentation for System.Reflection.CallingConventions
     // | Generic // of count: int
 
 [<RequireQualifiedAccess>]

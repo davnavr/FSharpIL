@@ -409,14 +409,18 @@ let root (info: CliInfo) (content: ChunkList) =
 
     let metadata = streamHeader "#~\000\000"B
     let strings = streamHeader "#Strings\000\000\000\000"B
-    // US
+    //if info. then // TODO: Write #US stream headerm
+    //    let us = streamHeader "#US\000"B
     let guid = streamHeader "#GUID\000\000\000"B
-    // TODO: Write other stream headers.
+    let blob =
+        if info.BlobStream.Count > 0
+        then streamHeader "#Blob\000\000\000"B
+        else null
 
     do // #~ stream
         content.PushSize()
         tables info content
-        let size = content.PopSize()
+        let size = content.PopSize() // TODO: Make local function for popping size and updating offset.
         metadata.WriteU4 offset
         metadata.WriteU4 size
         offset <- offset + size
@@ -424,6 +428,7 @@ let root (info: CliInfo) (content: ChunkList) =
     do // #Strings
         content.PushSize()
         info.StringsStream.WriteHeap content
+        // TODO: Should heaps be padded to the nearest 4-byte boundary?
         let size = content.PopSize()
         strings.WriteU4 offset
         strings.WriteU4 size
@@ -438,6 +443,14 @@ let root (info: CliInfo) (content: ChunkList) =
         let size = content.PopSize()
         guid.WriteU4 offset
         guid.WriteU4 size
+        offset <- offset + size
+
+    if blob <> null then
+        content.PushSize()
+        info.BlobStream.WriteHeap content
+        let size = content.PopSize()
+        blob.WriteU4 offset
+        blob.WriteU4 size
         offset <- offset + size
 
     ()

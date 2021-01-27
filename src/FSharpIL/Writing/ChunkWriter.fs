@@ -5,6 +5,7 @@ open System
 open Microsoft.FSharp.Core.Operators.Checked
 
 // TODO: Determine if this should be made into a struct or ref stuct, or should remain a reference type.
+[<AllowNullLiteral>]
 [<Sealed>]
 type internal ChunkWriter (chunk: Chunk, position: int, defaultCapacity: int32) =
     do
@@ -40,6 +41,8 @@ type internal ChunkWriter (chunk: Chunk, position: int, defaultCapacity: int32) 
         this.Chunk.Data.[pos] <- value
         pos <- pos + 1
         size <- size + 1u
+
+    member inline this.WriteU1 value = this.WriteU1(uint8 value)
 
     /// Writes an unsigned 2-byte integer in little-endian format.
     member this.WriteU2 value =
