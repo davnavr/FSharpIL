@@ -20,14 +20,16 @@ type private HeapCollection<'Key when 'Key : equality> internal (capacity: int32
 
     new(capacity) = HeapCollection(capacity, 0u)
 
-    member _.Add item =
+    member _.Add(item, index) =
         if lookup.ContainsKey item
         then false
         else
             items.[i] <- item
             i <- i + 1
-            lookup.Item <- item, (uint32 i) + offset
+            lookup.Item <- item, index
             true
+
+    member this.Add item = this.Add(item, (uint32 i) + 1u + offset)
 
     member _.Count = lookup.Count
 
@@ -51,6 +53,7 @@ type private HeapCollection<'Key when 'Key : equality> internal (capacity: int32
         member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
 
 // TODO: Determine if adding strings first and then allowing retrieval of index is faster than assigning an index to each string as it is written.
+// TODO: Implement merging of strings that end the same. Ex: "HelloWorld" and "World" end in the same, so indices would be x and x + 5.
 /// <summary>Represents the <c>#Strings</c> metadata stream (II.24.2.3).</summary>
 [<Sealed>]
 type internal StringsHeap internal (metadata: CliMetadata) =
@@ -77,7 +80,7 @@ type internal StringsHeap internal (metadata: CliMetadata) =
             | null
             | "" -> ()
             | str ->
-                if strings.Add str then
+                if strings.Add(str, uint32 size) then
                     size <- size + 1 + (Encoding.UTF8.GetByteCount str)
 
         string metadata.Module.Name |> add

@@ -28,7 +28,7 @@ type private CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uin
     
     member this.WriteIndex(item, writer: ChunkWriter) =
         let index = this.IndexOf item
-        if large then writer.WriteU2 index else writer.WriteU4 index
+        if large then writer.WriteU4 index else writer.WriteU2 index
 
 let private codedIndex count n indexer = CodedIndex<_>(count, n, indexer)
 
@@ -92,7 +92,6 @@ let tables (info: CliInfo) (content: ChunkList) =
     let heapSizes =
         let mutable bits = 0uy
         if info.StringsStream.IndexSize = 4 then bits <- bits ||| 1uy
-        // #US
         if info.GuidStream.IndexSize = 4 then bits <- bits ||| 2uy
         if info.BlobStream.IndexSize = 4 then bits <- bits ||| 4uy
         bits
@@ -325,7 +324,7 @@ let tables (info: CliInfo) (content: ChunkList) =
             let size =
                 16 // HashAlgId, MajorVersion, MinorVersion, BuildNumber, RevisionNumber, Flags
                 + info.BlobStream.IndexSize // PublicKey
-                + info.StringsStream.IndexSize // Name
+                + (2 * info.StringsStream.IndexSize) // Name, Culture
             ChunkWriter.After(content.Tail.Value, size)
 
         let assembly = tables.Assembly.Value
@@ -337,6 +336,7 @@ let tables (info: CliInfo) (content: ChunkList) =
         writer.WriteU4 0u // Flags // TODO: Determine what flags an assembly should have.
         info.BlobStream.WriteEmpty writer // PublicKey // TODO: Determine how to write the PublicKey into a blob.
         info.StringsStream.WriteIndex(assembly.Name, writer)
+        info.StringsStream.WriteIndex(assembly.Culture, writer)
 
     // AssemblyRef (0x23)
     if tables.AssemblyRef.Count > 0 then
@@ -410,8 +410,10 @@ let root (info: CliInfo) (content: ChunkList) =
 
     let metadata = streamHeader "#~\000\000"B
     let strings = streamHeader "#Strings\000\000\000\000"B
-    //if info. then // TODO: Write #US stream headerm
-    //    let us = streamHeader "#US\000"B
+    let us =
+        // if info. // TODO: Write #US stream header
+        // then streamHeader "#US\000"B
+        null
     let guid = streamHeader "#GUID\000\000\000"B
     let blob =
         if info.BlobStream.Count > 0
@@ -427,6 +429,7 @@ let root (info: CliInfo) (content: ChunkList) =
         offset <- offset + size
 
     do // #Strings
+        
         content.PushSize()
         info.StringsStream.WriteHeap content
         // TODO: Should heaps be padded to the nearest 4-byte boundary?
@@ -453,6 +456,8 @@ let root (info: CliInfo) (content: ChunkList) =
         blob.WriteU4 offset
         blob.WriteU4 size
         offset <- offset + size
+
+    // TODO: Consider aligning heaps to 4-byte boundary
 
     ()
 
