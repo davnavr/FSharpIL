@@ -1117,7 +1117,7 @@ type Opcode =
     | Ret
     // TODO: Include other opcodes.
 
-    /// An instruction that loads a literl string (III.4.16).
+    /// An instruction that loads a literal string (III.4.16).
     | Ldstr of string
 
     /// Returns the bytes that make up this opcode.

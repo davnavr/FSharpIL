@@ -8,6 +8,7 @@ open Microsoft.FSharp.Core.Operators.Checked
 
 open FSharpIL.Metadata
 
+open FSharpIL.Bytes
 open FSharpIL.Writing
 
 [<Sealed>]
@@ -141,6 +142,7 @@ type internal StringsHeap internal (metadata: CliMetadata) =
         for str in strings do
             Encoding.UTF8.GetBytes str |> writer.WriteBytes
             writer.WriteU1 0uy
+        ()
 
 /// <summary>Represents the <c>#US</c> metadata stream (II.24.2.4).</summary>
 [<Sealed>]
@@ -185,7 +187,7 @@ module private WriterExtensions =
     let MaxCompressedUnsigned = 0x1FFF_FFFFu
 
     type ChunkWriter with
-        /// <summary>Writes an unsigned compressed integer (II.23.2).</summary>
+        /// <summary>Writes an unsigned compressed integer in big-endian order (II.23.2).</summary>
         /// <exception cref="System.ArgumentException">The <paramref name="value"/> is greater than the maximum compressed unsigned integer.</exception>
         member this.WriteCompressed(value: uint32) =
             if value > MaxCompressedUnsigned then
@@ -196,10 +198,16 @@ module private WriterExtensions =
                 |> invalidArg (nameof value)
             elif value > 0x3FFFu then // 4 bytes
                 // Sets bit 31 and bit 30, bit 29 remains clear
-                value ||| 0xC000_0000u |> this.WriteU4
+                let (U4 (msb, b2, b3, lsb)) = value ||| 0xC000_0000u
+                this.WriteU1 msb
+                this.WriteU1 b2
+                this.WriteU1 b3
+                this.WriteU1 lsb
             elif value > 0x7Fu then // 2 bytes
                 // Sets bit 15, bit 14 remains clear
-                value ||| 0x8000u |> this.WriteU2
+                let (U2 (msb, lsb)) = uint16 (value ||| 0x8000u)
+                this.WriteU1 msb
+                this.WriteU1 lsb
             else // 1 byte
                 // Bit 7 remains clear
                 this.WriteU1 value

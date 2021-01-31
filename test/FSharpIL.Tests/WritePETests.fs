@@ -5,7 +5,6 @@ open Expecto
 open System
 open System.Collections.Immutable
 open System.IO
-open System.Reflection
 open System.Reflection.Metadata
 open System.Reflection.PortableExecutable
 
@@ -27,7 +26,7 @@ let tests =
     testList "write PE" [
         testProperty "hello world is an assembly" <| fun mvid ->
             let mdle =
-                { Name = Identifier.ofStr "HelloWorld"
+                { Name = Identifier.ofStr "HelloWorld.dll"
                   Mvid = mvid }
             let tables =
                 metadataBuilder mdle {

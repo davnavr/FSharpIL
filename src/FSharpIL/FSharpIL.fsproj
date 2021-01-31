@@ -10,11 +10,12 @@
 
   <ItemGroup>
     <Compile Include="AssemblyVisibility.fs" />
-    <Compile Include="Round.fs" />
+    <Compile Include="Bytes.fs" />
     <Compile Include="InternalException.fs" />
+    <Compile Include="Magic.fs" />
+    <Compile Include="Round.fs" />
     <Compile Include="Writing\ChunkList.fs" />
     <Compile Include="Writing\ChunkWriter.fs" />
-    <Compile Include="Magic.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\MiscTypes.fs" />
     <Compile Include="Metadata\Flags.fs" />

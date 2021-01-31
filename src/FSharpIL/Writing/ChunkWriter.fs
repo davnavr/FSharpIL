@@ -4,6 +4,8 @@ open System
 
 open Microsoft.FSharp.Core.Operators.Checked
 
+open FSharpIL.Bytes
+
 // TODO: Determine if this should be made into a struct or ref stuct, or should remain a reference type.
 [<AllowNullLiteral>]
 [<Sealed>]
@@ -45,31 +47,31 @@ type internal ChunkWriter (chunk: Chunk, position: int, defaultCapacity: int32) 
     member inline this.WriteU1 value = this.WriteU1(uint8 value)
 
     /// Writes an unsigned 2-byte integer in little-endian format.
-    member this.WriteU2 value =
-        this.WriteU1(value &&& 0xFFus |> byte)
-        this.WriteU1((value >>> 8) &&& 0xFFus |> byte)
+    member this.WriteU2 (U2 (msb, lsb)) =
+        this.WriteU1 lsb
+        this.WriteU1 msb
 
     member inline this.WriteU2 value = this.WriteU2(uint16 value)
 
     /// Writes an unsigned 4-byte integer in little-endian format.
-    member this.WriteU4 value =
-        this.WriteU1(value &&& 0xFFu |> byte)
-        this.WriteU1((value >>> 8) &&& 0xFFu |> byte)
-        this.WriteU1((value >>> 16) &&& 0xFFu |> byte)
-        this.WriteU1((value >>> 24) &&& 0xFFu |> byte)
+    member this.WriteU4 (U4 (msb, b3, b2, lsb)) =
+        this.WriteU1 lsb
+        this.WriteU1 b2
+        this.WriteU1 b3
+        this.WriteU1 msb
 
     member inline this.WriteU4 value = this.WriteU4(uint32 value)
 
     /// Writes an unsigned 8-byte integer in little-endian format.
-    member this.WriteU8 value =
-        this.WriteU1(value &&& 0xFFUL |> byte)
-        this.WriteU1((value >>> 8) &&& 0xFFUL |> byte)
-        this.WriteU1((value >>> 16) &&& 0xFFUL |> byte)
-        this.WriteU1((value >>> 24) &&& 0xFFUL |> byte)
-        this.WriteU1((value >>> 32) &&& 0xFFUL |> byte)
-        this.WriteU1((value >>> 40) &&& 0xFFUL |> byte)
-        this.WriteU1((value >>> 48) &&& 0xFFUL |> byte)
-        this.WriteU1((value >>> 56) &&& 0xFFUL |> byte)
+    member this.WriteU8 (U8 (msb, b7, b6, b5, b4, b3, b2, lsb)) =
+        this.WriteU1 lsb
+        this.WriteU1 b2
+        this.WriteU1 b3
+        this.WriteU1 b4
+        this.WriteU1 b5
+        this.WriteU1 b6
+        this.WriteU1 b7
+        this.WriteU1 msb
 
     member inline this.WriteU8 value = this.WriteU8(uint64 value)
 
