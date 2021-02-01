@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open System.Runtime.CompilerServices
 open System.Text
 
 open Microsoft.FSharp.Core.Operators.Checked
@@ -11,6 +12,163 @@ open FSharpIL.Metadata
 open FSharpIL.Bytes
 open FSharpIL.Writing
 
+type internal IHeap<'T> =
+    inherit IReadOnlyCollection<'T>
+
+    abstract IndexOf: 'T -> uint32
+    abstract ByteLength: uint32
+
+[<AutoOpen>]
+module internal HeapExtensions =
+    [<Literal>]
+    let private MaxSmallIndex = 0xFFFFu
+
+    type IHeap<'T> with
+        member this.IndexSize = if this.ByteLength > MaxSmallIndex then 4 else 2
+
+        member this.WriteIndex(item, writer: ChunkWriter) =
+            let i = this.IndexOf item
+            if this.IndexSize = 4
+            then writer.WriteU4 i
+            else writer.WriteU2 i
+
+    [<Extension>]
+    [<AbstractClass; Sealed>]
+    type SpecificHeapExtensions =
+        [<Extension>]
+        static member WriteStringIndex<'T>(strings: IHeap<string>, name: 'T, writer) = strings.WriteIndex(name.ToString(), writer)
+        [<Extension>]
+        static member WriteZero(guids: IHeap<Guid>, writer) = guids.WriteIndex(Guid.Empty, writer)
+
+[<RequireQualifiedAccess>]
+module internal Heap =
+    type Collection<'T when 'T : equality> internal (capacity: int32, initialSize, sizeOf, indexOf) =
+        let items = List<'T> capacity
+        let lookup = Dictionary<'T, uint32> capacity
+        let mutable size = initialSize
+
+        new(capacity, initialSize, sizeOf) = Collection(capacity, initialSize, sizeOf, Some)
+        new(capacity, initialSize) = Collection(capacity, initialSize, (fun _ -> 1u))
+
+        member _.Count = lookup.Count
+
+        member _.ByteLength = size
+
+        member _.IndexOf item: uint32 =
+            match indexOf item with
+            | Some item' -> lookup.Item item'
+            | None -> 0u
+
+        member _.Add item =
+            if lookup.ContainsKey item
+            then false
+            else
+                items.Add item
+                lookup.Item <- item, size
+                size <- size + (sizeOf item)
+                true
+
+        interface IHeap<'T> with
+            member this.Count = this.Count
+            member this.IndexOf item = this.IndexOf item
+            member this.ByteLength = this.ByteLength
+            member _.GetEnumerator() = items.GetEnumerator() :> IEnumerator<_>
+            member _.GetEnumerator() = items.GetEnumerator() :> System.Collections.IEnumerator
+
+    /// <summary>Creates the <c>#Strings</c> metadata stream (II.24.2.3).</summary>
+    let strings (metadata: CliMetadata) =
+        let strings =
+            // Estimated number of strings, actual count may be less.
+            let capacity =
+                1 // Module
+                + (2 * metadata.TypeRef.Count)
+                + (2 * metadata.TypeDef.Count)
+                + metadata.Field.Count
+                + metadata.MethodDef.Count
+                + metadata.Param.Length
+
+                + metadata.MemberRef.Count
+
+                + if metadata.Assembly.IsSome then 2 else 0
+                + (2 * metadata.AssemblyRef.Count)
+            let length (str: string) =
+                1u + (Encoding.UTF8.GetByteCount str |> uint32)
+            let indexOf =
+                function
+                | ""
+                | null -> None
+                | str -> Some str
+            Collection<_>(capacity, 1u, length, indexOf)
+        let add =
+            function
+            | ""
+            | null -> ()
+            | str -> strings.Add str |> ignore
+
+        string metadata.Module.Name |> add
+
+        for tref in metadata.TypeRef.Items do
+            string tref.TypeName |> add
+            add tref.TypeNamespace
+
+        for tdef in metadata.TypeDef.Items do
+            string tdef.TypeName |> add
+            add tdef.TypeNamespace
+
+        for field in metadata.Field.Items do
+            string field.Name |> add
+
+        for method in metadata.MethodDef.Items do
+            string method.Name |> add
+
+        for _, param in metadata.Param do
+            add param.ParamName
+
+
+
+        for mref in metadata.MemberRef.Items do
+            string mref.MemberName |> add
+
+
+
+        match metadata.Assembly with
+        | Some assembly ->
+            string assembly.Name |> add
+            string assembly.Culture |> add
+        | None -> ()
+
+        for assembly in metadata.AssemblyRef.Items do
+            string assembly.Name |> add
+            string assembly.Culture |> add
+
+        strings
+
+    /// <summary>Creates the <c>#GUID</c> metadata stream (II.24.2.5).</summary>
+    let guid (metadata: CliMetadata) =
+        let guids =
+            let indexOf guid =
+                if guid = Guid.Empty
+                then None
+                else Some guid
+            Collection<Guid>(1, 1u, (fun _ -> 16u), indexOf) // Module table is always present.
+        guids.Add metadata.Module.Mvid |> ignore
+        guids
+
+    let writeStrings (strings: IHeap<string>) (content: ChunkList) =
+        let writer = ChunkWriter.After(content.Tail.Value, int32 strings.ByteLength)
+        writer.WriteU1 0uy
+        for str in strings do
+            Encoding.UTF8.GetBytes str |> writer.WriteBytes
+            writer.WriteU1 0uy
+
+    let writeGuid (guids: IHeap<Guid>) (content: ChunkList) =
+        let writer = ChunkWriter.After(content.Tail.Value, int32 guids.ByteLength)
+        for guid in guids do
+            guid.ToByteArray() |> writer.WriteBytes
+
+type internal Heap<'T when 'T : equality> = Heap.Collection<'T>
+
+[<Obsolete>]
 [<Sealed>]
 type private HeapCollection<'Key when 'Key : equality> internal (capacity: int32, offset: uint32) =
     [<Literal>]
@@ -55,94 +213,7 @@ type private HeapCollection<'Key when 'Key : equality> internal (capacity: int32
 
 // TODO: Determine if adding strings first and then allowing retrieval of index is faster than assigning an index to each string as it is written.
 // TODO: Implement merging of strings that end the same. Ex: "HelloWorld" and "World" end in the same, so indices would be x and x + 5.
-/// <summary>Represents the <c>#Strings</c> metadata stream (II.24.2.3).</summary>
-[<Sealed>]
-type internal StringsHeap internal (metadata: CliMetadata) =
-    let strings =
-        // Estimated number of strings, actual count may be less.
-        let capacity =
-            1 // Module
-            + (2 * metadata.TypeRef.Count)
-            + (2 * metadata.TypeDef.Count)
-            + metadata.Field.Count
-            + metadata.MethodDef.Count
-            + metadata.Param.Length
-
-            + metadata.MemberRef.Count
-
-            + if metadata.Assembly.IsSome then 2 else 0
-            + (2 * metadata.AssemblyRef.Count)
-        HeapCollection<string> capacity
-    let mutable size = 1
-
-    do
-        let add =
-            function
-            | null
-            | "" -> ()
-            | str ->
-                if strings.Add(str, uint32 size) then
-                    size <- size + 1 + (Encoding.UTF8.GetByteCount str)
-
-        string metadata.Module.Name |> add
-
-        for tref in metadata.TypeRef.Items do
-            string tref.TypeName |> add
-            string tref.TypeNamespace |> add
-
-        for tdef in metadata.TypeDef.Items do
-            string tdef.TypeName |> add
-            string tdef.TypeNamespace |> add
-
-        for field in metadata.Field.Items do
-            string field.Name |> add
-
-        for method in metadata.MethodDef.Items do
-            string method.Name |> add
-
-        for _, param in metadata.Param do
-            add param.ParamName
-
-
-        for mref in metadata.MemberRef.Items do
-            string mref.MemberName |> add
-
-
-
-        match metadata.Assembly with
-        | Some assembly ->
-            string assembly.Name |> add
-            string assembly.Culture |> add
-        | None -> ()
-
-        for assembly in metadata.AssemblyRef.Items do
-            string assembly.Name |> add
-            string assembly.Culture |> add
-
-        ()
-
-    member val Count = strings.Count
-
-    member _.ByteLength = size
-
-    member _.IndexOf str =
-        match str with
-        | null
-        | "" -> 0u
-        | _ -> strings.IndexOf str
-
-    member val IndexSize = strings.IndexSize
-
-    member this.WriteIndex(str, writer) = strings.WriteRawIndex(this.IndexOf str, writer)
-    member this.WriteIndex(o, writer: ChunkWriter) = this.WriteIndex(o.ToString(), writer)
-
-    member _.WriteHeap(content: ChunkList) =
-        let writer = ChunkWriter.After(content.Tail.Value, size)
-        writer.WriteU1 0uy
-        for str in strings do
-            Encoding.UTF8.GetBytes str |> writer.WriteBytes
-            writer.WriteU1 0uy
-        ()
+// TODO: Prevent null character from being used in strings.
 
 /// <summary>Represents the <c>#US</c> metadata stream (II.24.2.4).</summary>
 [<Sealed>]
@@ -152,34 +223,6 @@ type internal UserStringHeap internal (metadata: CliMetadata) =
         |> Dictionary<string, uint32>
 
     // NOTE: When writing this heap, see II.24.2.4 to see how lengths of the bytes are encoded.
-
-/// <summary>Represents the <c>#GUID</c> metadata stream (II.24.2.5).</summary>
-[<Sealed>]
-type internal GuidHeap internal (metadata: CliMetadata) =
-    let guids =
-        let capacity = 1 // Module table is always present.
-        HeapCollection<Guid> capacity
-
-    do guids.Add metadata.Module.Mvid |> ignore
-
-    member val Count = guids.Count
-
-    member val ByteLength = 16 * guids.Count
-
-    member _.IndexOf guid =
-        if Guid.Empty = guid
-        then 0u
-        else guids.IndexOf guid
-
-    member val IndexSize = guids.IndexSize
-
-    member this.WriteIndex(guid, writer: ChunkWriter) = guids.WriteRawIndex(this.IndexOf guid, writer)
-    member this.WriteZero writer = this.WriteIndex(Guid.Empty, writer)
-
-    member this.WriteHeap (content: ChunkList) =
-        let writer = ChunkWriter.After(content.Tail.Value, this.ByteLength)
-        for guid in guids do
-            guid.ToByteArray() |> writer.WriteBytes
 
 [<AutoOpen>]
 module private WriterExtensions =
@@ -272,6 +315,7 @@ module private WriterExtensions =
             | FixedArg.Elem elem -> this.WriteElem elem
             | FixedArg.SZArray _ -> failwith "TODO: Implement writing of SZArray for FixedArg"
 
+// TODO: Figure out why method signature is empty byte array. Maybe indices into #Blob point to individual bytes similar to #Strings?
 /// <summary>Represents the <c>#Blob</c> metadata stream (II.24.2.4).</summary>
 [<Sealed>]
 type internal BlobHeap internal (metadata: CliMetadata) =

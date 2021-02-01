@@ -38,9 +38,9 @@ type CliInfo =
       Metadata: CliMetadata
       mutable MetadataSize: uint32
       mutable MethodBodiesSize: uint32
-      StringsStream: StringsHeap
+      StringsStream: Heap<string>
       // US
-      GuidStream: GuidHeap
+      GuidStream: Heap<Guid>
       BlobStream: BlobHeap }
 
     member this.MetadataRva = this.MethodBodiesRva + this.MethodBodiesSize
@@ -180,7 +180,7 @@ let tables (info: CliInfo) (content: ChunkList) =
         let size = 2 + info.StringsStream.IndexSize + (3 * info.GuidStream.IndexSize)
         ChunkWriter.After(content.Tail.Value, size)
     mdle.WriteU2 0us // Generation
-    info.StringsStream.WriteIndex(tables.Module.Name, mdle)
+    info.StringsStream.WriteStringIndex(tables.Module.Name, mdle)
     info.GuidStream.WriteIndex(tables.Module.Mvid, mdle)
     info.GuidStream.WriteZero mdle // EncId
     info.GuidStream.WriteZero mdle // Encbaseid
@@ -193,7 +193,7 @@ let tables (info: CliInfo) (content: ChunkList) =
 
         for tref in tables.TypeRef.Items do
             resolutionScope.WriteIndex(tref.ResolutionScope, typeRef)
-            info.StringsStream.WriteIndex(tref.TypeName, typeRef)
+            info.StringsStream.WriteStringIndex(tref.TypeName, typeRef)
             info.StringsStream.WriteIndex(tref.TypeNamespace, typeRef)
 
     // TypeDef (0x02)
@@ -212,7 +212,7 @@ let tables (info: CliInfo) (content: ChunkList) =
 
         for tdef in tables.TypeDef.Items do
             typeDef.WriteU4 tdef.Flags
-            info.StringsStream.WriteIndex(tdef.TypeName, typeDef)
+            info.StringsStream.WriteStringIndex(tdef.TypeName, typeDef)
             info.StringsStream.WriteIndex(tdef.TypeNamespace, typeDef)
             extends.WriteIndex(tdef.Extends, typeDef)
 
@@ -237,7 +237,7 @@ let tables (info: CliInfo) (content: ChunkList) =
 
         for row in tables.Field.Items do
             field.WriteU2 row.Flags
-            info.StringsStream.WriteIndex(row.Name, field)
+            info.StringsStream.WriteStringIndex(row.Name, field)
             invalidOp "TODO: Write index for field signatures."
 
     // MethodDef (0x06)
@@ -256,7 +256,7 @@ let tables (info: CliInfo) (content: ChunkList) =
             methodDef.WriteU4 0u // RVA // TODO: Write the RVA to the method body.
             methodDef.WriteU2 method.ImplFlags
             methodDef.WriteU2 method.Flags
-            info.StringsStream.WriteIndex(method.Name, methodDef)
+            info.StringsStream.WriteStringIndex(method.Name, methodDef)
             info.BlobStream.WriteIndex(method.Signature, methodDef) // Signature
 
             let param' = if method.ParamList.IsEmpty then 0u else param // Param
@@ -292,7 +292,7 @@ let tables (info: CliInfo) (content: ChunkList) =
 
         for row in tables.MemberRef.Items do
             memberRefParent.WriteIndex(row.Class, memberRef)
-            info.StringsStream.WriteIndex(row.MemberName, memberRef)
+            info.StringsStream.WriteStringIndex(row.MemberName, memberRef)
 
             // Signature
             match row with
@@ -335,8 +335,8 @@ let tables (info: CliInfo) (content: ChunkList) =
         writer.WriteU2 (max assembly.Version.Revision 0)
         writer.WriteU4 0u // Flags // TODO: Determine what flags an assembly should have.
         info.BlobStream.WriteEmpty writer // PublicKey // TODO: Determine how to write the PublicKey into a blob.
-        info.StringsStream.WriteIndex(assembly.Name, writer)
-        info.StringsStream.WriteIndex(assembly.Culture, writer)
+        info.StringsStream.WriteStringIndex(assembly.Name, writer)
+        info.StringsStream.WriteStringIndex(assembly.Culture, writer)
 
     // AssemblyRef (0x23)
     if tables.AssemblyRef.Count > 0 then
@@ -354,8 +354,8 @@ let tables (info: CliInfo) (content: ChunkList) =
             assemblyRef.WriteU2 row.Version.Revision
             assemblyRef.WriteU4 row.Flags
             info.BlobStream.WriteEmpty assemblyRef // PublicKeyOrToken // TODO: Figure out how to write the PublicKeyOrToken into a blob.
-            info.StringsStream.WriteIndex(row.Name, assemblyRef)
-            info.StringsStream.WriteIndex(row.Culture, assemblyRef)
+            info.StringsStream.WriteStringIndex(row.Name, assemblyRef)
+            info.StringsStream.WriteStringIndex(row.Culture, assemblyRef)
             info.BlobStream.WriteEmpty assemblyRef // HashValue // TODO: Figure out how to write the HashValue into a blob.
 
     // NestedClass (0x29)
@@ -431,7 +431,7 @@ let root (info: CliInfo) (content: ChunkList) =
     do // #Strings
         
         content.PushSize()
-        info.StringsStream.WriteHeap content
+        Heap.writeStrings info.StringsStream content
         // TODO: Should heaps be padded to the nearest 4-byte boundary?
         let size = content.PopSize()
         strings.WriteU4 offset
@@ -443,7 +443,7 @@ let root (info: CliInfo) (content: ChunkList) =
 
     do // #GUID
         content.PushSize()
-        info.GuidStream.WriteHeap content
+        Heap.writeGuid info.GuidStream content
         let size = content.PopSize()
         guid.WriteU4 offset
         guid.WriteU4 size
@@ -468,8 +468,8 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (content: ChunkList) =
           Metadata = cli
           MetadataSize = Unchecked.defaultof<uint32>
           MethodBodiesSize = Unchecked.defaultof<uint32>
-          StringsStream = StringsHeap cli
-          GuidStream = GuidHeap cli
+          StringsStream = Heap.strings cli
+          GuidStream = Heap.guid cli
           BlobStream = BlobHeap cli }
     let tail = content.Tail.Value
 
