@@ -132,7 +132,7 @@ let dataDirectories info (writer: ChunkWriter) =
     match info.File.CliHeader with
     | Some _ ->
         writer.WriteU4 info.CliHeaderRva
-        writer.WriteU4 WriteCli.Size.CliHeader // TODO: Is this supposed to be the size of the CLI header, or all of the metadata?
+        writer.WriteU4 WriteCli.Size.CliHeader
     | None -> writer.WriteU8 0UL
 
     writer.WriteU8 0UL // Reserved
