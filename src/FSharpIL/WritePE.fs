@@ -53,8 +53,7 @@ type PEInfo =
       mutable CliHeaderRva: uint32
       Sections: SectionInfo[] }
 
-    member this.FileAlignment = int32 this.File.NTSpecificFields.FileAlignment
-
+    // TODO: Make this a function.
     member this.RvaOf (section: (int * Section) option) =
         match section with
         | Some(i, _) -> (Array.get this.Sections i).VirtualAddress
@@ -137,7 +136,7 @@ let dataDirectories info (writer: ChunkWriter) =
 
     writer.WriteU8 0UL // Reserved
 
-let sections (info: PEInfo) (content: ChunkList) =
+let sections (info: PEInfo) (writer: ChunkWriter) =
     let pe = info.File
     let falignment = uint32 pe.NTSpecificFields.FileAlignment
     let salignment = uint32 pe.NTSpecificFields.SectionAlignment
@@ -160,19 +159,18 @@ let sections (info: PEInfo) (content: ChunkList) =
 
     for sectioni = 0 to pe.SectionTable.Length - 1 do
         let section = pe.SectionTable.Item sectioni
-        content.PushSize()
         for datai = 0 to section.Data.Length - 1 do
             match section.Data.Item datai with
             | CliHeader cli ->
                 if sectioni = cliSectionIndex && datai = cliDataIndex then
                     info.CliHeaderRva <- virtualAddress
-                WriteCli.metadata cli virtualAddress content
+                WriteCli.metadata cli virtualAddress writer
             | ClrLoaderStub -> () // TODO: Write loader stub.
-            | RawData(Lazy bytes) ->
-                Span(bytes).ToArray() |> content.AddLast |> ignore
+            | RawData bytes -> bytes() |> writer.WriteBytes
 
-        let size = content.PopSize()
-        let roundedSize = Round.upTo falignment size
+        let size = writer.Size
+        writer.MoveToEnd() // Padding before next section.
+        let roundedSize = writer.Size
 
         // Calculates the values for sizes in the standard fields (II.25.2.3.1)
         if section.Header.Characteristics.HasFlag SectionFlags.CntCode then
@@ -191,14 +189,7 @@ let sections (info: PEInfo) (content: ChunkList) =
         fileOffset <- fileOffset + roundedSize
         virtualAddress <- Round.upTo salignment (virtualAddress + size)
 
-        // Padding before next section.
-        let paddingSize = roundedSize - size |> int32
-        if paddingSize > 0 then
-            Array.zeroCreate<byte> paddingSize
-            |> content.AddLast
-            |> ignore
-
-let write (pe: PEFile) =
+let write pe =
     try
         let info =
             { File = pe
@@ -207,17 +198,14 @@ let write (pe: PEFile) =
               UninitializedDataSize = Unchecked.defaultof<uint32>
               CliHeaderRva = Unchecked.defaultof<uint32>
               Sections = Array.zeroCreate<SectionInfo> pe.SectionTable.Length }
-        let content = ChunkList()
-        content.PushSize()
+        let falignment = int32 pe.NTSpecificFields.FileAlignment
+        let content = LinkedList<byte[]>()
+        let headers = ChunkWriter(Array.zeroCreate falignment |> content.AddFirst)
 
-        let headers = content.AddFirst(Array.zeroCreate<byte> info.FileAlignment) |> ChunkWriter
+        // Since information about sections is needed in the header, the
+        // sections are written first before appending them after the headers.
+        ChunkWriter(content.Last, falignment, falignment) |> sections info
 
-        // Since information about sections is needed in the header,
-        // we write the sections before appending them after the headers.
-        sections info content
-
-        // TODO: Implement writing of headers by writing directly to the underlying array of the first chunk, instead of using a writer.
-        // This would require integer writing (WriteU4, WriteU8, etc.) functions to be moved to an extension class.
         headers.WriteBytes Magic.DosStub
         headers.WriteBytes Magic.PESignature
         coffHeader pe headers
@@ -242,28 +230,25 @@ let write (pe: PEFile) =
             headers.WriteU2 0us // NumberOfLineNumbers
             headers.WriteU4 header.Characteristics
 
-        content
+        content.Count * falignment, content
     with
     | ex -> InternalException ex |> raise
 
 /// Builds a byte array containing the Portable Executable file.
 let toArray pe =
-    let content = write pe
-    let data = content.PopSize() |> int32 |> Array.zeroCreate<byte>
-    let mutable i = 0
-    for { Data = chunk } in content do
+    let size, content = write pe
+    let output = Array.zeroCreate<byte> size
+    let mutable offset = 0
+    for chunk in content do
+        let length = chunk.Length
         try
-            let length = chunk.Length
-            Span(chunk).CopyTo(Span(data, i, length))
-            i <- i + length
+            Span(chunk).CopyTo(Span(output, offset, length))
+            offset <- offset + length
         with
         | ex ->
             let msg =
-                sprintf
-                    "Unable to copy chunk of length %i to offset %i."
-                    chunk.Length
-                    i
+                sprintf "Unable to copy chunk of length %i to offset %i." length offset
             InvalidOperationException(msg, ex) |> raise
-    data
+    output
 
 // TODO: Add toStream and toImmutableArray functions.

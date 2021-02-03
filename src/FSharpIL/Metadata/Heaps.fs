@@ -26,7 +26,7 @@ module internal HeapExtensions =
     type IHeap<'T> with
         member this.IndexSize = if this.ByteLength > MaxSmallIndex then 4 else 2
 
-        member this.WriteIndex(item, writer: ChunkWriter) =
+        member this.WriteIndex(item, writer: ChunkWriterOld) =
             let i = this.IndexOf item
             if this.IndexSize = 4
             then writer.WriteU4 i
@@ -154,15 +154,15 @@ module internal Heap =
         guids.Add metadata.Module.Mvid |> ignore
         guids
 
-    let writeStrings (strings: IHeap<string>) (content: ChunkList) =
-        let writer = ChunkWriter.After(content.Tail.Value, int32 strings.ByteLength)
+    let writeStrings (strings: IHeap<string>) (content: ChunkListOld) =
+        let writer = ChunkWriterOld.After(content.Tail.Value, int32 strings.ByteLength)
         writer.WriteU1 0uy
         for str in strings do
             Encoding.UTF8.GetBytes str |> writer.WriteBytes
             writer.WriteU1 0uy
 
-    let writeGuid (guids: IHeap<Guid>) (content: ChunkList) =
-        let writer = ChunkWriter.After(content.Tail.Value, int32 guids.ByteLength)
+    let writeGuid (guids: IHeap<Guid>) (content: ChunkListOld) =
+        let writer = ChunkWriterOld.After(content.Tail.Value, int32 guids.ByteLength)
         for guid in guids do
             guid.ToByteArray() |> writer.WriteBytes
 
@@ -201,7 +201,7 @@ type private HeapCollection<'Key when 'Key : equality> internal (capacity: int32
     // TODO: Make an HeapCollectonEnumerator struct?
     member _.GetEnumerator() = ArraySegment(items, 0, lookup.Count).GetEnumerator() :> IEnumerator<_>
 
-    member this.WriteRawIndex(i, writer: ChunkWriter) =
+    member this.WriteRawIndex(i, writer: ChunkWriterOld) =
         if this.IndexSize = 4
         then writer.WriteU4 i
         else writer.WriteU2 i
@@ -229,7 +229,7 @@ module private WriterExtensions =
     [<Literal>]
     let MaxCompressedUnsigned = 0x1FFF_FFFFu
 
-    type ChunkWriter with
+    type ChunkWriterOld with
         /// <summary>Writes an unsigned compressed integer in big-endian order (II.23.2).</summary>
         /// <exception cref="System.ArgumentException">The <paramref name="value"/> is greater than the maximum compressed unsigned integer.</exception>
         member this.WriteCompressed(value: uint32) =
@@ -366,7 +366,7 @@ type internal BlobHeap internal (metadata: CliMetadata) =
         + attributes.Count
     member _.IndexSize = last.IndexSize
 
-    member private _.WriteIndex(i: uint32, writer: ChunkWriter) = last.WriteRawIndex(i, writer)
+    member private _.WriteIndex(i: uint32, writer: ChunkWriterOld) = last.WriteRawIndex(i, writer)
 
     member this.WriteEmpty writer = this.WriteIndex(0u, writer)
     member this.WriteIndex(signature: MethodDefSignature, writer) = this.WriteIndex(this.IndexOf signature, writer)
@@ -380,9 +380,9 @@ type internal BlobHeap internal (metadata: CliMetadata) =
             |> Option.defaultValue 0u
         this.WriteIndex(index, writer)
 
-    member _.WriteHeap(content: ChunkList) =
+    member _.WriteHeap(content: ChunkListOld) =
         // TODO: Figure out how big chunks should be, or calculate sizes of all blobs beforehand.
-        let writer = ChunkWriter.After(content.Tail.Value, 32)
+        let writer = ChunkWriterOld.After(content.Tail.Value, 32)
         writer.WriteU1 0uy // Empty
 
         // Field

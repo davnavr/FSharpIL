@@ -3,11 +3,11 @@
 open System.Collections.Generic
 
 [<ReferenceEquality; NoComparison>]
-type internal Chunk =
+type internal ChunkOld =
     { Data: byte[]
-      List: ChunkList
-      mutable next: Chunk option
-      mutable previous: Chunk option }
+      List: ChunkListOld
+      mutable next: ChunkOld option
+      mutable previous: ChunkOld option }
 
     member this.Next =
         if this.List.Tail = Some this
@@ -18,13 +18,13 @@ type internal Chunk =
         then None
         else this.previous
 
-type internal ChunkListEnumerator =
+type internal ChunkListEnumeratorOld =
     struct
-        val mutable private current: Chunk option
+        val mutable private current: ChunkOld option
         val mutable private init: bool
-        val private list: ChunkList
+        val private list: ChunkListOld
 
-        new(list: ChunkList) =
+        new(list: ChunkListOld) =
             { current = list.Head
               init = false
               list = list }
@@ -48,7 +48,7 @@ type internal ChunkListEnumerator =
             this.init <- false
             this.current <- this.list.Head
 
-        interface IEnumerator<Chunk> with
+        interface IEnumerator<ChunkOld> with
             member this.Current = this.Current
             member this.Current = this.Current :> obj
             member this.MoveNext() = this.MoveNext()
@@ -57,38 +57,9 @@ type internal ChunkListEnumerator =
     end
 
 [<Sealed>]
-type private SizeStack() =
-    let mutable sizes = Array.zeroCreate<uint32> 1
-    let mutable i = -1
-
-    member _.Count = i + 1
-
-    member _.Head
-        with get() =
-            if i < 0 then
-                sprintf "Unable to retrieve size, the stack is empty." |> invalidOp
-            sizes.[i]
-        and set value = sizes.[i] <- value
-
-    member this.Push() =
-        if i >= sizes.Length - 1 then
-            let old = sizes
-            sizes <- Array.zeroCreate<uint32>(sizes.Length * 2)
-            Array.blit old 0 sizes 0 old.Length
-        i <- i + 1
-        this.Head <- 0u
-
-    member this.Pop() =
-        if i < 0 then invalidOp "The size stack was empty."
-        let size = this.Head
-        i <- i - 1
-        if i >= 0 then this.Head <- this.Head + size
-        size
-
-[<Sealed>]
-type internal ChunkList () =
+type internal ChunkListOld () =
     let sizes = SizeStack()
-    let mutable head: Chunk option = None
+    let mutable head: ChunkOld option = None
     let mutable count = 0u
 
     member _.Count: uint32 = count
@@ -103,7 +74,7 @@ type internal ChunkList () =
           next = next
           previous = prev }
 
-    member this.AddAfter(chunk: Chunk, data: byte[]) =
+    member this.AddAfter(chunk: ChunkOld, data: byte[]) =
         if chunk.List <> this then
             "The chunk must belong to the current list" |> invalidArg (nameof chunk)
         let toAppend = this.CreateChunk(data, chunk.next, Some chunk)
@@ -149,8 +120,8 @@ type internal ChunkList () =
         if sizes.Count > 0 then
             sizes.Head <- sizes.Head + uint32 by
 
-    member this.GetEnumerator() = new ChunkListEnumerator(this)
+    member this.GetEnumerator() = new ChunkListEnumeratorOld(this)
 
-    interface IEnumerable<Chunk> with
+    interface IEnumerable<ChunkOld> with
         member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
         member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator

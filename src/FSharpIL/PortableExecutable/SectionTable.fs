@@ -4,10 +4,8 @@ open System.Collections.Immutable
 
 open FSharpIL.Metadata
 
-type RawSectionData = Lazy<byte[]>
-
 type SectionData =
-    | RawData of RawSectionData
+    | RawData of (unit -> byte[])
     // First 8 bytes of the .text section
     | ClrLoaderStub
     | CliHeader of CliMetadata
