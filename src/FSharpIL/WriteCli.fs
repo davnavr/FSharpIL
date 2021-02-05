@@ -26,7 +26,7 @@ type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * ui
         let index, tag = indexer item
         (index <<< n) ||| tag
     
-    member this.WriteIndex(item, writer: ChunkWriterOld) =
+    member this.WriteIndex(item, writer: ChunkWriter) =
         let index = this.IndexOf item
         if large then writer.WriteU4 index else writer.WriteU2 index
 
@@ -43,7 +43,7 @@ type CliInfo =
       StringsStream: Heap<string>
       // US
       GuidStream: Heap<Guid>
-      BlobStream: BlobHeap }
+      mutable BlobStream: BlobHeap }
 
 /// Writes the CLI header (II.25.3.3).
 let header info (writer: ChunkWriter) =
@@ -82,6 +82,213 @@ let bodies (info: CliInfo) (writer: ChunkWriter) =
 
 /// Writes the contents of the #~ stream (II.24.2.6).
 let tables (info: CliInfo) (writer: ChunkWriter) =
+    writer.WriteU4 0u // Reserved
+    writer.WriteU1 2uy // MajorVersion
+    writer.WriteU1 0uy // MinorVersion
+
+    do // HeapSizes
+        let mutable bits = 0uy
+        if info.StringsStream.IndexSize = 4 then bits <- bits ||| 1uy
+        if info.GuidStream.IndexSize = 4 then bits <- bits ||| 2uy
+        if info.BlobStream.IndexSize = 4 then bits <- bits ||| 4uy
+        writer.WriteU1 bits
+
+    writer.WriteU1 1uy // Reserved
+    writer.WriteU8 info.Cli.Valid
+    writer.WriteU8 0UL // Sorted
+
+    let tables = info.Cli
+
+    // Rows
+    for row in tables.RowCounts do
+        writer.WriteU4 row
+
+    // Tables
+
+    // Calculate how big indices and coded indices should be.
+    let resolutionScope =
+        // TODO: Include ModuleRef table when determine how big a ResolutionScope should be.
+        let total =
+            1 // Module
+            + tables.AssemblyRef.Count
+            + tables.TypeRef.Count
+        function
+        | ResolutionScope.AssemblyRef assm -> tables.AssemblyRef.IndexOf assm, 2u
+        | bad -> failwithf "Unsupported resolution scope %A" bad
+        |> codedIndex total 2
+
+    let extends =
+        // TODO: Include TypeSpec table.
+        let total = tables.TypeDef.Count + tables.TypeRef.Count
+        function
+        | Extends.AbstractClass { TypeHandle = tdef }
+        | Extends.ConcreteClass { TypeHandle = tdef } -> tables.TypeDef.IndexOf tdef, 0u
+        | Extends.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
+        | bad -> failwithf "Unsupported extends %A" bad
+        |> codedIndex total 2
+
+    let memberRefParent =
+        // TODO: Include ModuleRef and TypeSpec tables.
+        let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.MethodDef.Count
+        function
+        | MemberRefParent.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
+        |> codedIndex total 3
+
+    let customAttriuteParent =
+        let total =
+            tables.MethodDef.Count
+            + tables.Field.Count
+            + tables.TypeRef.Count
+            + tables.TypeDef.Count
+            + tables.Param.Length
+            // InterfaceImpl
+            + tables.MemberRef.Count
+            + 1 // Module
+            // Permission
+            // Property
+            // Event
+            // StandAloneSig
+            // ModuleRef
+            // TypeSpec
+            + if tables.Assembly.IsSome then 1 else 0
+            + tables.AssemblyRef.Count
+            // File
+            // ExportedType
+            // ManifestResource
+            // GenericParam
+            // GenericParamConstraint
+            // MethodSpec
+        function
+        | CustomAttributeParent.Assembly _ -> 1u, 14u
+        | bad -> failwithf "Unsupported custom attribute parent %A" bad
+        |> codedIndex total 5
+
+    let customAttributeType =
+        let total = tables.MethodDef.Count + tables.MemberRef.Count
+        function
+        | CustomAttributeType.MemberRef mref -> tables.MemberRef.IndexOf mref.Handle, 3u
+        |> codedIndex total 3
+
+    // Module (0x00)
+    writer.WriteU2 0us // Generation
+    info.StringsStream.WriteStringIndex(tables.Module.Name, writer)
+    info.GuidStream.WriteIndex(tables.Module.Mvid, writer)
+    info.GuidStream.WriteZero writer // EncId
+    info.GuidStream.WriteZero writer // Encbaseid
+
+    // TypeRef (0x01)
+    for tref in tables.TypeRef.Items do
+        resolutionScope.WriteIndex(tref.ResolutionScope, writer)
+        info.StringsStream.WriteStringIndex(tref.TypeName, writer)
+        info.StringsStream.WriteIndex(tref.TypeNamespace, writer)
+
+    // TypeDef (0x02)
+    if tables.TypeDef.Count > 0 then
+        let mutable field = 1u
+        let mutable method = 1u
+
+        for tdef in tables.TypeDef.Items do
+            writer.WriteU4 tdef.Flags
+            info.StringsStream.WriteStringIndex(tdef.TypeName, writer)
+            info.StringsStream.WriteIndex(tdef.TypeNamespace, writer)
+            extends.WriteIndex(tdef.Extends, writer)
+
+            // Field
+            let field' = if tdef.FieldList.IsEmpty then 0u else field
+            field <- uint32 tdef.FieldList.Length
+            tables.Field.WriteSimpleIndex(field', writer)
+
+            // Method
+            let method' = if tdef.MethodList.IsEmpty then 0u else method
+            method <- uint32 tdef.MethodList.Length
+            tables.Field.WriteSimpleIndex(method', writer)
+
+    // Field (0x04)
+    for row in tables.Field.Items do
+        writer.WriteU2 row.Flags
+        info.StringsStream.WriteStringIndex(row.Name, writer)
+        invalidOp "TODO: Write index for field signatures."
+
+    // MethodDef (0x06)
+    if tables.MethodDef.Count > 0 then
+        let mutable param = 1u
+
+        for method in tables.MethodDef.Items do
+            writer.WriteU4 0u // RVA // TODO: Write the RVA to the method body.
+            writer.WriteU2 method.ImplFlags
+            writer.WriteU2 method.Flags
+            info.StringsStream.WriteStringIndex(method.Name, writer)
+            info.BlobStream.WriteIndex(method.Signature, writer) // Signature
+
+            let param' = if method.ParamList.IsEmpty then 0u else param // Param
+            param <- param + uint32 method.ParamList.Length
+            // TODO: Since both the Param table (which is an ImmutableArray) and the ImmutableTable class have an implementation for writing an index, maybe make it an extension method?
+            // If doing the above, maybe add an extension member to allow retrieval of IndexSize as well.
+            if tables.Param.Length < 65536
+            then writer.WriteU2 param'
+            else writer.WriteU4 param'
+
+    // Param (0x08)
+    for sequence, row in tables.Param do
+        writer.WriteU2 row.Flags.Flags
+        writer.WriteU2(sequence + 1)
+        info.StringsStream.WriteIndex(row.ParamName, writer)
+
+
+
+
+    // MemberRef (0x0A)
+    for row in tables.MemberRef.Items do
+        memberRefParent.WriteIndex(row.Class, writer)
+        info.StringsStream.WriteStringIndex(row.MemberName, writer)
+
+        // Signature
+        match row with
+        | MethodRef method -> info.BlobStream.WriteIndex(method.Signature, writer)
+
+
+
+
+    // CustomAttribute (0x0C)
+    for row in tables.CustomAttribute do
+        customAttriuteParent.WriteIndex(row.Parent, writer)
+        customAttributeType.WriteIndex(row.Type, writer)
+        info.BlobStream.WriteIndex(row.Value, writer)
+
+
+
+
+    // Assembly (0x20)
+    if tables.Assembly.IsSome then
+        let assembly = tables.Assembly.Value
+        writer.WriteU4 0u // TODO: Determine what HashAlgId should be.
+        writer.WriteU2 assembly.Version.Major
+        writer.WriteU2 assembly.Version.Minor
+        writer.WriteU2 (max assembly.Version.Build 0)
+        writer.WriteU2 (max assembly.Version.Revision 0)
+        writer.WriteU4 0u // Flags // TODO: Determine what flags an assembly should have.
+        info.BlobStream.WriteEmpty writer // PublicKey // TODO: Determine how to write the PublicKey into a blob.
+        info.StringsStream.WriteStringIndex(assembly.Name, writer)
+        info.StringsStream.WriteStringIndex(assembly.Culture, writer)
+
+    // AssemblyRef (0x23)
+    for row in tables.AssemblyRef.Items do
+        writer.WriteU2 row.Version.Major
+        writer.WriteU2 row.Version.Minor
+        writer.WriteU2 row.Version.Build
+        writer.WriteU2 row.Version.Revision
+        writer.WriteU4 row.Flags
+        info.BlobStream.WriteEmpty writer // PublicKeyOrToken // TODO: Figure out how to write the PublicKeyOrToken into a blob.
+        info.StringsStream.WriteStringIndex(row.Name, writer)
+        info.StringsStream.WriteStringIndex(row.Culture, writer)
+        info.BlobStream.WriteEmpty writer // HashValue // TODO: Figure out how to write the HashValue into a blob.
+
+    // NestedClass (0x29)
+    for row in tables.NestedClass do
+        tables.TypeDef.WriteSimpleIndex(row.NestedClass, writer)
+        tables.TypeDef.WriteSimpleIndex(row.EnclosingClass, writer)
+
+    // TODO: Write more tables.
     ()
 
 /// Writes a stream header in the CLI metadata root (II.24.2.2).
@@ -114,46 +321,51 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     writer.WriteBytes version
     writer.WriteU2 0us // Flags
 
-    do // Streams
-        let mutable count = 3u// #~, #Strings, #GUID
-        // TODO: Include #US stream in stream count.
-        if info.BlobStream.Count > 0 then count <- count + 1u
-
-        writer.WriteU2 count
+    // TODO: Write stream count after all streams have been written.
+    // Streams
+    let streams = writer.CreateWriter()
+    writer.SkipBytes 2
 
     let mutable offset = writer.Size
 
     // Since the ECMA-335 specification doesn't specify the order of the streams,
-    // this implementation can get away with writing the #~ stream last.
+    // this implementation can get away with writing the #Blob stream before the #~ stream.
+    info.BlobStream <- Heap.blob info.Cli
 
     // Stream headers
+    let blob =
+        if info.BlobStream.SignatureCount > 0
+        then streamHeader writer "#Blob\000\000\000"B
+        else Unchecked.defaultof<ChunkWriter>
+    let metadata = streamHeader writer "#~\000\000"B
     let strings = streamHeader writer "#Strings\000\000\000\000"B
     let us =
         // if info. // TODO: Write #US stream header
         // then streamHeader "#US\000"B
         Unchecked.defaultof<ChunkWriter>
     let guid = streamHeader writer "#GUID\000\000\000"B
-    let blob =
-        if info.BlobStream.Count > 0
-        then streamHeader writer "#Blob\000\000\000"B
-        else Unchecked.defaultof<ChunkWriter>
-    let metadata = streamHeader writer "#~\000\000"B
 
-    // #Strings
-    stream &offset strings writer (invalidOp "Write strings")
-
-    do // #US
-        // if info.
-        ()
-
-    // #GUID
-    stream &offset guid writer (invalidOp "Write guids")
-
+    // #Blob
     if blob <> Unchecked.defaultof<ChunkWriter> then
-        stream &offset blob writer (invalidOp "Write blobs")
+        stream &offset blob writer (Heap.writeBlob info.BlobStream info.Cli)
 
     // #~
     stream &offset metadata writer (tables info)
+
+    // #Strings
+    stream &offset strings writer (Heap.writeStrings info.StringsStream)
+
+    // #US
+
+    // #GUID
+    stream &offset guid writer (Heap.writeGuid info.GuidStream)
+
+    do // Stream count
+        let mutable count = 3u// #~, #Strings, #GUID
+        // TODO: Include #US stream in stream count.
+        if not info.BlobStream.IsEmpty then count <- count + 1u
+
+        streams.WriteU2 count
 
 /// Writes the entirety of the CLI metadata to the specified writer.
 let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
@@ -165,7 +377,7 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
           StrongNameSignature = Unchecked.defaultof<ChunkWriter>
           StringsStream = Heap.strings cli
           GuidStream = Heap.guid cli
-          BlobStream = BlobHeap cli }
+          BlobStream = Unchecked.defaultof<BlobHeap> }
     let mutable rva = headerRva
 
     header info writer
