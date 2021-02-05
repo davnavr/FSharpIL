@@ -926,6 +926,8 @@ type MethodRefSignature =
       Parameters: ImmutableArray<ParamItem>
       VarArgParameters: ImmutableArray<ParamItem> }
 
+    member this.ParamCount = uint32 (this.Parameters.Length + this.VarArgParameters.Length)
+
     member internal this.CallingConventions =
         let mutable flags = CallingConvention.Default
         if this.HasThis then flags <- flags ||| CallingConvention.HasThis

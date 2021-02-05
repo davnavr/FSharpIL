@@ -43,7 +43,7 @@ type CliInfo =
       StringsStream: Heap<string>
       // US
       GuidStream: Heap<Guid>
-      mutable BlobStream: BlobHeap }
+      BlobStream: BlobHeap }
 
 /// Writes the CLI header (II.25.3.3).
 let header info (writer: ChunkWriter) =
@@ -301,15 +301,6 @@ let streamHeader (writer: ChunkWriter) name =
     name'.WriteBytes name
     header
 
-let stream (offset: byref<uint32>) (header: ChunkWriter) (writer: ChunkWriter) content =
-    let heap = writer.CreateWriter()
-    content writer
-    // TODO: Align to four-byte boundary.
-    let size = heap.Size
-    header.WriteU4 offset
-    header.WriteU4 size
-    offset <- offset + size
-
 /// Writes the CLI metadata root (II.24.2.1) and the stream headers (II.24.2.2).
 let root (info: CliInfo) (writer: ChunkWriter) =
     let version = MetadataVersion.toArray info.Cli.MetadataVersion
@@ -328,10 +319,6 @@ let root (info: CliInfo) (writer: ChunkWriter) =
 
     let mutable offset = writer.Size
 
-    // Since the ECMA-335 specification doesn't specify the order of the streams,
-    // this implementation can get away with writing the #Blob stream before the #~ stream.
-    info.BlobStream <- Heap.blob info.Cli
-
     // Stream headers
     let blob =
         if info.BlobStream.SignatureCount > 0
@@ -345,31 +332,40 @@ let root (info: CliInfo) (writer: ChunkWriter) =
         Unchecked.defaultof<ChunkWriter>
     let guid = streamHeader writer "#GUID\000\000\000"B
 
-    // #Blob
-    if blob <> Unchecked.defaultof<ChunkWriter> then
-        stream &offset blob writer (Heap.writeBlob info.BlobStream info.Cli)
+    let inline stream (header: ChunkWriter) content =
+        let heap = writer.CreateWriter()
+        content writer
+        // TODO: Align to four-byte boundary.
+        let size = heap.Size
+        header.WriteU4 offset
+        header.WriteU4 size
+        offset <- offset + size
 
     // #~
-    stream &offset metadata writer (tables info)
+    stream metadata (tables info)
 
     // #Strings
-    stream &offset strings writer (Heap.writeStrings info.StringsStream)
+    stream strings (Heap.writeStrings info.StringsStream.Count info.Cli)
 
     // #US
 
     // #GUID
-    stream &offset guid writer (Heap.writeGuid info.GuidStream)
+    stream guid (Heap.writeGuid info.Cli)
+
+    // #Blob
+    if blob <> Unchecked.defaultof<ChunkWriter> then
+        stream blob (Heap.writeBlob info.BlobStream info.Cli)
 
     do // Stream count
-        let mutable count = 3u// #~, #Strings, #GUID
+        let mutable count = 3u // #~, #Strings, #GUID
         // TODO: Include #US stream in stream count.
-        if not info.BlobStream.IsEmpty then count <- count + 1u
+        if info.BlobStream.SignatureCount > 0 then count <- count + 1u
 
         streams.WriteU2 count
 
 /// Writes the entirety of the CLI metadata to the specified writer.
 let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
-    let writer = section.CreateWriter()
+    let writer = section.CreateWriter() // NOTE: How to modify size of (section: ChunkWriter)?
     let info =
         { HeaderRva = headerRva
           Cli = cli
@@ -377,7 +373,7 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
           StrongNameSignature = Unchecked.defaultof<ChunkWriter>
           StringsStream = Heap.strings cli
           GuidStream = Heap.guid cli
-          BlobStream = Unchecked.defaultof<BlobHeap> }
+          BlobStream = Heap.blob cli }
     let mutable rva = headerRva
 
     header info writer
@@ -401,3 +397,6 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
         writer.ResetSize()
         root info writer
         info.Metadata.WriteU4 writer.Size
+        rva <- rva + writer.Size
+
+    int32 (rva - headerRva) |> section.SkipBytes

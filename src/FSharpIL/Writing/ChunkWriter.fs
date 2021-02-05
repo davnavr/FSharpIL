@@ -27,10 +27,13 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, default
     member _.Position = pos
     member _.Size = size
 
+    member private this.NextChunk() =
+        current <- current.List.AddAfter(current, Array.zeroCreate<byte> defaultCapacity)
+        pos <- 0
+
     member this.WriteU1 value =
         if pos >= current.Value.Length then
-            current <- current.List.AddAfter(current, Array.zeroCreate<byte> defaultCapacity)
-            pos <- 0
+            this.NextChunk()
         this.Chunk.Value.[pos] <- value
         pos <- pos + 1
         size <- size + 1u
@@ -68,7 +71,7 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, default
 
     member private this.HasFreeBytes length = this.FreeBytes >= length
 
-    member this.CreateWriter() =
+    member _.CreateWriter() =
         ChunkWriter(current, pos, defaultCapacity)
 
     member this.WriteBytes(bytes: byte[]) =
@@ -83,12 +86,22 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, default
     member this.WriteBytes(bytes: seq<byte>) = Seq.iter this.WriteU1 bytes
 
     member this.SkipBytes count =
-        if count <= 0 then
-            ()
-        elif count <= this.FreeBytes then
+        if count < 0 then
+            invalidArg (nameof count) "Cannot skip a negative number of bytes."
+
+        size <- size + uint32 count
+
+        if count <= this.FreeBytes then
             pos <- pos + count
         else
-            invalidOp "TODO: Implement skipping of bytes in multiple chunks."
+            let mutable remaining = count
+            while remaining > 0 do
+                if this.FreeBytes <= 0 then
+                    this.NextChunk()
+
+                let skipped = min this.FreeBytes remaining
+                pos <- pos + skipped
+                remaining <- remaining - skipped
 
     member _.MoveToEnd() =
         let length = current.Value.Length
