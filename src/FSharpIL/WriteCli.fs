@@ -3,8 +3,6 @@
 open FSharp.Core.Operators.Checked
 
 open System
-open System.Collections.Generic
-open System.Text
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Heaps
@@ -278,7 +276,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         writer.WriteU2 row.Version.Build
         writer.WriteU2 row.Version.Revision
         writer.WriteU4 row.Flags
-        info.BlobStream.WriteEmpty writer // PublicKeyOrToken // TODO: Figure out how to write the PublicKeyOrToken into a blob.
+        info.BlobStream.WriteIndex(row.PublicKeyOrToken, writer)
         info.StringsStream.WriteStringIndex(row.Name, writer)
         info.StringsStream.WriteStringIndex(row.Culture, writer)
         info.BlobStream.WriteEmpty writer // HashValue // TODO: Figure out how to write the HashValue into a blob.

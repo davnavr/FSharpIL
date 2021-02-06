@@ -95,12 +95,14 @@ module internal Heap =
               MethodRef = Dictionary<_, _> metadata.MemberRef.Count
 
               CustomAttribute = Dictionary<_, _> metadata.CustomAttribute.Length
+              PublicKeyTokens = Dictionary<_, _> metadata.AssemblyRef.Count
               ByteLength = 1u }
         let inline index (dict: Dictionary<_, _>) key size =
-            let i = blob.ByteLength
-            let index = { BlobIndex.Index = i; BlobIndex.Size = size }
-            blob.ByteLength <- blob.ByteLength + index.TotalSize
-            dict.Item <- key, index
+            if size > 0u then
+                let i = blob.ByteLength
+                let index = { BlobIndex.Index = i; BlobIndex.Size = size }
+                blob.ByteLength <- blob.ByteLength + index.TotalSize
+                dict.Item <- key, index
 
         CliMetadata.iterBlobs
             (fun signature ->
@@ -112,6 +114,14 @@ module internal Heap =
             (fun signature ->
                 if not (blob.CustomAttribute.ContainsKey signature) then
                     BlobSize.ofCustomAttribute signature |> index blob.CustomAttribute signature)
+            (fun token ->
+                if not (blob.PublicKeyTokens.ContainsKey token) then
+                    match token with
+                    | _ when false -> 0u
+                    | PublicKey key -> uint32 key.Length
+                    | PublicKeyToken _ -> 8u
+                    | NoPublicKey -> 0u
+                    |> index blob.PublicKeyTokens token)
             metadata
 
         blob
@@ -136,6 +146,7 @@ module internal Heap =
         let methodDef = HashSet<_> blobs.MethodDef.Count
         let methodRef = HashSet<_> blobs.MethodRef.Count
         let attributes = HashSet<_> blobs.CustomAttribute.Count
+        let publicKeyTokens = HashSet<_> blobs.PublicKeyTokens.Count
 
         writer.WriteU1 0uy // Empty blob
 
@@ -172,6 +183,20 @@ module internal Heap =
                     writer.WriteU2 signature.NamedArg.Length // NumNamed
                     for arg in signature.NamedArg do
                         failwithf "TODO: Implement writing of named arguments for custom attributes")
+            (fun token ->
+                if publicKeyTokens.Add token then
+                    match token with
+                    | PublicKeyToken(b1, b2, b3, b4, b5, b6, b7, b8) ->
+                        writer.WriteBlobSize 8u
+                        writer.WriteU1 b1
+                        writer.WriteU1 b2
+                        writer.WriteU1 b3
+                        writer.WriteU1 b4
+                        writer.WriteU1 b5
+                        writer.WriteU1 b6
+                        writer.WriteU1 b7
+                        writer.WriteU1 b8
+                    | _ -> failwithf "Invalid public key or token %A" token)
             metadata
 
 type internal Heap<'T when 'T : equality> = Heap.Lookup<'T>

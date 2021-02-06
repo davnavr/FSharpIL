@@ -147,7 +147,12 @@ module CliMetadata =
             string assembly.Name |> action
             string assembly.Culture |> action
 
-    let inline internal iterBlobs methodDef methodRef customAttribute (metadata: CliMetadata) =
+    let inline internal iterBlobs
+            methodDef
+            methodRef
+            customAttribute
+            publicKeyOrToken
+            (metadata: CliMetadata) =
         for method in metadata.MethodDef.Items do
             methodDef method.Signature
 
@@ -157,5 +162,8 @@ module CliMetadata =
 
         for { Value = signature } in metadata.CustomAttribute do
             Option.iter customAttribute signature
+
+        for { PublicKeyOrToken = token } in metadata.AssemblyRef.Items do
+            publicKeyOrToken token
 
         ()
