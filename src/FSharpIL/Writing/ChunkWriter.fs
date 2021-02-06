@@ -104,6 +104,11 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, default
                 pos <- pos + (int32 skipped)
                 remaining <- remaining - skipped
 
+    member this.AlignTo alignment =
+        let pos' = uint32 pos
+        let rounded = FSharpIL.Round.upTo alignment pos'
+        this.SkipBytes(rounded - pos')
+
     /// Moves the writer to the end of the current chunk.
     member _.MoveToEnd() =
         let length = current.Value.Length

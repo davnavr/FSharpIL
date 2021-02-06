@@ -3,6 +3,7 @@
 open FSharp.Core.Operators.Checked
 
 open System
+open System.Collections.Generic
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Heaps
@@ -38,6 +39,7 @@ type CliInfo =
       mutable Metadata: ChunkWriter
       /// Specifies the RVA and size of the "hash data for this PE file" (II.25.3.3).
       mutable StrongNameSignature: ChunkWriter
+      MethodBodies: Dictionary<MethodDef, uint32>
       StringsStream: Heap<string>
       // US
       GuidStream: Heap<Guid>
@@ -75,8 +77,10 @@ let header info (writer: ChunkWriter) =
     writer.WriteU8 0UL // ManagedNativeHeader
 
 /// Writes the method bodies.
-let bodies (info: CliInfo) (writer: ChunkWriter) =
-    ()
+let bodies rva (info: CliInfo) (writer: ChunkWriter) =
+    for method in info.Cli.MethodDef.Items do
+        let body = method.Body
+        ()
 
 /// Writes the contents of the #~ stream (II.24.2.6).
 let tables (info: CliInfo) (writer: ChunkWriter) =
@@ -334,10 +338,10 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     let inline stream (header: ChunkWriter) content =
         let heap = writer.CreateWriter()
         content heap
-        // TODO: Align to four-byte boundary.
-        let size = heap.Size
         header.WriteU4 offset
-        header.WriteU4 size
+        header.WriteU4 heap.Size
+        heap.AlignTo 4u
+        let size = heap.Size
         offset <- offset + size
         writer.SkipBytes size
 
@@ -371,6 +375,7 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
           Cli = cli
           Metadata = Unchecked.defaultof<ChunkWriter>
           StrongNameSignature = Unchecked.defaultof<ChunkWriter>
+          MethodBodies = Dictionary<_, _> cli.MethodDef.Count
           StringsStream = Heap.strings cli
           GuidStream = Heap.guid cli
           BlobStream = Heap.blob cli }
@@ -383,13 +388,14 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
         info.StrongNameSignature.WriteU4 rva
         writer.ResetSize()
         writer.WriteBytes(cli.Header.StrongNameSignature)
-        let size = writer.Size
-        info.StrongNameSignature.WriteU4 size
-        rva <- rva + size
+        info.StrongNameSignature.WriteU4 writer.Size
+        writer.AlignTo 4u // TODO: See if alignment is necessary here.
+        rva <- rva + writer.Size
 
     do // Method Bodies
         writer.ResetSize()
-        bodies info writer
+        bodies rva info writer
+        writer.AlignTo 4u
         rva <- rva + writer.Size
 
     do // CLI metadata
