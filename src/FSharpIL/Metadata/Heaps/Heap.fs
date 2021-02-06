@@ -95,9 +95,9 @@ module internal Heap =
               ByteLength = 1u }
         let inline index (dict: Dictionary<_, _>) key size =
             let i = blob.ByteLength
-            let size' = (BlobSize.ofUnsigned size) + size
-            blob.ByteLength <- blob.ByteLength + size'
-            dict.Item <- key, { BlobIndex.Index = i; BlobIndex.Size = size' }
+            let index = { BlobIndex.Index = i; BlobIndex.Size = size }
+            blob.ByteLength <- index.TotalSize
+            dict.Item <- key, index
 
         CliMetadata.iterBlobs
             (fun signature ->
@@ -129,29 +129,46 @@ module internal Heap =
     let writeGuid (metadata: CliMetadata) (writer: ChunkWriter) =
         metadata.Module.Mvid.ToByteArray() |> writer.WriteBytes
 
-    let writeBlob (blob: BlobHeap) (metadata: CliMetadata) (writer: ChunkWriter) =
-        let mutable i = 1u
-        writer.WriteU1 0uy // Empty blob?
-        // TODO: Figure out how indices into #Blob are formatted?
+    let writeBlob (blobs: BlobHeap) (metadata: CliMetadata) (writer: ChunkWriter) =
+        let methodDef = HashSet<_> blobs.MethodDef.Count
+        let methodRef = HashSet<_> blobs.MethodRef.Count
+        let attributes = HashSet<_> blobs.CustomAttribute.Count
 
-        // TODO: Iterate through each signature and add it to the dictionaries after writing
+        writer.WriteU1 0uy // Empty blob
 
-        // Field
-        for methodDef in metadata.MethodDef.Items do
-            let signature = methodDef.Signature
-            if blob.MethodDef.ContainsKey signature |> not then
-                let size = writer.Size
-                writer.WriteU1 signature.Flags
-        
-                // match signature.CallingConventions with
-                // | MethodCallingConventions.Generic count -> invalidOp "TODO: Write number of generic parameters."
-        
-                writer.WriteCompressed signature.Parameters.Length // ParamCount
-                writer.WriteRetType signature.ReturnType
-                writer.WriteParameters signature.Parameters
-                i <- i + writer.Size - size
-                blob.MethodDef.Item <- signature, (i |> invalidOp "TODO: Fancy index calculations.")
+        CliMetadata.iterBlobs
+            (fun signature ->
+                if methodDef.Add signature then
+                    writer.WriteBlobSize blobs.MethodDef.[signature].Size
+                    writer.WriteU1 signature.Flags
 
-        ()
+                    // match signature.CallingConventions with
+                    // | MethodCallingConventions.Generic count -> invalidOp "TODO: Write number of generic parameters."
+
+                    writer.WriteCompressed signature.Parameters.Length // ParamCount
+                    writer.WriteRetType signature.ReturnType
+                    writer.WriteParameters signature.Parameters)
+            (fun signature ->
+                if methodRef.Add signature then
+                    writer.WriteBlobSize blobs.MethodRef.[signature].Index
+                    writer.WriteU1 signature.CallingConventions
+                    writer.WriteCompressed signature.Parameters.Length // ParamCount
+                    writer.WriteRetType signature.ReturnType
+                    writer.WriteParameters signature.Parameters
+                    // TODO: Write SENTINEL and extra parameters.
+                    if not signature.VarArgParameters.IsEmpty then
+                        failwith "TODO: Implement writing of VarArg parameters")
+            (fun signature ->
+                if attributes.Add signature then
+                    if signature.FixedArg.IsEmpty && signature.NamedArg.IsEmpty then
+                        invalidOp "Attributes without any fixed or named arguments should use the empty blob instead."
+                    writer.WriteBlobSize blobs.CustomAttribute.[signature].Size
+                    writer.WriteU2 1us // Prolog
+                    for arg in signature.FixedArg do
+                        writer.WriteFixedArg arg
+                    writer.WriteU2 signature.NamedArg.Length // NumNamed
+                    for arg in signature.NamedArg do
+                        failwithf "TODO: Implement writing of named arguments for custom attributes")
+            metadata
 
 type internal Heap<'T when 'T : equality> = Heap.Lookup<'T>

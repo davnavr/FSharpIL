@@ -12,6 +12,8 @@ type internal BlobIndex =
     { Index: uint32
       Size: uint32 }
 
+    member this.TotalSize = (BlobSize.ofUnsigned this.Size) + this.Size
+
 /// <summary>Represents the <c>#Blob</c> metadata stream (II.24.2.4).</summary>
 [<ReferenceEquality; NoComparison>]
 type internal BlobHeap =

@@ -30,6 +30,11 @@ type ChunkWriter with
             this.WriteU1 lsb
         | BlobSize.B1 -> this.WriteU1 value // Bit 7 remains clear
 
+    member this.WriteBlobSize(size: uint32) =
+        match BlobSize.ofUnsigned size with
+        | BlobSize.B1 -> this.WriteU1 size // Bit 7 remains clear
+        | _ -> failwith "TODO: Figure out how blob length is encoded in 2 or 4 bytes."
+
     member inline this.WriteCompressed value = this.WriteCompressed(uint32 value)
 
     member _.WriteCompressedSigned(value: int32) =

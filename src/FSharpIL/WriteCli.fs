@@ -367,7 +367,7 @@ let root (info: CliInfo) (writer: ChunkWriter) =
 
 /// Writes the entirety of the CLI metadata to the specified writer.
 let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
-    let writer = section.CreateWriter() // NOTE: How to modify size of (section: ChunkWriter)?
+    let writer = section.CreateWriter()
     let info =
         { HeaderRva = headerRva
           Cli = cli
