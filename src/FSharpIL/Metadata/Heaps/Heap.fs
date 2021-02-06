@@ -56,7 +56,10 @@ module internal Heap =
         let mutable size = 1u
 
         CliMetadata.iterStrings
-            (fun str ->
+            (function
+            | ""
+            | null -> ()
+            | str ->
                 if strings.TryAdd(str, size) then
                     size <- size + 1u + (Encoding.UTF8.GetByteCount str |> uint32))
             metadata
@@ -96,7 +99,7 @@ module internal Heap =
         let inline index (dict: Dictionary<_, _>) key size =
             let i = blob.ByteLength
             let index = { BlobIndex.Index = i; BlobIndex.Size = size }
-            blob.ByteLength <- index.TotalSize
+            blob.ByteLength <- blob.ByteLength + index.TotalSize
             dict.Item <- key, index
 
         CliMetadata.iterBlobs

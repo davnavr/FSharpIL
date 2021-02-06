@@ -137,12 +137,9 @@ let tests =
                         program
                 }
                 |> ValidationResult.get
-            let pe =
-                PEFile.ofMetadata IsExe tables
-                |> WritePE.toArray
-                |> ImmutableArray.Create<byte>
+            let pe = PEFile.ofMetadata IsExe tables |> WritePE.toArray
 
-            use reader = new PEReader(pe)
+            use reader = new PEReader(ImmutableArray.Create<byte> pe)
             let metadata = reader.GetMetadataReader()
 
             Expect.isNonEmpty metadata.TypeDefinitions "assembly should contain types"
