@@ -54,7 +54,7 @@ let header info (writer: ChunkWriter) =
 
     // MetaData
     info.Metadata <- writer.CreateWriter()
-    writer.SkipBytes 8
+    writer.SkipBytes 8u
 
     writer.WriteU4 info.Cli.HeaderFlags // Flags
     writer.WriteU4 0u // EntryPointToken // TODO: Figure out what this token value should be. Is an index into the MethodDef table allowed?
@@ -65,7 +65,7 @@ let header info (writer: ChunkWriter) =
 
     // StrongNameSignature
     info.StrongNameSignature <- writer.CreateWriter()
-    writer.SkipBytes 8
+    writer.SkipBytes 8u
 
     writer.WriteU8 0UL // CodeManagerTable
 
@@ -291,16 +291,6 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // TODO: Write more tables.
     ()
 
-/// Writes a stream header in the CLI metadata root (II.24.2.2).
-let streamHeader (writer: ChunkWriter) name =
-    if Array.length name % 4 <> 0 then
-        invalidArg (nameof name) "The length of the stream header name must be a multiple of four."
-    let header = writer.CreateWriter()
-    let name' = header.CreateWriter()
-    name'.SkipBytes 8
-    name'.WriteBytes name
-    header
-
 /// Writes the CLI metadata root (II.24.2.1) and the stream headers (II.24.2.2).
 let root (info: CliInfo) (writer: ChunkWriter) =
     let version = MetadataVersion.toArray info.Cli.MetadataVersion
@@ -312,34 +302,46 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     writer.WriteBytes version
     writer.WriteU2 0us // Flags
 
-    // TODO: Write stream count after all streams have been written.
     // Streams
     let streams = writer.CreateWriter()
-    writer.SkipBytes 2
+    writer.SkipBytes 2u
 
     let mutable offset = writer.Size
 
     // Stream headers
-    let blob =
-        if info.BlobStream.SignatureCount > 0
-        then streamHeader writer "#Blob\000\000\000"B
-        else Unchecked.defaultof<ChunkWriter>
-    let metadata = streamHeader writer "#~\000\000"B
-    let strings = streamHeader writer "#Strings\000\000\000\000"B
+    let inline streamHeader name =
+        if Array.length name % 4 <> 0 then
+            invalidArg (nameof name) "The length of the stream header name must be a multiple of four."
+        let header = writer.CreateWriter()
+        let name' = header.CreateWriter()
+        name'.SkipBytes 8u
+        name'.WriteBytes name
+        let size = name'.Size
+        writer.SkipBytes size
+        offset <- offset + size
+        header
+
+    let metadata = streamHeader "#~\000\000"B
+    let strings = streamHeader "#Strings\000\000\000\000"B
     let us =
         // if info. // TODO: Write #US stream header
         // then streamHeader "#US\000"B
         Unchecked.defaultof<ChunkWriter>
-    let guid = streamHeader writer "#GUID\000\000\000"B
+    let guid = streamHeader "#GUID\000\000\000"B
+    let blob =
+        if info.BlobStream.SignatureCount > 0
+        then streamHeader "#Blob\000\000\000"B
+        else Unchecked.defaultof<ChunkWriter>
 
     let inline stream (header: ChunkWriter) content =
         let heap = writer.CreateWriter()
-        content writer
+        content heap
         // TODO: Align to four-byte boundary.
         let size = heap.Size
         header.WriteU4 offset
         header.WriteU4 size
         offset <- offset + size
+        writer.SkipBytes size
 
     // #~
     stream metadata (tables info)
@@ -399,4 +401,4 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
         info.Metadata.WriteU4 writer.Size
         rva <- rva + writer.Size
 
-    int32 (rva - headerRva) |> section.SkipBytes
+    section.SkipBytes (rva - headerRva)

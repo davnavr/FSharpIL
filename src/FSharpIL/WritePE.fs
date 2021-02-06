@@ -36,28 +36,16 @@ module Size =
     [<Literal>]
     let SectionHeader = 40u
 
-type SectionInfo =
-    { ActualSize: uint32
-      FileOffset: uint32
-      /// Specifies the RVA of the section.
-      VirtualAddress: uint32
-      Section: Section }
-
-/// Stores the sizes and file offsets of the various objects and structs that make up a PE file.
 [<ReferenceEquality; NoComparison>]
 type PEInfo =
     { File: PEFile
-      mutable CodeSize: uint32
-      mutable InitializedDataSize: uint32
-      mutable UninitializedDataSize: uint32
-      mutable CliHeaderRva: uint32
-      Sections: SectionInfo[] }
-
-    // TODO: Make this a function.
-    member this.RvaOf (section: (int * Section) option) =
-        match section with
-        | Some(i, _) -> (Array.get this.Sections i).VirtualAddress
-        | None -> 0u
+      mutable CodeSize: ChunkWriter
+      mutable InitializedDataSize: ChunkWriter
+      mutable UninitializedDataSize: ChunkWriter
+      mutable BaseOfCode: ChunkWriter
+      mutable BaseOfData: ChunkWriter
+      mutable CliHeaderRva: ChunkWriter
+      Sections: ChunkWriter[] }
 
 // II.25.2.2
 let coffHeader pe (writer: ChunkWriter) =
@@ -77,13 +65,24 @@ let standardFields info (writer: ChunkWriter) =
     writer.WriteU2 Magic.PE32
     writer.WriteU1 standard.LMajor
     writer.WriteU1 standard.LMinor
-    writer.WriteU4 info.CodeSize
-    writer.WriteU4 info.InitializedDataSize
-    writer.WriteU4 info.UninitializedDataSize
+
+    info.CodeSize <- writer.CreateWriter()
+    writer.SkipBytes 4u
+
+    info.InitializedDataSize <- writer.CreateWriter()
+    writer.SkipBytes 4u
+
+    info.UninitializedDataSize <- writer.CreateWriter()
+    writer.SkipBytes 4u
+
     // NOTE: The EntryPointRva always has a value regardless of whether or not it is a .dll or .exe, and points to somewhere special (see the end of II.25.2.3.1)
     writer.WriteU4 0u // EntryPointRva // TODO: Figure out what this value should be.
-    info.RvaOf pe.Sections.TextSection |> writer.WriteU4 // BaseOfCode, matches the RVA of the .text section
-    info.RvaOf pe.Sections.RsrcSection |> writer.WriteU4 // BaseOfData, matches the RVA of the .rsrc section
+
+    info.BaseOfCode <- writer.CreateWriter() // RVA of the .text section
+    writer.SkipBytes 4u
+
+    info.BaseOfData <- writer.CreateWriter() // RVA of the .rsrc section
+    writer.SkipBytes 4u
 
 // II.25.2.3.2
 let ntSpecificFields pe (writer: ChunkWriter) =
@@ -130,7 +129,8 @@ let dataDirectories info (writer: ChunkWriter) =
     // CliHeader
     match info.File.CliHeader with
     | Some _ ->
-        writer.WriteU4 info.CliHeaderRva
+        info.CliHeaderRva <- writer.CreateWriter()
+        writer.SkipBytes 4u
         writer.WriteU4 WriteCli.Size.CliHeader
     | None -> writer.WriteU8 0UL
 
@@ -152,18 +152,21 @@ let sections (info: PEInfo) (writer: ChunkWriter) =
 
     let mutable virtualAddress = salignment
 
+    let mutable codeSize, initializedDataSize, uninitializedDataSize = 0u, 0u, 0u
+
     let cliSectionIndex, cliDataIndex =
         match pe.DataDirectories.CliHeader with
         | Some header -> header.SectionIndex, header.DataIndex
         | None -> -1, -1
 
     for sectioni = 0 to pe.SectionTable.Length - 1 do
+        writer.ResetSize()
         let section = pe.SectionTable.Item sectioni
         for datai = 0 to section.Data.Length - 1 do
             match section.Data.Item datai with
             | CliHeader cli ->
                 if sectioni = cliSectionIndex && datai = cliDataIndex then
-                    info.CliHeaderRva <- virtualAddress
+                    info.CliHeaderRva.WriteU4 virtualAddress
                 WriteCli.metadata cli virtualAddress writer
             | ClrLoaderStub -> () // TODO: Write loader stub.
             | RawData bytes -> bytes() |> writer.WriteBytes
@@ -174,67 +177,72 @@ let sections (info: PEInfo) (writer: ChunkWriter) =
 
         // Calculates the values for sizes in the standard fields (II.25.2.3.1)
         if section.Header.Characteristics.HasFlag SectionFlags.CntCode then
-            info.CodeSize <- info.CodeSize + size
+            codeSize <- codeSize + size
         if section.Header.Characteristics.HasFlag SectionFlags.CntInitializedData then
-            info.InitializedDataSize <- info.InitializedDataSize + size
+            initializedDataSize <- initializedDataSize + size
         if section.Header.Characteristics.HasFlag SectionFlags.CntUninitializedData then
-            info.UninitializedDataSize <- info.UninitializedDataSize + size
+            uninitializedDataSize <- uninitializedDataSize + size
 
-        info.Sections.[sectioni] <-
-            { ActualSize = size
-              FileOffset = fileOffset
-              VirtualAddress = virtualAddress
-              Section = section }
+        let header = info.Sections.[sectioni]
+        header.WriteU4 size // VirtualSize, actual size of the section
+        header.WriteU4 virtualAddress // VirtualAddress
+        header.WriteU4 roundedSize // SizeOfRawData, size of section rounded up to file alignment
+        header.WriteU4 fileOffset // PointerToRawData
 
         fileOffset <- fileOffset + roundedSize
         virtualAddress <- Round.upTo salignment (virtualAddress + size)
 
+    info.CodeSize.WriteU4 codeSize
+    info.InitializedDataSize.WriteU4 codeSize
+    info.UninitializedDataSize.WriteU4 codeSize
+
 let write pe =
     try
         let info =
+            let uninitialized = Unchecked.defaultof<ChunkWriter>
             { File = pe
-              CodeSize = Unchecked.defaultof<uint32>
-              InitializedDataSize = Unchecked.defaultof<uint32>
-              UninitializedDataSize = Unchecked.defaultof<uint32>
-              CliHeaderRva = Unchecked.defaultof<uint32>
-              Sections = Array.zeroCreate<SectionInfo> pe.SectionTable.Length }
+              CodeSize = uninitialized
+              InitializedDataSize = uninitialized
+              UninitializedDataSize = uninitialized
+              BaseOfCode = uninitialized
+              BaseOfData = uninitialized
+              CliHeaderRva = uninitialized
+              Sections = Array.zeroCreate pe.SectionTable.Length }
         let falignment = int32 pe.NTSpecificFields.FileAlignment
         let content = LinkedList<byte[]>()
-        let headers = ChunkWriter(Array.zeroCreate falignment |> content.AddFirst)
+        let writer = ChunkWriter(Array.zeroCreate falignment |> content.AddFirst)
 
-        // Since information about sections is needed in the header, the
-        // sections are written first before appending them after the headers.
-        ChunkWriter(content.Last, falignment, falignment) |> sections info
-
-        headers.WriteBytes Magic.DosStub
-        headers.WriteBytes Magic.PESignature
-        coffHeader pe headers
-        standardFields info headers
-        ntSpecificFields pe headers
-        dataDirectories info headers
+        writer.WriteBytes Magic.DosStub
+        writer.WriteBytes Magic.PESignature
+        coffHeader pe writer
+        standardFields info writer
+        ntSpecificFields pe writer
+        dataDirectories info writer
 
         // Section headers
         for i = 0 to info.File.SectionTable.Length - 1 do
-            let section = Array.get info.Sections i
-            let header = section.Section.Header
-            SectionName.toArray header.SectionName |> headers.WriteBytes
-            headers.WriteU4 section.ActualSize
-            // TODO: Figure out how to calculate these fields from the data
-            headers.WriteU4 section.VirtualAddress // VirtualAddress
-            let roundedSize = Round.upTo (uint32 pe.NTSpecificFields.FileAlignment) section.ActualSize
-            headers.WriteU4 roundedSize // SizeOfRawData
-            headers.WriteU4 section.FileOffset // PointerToRawData
-            headers.WriteU4 header.PointerToRelocations
-            headers.WriteU4 0u // PointerToLineNumbers
-            headers.WriteU2 header.NumberOfRelocations
-            headers.WriteU2 0us // NumberOfLineNumbers
-            headers.WriteU4 header.Characteristics
+            let section = pe.SectionTable.Item i
+            let header = section.Header
+            SectionName.toArray header.SectionName |> writer.WriteBytes
+            // VirtualSize, VirtualAddress, SizeOfRawData, PointerToRawData
+            let header' = writer.CreateWriter()
+            writer.SkipBytes 16u
+            writer.WriteU4 header.PointerToRelocations
+            writer.WriteU4 0u // PointerToLineNumbers
+            writer.WriteU2 header.NumberOfRelocations
+            writer.WriteU2 0us // NumberOfLineNumbers
+            writer.WriteU4 header.Characteristics
+            info.Sections.[i] <- header'
+
+        writer.MoveToEnd() // Padding before sections
+
+        sections info writer
 
         content.Count * falignment, content
     with
     | ex -> InternalException ex |> raise
 
-/// Builds a byte array containing the Portable Executable file.
+/// Returns a byte array containing the Portable Executable file.
 let toArray pe =
     let size, content = write pe
     let output = Array.zeroCreate<byte> size
