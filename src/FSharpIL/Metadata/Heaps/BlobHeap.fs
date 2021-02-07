@@ -10,6 +10,7 @@ open FSharpIL.Writing
 [<RequireQualifiedAccess>]
 type internal BlobIndex =
     { Index: uint32
+      /// The size of the blob pointed to by this index.
       Size: uint32 }
 
     member this.TotalSize = (BlobSize.ofUnsigned this.Size) + this.Size

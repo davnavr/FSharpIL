@@ -1,5 +1,5 @@
 ﻿[<AutoOpen>]
-module private FSharpIL.Metadata.Heaps.ChunkWriterExtensions
+module internal FSharpIL.Metadata.Heaps.ChunkWriterExtensions
 
 open System.Collections.Generic
 open System.Text
@@ -30,7 +30,7 @@ type ChunkWriter with
             this.WriteU1 lsb
         | BlobSize.B1 -> this.WriteU1 value // Bit 7 remains clear
 
-    member this.WriteBlobSize(size: uint32) =
+    member this.WriteBlobSize(size: uint32) = // TODO: Figure out if blob size is same as an unsigned compressed integer.
         match BlobSize.ofUnsigned size with
         | BlobSize.B1 -> this.WriteU1 size // Bit 7 remains clear
         | _ -> failwith "TODO: Figure out how blob length is encoded in 2 or 4 bytes."

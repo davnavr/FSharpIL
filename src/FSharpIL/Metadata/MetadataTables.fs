@@ -1108,30 +1108,23 @@ type CustomAttributeSignature =
 type Callee =
     | MethodRef of MemberRefHandle<MethodRef>
 
+/// (III.1.2.1)
 type Opcode =
     /// An instruction that does nothing (III.3.51).
     | Nop
     /// An instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been tripped" (III.3.16).
     | Break
+    /// An instruction that calls a method (III.3.19).
     | Call of Callee // TODO: Allow call to accept a MethodDef, MethodRef, or MethodSpec.
-    // | Calli
+    | Calli // of ?
     /// An instruction used to return from the current method (III.3.56).
     | Ret
     // TODO: Include other opcodes.
 
+    // Ldnull
+
     /// An instruction that loads a literal string (III.4.16).
-    | Ldstr of string
-
-    /// Returns the bytes that make up this opcode.
-    member this.Opcode =
-        match this with
-        | Nop -> [| 0uy |]
-        | Break -> [| 1uy |]
-        | Call _ -> [| 0x28uy |]
-
-        | Ret -> [| 0x2Auy |]
-
-        | Ldstr _ -> [| 0x72uy |]
+    | Ldstr of string // TODO: How to disallow null? Maybe usage of null here is same as Ldnull?
 
 // TODO: Figure out how exception handling information will be included.
 // TODO: Figure out how to prevent (some) invalid method bodies.

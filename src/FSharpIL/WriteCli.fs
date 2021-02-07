@@ -41,7 +41,7 @@ type CliInfo =
       mutable StrongNameSignature: ChunkWriter
       MethodBodies: Dictionary<MethodDef, uint32>
       StringsStream: Heap<string>
-      // US
+      UserStringStream: UserStringHeap
       GuidStream: Heap<Guid>
       BlobStream: BlobHeap }
 
@@ -78,9 +78,42 @@ let header info (writer: ChunkWriter) =
 
 /// Writes the method bodies.
 let bodies rva (info: CliInfo) (writer: ChunkWriter) =
+    let mutable offset = rva
+
     for method in info.Cli.MethodDef.Items do
-        let body = method.Body
-        ()
+        // TODO: Ensure that MethodDefs with the same method bodies point to the same RVA.
+        // TODO: Write fat format when necessary.
+        // NOTE: For fat (and tiny) formats, "two least significant bits of first byte" indicate the type.
+        // TODO: Check conditions to see if tiny format can be used.
+        let header = writer.CreateWriter()
+        writer.SkipBytes 1u
+        let body = writer.CreateWriter()
+
+        for opcode in method.Body do
+            match opcode with
+            | Opcode.Nop -> body.WriteU1 0uy
+            | Opcode.Break -> body.WriteU1 1uy
+            | Opcode.Call callee ->
+                body.WriteU1 0x28uy
+                MetadataToken.callee info.Cli callee body
+
+            | Opcode.Ret -> body.WriteU1 0x2Auy
+
+            | Opcode.Ldstr str ->
+                body.WriteU1 0x72uy
+                MetadataToken.userString str info.UserStringStream body
+
+            | _ -> failwithf "TODO: Implement support for more opcodes (%A)" opcode
+
+        let size = body.Size
+        0x2uy ||| (byte size <<< 2) |> header.WriteU1
+        info.MethodBodies.Item <- method, offset
+        offset <- offset + size
+        writer.SkipBytes size
+
+        // TODO: Write extra method data sections.
+
+    writer.AlignTo 4u
 
 /// Writes the contents of the #~ stream (II.24.2.6).
 let tables (info: CliInfo) (writer: ChunkWriter) =
@@ -216,7 +249,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         let mutable param = 1u
 
         for method in tables.MethodDef.Items do
-            writer.WriteU4 0u // RVA // TODO: Write the RVA to the method body.
+            writer.WriteU4 info.MethodBodies.[method]
             writer.WriteU2 method.ImplFlags
             writer.WriteU2 method.Flags
             info.StringsStream.WriteStringIndex(method.Name, writer)
@@ -326,9 +359,9 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     let metadata = streamHeader "#~\000\000"B
     let strings = streamHeader "#Strings\000\000\000\000"B
     let us =
-        // if info. // TODO: Write #US stream header
-        // then streamHeader "#US\000"B
-        Unchecked.defaultof<ChunkWriter>
+        if info.UserStringStream.StringCount > 0
+        then streamHeader "#US\000"B
+        else Unchecked.defaultof<ChunkWriter>
     let guid = streamHeader "#GUID\000\000\000"B
     let blob =
         if info.BlobStream.SignatureCount > 0
@@ -352,9 +385,10 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     stream strings (Heap.writeStrings info.StringsStream.Count info.Cli)
 
     // #US
+    stream us (Heap.writeUS info.UserStringStream)
 
     // #GUID
-    stream guid (Heap.writeGuid info.Cli)
+    stream guid (Heap.writeGuid info.Cli) // TODO: Fix, GUID heap should be an array of guids, where 1 refers to the first item.
 
     // #Blob
     if blob <> Unchecked.defaultof<ChunkWriter> then
@@ -362,7 +396,7 @@ let root (info: CliInfo) (writer: ChunkWriter) =
 
     do // Stream count
         let mutable count = 3u // #~, #Strings, #GUID
-        // TODO: Include #US stream in stream count.
+        if info.UserStringStream.StringCount > 0 then count <- count + 1u
         if info.BlobStream.SignatureCount > 0 then count <- count + 1u
 
         streams.WriteU2 count
@@ -377,6 +411,7 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
           StrongNameSignature = Unchecked.defaultof<ChunkWriter>
           MethodBodies = Dictionary<_, _> cli.MethodDef.Count
           StringsStream = Heap.strings cli
+          UserStringStream = UserStringHeap 64
           GuidStream = Heap.guid cli
           BlobStream = Heap.blob cli }
     let mutable rva = headerRva

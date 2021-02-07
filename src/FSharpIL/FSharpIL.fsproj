@@ -31,7 +31,9 @@
     <Compile Include="Metadata\Heaps\ChunkWriterExtensions.fs" />
     <Compile Include="Metadata\Heaps\HeapExtensions.fs" />
     <Compile Include="Metadata\Heaps\BlobHeap.fs" />
+    <Compile Include="Metadata\Heaps\UserString.fs" />
     <Compile Include="Metadata\Heaps\Heap.fs" />
+    <Compile Include="Metadata\MetadataToken.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />

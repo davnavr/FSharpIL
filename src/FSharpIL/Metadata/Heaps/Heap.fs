@@ -85,8 +85,6 @@ module internal Heap =
 
         Lookup<_>(guids, uint32 guids.Count * 16u, indexOf)
 
-    // us
-
     /// <summary>Creates the <c>#Blob</c> metadata stream, which contains signatures (II.24.2.4).</summary>
     let blob (metadata: CliMetadata) =
         let blob =
@@ -198,5 +196,13 @@ module internal Heap =
                         writer.WriteU1 b8
                     | _ -> failwithf "Invalid public key or token %A" token)
             metadata
+
+    let writeUS (us: UserStringHeap) (writer: ChunkWriter) =
+        writer.WriteU1 0uy
+        for str in us do
+            let { BlobIndex.Size = size } = us.IndexOf str
+            writer.WriteBlobSize size
+            Encoding.Unicode.GetBytes str |> writer.WriteBytes
+            writer.WriteU1 0uy // TODO: Determine value of terminal byte.
 
 type internal Heap<'T when 'T : equality> = Heap.Lookup<'T>
