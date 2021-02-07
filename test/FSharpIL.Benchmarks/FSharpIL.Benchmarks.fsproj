@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>FSharpIL.Benchmarks</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Benchmarks.fs" />
+
+    <PackageReference Include="BenchmarkDotNet" Version="0.12.1" />
+
+    <ProjectReference Include="$(RootDirectory)/src/FSharpIL/FSharpIL.fsproj" />
+  </ItemGroup>
+
+</Project>

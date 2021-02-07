@@ -1,4 +1,4 @@
 # FSharpIL
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
-An F# library to read and write .NET Assemblies.
+An F# library to write .NET Assemblies using computation expressions.

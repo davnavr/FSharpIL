@@ -1,12 +1,6 @@
-﻿module private FSharpIL.Test
+﻿module FSharpIL.Test
 
-open Fuchu
-
-let tests =
-    [
-        // TODO: Add tests
-    ]
-    |> testList "tests"
+open Expecto
 
 [<EntryPoint>]
-let main args = defaultMain tests args
+let main argv = runTestsInAssemblyWithCLIArgs Seq.empty [| "--sequenced" |] // TODO: Replace this temporary array with argv
