@@ -3,6 +3,7 @@ module FSharpIL.WritePE
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
 open System.IO
 
 open Microsoft.FSharp.Core.Operators.Checked
@@ -89,8 +90,8 @@ let standardFields info (writer: ChunkWriter) =
 let ntSpecificFields pe (writer: ChunkWriter) =
     let nt = pe.NTSpecificFields
     writer.WriteU4 nt.ImageBase
-    writer.WriteU2 nt.SectionAlignment
-    writer.WriteU2 nt.FileAlignment
+    writer.WriteU4 nt.SectionAlignment
+    writer.WriteU4 nt.FileAlignment
     writer.WriteU2 nt.OSMajor
     writer.WriteU2 nt.OSMinor
     writer.WriteU2 nt.UserMajor
@@ -259,12 +260,37 @@ let toArray pe =
             InvalidOperationException(msg, ex) |> raise
     output
 
+let toBlock pe =
+    let size, content = write pe
+    let builder = ImmutableArray.CreateBuilder<byte> size
+    for chunk in content do
+        builder.AddRange chunk
+    builder.ToImmutable()
+
 let stream pe =
     // TODO: Return an optimized stream type instead.
     new MemoryStream(toArray pe) :> Stream
 
-// TODO: Add toStream, toSeq, and toBlock/toImmutableArray functions.
+// TODO: Add toSeq function.
 
-//let toStream pe (stream: Stream) =
+let toStream pe (stream: Stream) =
+    match stream with
+    | null -> nameof stream |> nullArg
+    | _ when not stream.CanWrite -> invalidArg (nameof stream) "The stream must support writing"
+    | _ ->
+        try
+            let _, content = write pe
+            for chunk in content do
+                stream.Write(ReadOnlySpan chunk)
+        finally
+            stream.Close()
 
-//let toBlock pe = 
+let toFile pe =
+    function
+    | null -> nullArg "file"
+    | (file: FileInfo) -> file.OpenWrite() |> toStream pe
+
+let toPath pe =
+    function
+    | null -> nullArg "path"
+    | path -> File.OpenWrite path |> toStream pe

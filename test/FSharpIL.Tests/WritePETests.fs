@@ -1,167 +1,70 @@
 ﻿module FSharpIL.WritePETests
 
+open FsCheck
+
 open Expecto
 
-open System
 open System.Collections.Immutable
-open System.Reflection.Metadata
 open System.Reflection.PortableExecutable
 
-open Mono.Cecil
-
-open FSharpIL.Generate
-
-open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
+
+type Generate() =
+    static member Alignment() =
+        gen {
+            let! falignment = Gen.choose(9, 14)
+            let! salignment = Gen.choose(falignment + 1, 15)
+            let inline pow2 num = pown 2 num
+            return Alignment.create (pow2 salignment) (pow2 falignment) |> Option.get
+        }
+        |> Arb.fromGen
+
+    static member PESections() =
+        gen {
+            let! sections =
+                gen {
+                    let! data =
+                        Arb.generate<byte[]>
+                        |> Gen.map (fun data -> RawData(fun() -> data))
+                        |> Gen.arrayOf
+                    let! kind = Arb.generate
+
+                    return
+                        { Data = ImmutableArray.Create(items = data)
+                          Kind = kind }
+                }
+                |> Gen.arrayOf
+            return ImmutableArray.Create(items = sections) |> PESections
+        }
+        |> Arb.fromGen
 
 [<Tests>]
 let tests =
+    let config =
+        { FsCheckConfig.defaultConfig with
+            arbitrary = typeof<Generate> :: FsCheckConfig.defaultConfig.arbitrary }
+
+    let inline testProperty name = testPropertyWithConfig config name
+
+    let testPE name body =
+        testProperty name <| fun (pe: PEFile) ->
+            use reader = new PEReader(WritePE.stream pe)
+            body pe reader
+
     testList "write PE" [
-        let testAssembly name body =
-            testProperty name <| fun (ValidAssembly pe) ->
-                use mdle = ModuleDefinition.ReadModule(WritePE.stream pe)
-                body pe mdle
-
-        testAssembly "module name matches parsed name" <| fun pe mdle ->
-            let expected = string pe.CliHeader.Value.Module.Name
-            expected = mdle.Name
-
-        testAssembly "names of defined types match parsed names" <| fun pe mdle ->
+        testPE "section names match parsed name" <| fun pe reader ->
             let expected =
-                pe.CliHeader.Value.TypeDef.Items |> Seq.map (fun t -> string t.TypeName)
+                pe.SectionTable |> Seq.map (fun section -> string section.Header.SectionName)
             let actual =
-                mdle.Types |> Seq.map (fun t -> t.Name)
-            Expect.sequenceEqual actual expected "type names should match"
+                reader.PEHeaders.SectionHeaders |> Seq.map (fun header -> header.Name)
+            Expect.sequenceEqual actual expected "section name should match"
 
-        // TODO: Remove hello world.
-        testProperty "hello world is an assembly" <| fun mvid ->
-            let mdle =
-                { Name = Identifier.ofStr "HelloWorld.dll"
-                  Mvid = mvid }
-            let tables =
-                metadataBuilder mdle {
-                    let! assm =
-                        Assembly.Set
-                            { Name = AssemblyName.ofStr "HelloWorld"
-                              HashAlgId = ()
-                              Version = Version()
-                              Flags = ()
-                              PublicKey = None
-                              Culture = NullCulture }
-                    let! mscorlib =
-                        AssemblyRef.Add
-                            { Version = Version(5, 0, 0, 0)
-                              PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
-                              Name = AssemblyName.ofStr "System.Private.CoreLib"
-                              Culture = NullCulture
-                              HashValue = None }
-                    let! consolelib =
-                        AssemblyRef.Add
-                            { Version = Version(5, 0, 0, 0)
-                              PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-                              Name = AssemblyName.ofStr "System.Console"
-                              Culture = NullCulture
-                              HashValue = None }
+        testPE "file alignment matches" <| fun pe reader ->
+            reader.PEHeaders.PEHeader.FileAlignment = int32 pe.NTSpecificFields.FileAlignment
 
-                    let! console =
-                        TypeRef.Add
-                            { TypeName = Identifier.ofStr "Console"
-                              TypeNamespace = "System"
-                              ResolutionScope = ResolutionScope.AssemblyRef consolelib }
-                    let! object =
-                        TypeRef.Add
-                            { TypeName = Identifier.ofStr "Object"
-                              TypeNamespace = "System"
-                              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-                    let! tfmAttr =
-                        TypeRef.Add
-                            { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
-                              TypeNamespace = "System.Runtime.Versioning"
-                              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-                    let string = { CustomMod = ImmutableArray.Empty; ParamType = EncodedType.String }
+        testPE "all PE files are PE32" <| fun _ reader ->
+            reader.PEHeaders.PEHeader.Magic = PEMagic.PE32
 
-                    let! writeLine =
-                        MemberRef.AddMethod
-                            { Class = MemberRefParent.TypeRef console
-                              MemberName = Identifier.ofStr "WriteLine"
-                              Signature =
-                                { HasThis = false
-                                  ExplicitThis = false
-                                  ReturnType = ReturnTypeItem.Void
-                                  Parameters = ImmutableArray.Create string
-                                  VarArgParameters = ImmutableArray.Empty } }
-                    let! tfmAttrCtor =
-                        MemberRef.AddMethod
-                            { Class = MemberRefParent.TypeRef tfmAttr
-                              MemberName = Identifier.ofStr ".ctor"
-                              Signature =
-                                { HasThis = true // TODO: Figure out flags.
-                                  ExplicitThis = false
-                                  ReturnType = ReturnTypeItem.Void
-                                  Parameters = ImmutableArray.Create string
-                                  VarArgParameters = ImmutableArray.Empty } }
-
-                    CustomAttribute.Add
-                        { Parent = CustomAttributeParent.Assembly assm
-                          Type = CustomAttributeType.MemberRef tfmAttrCtor
-                          Value =
-                            { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
-                              NamedArg = ImmutableArray.Empty (* FrameworkDisplayName = "" *) }
-                            |> Some }
-
-                    let! methodList =
-                        methods {
-                            StaticClassMethod.Method
-                                { Body =
-                                    [|
-                                        Ldstr "Hello World!"
-                                        Call (Callee.MethodRef writeLine)
-                                        Ret
-                                    |]
-                                    |> ImmutableArray.Create<Opcode>
-                                  ImplFlags = MethodImplFlags.Zero
-                                  MethodName = Identifier.ofStr "Method"
-                                  Flags =
-                                    { Visibility = Public
-                                      HideBySig = true }
-                                    |> StaticMethodFlags
-                                  Signature =
-                                    let args =
-                                        { CustomMod = ImmutableArray.Empty
-                                          ParamType = EncodedType.Array(EncodedType.String, ArrayShape.OneDimension) }
-                                        |> ImmutableArray.Create
-                                    StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, args)
-                                  ParamList = fun _ _ -> Param { Flags = ParamFlags.Zero; ParamName = "args" } }
-                        }
-                    let! program =
-                        TypeDef.AddClass
-                            { Access = TypeVisibility.Public
-                              ClassName = Identifier.ofStr "Program"
-                              Extends = Extends.TypeRef object
-                              Fields = FieldList.Empty
-                              Flags = StaticClassFlags ClassFlags.Zero
-                              TypeNamespace = "HelloWorld"
-                              Methods = methodList }
-                    entrypoint
-                        (fun _ -> true)
-                        program
-                }
-                |> ValidationResult.get
-            let pe = PEFile.ofMetadata IsExe tables |> WritePE.toArray
-
-            use reader = new PEReader(ImmutableArray.Create<byte> pe)
-            let metadata = reader.GetMetadataReader()
-
-            Expect.isNonEmpty metadata.TypeDefinitions "assembly should contain types"
-            Expect.isNonEmpty metadata.MethodDefinitions "assembly should contain methods"
-            Expect.equal
-                (metadata.GetModuleDefinition().Mvid |> metadata.GetGuid)
-                mvid
-                "modules should contain same mvid"
-            let assemblyattrs = metadata.GetAssemblyDefinition().GetCustomAttributes()
-            Expect.isNonEmpty assemblyattrs "assembly should contain at least one custom attribute"
-            Expect.all
-                assemblyattrs
-                (fun handle -> metadata.GetCustomAttribute(handle).Parent.Kind = HandleKind.AssemblyDefinition)
-                "attributes should be parented to the assembly"
+        testPE "all PE files have 10 data directories" <| fun _ reader ->
+            reader.PEHeaders.PEHeader.NumberOfRvaAndSizes = 10
     ]

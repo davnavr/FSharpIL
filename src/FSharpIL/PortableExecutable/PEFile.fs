@@ -4,8 +4,6 @@ open System.Collections.Immutable
 
 open FSharpIL.Metadata
 
-#nowarn "25"
-
 type PEFile =
     { FileHeader: CoffHeader
       StandardFields: StandardFields
