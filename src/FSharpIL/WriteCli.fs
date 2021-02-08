@@ -1,4 +1,5 @@
-﻿module internal FSharpIL.WriteCli
+﻿[<RequireQualifiedAccess>]
+module internal FSharpIL.WriteCli
 
 open FSharp.Core.Operators.Checked
 
@@ -159,7 +160,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         | Extends.AbstractClass { TypeHandle = tdef }
         | Extends.ConcreteClass { TypeHandle = tdef } -> tables.TypeDef.IndexOf tdef, 0u
         | Extends.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
-        | bad -> failwithf "Unsupported extends %A" bad
+        | Extends.Null -> 0u, 0u
         |> codedIndex total 2
 
     let memberRefParent =
@@ -385,7 +386,8 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     stream strings (Heap.writeStrings info.StringsStream.Count info.Cli)
 
     // #US
-    stream us (Heap.writeUS info.UserStringStream)
+    if us <> Unchecked.defaultof<ChunkWriter> then
+        stream us (Heap.writeUS info.UserStringStream)
 
     // #GUID
     stream guid (Heap.writeGuid info.Cli) // TODO: Fix, GUID heap should be an array of guids, where 1 refers to the first item.

@@ -9,7 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="AssemblyVisibility.fs" />
     <Compile Include="Bytes.fs" />
     <Compile Include="InternalException.fs" />
     <Compile Include="Magic.fs" />

@@ -5,38 +5,13 @@ open Expecto
 open System
 open System.Reflection
 
+open FSharpIL.Generate
+
 open FSharpIL.Metadata
 
 [<Tests>]
 let tests =
     testList "metadata" [
-        testList "version" [
-            let testVersion name body =
-                testPropertyWithConfig
-                    Generate.config
-                    name
-                    (fun (VersionString ver) -> body ver)
-
-            testVersion "byte length is a multiple of 4" <| fun ver ->
-                (MetadataVersion.ofStr ver |> MetadataVersion.toArray |> Array.length) % 4 = 0
-
-            testVersion "byte length is greater than or equal to string length" <| fun ver ->
-                let bytes = MetadataVersion.ofStr ver |> MetadataVersion.toArray
-                bytes.Length >= ver.Length
-
-            testVersion "string representation as version equals original" <| fun ver ->
-                let ver' = MetadataVersion.ofStr ver
-                (string ver' |> MetadataVersion.ofStr) = ver'
-
-            testVersion "version as string matches original string" <| fun expected ->
-                let ver = MetadataVersion.ofStr expected
-                let actual = string ver
-                actual = expected
-
-            testVersion "last byte of version string bytes is null" <| fun ver ->
-                (MetadataVersion.ofStr ver |> MetadataVersion.toArray |> Array.last) = 0uy
-        ]
-
         (*
         testList "computation expression" [
             testCase "variable can be used" <| fun() ->

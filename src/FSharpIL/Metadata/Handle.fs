@@ -15,7 +15,7 @@ type IHandleValue =
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 // TODO: See if this being a struct is a performance advantage.
 // TODO: Should this be a record instead of a union to avoid the generation of a "Tag" member?
-type Handle<'Value> =
+type Handle<'Value> = // TODO: Rename to Index
     private
     | Handle of obj * 'Value
 

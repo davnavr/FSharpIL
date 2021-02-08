@@ -4,26 +4,36 @@ open Expecto
 
 open System
 open System.Collections.Immutable
-open System.IO
 open System.Reflection.Metadata
 open System.Reflection.PortableExecutable
+
+open Mono.Cecil
+
+open FSharpIL.Generate
 
 open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 
 [<Tests>]
 let tests =
-    let testPE name pe body =
-        testCase name <| fun() ->
-            let data = WritePE.toArray pe
-            use source = new MemoryStream(data, false)
-            use reader = new PEReader(source, PEStreamOptions.PrefetchEntireImage)
-            body reader |> ignore
-    let testMetadata name pe body =
-        testPE name pe <| fun reader ->
-            reader.GetMetadataReader() |> body
-
     testList "write PE" [
+        let testAssembly name body =
+            testProperty name <| fun (ValidAssembly pe) ->
+                use mdle = ModuleDefinition.ReadModule(WritePE.stream pe)
+                body pe mdle
+
+        testAssembly "module name matches parsed name" <| fun pe mdle ->
+            let expected = string pe.CliHeader.Value.Module.Name
+            expected = mdle.Name
+
+        testAssembly "names of defined types match parsed names" <| fun pe mdle ->
+            let expected =
+                pe.CliHeader.Value.TypeDef.Items |> Seq.map (fun t -> string t.TypeName)
+            let actual =
+                mdle.Types |> Seq.map (fun t -> t.Name)
+            Expect.sequenceEqual actual expected "type names should match"
+
+        // TODO: Remove hello world.
         testProperty "hello world is an assembly" <| fun mvid ->
             let mdle =
                 { Name = Identifier.ofStr "HelloWorld.dll"

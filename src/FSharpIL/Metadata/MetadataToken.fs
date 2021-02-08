@@ -9,7 +9,7 @@ open FSharpIL.Metadata.Heaps
 /// <summary>
 /// Writes a metadata token, which is used as an argument to some CIL instructions (III.1.9).
 /// </summary>
-/// <exception cref="System.ArgumentException">The <paramref name="index"/> cannot be represented in 3 bytes.</exception>
+/// <exception cref="T:System.ArgumentException">The <paramref name="index"/> cannot be represented in 3 bytes.</exception>
 let write index table (writer: ChunkWriter) =
     if index > 0xFF_FF_FFu then
         invalidArg

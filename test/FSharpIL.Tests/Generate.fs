@@ -1,30 +1,117 @@
-﻿namespace FSharpIL
+﻿module FSharpIL.Generate
 
 open FsCheck
 
 open Expecto
 
+open System
+open System.Text
+
+open FSharpIL.Metadata
+open FSharpIL.PortableExecutable
+
 [<Struct>]
-type VersionString = VersionString of string
+type ValidAssembly = ValidAssembly of PEFile
+
+[<AutoOpen>]
+module private Helpers =
+    let identifier =
+        gen {
+            let! (NonEmptyString identifier) = Arb.generate
+            return Identifier.ofStr identifier
+        }
+
+    let moduleTable =
+        gen {
+            let! name = identifier
+            let! mvid = Arb.generate
+            return
+                { Name = name
+                  Mvid = mvid }
+        }
 
 type Generate() =
-    static member VersionString() =
+    static member ValidAssembly() =
         gen {
-            let! str =
-                Arb.from<string>
-                |> Arb.toGen
-                |> Gen.filter
-                    (fun str ->
-                        not(System.String.IsNullOrEmpty str) && System.Text.Encoding.UTF8.GetByteCount str <= 255)
-            return VersionString str
+            let! kind = Arb.generate<IsDll>
+
+            let! cli =
+                gen {
+                    let! mdle = moduleTable
+                    let! state = Gen.fresh (fun() -> MetadataBuilderState mdle)
+
+                    let! assembly =
+                        gen {
+                            let! (NonEmptyString name) =
+                                Gen.filter
+                                    (fun (NonEmptyString str) -> str.IndexOfAny [| ':'; '\\'; '/' |] = -1)
+                                    Arb.generate
+                            let! version =
+                                Gen.choose (0, 9)
+                                |> Gen.four
+                                |> Gen.map Version
+                            let! publicKey = Arb.generate
+                            let! culture = Arb.generate
+                            return Assembly.Set
+                                { Name = AssemblyName.ofStr name
+                                  HashAlgId = ()
+                                  Version = version
+                                  Flags = ()
+                                  PublicKey = publicKey
+                                  Culture = culture }
+                                state
+                        }
+                        |> Gen.optionOf
+
+                    let! typeRef = Gen.choose (-1, 0xFF)
+                    for _ = 0 to typeRef do
+                        ()
+
+                    let! typeDef = Gen.choose (-1, 0xFF)
+                    for _ = 0 to typeDef do
+                        let! visibility =
+                            [|
+                                Gen.constant TypeVisibility.NotPublic
+                                Gen.constant TypeVisibility.Public
+
+                                // TODO: Add support for nested visibility.
+                            |]
+                            |> Gen.oneof
+                        let! flags = Arb.generate<ClassFlags> |> Gen.map StaticClassFlags
+                        let! name = identifier
+                        let! (NonEmptyString ns) = Arb.generate
+                        let! extends =
+                            [|
+                                Gen.constant Extends.Null
+
+                                // TODO: Add support for other extends.
+                            |]
+                            |> Gen.oneof
+
+                        // TODO: Add support for other classes.
+                        TypeDef.AddClass
+                            { StaticClassDef.Access = visibility
+                              Flags = flags
+                              ClassName = name
+                              TypeNamespace = ns
+                              Extends = extends
+                              Fields = MemberList.Empty
+                              Methods = MemberList.Empty }
+                            state
+                        |> ignore
+
+                    return CliMetadata state
+                }
+
+            return PEFile.ofMetadata kind cli |> ValidAssembly
         }
         |> Arb.fromGen
 
-[<RequireQualifiedAccess>]
-module Generate =
-    let config =
-        let arbs =
-            [
-                typeof<Generate>
-            ]
-        { FsCheckConfig.defaultConfig with arbitrary = arbs @ FsCheckConfig.defaultConfig.arbitrary }
+let private config =
+    let arbs =
+        [
+            typeof<Generate>
+        ]
+    { FsCheckConfig.defaultConfig with arbitrary = arbs @ FsCheckConfig.defaultConfig.arbitrary }
+
+let testProperty name body = testPropertyWithConfig config name body

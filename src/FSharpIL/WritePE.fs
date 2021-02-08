@@ -3,8 +3,9 @@ module FSharpIL.WritePE
 
 open System
 open System.Collections.Generic
+open System.IO
 
-open FSharp.Core.Operators.Checked
+open Microsoft.FSharp.Core.Operators.Checked
 
 open FSharpIL.PortableExecutable
 open FSharpIL.Writing
@@ -242,7 +243,6 @@ let write pe =
     with
     | ex -> InternalException ex |> raise
 
-/// Returns a byte array containing the Portable Executable file.
 let toArray pe =
     let size, content = write pe
     let output = Array.zeroCreate<byte> size
@@ -259,4 +259,12 @@ let toArray pe =
             InvalidOperationException(msg, ex) |> raise
     output
 
-// TODO: Add toStream and toImmutableArray functions.
+let stream pe =
+    // TODO: Return an optimized stream type instead.
+    new MemoryStream(toArray pe) :> Stream
+
+// TODO: Add toStream, toSeq, and toBlock/toImmutableArray functions.
+
+//let toStream pe (stream: Stream) =
+
+//let toBlock pe = 

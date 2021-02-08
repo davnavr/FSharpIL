@@ -1,7 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
 [<Sealed>]
-type MetadataBuilder internal (mdle) =
+type MetadataBuilder internal (mdle) = // TODO: Create nicer to use computation expression.
     member inline _.Combine(one: MetadataBuilderState -> Result<_, _>, two: MetadataBuilderState -> Result<_, ValidationError>) =
         fun state ->
             match one state with

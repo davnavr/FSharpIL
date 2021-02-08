@@ -4,7 +4,7 @@ open System.Collections.Immutable
 
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
 [<Sealed>]
-type CliMetadata internal (state: MetadataBuilderState) =
+type CliMetadata (state: MetadataBuilderState) =
     // TODO: Determine if readOnlyDict or ImmutableDictionary has faster lookup times.
     let field =
         let table =
