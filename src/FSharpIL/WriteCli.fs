@@ -58,7 +58,12 @@ let header info (writer: ChunkWriter) =
     writer.SkipBytes 8u
 
     writer.WriteU4 info.Cli.HeaderFlags // Flags
-    writer.WriteU4 0u // EntryPointToken // TODO: Figure out what this token value should be. Is an index into the MethodDef table allowed?
+
+    let entryPointToken =
+        info.Cli.EntryPointToken
+        |> Option.map info.Cli.MethodDef.IndexOf
+        |> Option.defaultValue 0u
+    MetadataToken.write entryPointToken 0x6uy writer
 
     // Resources
     writer.WriteU4 0u
@@ -250,7 +255,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         let mutable param = 1u
 
         for method in tables.MethodDef.Items do
-            writer.WriteU4 info.MethodBodies.[method]
+            writer.WriteU4 info.MethodBodies.[method] // Rva
             writer.WriteU2 method.ImplFlags
             writer.WriteU2 method.Flags
             info.StringsStream.WriteStringIndex(method.Name, writer)
@@ -426,7 +431,7 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
         writer.ResetSize()
         writer.WriteBytes(cli.Header.StrongNameSignature)
         info.StrongNameSignature.WriteU4 writer.Size
-        writer.AlignTo 4u // TODO: See if alignment is necessary here.
+        writer.AlignTo 4u
         rva <- rva + writer.Size
 
     do // Method Bodies

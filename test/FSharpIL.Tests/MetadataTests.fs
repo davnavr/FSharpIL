@@ -4,9 +4,13 @@ open Expecto
 
 open Mono.Cecil
 
+open System
+open System.Collections.Immutable
+
 open FSharpIL.Generate
 
 open FSharpIL.Metadata
+open FSharpIL.PortableExecutable
 
 [<Tests>]
 let tests =
@@ -22,10 +26,44 @@ let tests =
 
         testAssembly "names of defined types match parsed names" <| fun pe mdle ->
             let expected =
-                pe.CliHeader.Value.TypeDef.Items |> Seq.map (fun t -> string t.TypeName)
+                pe.CliHeader.Value.TypeDef.Items |> Seq.map (fun t -> string t.TypeName, t.TypeNamespace)
             let actual =
-                mdle.Types |> Seq.map (fun t -> t.Name)
-            Expect.sequenceEqual actual expected "type names should match"
+                mdle.Types |> Seq.map (fun t -> t.Name, t.Namespace)
+            Expect.sequenceEqual actual expected "type name and namespace should match"
+
+        testCase "entrypoint is set correctly" <| fun() ->
+            let entrypoint =
+                { Body = ImmutableArray.Create Opcode.Ret
+                  ImplFlags = MethodImplFlags.Zero
+                  Flags = StaticMethodFlags { Visibility = Visibility.Public; HideBySig = true }
+                  MethodName = Identifier.ofStr "Main"
+                  Signature = StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, ImmutableArray.Empty)
+                  ParamList = fun _ -> failwith "no parameters" }
+
+            let pe =
+                let builder =
+                    MetadataBuilderState
+                        { Mvid = Guid.NewGuid()
+                          Name = Identifier.ofStr "Program.exe" }
+
+                let program =
+                    TypeDef.AddClass
+                        { StaticClassDef.Access = TypeVisibility.Public
+                          Extends = Extends.Null
+                          ClassName = Identifier.ofStr "Program"
+                          TypeNamespace = ""
+                          Flags = StaticClassFlags ClassFlags.Zero
+                          Fields = FieldList.Empty
+                          Methods = methods { StaticClassMethod.Method entrypoint } |> Result.get }
+                        builder
+                    |> Result.get
+
+                MetadataBuilder.entrypoint (fun _ -> true) program builder
+
+                CliMetadata builder |> PEFile.ofMetadata IsExe
+
+            use metadata = WritePE.stream pe |> ModuleDefinition.ReadModule
+            Expect.equal metadata.EntryPoint.Name (string entrypoint.MethodName) "name of entrypoint should match"
 
         (*
         testList "computation expression" [

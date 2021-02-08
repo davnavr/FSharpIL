@@ -68,7 +68,7 @@ let standardFields info (writer: ChunkWriter) =
     // NOTE: The EntryPointRva always has a value regardless of whether or not it is a .dll or .exe, and points to somewhere special (see the end of II.25.2.3.1)
     writer.WriteU4 0u // EntryPointRva // TODO: Figure out what this value should be.
 
-    info.BaseOfCode <- writer.CreateWriter() // RVA of the .text section
+    info.BaseOfCode <- writer.CreateWriter() // RVA of the .text section // TODO: Set BaseOfCode? Though everything seems to work without this value ever being set.
     writer.SkipBytes 4u
 
     info.BaseOfData <- writer.CreateWriter() // RVA of the .rsrc section
