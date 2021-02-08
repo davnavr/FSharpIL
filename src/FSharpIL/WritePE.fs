@@ -22,18 +22,6 @@ module Size =
     [<Literal>]
     let OptionalHeader = 0xE0us
 
-    [<Literal>]
-    /// The size of the standard fields (PE32).
-    let StandardFields = 28u
-
-    [<Literal>]
-    /// The size of the NT specific fields (PE32).
-    let NTSpecificFields = 68u
-
-    [<Literal>]
-    /// The size of the ten data directories.
-    let DataDirectories = 128u
-
     /// The length of a single section header.
     [<Literal>]
     let SectionHeader = 40u
@@ -102,8 +90,8 @@ let ntSpecificFields pe (writer: ChunkWriter) =
     writer.WriteU4 0u // ImageSize // TODO: Figure out how to calculate the ImageSize
     writer.WriteU4 pe.NTSpecificFields.FileAlignment
     writer.WriteU4 nt.FileChecksum
-    writer.WriteU4 nt.Subsystem
-    writer.WriteU4 nt.DllFlags
+    writer.WriteU2 nt.Subsystem
+    writer.WriteU2 nt.DllFlags
     writer.WriteU4 nt.StackReserveSize
     writer.WriteU4 nt.StackCommitSize
     writer.WriteU4 nt.HeapReserveSize
@@ -146,9 +134,7 @@ let sections (info: PEInfo) (writer: ChunkWriter) =
     let mutable fileOffset =
         Size.PEHeader
         + Size.CoffHeader
-        + Size.StandardFields
-        + Size.NTSpecificFields
-        + Size.DataDirectories
+        + uint32 Size.OptionalHeader
         + (uint32 pe.SectionTable.Length * Size.SectionHeader)
         |> Round.upTo falignment
 

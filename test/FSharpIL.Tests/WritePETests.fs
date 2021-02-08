@@ -65,6 +65,6 @@ let tests =
         testPE "all PE files are PE32" <| fun _ reader ->
             reader.PEHeaders.PEHeader.Magic = PEMagic.PE32
 
-        testPE "all PE files have 10 data directories" <| fun _ reader ->
-            reader.PEHeaders.PEHeader.NumberOfRvaAndSizes = 10
+        testPE "all PE files have 16 data directories" <| fun _ reader ->
+            reader.PEHeaders.PEHeader.NumberOfRvaAndSizes = 0x10
     ]

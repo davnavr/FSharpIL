@@ -73,20 +73,20 @@ type ImageBase =
     static member Default = ImageBase 0x40us
 
 type ImageSubsystem =
-    | Unknown = 0uy
-    | Native = 1uy
-    | WindowsGui = 2uy
-    | WindowsCui = 3uy
-    | OS2Cui = 5uy
-    | PosixCui = 7uy
-    | NativeWindows = 8uy
-    | WindowsCEGui = 9uy
-    | EfiApplication = 10uy
-    | EfiBootServiceDriver = 11uy
-    | EfiRuntimeDriver = 12uy
-    | EfiRom = 13uy
-    | Xbox = 14uy
-    | WindowsBootApplication = 16uy
+    | Unknown = 0us
+    | Native = 1us
+    | WindowsGui = 2us
+    | WindowsCui = 3us
+    | OS2Cui = 5us
+    | PosixCui = 7us
+    | NativeWindows = 8us
+    | WindowsCEGui = 9us
+    | EfiApplication = 10us
+    | EfiBootServiceDriver = 11us
+    | EfiRuntimeDriver = 12us
+    | EfiRom = 13us
+    | Xbox = 14us
+    | WindowsBootApplication = 16us
 
 [<Flags>]
 type PEFileFlags =
