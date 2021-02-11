@@ -34,14 +34,12 @@ type ValidationError =
 
     override this.ToString() =
         match this with
-        | DuplicateValue value -> value.GetType().Name |> sprintf "Cannot add duplicate %s to the table"
+        | DuplicateValue value -> value.GetType().Name |> sprintf "Cannot add duplicate %s"
         | MissingType(ns, name) ->
             match ns with
             | "" -> string name
             | _ -> sprintf "%s.%A" ns name
             |> sprintf "Unable to find type \"%s\", perhaps a TypeDef or TypeRef is missing"
-
-type ValidationResult<'Result> = ValidationResult<'Result, ClsViolation, ValidationWarning, ValidationError>
 
 type internal ITable<'Value> =
     inherit IReadOnlyCollection<'Value>
@@ -108,8 +106,6 @@ type TypeRef =
             | ResolutionScope.TypeRef (IHandle handle) -> handle |> Seq.singleton
             | _ -> Seq.empty
 
-    static member Add (t: TypeRef) (state: MetadataBuilderState) = state.TypeRef.GetHandle t
-
 [<Sealed>]
 type TypeRefTable internal (state: MetadataBuilderState) =
     inherit Table<TypeRef>(state)
@@ -117,8 +113,7 @@ type TypeRefTable internal (state: MetadataBuilderState) =
     let search = Dictionary<string * Identifier, TypeRef> 8
 
     /// <summary>
-    /// Searches for a type with the specified name and namespace, with a resolution scope
-    /// of <see cref="T:FSharpIL.Metadata.ResolutionScope.AssemblyRef"/>.
+    /// Searches for a type with the specified name and namespace, with a resolution scope of <see cref="T:FSharpIL.Metadata.ResolutionScope.AssemblyRef"/>.
     /// </summary>
     member internal this.FindType((ns, name) as t) =
         match search.TryGetValue(t) with
@@ -324,6 +319,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 | None -> ()
             }
 
+    // TODO: Replace these static methods for adding types with functions.
     static member private GetHandle<'Type> (def: 'Type) (state: MetadataBuilderState) (row: TypeDef) =
         state.TypeDef.GetHandle row
         |> Result.map (fun def' -> { TypeHandle = def' }: TypeHandle<'Type>)
@@ -715,16 +711,6 @@ type MemberRefTable internal (owner: MetadataBuilderState) =
         member _.GetEnumerator() = members.GetEnumerator()
         member _.GetEnumerator() = (members :> System.Collections.IEnumerable).GetEnumerator()
 
-/// <summary>
-/// Contains methods for adding <see cref="T:FSharpIL.Metadata.MethodRef"/> and
-/// <see cref="T:FSharpIL.Metadata.FieldRef"/> instances to the <c>MemberRef</c> table.
-/// </summary>
-/// <seealso cref="T:FSharpIL.Metadata.MemberRefTable"/>
-[<AbstractClass; Sealed>]
-type MemberRef =
-    static member AddMethod(method: MethodRef) (state: MetadataBuilderState) = state.MemberRef.GetHandle method
-    // static member AddField
-
 
 
 
@@ -778,8 +764,6 @@ type CustomAttribute =
                 // TODO: Yield handles used in custom attribute signature.
             }
 
-    static member Add (attr: CustomAttribute) (state: MetadataBuilderState) = state.CustomAttribute.Add attr
-
 [<Sealed>]
 type CustomAttributeTable internal (state: MetadataBuilderState) =
     let attrs = List<CustomAttribute>()
@@ -805,9 +789,6 @@ type Assembly =
       PublicKey: unit option
       Name: AssemblyName
       Culture: AssemblyCulture }
-
-    /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
-    static member Set(assembly: Assembly) (state: MetadataBuilderState) = state.SetAssembly assembly
 
 [<Sealed>]
 type AssemblyHandle internal (owner: obj) =
@@ -837,19 +818,6 @@ type AssemblyRef =
             && this.Culture = other.Culture
 
     interface IHandleValue with member _.Handles = Seq.empty
-
-    /// Adds a reference to an assembly.
-    static member Add(ref: AssemblyRef) = fun (state: MetadataBuilderState) -> state.AssemblyRef.GetHandle ref
-    static member Add(assembly: System.Reflection.Assembly) =
-        fun (state: MetadataBuilderState) ->
-            let name = assembly.GetName()
-            let ref =
-                { Version = name.Version
-                  PublicKeyOrToken = invalidOp "What public key?"
-                  Name = AssemblyName.ofStr name.Name
-                  Culture = name.CultureInfo |> invalidOp "What culture?"
-                  HashValue = None }
-            AssemblyRef.Add ref state
 
 [<Sealed>]
 type AssemblyRefTable internal (state: MetadataBuilderState) =
@@ -1154,8 +1122,8 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     /// The metadata version, contained in the metadata root (II.24.2.1).
     member val MetadataVersion = MetadataVersion.ofStr "v4.0.30319" with get, set
 
-    member val internal Warnings: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
-    member val internal ClsViolations: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ClsViolation>()
+    member val Warnings: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
+    member val ClsViolations: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ClsViolation>()
 
     // Reserved: uint32
     member val MajorVersion: byte = 2uy

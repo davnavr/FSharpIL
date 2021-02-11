@@ -3,21 +3,21 @@
 open System.Collections.Immutable
 
 /// II.22.1
-type ValidationResult<'Result, 'ClsViolation, 'Warning, 'Error> =
-    | ValidationSuccess of 'Result * IImmutableList<'ClsViolation>
-    | ValidationWarning of 'Result * IImmutableList<'ClsViolation> * IImmutableList<'Warning>
-    | ValidationError of 'Error
+type ValidationResult<'Result> =
+    | ValidationSuccess of 'Result * IImmutableList<ClsViolation>
+    | ValidationWarning of 'Result * IImmutableList<ClsViolation> * IImmutableList<ValidationWarning>
+    | ValidationError of ValidationError
 
     member this.Warnings =
         match this with
         | ValidationWarning (_, _, warnings) -> warnings
-        | _ -> ImmutableArray.Empty :> IImmutableList<_>
+        | _ -> ImmutableList.Empty :> IImmutableList<_>
 
     member this.ClsChecks =
         match this with
         | ValidationSuccess (_, checks)
         | ValidationWarning (_, checks, _) -> checks
-        | _ -> ImmutableArray.Empty :> IImmutableList<_>
+        | _ -> ImmutableList.Empty :> IImmutableList<_>
 
     member this.IsError =
         match this with
@@ -27,11 +27,17 @@ type ValidationResult<'Result, 'ClsViolation, 'Warning, 'Error> =
 
 [<RequireQualifiedAccess>]
 module ValidationResult =
+    /// <summary>
+    /// Retrieves the value associated with the result.
+    /// </summary>
+    /// <exception cref="T:System.ArgumentException">
+    /// The <paramref name="value"/> is a <see cref="T:FSharpIL.Metadata.ValidationResult`1.ValidationError"/>.
+    /// </exception>
     let get value =
         match value with
         | ValidationSuccess (result, _)
         | ValidationWarning (result, _, _) -> result
-        | ValidationError err -> string err |> invalidArg "value"
+        | ValidationError err -> string err |> invalidArg (nameof value)
 
     let toOption value =
         match value with
@@ -44,12 +50,6 @@ module ValidationResult =
         | ValidationSuccess (result, _)
         | ValidationWarning (result, _, _) -> Ok result
         | ValidationError err -> Error err
-
-    let map mapping value =
-        match value with
-        | ValidationSuccess (result, checks) -> ValidationSuccess(mapping result, checks)
-        | ValidationWarning (result, checks, warnings) -> ValidationWarning(mapping result, checks, warnings)
-        | ValidationError err -> ValidationError err
 
 [<AutoOpen>]
 module ValidationResultPatterns =

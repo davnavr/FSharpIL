@@ -3,7 +3,7 @@ module FSharpIL.Metadata.ValidationExpect
 
 open Expecto
 
-let wantError (x: ValidationResult<_, _, _, _>) msg =
+let wantError (x: ValidationResult<_>) msg =
     match x with
     | ValidationSuccess(result, checks) ->
         failtestf "%s. Expected ValidationError, was ValidationSuccess(%A, %A)" msg result checks

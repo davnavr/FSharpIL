@@ -10,6 +10,7 @@ open System.Collections.Immutable
 open FSharpIL.Generate
 
 open FSharpIL.Metadata
+open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
 [<Tests>]
@@ -41,26 +42,24 @@ let tests =
                   ParamList = fun _ -> failwith "no parameters" }
 
             let pe =
-                let builder =
-                    MetadataBuilderState
-                        { Mvid = Guid.NewGuid()
-                          Name = Identifier.ofStr "Program.exe" }
+                metadata {
+                    let! (program: TypeHandle<_>) =
+                        TypeDef.AddClass
+                            { StaticClassDef.Access = TypeVisibility.Public
+                              Extends = Extends.Null
+                              ClassName = Identifier.ofStr "Program"
+                              TypeNamespace = ""
+                              Flags = StaticClassFlags ClassFlags.Zero
+                              Fields = FieldList.Empty
+                              Methods = methods { StaticClassMethod.Method entrypoint } |> Result.get }
 
-                let program =
-                    TypeDef.AddClass
-                        { StaticClassDef.Access = TypeVisibility.Public
-                          Extends = Extends.Null
-                          ClassName = Identifier.ofStr "Program"
-                          TypeNamespace = ""
-                          Flags = StaticClassFlags ClassFlags.Zero
-                          Fields = FieldList.Empty
-                          Methods = methods { StaticClassMethod.Method entrypoint } |> Result.get }
-                        builder
-                    |> Result.get
-
-                MetadataBuilder.entrypoint (fun _ -> true) program builder
-
-                CliMetadata builder |> PEFile.ofMetadata IsExe
+                    do! selectEntrypoint (fun _ -> true) program
+                }
+                |> createMetadata
+                    { Mvid = Guid.NewGuid()
+                      Name = Identifier.ofStr "Program.exe" }
+                |> ValidationResult.get
+                |> PEFile.ofMetadata IsExe
 
             use metadata = WritePE.stream pe |> ModuleDefinition.ReadModule
             Expect.equal metadata.EntryPoint.Name (string entrypoint.MethodName) "name of entrypoint should match"

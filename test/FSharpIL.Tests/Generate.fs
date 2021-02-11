@@ -52,14 +52,14 @@ type Generate() =
                                 |> Gen.map Version
                             let! publicKey = Arb.generate
                             let! culture = Arb.generate
-                            return Assembly.Set
+                            let assembly =
                                 { Name = AssemblyName.ofStr name
                                   HashAlgId = ()
                                   Version = version
                                   Flags = ()
                                   PublicKey = publicKey
                                   Culture = culture }
-                                state
+                            return CliMetadata.setAssembly assembly state
                         }
                         |> Gen.optionOf
 

@@ -28,9 +28,9 @@ type MemberListBuilder<'Member, 'Row> internal (row: 'Member -> 'Row) =
     member inline _.Delay(f: unit -> HashSet<'Row> -> Result<unit, 'Member>) = fun set -> f () set
     member _.Run (expr: _ -> Result<_, 'Member>) =
         let set = HashSet<'Row>()
-        match expr set with
-        | Ok() -> set.ToImmutableArray() |> MemberList<'Member, 'Row> |> Ok
-        | Error err -> Error err
+        HashSet<'Row>()
+        |> expr
+        |> Result.map (fun() -> set.ToImmutableArray() |> MemberList<'Member, 'Row>)
     member _.Yield mber =
         fun (set: HashSet<'Row>) ->
             let item = row mber
