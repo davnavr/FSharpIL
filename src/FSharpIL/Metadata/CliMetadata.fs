@@ -158,11 +158,13 @@ module CliMetadata =
     /// <param name="predicate">A function used to determine which method is the entrypoint.</param>
     /// <param name="definingType">The type definition containing the entrypoint of the assembly.</param>
     let selectEntrypoint (predicate: MethodDef -> bool) (definingType: TypeHandle<_>) (state: MetadataBuilderState) =
-        Seq.tryFind
-            predicate
-            definingType.Item.MethodList
-        |> Option.iter
-            (fun main -> state.EntryPoint <- state.CreateHandle main |> Some)
+        let main =
+            Seq.find
+                predicate
+                definingType.Item.MethodList
+            |> state.CreateHandle
+            |> Some
+        state.EntryPoint <- main
 
     // let addTypeDef
 

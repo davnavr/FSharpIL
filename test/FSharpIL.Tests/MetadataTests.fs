@@ -32,7 +32,7 @@ let tests =
                 mdle.Types |> Seq.map (fun t -> t.Name, t.Namespace)
             Expect.sequenceEqual actual expected "type name and namespace should match"
 
-        testCase "entrypoint is set correctly" <| fun() ->
+        ftestCase "entrypoint is set correctly" <| fun() ->
             let entrypoint =
                 { Body = ImmutableArray.Create Opcode.Ret
                   ImplFlags = MethodImplFlags.Zero
@@ -43,6 +43,8 @@ let tests =
 
             let pe =
                 metadata {
+                    let! methodList = methods { StaticClassMethod.Method entrypoint }
+
                     let! (program: TypeHandle<_>) =
                         TypeDef.AddClass
                             { StaticClassDef.Access = TypeVisibility.Public
@@ -51,7 +53,7 @@ let tests =
                               TypeNamespace = ""
                               Flags = StaticClassFlags ClassFlags.Zero
                               Fields = FieldList.Empty
-                              Methods = methods { StaticClassMethod.Method entrypoint } |> Result.get }
+                              Methods = methodList }
 
                     do! selectEntrypoint (fun _ -> true) program
                 }
