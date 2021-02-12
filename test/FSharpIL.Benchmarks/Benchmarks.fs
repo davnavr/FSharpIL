@@ -116,7 +116,7 @@ type HelloWorld () =
                 }
 
             let! program =
-                TypeDef.AddClass
+                addStaticClass
                     { Access = TypeVisibility.Public
                       ClassName = Identifier.ofStr "Program"
                       Extends = Extends.TypeRef object

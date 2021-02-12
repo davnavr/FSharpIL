@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Collections.Immutable
+open System.Reflection
 
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
 [<Sealed>]
@@ -105,7 +106,9 @@ type CliMetadata (state: MetadataBuilderState) =
     /// </summary>
     member _.RowCounts = rowCounts
 
-type BuilderExpression<'T> = MetadataBuilderState -> Result<'T, ValidationError>
+type BuilderResult<'T> = Result<'T, ValidationError>
+
+type BuilderExpression<'T> = MetadataBuilderState -> BuilderResult<'T>
 
 [<Sealed>]
 type CliMetadataBuilder internal () =
@@ -166,11 +169,119 @@ module CliMetadata =
             |> Some
         state.EntryPoint <- main
 
-    // let addTypeDef
+    let private addTypeDef (def: 'Type) (typeDef: TypeDef) (state: MetadataBuilderState) =
+        state.TypeDef.GetHandle typeDef |> Result.map (fun def' -> { TypeHandle = def' }: TypeHandle<'Type>)
 
-    let referenceType typeRef (state: MetadataBuilderState) = state.TypeRef.GetHandle typeRef
+    // TODO: Enforce CLS checks and warnings.
+    let private addClassImpl ({ Flags = Flags flags } as def: ClassDef<_, _, _>) (state: MetadataBuilderState) =
+        let typeDef =
+            TypeDefRow (
+                flags ||| def.Access.Flags,
+                def.ClassName,
+                def.TypeNamespace,
+                def.Extends,
+                def.Fields.ToImmutableArray(),
+                def.Methods.ToImmutableArray(),
+                def.Access.EnclosingClass
+            )
+        addTypeDef def typeDef state
 
-    let referenceMethod method (state: MetadataBuilderState) = state.MemberRef.GetHandle method
+    /// <summary>
+    /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is not marked abstract or marked sealed.
+    /// </summary>
+    let addClass (classDef: ConcreteClassDef): BuilderExpression<TypeHandle<ConcreteClassDef>> = addClassImpl classDef
+
+    /// <summary>
+    /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is marked abstract,
+    /// meaning that it contains abstract methods that must be overriden by deriving classes.
+    /// </summary>
+    let addAbstractClass (classDef: AbstractClassDef): BuilderExpression<TypeHandle<AbstractClassDef>> = addClassImpl classDef
+
+    /// <summary>
+    /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is marked sealed,
+    /// meaning that it cannot be derived from by other classes.
+    /// </summary>
+    let addSealedClass (classDef: SealedClassDef): BuilderExpression<TypeHandle<SealedClassDef>> = addClassImpl classDef
+
+    /// <summary>
+    /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is marked both sealed and abstract.
+    /// </summary>
+    let addStaticClass (classDef: StaticClassDef): BuilderExpression<TypeHandle<StaticClassDef>> = addClassImpl classDef
+
+    let private addDerivedType extends f typeDef (state: MetadataBuilderState) =
+        match state.FindType extends with
+        | Some extends' ->
+            let def = f extends' typeDef
+            addTypeDef typeDef def state
+        | None -> MissingType extends |> Error
+
+    let addDelegate typeDef: BuilderExpression<_> =
+        addDerivedType
+            SystemType.Delegate
+            (fun extends ({ DelegateDef.Flags = Flags flags } as def) ->
+                TypeDefRow (
+                    flags ||| def.Access.Flags,
+                    def.DelegateName,
+                    def.TypeNamespace,
+                    Extends.TypeRef extends,
+                    ImmutableArray.Empty,
+                    ImmutableArray.Empty, // TODO: Add delegate methods.
+                    def.Access.EnclosingClass
+                ))
+            typeDef
+
+    let addEnum typeDef: BuilderExpression<_> =
+        addDerivedType
+            SystemType.Enum
+            (fun extends (def: EnumDef) ->
+                TypeDefRow (
+                    def.Access.Flags ||| TypeAttributes.Sealed ||| TypeAttributes.Serializable,
+                    def.EnumName,
+                    def.TypeNamespace,
+                    Extends.TypeRef extends,
+                    ImmutableArray.Empty, // TODO: Add enum values.
+                    ImmutableArray.Empty, // TODO: Add enum methods, if any.
+                    def.Access.EnclosingClass
+                ))
+            typeDef
+
+    /// <summary>
+    /// Adds a user-defined value type, which is a sealed <see cref="T:FSharpIL.Metadata.TypeDef"/>
+    /// that inherits from <see cref="T:System.ValueType"/>.
+    /// </summary>
+    let addStruct typeDef: BuilderExpression<_> =
+        addDerivedType
+            SystemType.ValueType
+            (fun extends ({ StructDef.Flags = Flags flags } as def) ->
+                TypeDefRow (
+                    flags ||| def.Access.Flags,
+                    def.StructName,
+                    def.TypeNamespace,
+                    Extends.TypeRef extends,
+                    def.Fields.ToImmutableArray(),
+                    ImmutableArray.Empty, // def.Methods.ToImmutableArray(), // TODO: Add struct methods.
+                    def.Access.EnclosingClass
+                ))
+            typeDef
+
+    let addInterface ({ InterfaceDef.Flags = Flags flags } as typeDef) (state: MetadataBuilderState): BuilderResult<_> =
+        let intf =
+            TypeDefRow (
+                flags ||| typeDef.Access.Flags,
+                typeDef.InterfaceName,
+                typeDef.TypeNamespace,
+                Extends.Null,
+                typeDef.Fields.ToImmutableArray(),
+                ImmutableArray.Empty, //def.Methods.ToImmutableArray(), // TODO: Add interface methods.
+                typeDef.Access.EnclosingClass
+            )
+        // TODO: Only add violation if type is successfully added.
+        if typeDef.Fields.Count > 0 then InterfaceContainsFields typeDef |> state.ClsViolations.Add
+        addTypeDef typeDef intf state
+
+    let referenceType typeRef (state: MetadataBuilderState): BuilderResult<_> = state.TypeRef.GetHandle typeRef
+
+    let referenceMethod method (state: MetadataBuilderState): BuilderResult<_> = state.MemberRef.GetHandle method
 
     // TODO: Better way of adding custom attributes, have a function: CustomAttribute -> target: _ -> MetadataBuilderState -> _
     let attribute attr (state: MetadataBuilderState) = state.CustomAttribute.Add attr

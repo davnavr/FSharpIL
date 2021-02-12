@@ -9,13 +9,14 @@ type IHandle =
 type IHandleValue =
     abstract Handles: seq<IHandle>
 
+// TODO: Replace handles with something else? Maybe make unique types for all tables?
 /// <summary>
 /// Guarantees that values originate from the same <see cref="T:FSharpIL.Metadata.MetadataBuilderState"/>.
 /// </summary>
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 // TODO: See if this being a struct is a performance advantage.
 // TODO: Should this be a record instead of a union to avoid the generation of a "Tag" member?
-type Handle<'Value> = // TODO: Rename to Index
+type Handle<'Value> = // TODO: Rename to Index or Owned
     private
     | Handle of obj * 'Value
 

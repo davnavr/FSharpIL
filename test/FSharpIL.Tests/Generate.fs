@@ -89,8 +89,8 @@ type Generate() =
                             |> Gen.oneof
 
                         // TODO: Add support for other classes.
-                        TypeDef.AddClass
-                            { StaticClassDef.Access = visibility
+                        CliMetadata.addStaticClass
+                            { Access = visibility
                               Flags = flags
                               ClassName = name
                               TypeNamespace = ns

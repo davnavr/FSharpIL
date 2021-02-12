@@ -46,8 +46,8 @@ let tests =
                     let! methodList = methods { StaticClassMethod.Method entrypoint }
 
                     let! (program: TypeHandle<_>) =
-                        TypeDef.AddClass
-                            { StaticClassDef.Access = TypeVisibility.Public
+                        addStaticClass
+                            { Access = TypeVisibility.Public
                               Extends = Extends.Null
                               ClassName = Identifier.ofStr "Program"
                               TypeNamespace = ""

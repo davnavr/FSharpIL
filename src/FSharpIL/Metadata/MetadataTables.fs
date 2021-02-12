@@ -53,6 +53,7 @@ type Table<'Value when 'Value :> IHandleValue> internal (state: MetadataBuilderS
 
     member _.Count = set.Count
 
+    // TODO: Figure out how to make this method internal.
     abstract member GetHandle : 'Value -> Result<Handle<'Value>, ValidationError>
     default _.GetHandle(value: 'Value) =
         state.EnsureOwner value
@@ -223,7 +224,7 @@ type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, ConcreteClassM
 /// Represents an abstract class.
 type AbstractClassDef = ClassDef<AbstractClassFlags, FieldChoice, AbstractClassMethod>
 type SealedClassDef = ClassDef<SealedClassFlags, FieldChoice, SealedClassMethod>
-// TODO: Remove Extends field for static classes, and make them inherit from System.Object.
+// TODO: Remove Extends field for static classes, and make them inherit from System.Object if this is a requirement by ECMA-335.
 /// Represents a sealed and abstract class, meaning that it can only contain static members.
 type StaticClassDef = ClassDef<StaticClassFlags, StaticField, StaticClassMethod>
 
@@ -276,6 +277,8 @@ type TypeHandle<'Type> = // TODO: Rename to TypeDefHandle
         member this.Owner = this.TypeHandle.Owner
         member _.ValueType = typeof<'Type>
 
+// TODO: Create TypeHandle aliases for all kinds of TypeDefs.
+
 /// <summary>
 /// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
 /// </summary>
@@ -285,7 +288,7 @@ type TypeHandle<'Type> = // TODO: Rename to TypeDefHandle
 /// <seealso cref="T:FSharpIL.Metadata.InterfaceDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.StructDef"/>
 [<Sealed>]
-type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
+type TypeDef internal (flags, name, ns, extends, fields, methods, parent) = // TODO: Rename to TypeDefRow.
     member _.Flags: TypeAttributes = flags
     member _.TypeName: Identifier = name
     member _.TypeNamespace: string = ns
@@ -319,89 +322,7 @@ type TypeDef private (flags, name, ns, extends, fields, methods, parent) =
                 | None -> ()
             }
 
-    // TODO: Replace these static methods for adding types with functions.
-    static member private GetHandle<'Type> (def: 'Type) (state: MetadataBuilderState) (row: TypeDef) =
-        state.TypeDef.GetHandle row
-        |> Result.map (fun def' -> { TypeHandle = def' }: TypeHandle<'Type>)
-
-    // TODO: Enforce CLS checks and warnings.
-    static member private AddClassImpl({ Flags = Flags flags } as def: ClassDef<'Flags, 'Field, 'Method>) (state: MetadataBuilderState) =
-        TypeDef (
-            flags ||| def.Access.Flags,
-            def.ClassName,
-            def.TypeNamespace,
-            def.Extends,
-            def.Fields.ToImmutableArray(),
-            def.Methods.ToImmutableArray(),
-            def.Access.EnclosingClass
-        )
-        |> TypeDef.GetHandle<ClassDef<'Flags, 'Field, 'Method>> def state
-
-    static member AddClass(def: ConcreteClassDef) = TypeDef.AddClassImpl def
-    static member AddClass(def: AbstractClassDef) = TypeDef.AddClassImpl def
-    static member AddClass(def: SealedClassDef) = TypeDef.AddClassImpl def
-    static member AddClass(def: StaticClassDef) = TypeDef.AddClassImpl def
-
-    static member AddDelegate({ Flags = Flags flags } as def: DelegateDef) (state: MetadataBuilderState) =
-        match state.FindType SystemType.Delegate with
-        | Some super ->
-            TypeDef (
-                flags ||| def.Access.Flags,
-                def.DelegateName,
-                def.TypeNamespace,
-                Extends.TypeRef super,
-                ImmutableArray.Empty,
-                ImmutableArray.Empty, // TODO: Add delegate methods.
-                def.Access.EnclosingClass
-            )
-            |> TypeDef.GetHandle<DelegateDef> def state
-        | None -> MissingType SystemType.Delegate |> Error
-
-    static member AddEnum(def: EnumDef) (state: MetadataBuilderState) =
-        match state.FindType SystemType.Enum with
-        | Some super ->
-            TypeDef (
-                def.Access.Flags ||| TypeAttributes.Sealed ||| TypeAttributes.Serializable,
-                def.EnumName,
-                def.TypeNamespace,
-                Extends.TypeRef super,
-                ImmutableArray.Empty, // TODO: Add enum values.
-                ImmutableArray.Empty, // TODO: Add enum methods, if any.
-                def.Access.EnclosingClass
-            )
-            |> TypeDef.GetHandle<EnumDef> def state
-        | None -> MissingType SystemType.Enum |> Error
-
-    static member AddInterface({ Flags = Flags flags } as def: InterfaceDef) (state: MetadataBuilderState) =
-        let intf =
-            TypeDef (
-                flags ||| def.Access.Flags,
-                def.InterfaceName,
-                def.TypeNamespace,
-                Extends.Null,
-                def.Fields.ToImmutableArray(),
-                ImmutableArray.Empty, //def.Methods.ToImmutableArray(), // TODO: Add interface methods.
-                def.Access.EnclosingClass
-            )
-            |> TypeDef.GetHandle<InterfaceDef> def state
-        if def.Fields.Count > 0 then InterfaceContainsFields def |> state.ClsViolations.Add
-        intf
-
-    /// <summary>Defines a value type, which is a class that inherits from <see cref="T:System.ValueType"/>.</summary>
-    static member AddStruct({ Flags = Flags flags } as def: StructDef) (state: MetadataBuilderState) =
-        match state.FindType SystemType.ValueType with
-        | Some super ->
-            TypeDef (
-                flags ||| def.Access.Flags,
-                def.StructName,
-                def.TypeNamespace,
-                Extends.TypeRef super,
-                def.Fields.ToImmutableArray(),
-                ImmutableArray.Empty, // def.Methods.ToImmutableArray(), // TODO: Add struct methods.
-                def.Access.EnclosingClass
-            )
-            |> TypeDef.GetHandle<StructDef> def state
-        | None -> MissingType SystemType.ValueType |> Error
+type TypeDefRow = TypeDef
 
 [<Sealed>]
 type TypeDefTable internal (owner: MetadataBuilderState) =
