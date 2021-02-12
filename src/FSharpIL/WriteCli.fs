@@ -154,6 +154,8 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             + tables.AssemblyRef.Count
             + tables.TypeRef.Count
         function
+        | ResolutionScope.Module -> 1u, 0u
+        | ResolutionScope.ModuleRef moduleRef -> tables.ModuleRef.IndexOf moduleRef, 1u
         | ResolutionScope.AssemblyRef assm -> tables.AssemblyRef.IndexOf assm, 2u
         | bad -> failwithf "Unsupported resolution scope %A" bad
         |> codedIndex total 2
@@ -299,6 +301,13 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
 
 
+    // ModuleRef (0x1A)
+    for moduleRef in tables.ModuleRef.Items do
+        info.StringsStream.WriteStringIndex(moduleRef.Name, writer) // Name
+
+
+
+
     // Assembly (0x20)
     if tables.Assembly.IsSome then
         let assembly = tables.Assembly.Value
@@ -323,6 +332,22 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         info.StringsStream.WriteStringIndex(row.Name, writer)
         info.StringsStream.WriteStringIndex(row.Culture, writer)
         info.BlobStream.WriteEmpty writer // HashValue // TODO: Figure out how to write the HashValue into a blob.
+
+
+
+
+    // File (0x26)
+    for file in tables.File.Items do
+        let flags =
+            if file.ContainsMetadata
+            then 0u
+            else 1u
+        writer.WriteU4 flags
+        info.StringsStream.WriteStringIndex(file.FileName, writer)
+        info.BlobStream.WriteIndex(file.HashValue, writer)
+
+
+
 
     // NestedClass (0x29)
     for row in tables.NestedClass do

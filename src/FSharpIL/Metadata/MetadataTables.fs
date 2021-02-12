@@ -22,19 +22,28 @@ type ClsViolation =
     | InterfaceContainsFields of InterfaceDef
 
 type ValidationWarning =
-    /// 10
-    | DuplicateAssemblyRef of AssemblyRef
-    /// 1d
+    /// (1d)
     | TypeRefUsesModuleResolutionScope of TypeRef
 
+    // TODO: Consider not generating warnings if a duplicate value is detected for certain tables since duplicate items are already silently removed,
+    // to avoid having users checking for duplicates themselves.
+
+    /// (2)
+    | DuplicateModuleRef of ModuleRef
+    /// (10)
+    | DuplicateAssemblyRef of AssemblyRef
+
 type ValidationError =
+    // TODO: Have different cases for different duplicate values.
     /// Error used when a duplicate object was added to a table, or when a duplicate method or field is added to a type.
     | DuplicateValue of obj
+    | DuplicateFile of File
     | MissingType of ns: string * Identifier
 
     override this.ToString() =
         match this with
         | DuplicateValue value -> value.GetType().Name |> sprintf "Cannot add duplicate %s"
+        | DuplicateFile file -> sprintf "A file with the name %A already exists in the file table" file.FileName
         | MissingType(ns, name) ->
             match ns with
             | "" -> string name
@@ -78,14 +87,20 @@ type ModuleTable =
       // EncBaseId
       }
 
+/// <summary>
+/// Indicates where the target <see cref="T:FSharpIL.Metadata.TypeRef"/> is defined (II.22.38).
+/// </summary>
 [<NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]
 type ResolutionScope =
-    | Module // NOTE: Does not occur in a compressed CLI module, and should produce a warning.
-    | ModuleRef // of Handle<?>
+    /// Indicates that "the target type is defined in the current module", and produces a warning as this value should not be used.
+    | Module
+    /// Indicates that the target type "is defined in another module within the same assembly as this one".
+    | ModuleRef of Handle<ModuleRef>
+    /// Indicates that "The target type is defined in a different assembly".
     | AssemblyRef of Handle<AssemblyRef>
     | TypeRef of Handle<TypeRef>
-    | Null
+    | Null // of Handle<ExportedTypeRow> // TODO: How to enforce that a row exists in the ExportedType table?
 
 /// II.22.38
 [<NoComparison; CustomEquality>]
@@ -400,26 +415,6 @@ type FieldChoice =
 /// </summary>
 type GlobalField = Field<GlobalFieldFlags, FieldSignature>
 
-// TODO: Make FieldSet and MethodSet immutable collections?
-// TODO: Make computation expressions for fields and methods.
-/// <summary>Represents a set of fields owned by a <see cref="T:FSharpIL.Metadata.TypeDef"/> within the <c>Field</c> table.</summary>
-[<Sealed>]
-[<Obsolete>]
-type FieldSet<'Field when 'Field :> IField> (capacity: int) =
-    let fields = HashSet<FieldRow> capacity
-
-    new() = FieldSet 1
-
-    member _.Count: int = fields.Count
-
-    member _.Add(field: 'Field) =
-        let field' = field.Row()
-        if fields.Add field'
-        then Ok()
-        else Error field
-
-    member _.ToImmutable(): ImmutableArray<FieldRow> = fields.ToImmutableArray()
-
 // TODO: Create better way to get Handle<MethodDef> to allow easy use when setting the entrypoint or adding custom attributes.
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
@@ -702,6 +697,42 @@ type CustomAttributeTable internal (state: MetadataBuilderState) =
 
 
 
+
+/// <seealso cref="T:FSharpIL.Metadata.FileTable"/>
+[<IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
+//[<StructuralComparison; StructuralEquality>]
+type ModuleRef =
+    { /// <summary>
+      /// The corresponding entry in the <c>File</c> table that allows "the CLI to locate the target module".
+      /// </summary>
+      File: Handle<File> }
+
+    /// <summary>
+    /// Corresponds to the <c>Name</c> column, which matches an entry in the <c>File</c> table.
+    /// </summary>
+    member this.Name = this.File.Item.FileName
+
+[<Sealed>]
+type ModuleRefTable internal (state: MetadataBuilderState) =
+    let modules = HashSet<_>()
+
+    member _.Count = modules.Count
+
+    member _.Add moduleRef =
+        if modules.Add moduleRef |> not then
+            DuplicateModuleRef moduleRef |> state.Warnings.Add
+        state.CreateHandle moduleRef
+
+    interface ITable<ModuleRef> with
+        member _.Count = modules.Count
+        member _.Comparer = modules.Comparer
+        member _.GetEnumerator() = modules.GetEnumerator() :> IEnumerator<_>
+        member _.GetEnumerator() = modules.GetEnumerator() :> System.Collections.IEnumerator
+
+
+
+
 /// II.22.2
 type Assembly =
     { HashAlgId: unit
@@ -756,6 +787,50 @@ type AssemblyRefTable internal (state: MetadataBuilderState) =
         member _.Count = set.Count
         member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
+
+
+
+
+
+/// <summary>Represents a row in the <c>File</c> table (II.22.19).</summary>
+[<CustomComparison; CustomEquality>]
+type File =
+    { /// <summary>
+      /// Corresponds to the <c>Flags</c> row, indicates whether a file "is a resource file or
+      /// other non-metadata-containing file" (II.23.1.6).
+      /// </summary>
+      ContainsMetadata: bool
+      FileName: Identifier
+      HashValue: byte[] }
+
+    override this.Equals obj = (this :> IEquatable<File>).Equals(obj :?> File)
+    override this.GetHashCode() = this.FileName.GetHashCode()
+
+    interface IEquatable<File> with
+        member this.Equals other = this.FileName = other.FileName
+
+    interface IComparable with
+        member this.CompareTo obj = compare this.FileName (obj :?> File).FileName
+
+[<Sealed>]
+type FileTable internal (state: MetadataBuilderState) =
+    let set = HashSet<File>()
+
+    member _.Count = set.Count
+
+    member _.GetHandle file =
+        if set.Add file
+        then state.CreateHandle file |> Ok
+        else DuplicateFile file |> Error
+
+    interface ITable<File> with
+        member _.Comparer = EqualityComparer<_>.Default :> IEqualityComparer<_>
+        member _.Count = set.Count
+        member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
+        member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
+
+
+
 
 // II.22.32
 [<Struct; IsReadOnly>]
@@ -1096,8 +1171,8 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     // member MethodSemantics
     // (0x19)
     // member MethodImpl
-    // (0x1A)
-    // member ModuleRef
+    /// (0x1A)
+    member val ModuleRef = ModuleRefTable this
     // (0x1B)
     // member TypeSpec
     // (0x1C)
@@ -1112,8 +1187,8 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     member val AssemblyRef: AssemblyRefTable = AssemblyRefTable this
     // AssemblyRefProcessor // 0x24 // Not used when writing a PE file
     // AssemblyRefOS // 0x25 // Not used when writing a PE file
-    // (0x26)
-    // member File
+    /// (0x26)
+    member val File = FileTable this
     // (0x27)
     // member ExportedType
     // (0x28)

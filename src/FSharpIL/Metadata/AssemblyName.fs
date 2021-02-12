@@ -3,8 +3,9 @@
 open System
 
 // II.22.2
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type AssemblyName =
-    internal
+    private
     | AssemblyName of string
 
     override this.ToString() = let (AssemblyName name) = this in name

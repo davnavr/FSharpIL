@@ -46,13 +46,25 @@ type CliMetadata (state: MetadataBuilderState) =
             bits <- bits ||| (1UL <<< 8)
             uint32 parameters.Length |> counts.Add
 
+
+
         if state.MemberRef.Count > 0 then
             bits <- bits ||| (1UL <<< 0xA)
             uint32 state.MemberRef.Count |> counts.Add
 
+
+
         if state.CustomAttribute.Count > 0 then
             bits <- bits ||| (1UL <<< 0xC)
             uint32 state.CustomAttribute.Count |> counts.Add
+
+
+
+        if state.ModuleRef.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x1A)
+            uint32 state.ModuleRef.Count |> counts.Add
+
+
 
         if state.Assembly.IsSome then
             bits <- bits ||| (1UL <<< 0x20)
@@ -60,6 +72,14 @@ type CliMetadata (state: MetadataBuilderState) =
         if state.AssemblyRef.Count > 0 then
             bits <- bits ||| (1UL <<< 0x23)
             uint32 state.AssemblyRef.Count |> counts.Add
+
+
+
+        if state.File.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x26)
+            uint32 state.File.Count |> counts.Add
+
+
 
         if nestedClass.Length > 0 then
             bits <- bits ||| (1UL <<< 0x29)
@@ -92,8 +112,12 @@ type CliMetadata (state: MetadataBuilderState) =
 
     member val CustomAttribute = state.CustomAttribute.ToImmutableArray()
 
+    member val ModuleRef = state.CreateTable state.ModuleRef
+
     member val Assembly = state.Assembly
     member val AssemblyRef = state.CreateTable state.AssemblyRef
+
+    member val File = state.CreateTable state.File
 
     member _.NestedClass = nestedClass
 
@@ -240,7 +264,7 @@ module CliMetadata =
                     def.TypeNamespace,
                     Extends.TypeRef extends,
                     ImmutableArray.Empty, // TODO: Add enum values.
-                    ImmutableArray.Empty, // TODO: Add enum methods, if any.
+                    ImmutableArray.Empty,
                     def.Access.EnclosingClass
                 ))
             typeDef
@@ -321,7 +345,7 @@ module CliMetadata =
         for mref in metadata.MemberRef.Items do
             string mref.MemberName |> action
 
-
+        // ModuleRef table not necessary, since its names will correspond to names used in the File table
 
         match metadata.Assembly with
         | Some assembly ->
@@ -333,11 +357,15 @@ module CliMetadata =
             string assembly.Name |> action
             string assembly.Culture |> action
 
+        for { FileName = name } in metadata.File.Items do
+            string name |> action
+
     let inline internal iterBlobs
             methodDef
             methodRef
             customAttribute
             publicKeyOrToken
+            bytes
             (metadata: CliMetadata) =
         for method in metadata.MethodDef.Items do
             methodDef method.Signature
@@ -351,5 +379,8 @@ module CliMetadata =
 
         for { PublicKeyOrToken = token } in metadata.AssemblyRef.Items do
             publicKeyOrToken token
+
+        for { File.HashValue = hashValue } in metadata.File.Items do
+            bytes hashValue
 
         ()

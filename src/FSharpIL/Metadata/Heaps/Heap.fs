@@ -94,6 +94,7 @@ module internal Heap =
 
               CustomAttribute = Dictionary<_, _> metadata.CustomAttribute.Length
               PublicKeyTokens = Dictionary<_, _> metadata.AssemblyRef.Count
+              ByteBlobs = Dictionary<_, _>(metadata.File.Count)
               ByteLength = 1u }
         let inline index (dict: Dictionary<_, _>) key size =
             if size > 0u then
@@ -120,6 +121,9 @@ module internal Heap =
                     | PublicKeyToken _ -> 8u
                     | NoPublicKey -> 0u
                     |> index blob.PublicKeyTokens token)
+            (fun bytes ->
+                if not (blob.ByteBlobs.ContainsKey bytes) then
+                    uint32 bytes.Length |> index blob.ByteBlobs bytes)
             metadata
 
         blob
@@ -145,6 +149,7 @@ module internal Heap =
         let methodRef = HashSet<_> blobs.MethodRef.Count
         let attributes = HashSet<_> blobs.CustomAttribute.Count
         let publicKeyTokens = HashSet<_> blobs.PublicKeyTokens.Count
+        let bytes = HashSet<byte[]> blobs.ByteBlobs.Count
 
         writer.WriteU1 0uy // Empty blob
 
@@ -195,6 +200,9 @@ module internal Heap =
                         writer.WriteU1 b7
                         writer.WriteU1 b8
                     | _ -> failwithf "Invalid public key or token %A" token)
+            (fun bytes ->
+                uint32 bytes.Length |> writer.WriteBlobSize
+                writer.WriteBytes bytes)
             metadata
 
     let writeUS (us: UserStringHeap) (writer: ChunkWriter) =

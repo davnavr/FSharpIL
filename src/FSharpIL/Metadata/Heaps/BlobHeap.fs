@@ -27,6 +27,7 @@ type internal BlobHeap =
       CustomAttribute: Dictionary<CustomAttributeSignature, BlobIndex>
 
       PublicKeyTokens: Dictionary<PublicKeyOrToken, BlobIndex>
+      ByteBlobs: Dictionary<byte[], BlobIndex>
       mutable ByteLength: uint32 }
 
     member this.SignatureCount =
@@ -50,6 +51,7 @@ type internal BlobHeap =
         | None -> ()
 
     member this.WriteIndex(token, writer) = this.WriteRawIndex(this.PublicKeyTokens.Item token, writer)
+    member this.WriteIndex(bytes, writer) = this.WriteRawIndex(this.ByteBlobs.Item bytes, writer)
 
     member this.WriteEmpty writer = this.WriteRawIndex(0u, writer)
 

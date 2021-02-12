@@ -9,6 +9,7 @@ type IHandle =
 type IHandleValue =
     abstract Handles: seq<IHandle>
 
+// TODO: Figure out how to allow equality and comparison? This rpoblem might be made easier if multiple specifif handle types existed.
 // TODO: Replace handles with something else? Maybe make unique types for all tables?
 /// <summary>
 /// Guarantees that values originate from the same <see cref="T:FSharpIL.Metadata.MetadataBuilderState"/>.
