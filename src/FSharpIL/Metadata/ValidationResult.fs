@@ -39,6 +39,11 @@ module ValidationResult =
         | ValidationWarning (result, _, _) -> result
         | ValidationError err -> string err |> invalidArg (nameof value)
 
+    let ofOption none value =
+        match value with
+        | Some value' -> ValidationSuccess(value', ImmutableList.Empty)
+        | None -> none value |> ValidationError
+
     let toOption value =
         match value with
         | ValidationSuccess (result, _)

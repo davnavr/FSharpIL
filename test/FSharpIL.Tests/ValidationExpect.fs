@@ -12,3 +12,7 @@ let wantError (x: ValidationResult<_>) msg =
     | ValidationError err -> err
 
 let isError x msg = wantError x msg |> ignore
+
+let isSpecificError (actual: ValidationResult<_>) (expected: ValidationError) msg =
+    let result = wantError actual msg
+    Expect.equal expected result msg

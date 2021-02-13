@@ -164,8 +164,8 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         // TODO: Include TypeSpec table.
         let total = tables.TypeDef.Count + tables.TypeRef.Count
         function
-        | Extends.AbstractClass { TypeHandle = tdef }
-        | Extends.ConcreteClass { TypeHandle = tdef } -> tables.TypeDef.IndexOf tdef, 0u
+        | Extends.AbstractClass (SimpleIndex tdef)
+        | Extends.ConcreteClass (SimpleIndex tdef) -> tables.TypeDef.IndexOf tdef, 0u
         | Extends.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
         | Extends.Null -> 0u, 0u
         |> codedIndex total 2
@@ -213,7 +213,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     let customAttributeType =
         let total = tables.MethodDef.Count + tables.MemberRef.Count
         function
-        | CustomAttributeType.MemberRef mref -> tables.MemberRef.IndexOf mref.Handle, 3u
+        | CustomAttributeType.MemberRef (SimpleIndex mref) -> tables.MemberRef.IndexOf mref, 3u
         |> codedIndex total 3
 
     // Module (0x00)

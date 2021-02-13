@@ -1,4 +1,5 @@
-﻿module FSharpIL.Result
+﻿[<System.Obsolete>]
+module FSharpIL.Result
 
 let get =
     function

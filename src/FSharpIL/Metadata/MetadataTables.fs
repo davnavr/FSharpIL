@@ -8,6 +8,8 @@ open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 
+// TODO: Consider moving some table types and the MetadataBuilder class to a file below this one.
+
 [<RequireQualifiedAccess>]
 module internal SystemType =
     let Delegate = "System", Identifier "Delegate"
@@ -27,6 +29,7 @@ type ValidationWarning =
 
 type ValidationError =
     // TODO: Have different cases for different duplicate values.
+    // TODO: Consider replacing errors that occur for duplicate values with something else.
     /// Error used when a duplicate object was added to a table, or when a duplicate method or field is added to a type.
     | DuplicateValue of obj
     | DuplicateFile of File
@@ -42,34 +45,6 @@ type ValidationError =
             | _ -> sprintf "%s.%A" ns name
             |> sprintf "Unable to find type \"%s\", perhaps a TypeDef or TypeRef is missing"
 
-type internal ITable<'Value> =
-    inherit IReadOnlyCollection<'Value>
-
-    abstract Comparer : IEqualityComparer<'Value>
-
-type Table<'Value when 'Value :> IHandleValue> internal (state: MetadataBuilderState, comparer: IEqualityComparer<'Value>) =
-    let set = HashSet<'Value> comparer
-
-    new(state: MetadataBuilderState) = Table(state, EqualityComparer.Default)
-
-    member _.Count = set.Count
-
-    // TODO: Figure out how to make this method internal.
-    abstract member GetHandle : 'Value -> Result<Handle<'Value>, ValidationError>
-    default _.GetHandle(value: 'Value) =
-        state.EnsureOwner value
-        if set.Add value |> not
-        then DuplicateValue value |> Error
-        else state.CreateHandle value |> Ok
-
-    member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
-
-    interface ITable<'Value> with
-        member _.Comparer = comparer
-        member _.Count = set.Count
-        member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
-        member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
-
 /// II.22.30
 type ModuleTable =
     { // Generation
@@ -82,86 +57,73 @@ type ModuleTable =
 /// <summary>
 /// Indicates where the target <see cref="T:FSharpIL.Metadata.TypeRef"/> is defined (II.22.38).
 /// </summary>
-[<NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]
 type ResolutionScope =
     /// Indicates that "the target type is defined in the current module", and produces a warning as this value should not be used.
     | Module
     /// Indicates that the target type "is defined in another module within the same assembly as this one".
-    | ModuleRef of Handle<ModuleRef>
+    | ModuleRef of SimpleIndex<ModuleRef>
     /// Indicates that "The target type is defined in a different assembly".
-    | AssemblyRef of Handle<AssemblyRef>
-    | TypeRef of Handle<TypeRef>
-    | Null // of Handle<ExportedTypeRow> // TODO: How to enforce that a row exists in the ExportedType table?
+    | AssemblyRef of SimpleIndex<AssemblyRef>
+    | TypeRef of SimpleIndex<TypeRef>
+    | Null // of SimpleIndex<ExportedTypeRow> // TODO: How to enforce that a row exists in the ExportedType table?
 
 /// II.22.38
-[<NoComparison; CustomEquality>]
+[<StructuralComparison; StructuralEquality>]
 type TypeRef =
     { ResolutionScope: ResolutionScope
       TypeName: Identifier
       TypeNamespace: string }
 
-    interface IEquatable<TypeRef> with
-        member this.Equals other =
-            this.ResolutionScope = other.ResolutionScope
-            && this.TypeName = other.TypeName
-            && this.TypeNamespace = other.TypeNamespace
-
-    interface IHandleValue with
-        member this.Handles =
-            match this.ResolutionScope with
-            | ResolutionScope.AssemblyRef (IHandle handle)
-            | ResolutionScope.TypeRef (IHandle handle) -> handle |> Seq.singleton
-            | _ -> Seq.empty
-
 [<Sealed>]
-type TypeRefTable internal (state: MetadataBuilderState) =
-    inherit Table<TypeRef>(state)
-
+type TypeRefTable internal (owner: obj, warnings: ImmutableArray<_>.Builder) =
+    let table = MutableTable<_> owner
     let search = Dictionary<string * Identifier, TypeRef> 8
+
+    member _.Count = table.Count
 
     /// <summary>
     /// Searches for a type with the specified name and namespace, with a resolution scope of <see cref="T:FSharpIL.Metadata.ResolutionScope.AssemblyRef"/>.
     /// </summary>
-    member internal this.FindType((ns, name) as t) =
+    member internal _.FindType((ns, name) as t) =
         match search.TryGetValue(t) with
-        | (true, existing) -> state.CreateHandle existing |> Some
+        | (true, existing) -> SimpleIndex(owner, existing) |> Some
         | (false, _) ->
             Seq.tryPick
                 (function
                 | { ResolutionScope = ResolutionScope.AssemblyRef _ } as t' when t'.TypeName = name && t'.TypeNamespace = ns ->
                     search.Item <- (ns, name), t'
-                    state.CreateHandle t' |> Some
+                    SimpleIndex(owner, t') |> Some
                 | _ -> None)
-                this
+                table
 
-    override _.GetHandle typeRef =
-        let token = base.GetHandle typeRef
-
-        match token with
-        | Ok _ ->
-            // TODO: Check that the name is a "valid CLS identifier".
-
-            match typeRef.ResolutionScope with
-            | ResolutionScope.Module -> TypeRefUsesModuleResolutionScope typeRef |> state.Warnings.Add
-            | _ -> ()
+    member _.GetIndex typeRef =
+        // TODO: Check that the name is a "valid CLS identifier".
+        match typeRef.ResolutionScope with
+        | ResolutionScope.Module -> TypeRefUsesModuleResolutionScope typeRef |> warnings.Add
         | _ -> ()
 
-        token
+        table.GetIndex typeRef |> Option.defaultWith (fun() -> SimpleIndex(owner, typeRef))
+
+    member _.GetEnumerator() = table.GetEnumerator()
+
+    interface IReadOnlyCollection<TypeRef> with
+        member this.Count = this.Count
+        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
+        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
 
 /// <summary>
 /// Specifies which type a <see cref="T:FSharpIL.Metadata.TypeDef"/> extends.
 /// </summary>
-[<NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]
 type Extends =
     /// Extend a class that is not sealed or abstract.
-    | ConcreteClass of TypeHandle<ConcreteClassDef>
+    | ConcreteClass of TypeIndex<ConcreteClassDef>
     /// Extend an abstract class.
-    | AbstractClass of TypeHandle<AbstractClassDef>
+    | AbstractClass of TypeIndex<AbstractClassDef>
     /// Extends a type referenced in another assembly.
-    | TypeRef of Handle<TypeRef>
-    // | TypeSpec of Handle<?>
+    | TypeRef of SimpleIndex<TypeRef>
+    // | TypeSpec of SimpleIndex<?>
     /// <summary>
     /// Indicates that a class does not extend another class, used by <see cref="T:System.Object"/> and interfaces.
     /// </summary>
@@ -171,16 +133,16 @@ type Extends =
 type TypeVisibility =
     | NotPublic
     | Public
-    | NestedPublic of Handle<TypeDef>
-    | NestedPrivate of Handle<TypeDef>
+    | NestedPublic of SimpleIndex<TypeDef>
+    | NestedPrivate of SimpleIndex<TypeDef>
     /// <summary>Equivalent to the C# <see langword="protected"/> keyword.</summary>
-    | NestedFamily of Handle<TypeDef>
+    | NestedFamily of SimpleIndex<TypeDef>
     /// <summary>Equivalent to the C# <see langword="internal"/> keyword.</summary>
-    | NestedAssembly of Handle<TypeDef>
+    | NestedAssembly of SimpleIndex<TypeDef>
     /// <summary>Equivalent to the C# <see langword="private protected"/> keyword.</summary>
-    | NestedFamilyAndAssembly of Handle<TypeDef>
+    | NestedFamilyAndAssembly of SimpleIndex<TypeDef>
     /// <summary>Equivalent to the C# <see langword="protected internal"/> keyword.</summary>
-    | NestedFamilyOrAssembly of Handle<TypeDef>
+    | NestedFamilyOrAssembly of SimpleIndex<TypeDef>
 
     /// <summary>Retrieves the enclosing class of this nested class.</summary>
     /// <remarks>In the actual metadata, nested type information is actually stored in the NestedClass table (II.22.32).</remarks>
@@ -273,18 +235,7 @@ type StructDef =
      Fields: FieldList<FieldChoice>
      Methods: unit }
 
-[<Struct; IsReadOnly>]
-type TypeHandle<'Type> = // TODO: Rename to TypeDefHandle
-    internal { TypeHandle: Handle<TypeDef> }
-
-    member this.Handle = this.TypeHandle
-    member this.Item = this.TypeHandle.Item // TODO: Rename to Type
-
-    interface IHandle with
-        member this.Owner = this.TypeHandle.Owner
-        member _.ValueType = typeof<'Type>
-
-// TODO: Create TypeHandle aliases for all kinds of TypeDefs.
+type TypeIndex<'Type> = TaggedIndex<'Type, TypeDef>
 
 /// <summary>
 /// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
@@ -302,7 +253,7 @@ type TypeDef internal (flags, name, ns, extends, fields, methods, parent) = // T
     member _.Extends: Extends = extends
     member _.FieldList: ImmutableArray<FieldRow> = fields
     member _.MethodList: ImmutableArray<MethodDef> = methods
-    member _.EnclosingClass: Handle<TypeDef> option = parent
+    member _.EnclosingClass: SimpleIndex<TypeDef> option = parent
 
     override this.Equals obj =
         match obj with
@@ -315,35 +266,21 @@ type TypeDef internal (flags, name, ns, extends, fields, methods, parent) = // T
         member _.Equals other =
             ns = other.TypeNamespace && name = other.TypeName
 
-    interface IHandleValue with
-        member _.Handles =
-            seq {
-                match extends with
-                | Extends.ConcreteClass (IHandle handle)
-                | Extends.AbstractClass (IHandle handle)
-                | Extends.TypeRef (IHandle handle) -> handle
-                | Extends.Null -> ()
-
-                match parent with
-                | Some(IHandle parent') -> parent'
-                | None -> ()
-            }
-
 type TypeDefRow = TypeDef
 
 [<Sealed>]
-type TypeDefTable internal (owner: MetadataBuilderState) =
-    let defs = Table<TypeDef> owner
+type TypeDefTable internal (owner: obj) =
+    let defs = MutableTable<TypeDef> owner
 
     // TODO: Add the <Module> class used for global variables and functions, which should be the first entry.
 
     member _.Count = defs.Count
 
     // TODO: Enforce common CLS checks and warnings for types.
-    member internal _.GetHandle(t: TypeDef): Result<Handle<TypeDef>, ValidationError> = defs.GetHandle t
+    member _.GetIndex(t: TypeDef) =
+        defs.GetIndex t
 
-    interface ITable<TypeDef> with
-        member _.Comparer = (defs :> ITable<_>).Comparer
+    interface IReadOnlyCollection<TypeDef> with
         member _.Count = defs.Count
         member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
@@ -375,14 +312,13 @@ type IField =
 
 type FieldList<'Field when 'Field :> IField> = MemberList<'Field, FieldRow>
 
-type Field<'Flags, 'Signature when 'Flags :> IFlags<FieldAttributes> and 'Signature :> IHandleValue and 'Signature : equality> =
+[<StructuralComparison; StructuralEquality>]
+type Field<'Flags, 'Signature when 'Flags :> IFlags<FieldAttributes> and 'Signature : equality> =
     { Flags: 'Flags
       FieldName: Identifier
       Signature: 'Signature }
 
     interface IField with member this.Row() = FieldRow(this.Flags.Flags, this.FieldName, ())
-
-    interface IHandleValue with member this.Handles = this.Signature.Handles
 
 /// <summary>Represents a non-static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
 type InstanceField = Field<InstanceFieldFlags, FieldSignature>
@@ -407,7 +343,7 @@ type FieldChoice =
 /// </summary>
 type GlobalField = Field<GlobalFieldFlags, FieldSignature>
 
-// TODO: Create better way to get Handle<MethodDef> to allow easy use when setting the entrypoint or adding custom attributes.
+// TODO: Create better way to get SimpleIndex<MethodDef> to allow easy use when setting the entrypoint or adding custom attributes.
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
 type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
@@ -432,9 +368,6 @@ type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature
             if this.SkipDuplicateChecking || other.SkipDuplicateChecking
             then false
             else this.Name = other.Name && this.Signature = other.Signature
-
-    interface IHandleValue with
-        member this.Handles = Seq.empty // TODO: Return handles used by the MethodDef.
 
 type IMethod =
     abstract Definition : unit -> MethodDef
@@ -554,10 +487,10 @@ type MemberRefParent =
     // | MethodDef // of ?
     // | ModuleRef // of ?
     // | TypeDef // of ?
-    | TypeRef of Handle<TypeRef>
+    | TypeRef of SimpleIndex<TypeRef>
     // | TypeSpec // of ?
 
-type MemberRef<'Signature when 'Signature :> IHandleValue> =
+type MemberRef<'Signature> =
     { Class: MemberRefParent
       MemberName: Identifier
       Signature: 'Signature }
@@ -583,43 +516,29 @@ type MemberRefRow =
         match this with
         | MethodRef { MemberName = name } -> name
 
-    interface IHandleValue with
-        member this.Handles =
-            match this with
-            | MethodRef { Signature = Handles handles } -> handles
-
-[<IsReadOnly; Struct>]
-type MemberRefHandle<'MemberRef> =
-    internal { MemberRefHandle: Handle<MemberRefRow> }
-
-    member this.Handle = this.MemberRefHandle
-    member this.Member = this.MemberRefHandle.Item
-
-    interface IHandle with
-        member this.Owner = this.MemberRefHandle.Owner
-        member _.ValueType = typeof<'MemberRef>
+type MemberRefIndex<'Member> = TaggedIndex<'Member, MemberRefRow>
 
 // TODO: Create an equality comparer for MemberRefRow or have MemberRefRow implement IEquatable.
 [<Sealed>]
-type MemberRefTable internal (owner: MetadataBuilderState) =
-    let members = Table<MemberRefRow> owner
+type MemberRefTable internal (owner: obj) =
+    let members = MutableTable<MemberRefRow> owner
 
     member _.Count = members.Count
 
     // TODO: Enforce CLS checks.
     // NOTE: Duplicates (based on owning class, name, and signature) are allowed, but produce a warning.
-    member private _.GetHandle<'MemberRef>(row: MemberRefRow) =
-        members.GetHandle row
-        |> Result.map (fun handle -> { MemberRefHandle = handle }: MemberRefHandle<'MemberRef>)
+    member private _.GetIndex<'MemberRef>(row: MemberRefRow) =
+        members.GetIndex row
+        |> Option.map MemberRefIndex
+        |> Option.defaultWith (fun() -> MemberRefIndex<'MemberRef>(owner, row))
 
-    member this.GetHandle(method: MethodRef) = this.GetHandle<MethodRef>(MethodRef method)
-    // member this.GetHandle(field: FieldRef) = this.GetHandle<FieldRef>(FieldRef field)
+    member this.GetIndex(method: MethodRef) = this.GetIndex<MethodRef>(MethodRef method)
+    // member this.GetIndex(field: FieldRef) = this.GetIndex<FieldRef>(FieldRef field)
 
-    interface ITable<MemberRefRow> with
+    interface IReadOnlyCollection<MemberRefRow> with
         member _.Count = members.Count
-        member _.Comparer = (members :> ITable<_>).Comparer
-        member _.GetEnumerator() = members.GetEnumerator()
-        member _.GetEnumerator() = (members :> System.Collections.IEnumerable).GetEnumerator()
+        member _.GetEnumerator() = members.GetEnumerator() :> IEnumerator<_>
+        member _.GetEnumerator() = members.GetEnumerator() :> System.Collections.IEnumerator
 
 
 
@@ -629,18 +548,18 @@ type CustomAttributeParent =
     // | MethodDef // of ?
     // | Field // of ?
     // | TypeRef // of ?
-    | TypeDef of Handle<TypeDef>
+    | TypeDef of SimpleIndex<TypeDef>
     // | Param // of ?
     // | InterfaceImpl // of ?
-    // | MemberRef of Handle<MemberRefRow>
-    // | Module // of Handle<?>
+    // | MemberRef of SimpleIndex<MemberRefRow>
+    // | Module // of ?
     // | Permission // of ?
     // | Property // of ?
     // | Event // of ?
     // | StandAloneSig // of ?
     // | ModuleRef // of ?
     // | TypeSpec // of ?
-    | Assembly of AssemblyHandle
+    | Assembly of AssemblyIndex
     // | AssemblyRef // of ?
     // | File // of ?
     // | ExportedType // of ?
@@ -652,7 +571,7 @@ type CustomAttributeParent =
 [<RequireQualifiedAccess>]
 type CustomAttributeType =
     // | MethodDef // of ?
-    | MemberRef of MemberRefHandle<MethodRef>
+    | MemberRef of MemberRefIndex<MethodRef>
 
 /// <summary>Represents a row in the <c>CustomAttribute</c> table (II.22.10).</summary>
 type CustomAttribute =
@@ -661,27 +580,14 @@ type CustomAttribute =
       Type: CustomAttributeType // TODO: How to ensure that the MethodRef points to a .ctor?
       Value: CustomAttributeSignature option } // TODO: How to validate signature to ensure types of fixed arguments match method signature?
 
-    interface IHandleValue with
-        member this.Handles =
-            seq {
-                match this.Parent with
-                | CustomAttributeParent.TypeDef (IHandle parent)
-                | CustomAttributeParent.Assembly (IHandle parent) -> parent
-
-                match this.Type with
-                | CustomAttributeType.MemberRef (IHandle t) -> t
-
-                // TODO: Yield handles used in custom attribute signature.
-            }
-
 [<Sealed>]
-type CustomAttributeTable internal (state: MetadataBuilderState) =
+type CustomAttributeTable internal (owner: obj) =
     let attrs = List<CustomAttribute>()
 
     member _.Count = attrs.Count
 
     member _.Add(attr: CustomAttribute) =
-        state.EnsureOwner attr
+        // state.EnsureOwner attr // TODO: Ensure signature reference valid things with the same owner.
         attrs.Add attr
 
     interface IReadOnlyCollection<CustomAttribute> with
@@ -695,31 +601,30 @@ type CustomAttributeTable internal (state: MetadataBuilderState) =
 /// <seealso cref="T:FSharpIL.Metadata.FileTable"/>
 [<IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]
-//[<StructuralComparison; StructuralEquality>]
+[<StructuralComparison; StructuralEquality>]
 type ModuleRef =
     { /// <summary>
       /// The corresponding entry in the <c>File</c> table that allows "the CLI to locate the target module".
       /// </summary>
-      File: Handle<File> }
+      File: SimpleIndex<File> }
 
     /// <summary>
     /// Corresponds to the <c>Name</c> column, which matches an entry in the <c>File</c> table.
     /// </summary>
-    member this.Name = this.File.Item.FileName
+    member this.Name = this.File.Value.FileName
 
 [<Sealed>]
-type ModuleRefTable internal (state: MetadataBuilderState) =
-    let modules = HashSet<_>()
+type ModuleRefTable internal (owner: obj) =
+    let modules = HashSet<ModuleRef>()
 
     member _.Count = modules.Count
 
     member _.Add moduleRef =
         modules.Add moduleRef |> ignore
-        state.CreateHandle moduleRef
+        SimpleIndex(owner, moduleRef)
 
-    interface ITable<ModuleRef> with
+    interface IReadOnlyCollection<ModuleRef> with
         member _.Count = modules.Count
-        member _.Comparer = modules.Comparer
         member _.GetEnumerator() = modules.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = modules.GetEnumerator() :> System.Collections.IEnumerator
 
@@ -735,11 +640,7 @@ type Assembly =
       Name: AssemblyName
       Culture: AssemblyCulture }
 
-[<Sealed>]
-type AssemblyHandle internal (owner: obj) =
-    interface IHandle with
-        member _.Owner = owner
-        member _.ValueType = typeof<Assembly>
+type AssemblyIndex = TaggedIndex<AssemblyRef, unit>
 
 /// II.22.5
 [<CustomEquality; NoComparison>]
@@ -762,20 +663,18 @@ type AssemblyRef =
             && this.Name = other.Name
             && this.Culture = other.Culture
 
-    interface IHandleValue with member _.Handles = Seq.empty
-
+// TODO: Create new class as this shares code with ModuleRefTable
 [<Sealed>]
-type AssemblyRefTable internal (state: MetadataBuilderState) =
+type AssemblyRefTable internal (owner: obj) =
     let set = HashSet<AssemblyRef>()
 
     member _.Count = set.Count
 
-    member _.GetHandle assemblyRef =
+    member _.GetIndex assemblyRef =
         set.Add assemblyRef |> ignore
-        state.CreateHandle assemblyRef
+        SimpleIndex(owner, assemblyRef)
 
-    interface ITable<AssemblyRef> with
-        member _.Comparer = EqualityComparer<_>.Default :> IEqualityComparer<_>
+    interface IReadOnlyCollection<AssemblyRef> with
         member _.Count = set.Count
         member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
@@ -805,18 +704,17 @@ type File =
         member this.CompareTo obj = compare this.FileName (obj :?> File).FileName
 
 [<Sealed>]
-type FileTable internal (state: MetadataBuilderState) =
+type FileTable internal (owner: obj) =
     let set = HashSet<File>()
 
     member _.Count = set.Count
 
-    member _.GetHandle file =
+    member _.GetIndex file =
         if set.Add file
-        then state.CreateHandle file |> Ok
+        then SimpleIndex(owner, file) |> Ok
         else DuplicateFile file |> Error
 
-    interface ITable<File> with
-        member _.Comparer = EqualityComparer<_>.Default :> IEqualityComparer<_>
+    interface IReadOnlyCollection<File> with
         member _.Count = set.Count
         member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
@@ -826,9 +724,10 @@ type FileTable internal (state: MetadataBuilderState) =
 
 // II.22.32
 [<Struct; IsReadOnly>]
+[<StructuralComparison; StructuralEquality>]
 type NestedClass =
-    { NestedClass: Handle<TypeDef>
-      EnclosingClass: Handle<TypeDef> }
+    { NestedClass: SimpleIndex<TypeDef>
+      EnclosingClass: SimpleIndex<TypeDef> }
 
 
 
@@ -870,8 +769,6 @@ type StaticMethodSignature =
             let (StaticMethodSignature (cconv, rtype, parameters)) = this
             MethodDefSignature(false, false, cconv, rtype, parameters)
 
-    // TODO: Implement IHandleValue.
-
 /// <summary>Represents a <c>MethodRefSig</c>, which "provides the call site Signature for a method" (II.23.2.2).</summary>
 [<IsReadOnly; Struct>]
 type MethodRefSignature =
@@ -891,27 +788,11 @@ type MethodRefSignature =
         if not this.VarArgParameters.IsEmpty then flags <- flags ||| CallingConvention.VarArg
         flags
 
-    interface IHandleValue with
-        member this.Handles = Seq.empty // TODO: Get handles used by the MethodRefSignature.
-
 /// Captures the definition of a field or global variable (II.23.2.4).
 [<IsReadOnly; Struct>]
 type FieldSignature =
     { CustomMod: ImmutableArray<CustomModifier>
       FieldType: ReturnTypeItem }
-
-    interface IHandleValue with
-        member this.Handles =
-            let modifiers = this.CustomMod
-            let ftype = this.FieldType
-            seq {
-                for { ModifierType = t } in modifiers do
-                    match t with
-                    | TypeDef (IHandle handle)
-                    | TypeRef (IHandle handle) -> handle
-
-                // ftype // TODO: Include field type in handle validation.
-            }
 
 /// II.23.2.7
 [<IsReadOnly; Struct>]
@@ -921,8 +802,8 @@ type CustomModifier =
 
 /// II.23.2.8
 type TypeDefOrRefOrSpecEncoded =
-    | TypeDef of Handle<TypeDef>
-    | TypeRef of Handle<TypeRef>
+    | TypeDef of SimpleIndex<TypeDef>
+    | TypeRef of SimpleIndex<TypeRef>
     // TypeSpec // of ?
 
 /// <summary>Represents a <c>Param</c> item used in signatures (II.23.2.10).</summary>
@@ -1062,7 +943,7 @@ type CustomAttributeSignature =
 [<IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]
 type Callee =
-    | MethodRef of MemberRefHandle<MethodRef>
+    | MethodRef of MemberRefIndex<MethodRef>
 
 /// (III.1.2.1)
 type Opcode =
@@ -1084,19 +965,24 @@ type Opcode =
 
 // TODO: Figure out how exception handling information will be included.
 // TODO: Figure out how to prevent (some) invalid method bodies.
-// TODO: Ensure handles used in opcodes have the correct owner.
+// TODO: Ensure index objects used in opcodes have the correct owner.
 /// II.25.4
 type MethodBody =
     ImmutableArray<Opcode>
 
 [<Sealed>]
-type MetadataBuilderState (mdle: ModuleTable) as this =
+type MetadataBuilderState (mdle: ModuleTable) =
     let owner = Object()
 
-    let typeDef = TypeDefTable this
+    let warnings = ImmutableArray.CreateBuilder<ValidationWarning>()
+    let clsViolations = ImmutableArray.CreateBuilder<ClsViolation>()
+
+    let typeDef = TypeDefTable owner
     let mutable assembly = None
 
     let mutable entrypoint = None
+
+    member internal _.Owner = owner
 
     member val Header = CliHeaderFields.Default with get, set
 
@@ -1110,8 +996,8 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     /// The metadata version, contained in the metadata root (II.24.2.1).
     member val MetadataVersion = MetadataVersion.ofStr "v4.0.30319" with get, set
 
-    member val Warnings: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ValidationWarning>()
-    member val ClsViolations: ImmutableArray<_>.Builder = ImmutableArray.CreateBuilder<ClsViolation>()
+    member val Warnings = warnings
+    member val ClsViolations = clsViolations
 
     // Reserved: uint32
     member val MajorVersion: byte = 2uy
@@ -1124,7 +1010,7 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     /// (0x00)
     member val Module = mdle
     /// (0x01)
-    member val TypeRef: TypeRefTable = TypeRefTable this
+    member val TypeRef: TypeRefTable = TypeRefTable(owner, warnings)
     /// (0x02)
     member _.TypeDef: TypeDefTable = typeDef
     // (0x04)
@@ -1136,11 +1022,11 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     // (0x09)
     // member InterfaceImpl
     /// (0x0A)
-    member val MemberRef: MemberRefTable = MemberRefTable this
+    member val MemberRef: MemberRefTable = MemberRefTable owner
     // (0x0B)
     // member Constant
     /// (0x0C)
-    member val CustomAttribute: CustomAttributeTable = CustomAttributeTable this
+    member val CustomAttribute: CustomAttributeTable = CustomAttributeTable owner
     // (0x0D)
     // member FieldMarshal
     // (0x0E)
@@ -1164,7 +1050,7 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     // (0x19)
     // member MethodImpl
     /// (0x1A)
-    member val ModuleRef = ModuleRefTable this
+    member val ModuleRef = ModuleRefTable owner
     // (0x1B)
     // member TypeSpec
     // (0x1C)
@@ -1176,11 +1062,11 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// (0x23)
-    member val AssemblyRef: AssemblyRefTable = AssemblyRefTable this
+    member val AssemblyRef: AssemblyRefTable = AssemblyRefTable owner
     // AssemblyRefProcessor // 0x24 // Not used when writing a PE file
     // AssemblyRefOS // 0x25 // Not used when writing a PE file
     /// (0x26)
-    member val File = FileTable this
+    member val File = FileTable owner
     // (0x27)
     // member ExportedType
     // (0x28)
@@ -1191,7 +1077,7 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
             (fun (tdef: TypeDef) ->
                 match tdef.EnclosingClass with
                 | Some parent ->
-                    { NestedClass = this.CreateHandle tdef
+                    { NestedClass = SimpleIndex(owner, tdef)
                       EnclosingClass = parent }
                     |> Some
                 | _ -> None)
@@ -1207,44 +1093,27 @@ type MetadataBuilderState (mdle: ModuleTable) as this =
     /// <summary>Gets or sets the entrypoint of the assembly.</summary>
     /// <remarks>The entrypoint of the assembly is specified by the <c>EntryPointToken</c> field of the CLI header (II.25.3.3).</remarks>
     member this.EntryPoint
-        with get(): Handle<MethodDef> option = entrypoint
+        with get(): SimpleIndex<MethodDef> option = entrypoint
         and set main =
             match main with
-            | Some (main': Handle<_>) ->
+            | Some (main': SimpleIndex<_>) ->
                 if main'.Owner <> owner then
                     invalidArg "main" "The specified entrypoint cannot be owned by another state."
-                this.EnsureOwner main'.Item
+                // this.EnsureOwner main'.Item // TODO: Check indices of main method is owned by this state.
                 entrypoint <- Some main'
             | None -> entrypoint <- None
 
     member _.SetAssembly(assm: Assembly) =
         assembly <- Some assm
-        AssemblyHandle owner
+        AssemblyIndex(owner, ())
 
-    member internal this.FindType t: Handle<_> option =
+    member internal this.FindType t: SimpleIndex<_> option =
         // TODO: Search in the TypeDefTable as well.
         this.TypeRef.FindType t
 
-    member internal _.CreateHandle<'T> (value: 'T): Handle<'T> = Handle(owner, value)
-
-    member internal this.CreateTable<'T when 'T : equality> (table: ITable<'T>): ImmutableTable<'T> =
-        ImmutableTable(table :> IReadOnlyCollection<_>, this.CreateHandle)
-
-
-
-    member internal _.EnsureOwner(value: IHandleValue) =
-        for handle in value.Handles do
-            if handle.Owner <> owner then
-                sprintf
-                    "A handle to a %s owned by another state was incorrectly referenced by an %s."
-                    handle.ValueType.Name
-                    (value.GetType().Name)
-                |> invalidArg "item"
+    member internal _.CreateTable table = ImmutableTable(table, fun item -> SimpleIndex(owner, item))
 
 [<AutoOpen>]
 module ExtraPatterns =
-    let (|OptionalModifier|RequiredModifier|) (cmod: CustomModifier) =
-        if cmod.Required then RequiredModifier cmod else OptionalModifier cmod
-
     let internal (|FieldRow|) (f: IField) = f.Row()
     let internal (|MethodDef|) (mthd: IMethod) = mthd.Definition()

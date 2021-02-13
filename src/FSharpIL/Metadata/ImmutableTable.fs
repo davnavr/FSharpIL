@@ -7,9 +7,9 @@ open Microsoft.FSharp.Core.Operators.Checked
 
 open FSharpIL.Writing
 
-type ImmutableTable<'T when 'T : equality> internal (table: IReadOnlyCollection<'T>, own: 'T -> Handle<'T>) =
+type ImmutableTable<'Index, 'T when 'Index :> IIndex and 'Index : equality> internal (table: IReadOnlyCollection<'T>, own: 'T -> 'Index) =
     let items = Array.zeroCreate<'T> table.Count
-    let dict = Dictionary<Handle<'T>, uint32> table.Count
+    let dict = Dictionary<'Index, uint32> table.Count
 
     do
         let mutable i = 0
@@ -33,7 +33,7 @@ type ImmutableTable<'T when 'T : equality> internal (table: IReadOnlyCollection<
 
     member internal this.WriteSimpleIndex(handle, writer) = this.WriteSimpleIndex(this.IndexOf handle, writer)
 
-    interface IReadOnlyDictionary<Handle<'T>, uint32> with
+    interface IReadOnlyDictionary<'Index, uint32> with
         member this.Count = this.Count
         member this.Item with get handle = this.IndexOf handle
         member _.Keys = dict.Keys :> IEnumerable<_>

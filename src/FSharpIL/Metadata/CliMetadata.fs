@@ -1,6 +1,5 @@
 ﻿namespace FSharpIL.Metadata
 
-open System.Collections.Generic
 open System.Collections.Immutable
 open System.Reflection
 
@@ -13,13 +12,13 @@ type CliMetadata (state: MetadataBuilderState) =
             state.TypeDef
             |> Seq.collect (fun tdef -> tdef.FieldList)
             |> Seq.toArray
-        ImmutableTable(table, state.CreateHandle)
+        state.CreateTable table
     let methodDef =
         let table =
             state.TypeDef
             |> Seq.collect (fun tdef -> tdef.MethodList)
             |> Seq.toArray
-        ImmutableTable(table, state.CreateHandle)
+        state.CreateTable table
     let parameters =
         methodDef.Items
         |> Seq.collect(fun method -> Seq.indexed method.ParamList)
@@ -141,9 +140,10 @@ type CliMetadataBuilder internal () =
         fun state ->
             expr state |> Result.bind (fun result -> body result state)
 
-    member inline _.Bind(expr: _ -> #IHandle, body: _ -> BuilderExpression<_>): BuilderExpression<_> =
+    member inline _.Bind(expr: MetadataBuilderState -> #IIndex, body: _ -> _): BuilderExpression<_> =
         fun state ->
-            let handle = expr state in body handle state
+            let result = expr state
+            body result state
 
     member inline _.Bind(members: Result<MemberList<'Member, _>, 'Member>, body: _ -> BuilderExpression<_>): BuilderExpression<_> =
         fun state ->
@@ -185,19 +185,17 @@ module CliMetadata =
     /// </summary>
     /// <param name="predicate">A function used to determine which method is the entrypoint.</param>
     /// <param name="definingType">The type definition containing the entrypoint of the assembly.</param>
-    let selectEntrypoint (predicate: MethodDef -> bool) (definingType: TypeHandle<_>) (state: MetadataBuilderState) =
+    let selectEntrypoint (predicate: MethodDef -> bool) (definingType: TypeIndex<_>) (state: MetadataBuilderState) =
         let main =
             Seq.find
                 predicate
-                definingType.Item.MethodList
-            |> state.CreateHandle
-            |> Some
-        state.EntryPoint <- main
+                definingType.Value.MethodList
+        state.EntryPoint <- SimpleIndex(state.Owner, main) |> Some
 
     let private addTypeDef<'Type> (typeDef: TypeDef) (state: MetadataBuilderState) =
-        state.TypeDef.GetHandle typeDef
-        |> Result.map
-            (fun def' -> { TypeHandle = def' }: TypeHandle<'Type>)
+        state.TypeDef.GetIndex typeDef
+        |> Option.map (TypeIndex<'Type> >> Ok)
+        |> Option.defaultValue (DuplicateValue typeDef |> Error) // TODO: Figure out how to handle error case.
 
     // TODO: Enforce CLS checks and warnings.
     let private addClassImpl ({ Flags = Flags flags } as def: ClassDef<'Flags, 'Field, 'Method>) (state: MetadataBuilderState) =
@@ -216,24 +214,24 @@ module CliMetadata =
     /// <summary>
     /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is not marked abstract or marked sealed.
     /// </summary>
-    let addClass (classDef: ConcreteClassDef): BuilderExpression<TypeHandle<ConcreteClassDef>> = addClassImpl classDef
+    let addClass (classDef: ConcreteClassDef): BuilderExpression<TypeIndex<ConcreteClassDef>> = addClassImpl classDef
 
     /// <summary>
     /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is marked abstract,
     /// meaning that it contains abstract methods that must be overriden by deriving classes.
     /// </summary>
-    let addAbstractClass (classDef: AbstractClassDef): BuilderExpression<TypeHandle<AbstractClassDef>> = addClassImpl classDef
+    let addAbstractClass (classDef: AbstractClassDef): BuilderExpression<TypeIndex<AbstractClassDef>> = addClassImpl classDef
 
     /// <summary>
     /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is marked sealed,
     /// meaning that it cannot be derived from by other classes.
     /// </summary>
-    let addSealedClass (classDef: SealedClassDef): BuilderExpression<TypeHandle<SealedClassDef>> = addClassImpl classDef
+    let addSealedClass (classDef: SealedClassDef): BuilderExpression<TypeIndex<SealedClassDef>> = addClassImpl classDef
 
     /// <summary>
     /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is marked both sealed and abstract.
     /// </summary>
-    let addStaticClass (classDef: StaticClassDef): BuilderExpression<TypeHandle<StaticClassDef>> = addClassImpl classDef
+    let addStaticClass (classDef: StaticClassDef): BuilderExpression<TypeIndex<StaticClassDef>> = addClassImpl classDef
 
     let private addDerivedType extends f (typeDef: 'Type) (state: MetadataBuilderState) =
         match state.FindType extends with
@@ -306,9 +304,9 @@ module CliMetadata =
         if typeDef.Fields.Count > 0 then InterfaceContainsFields typeDef |> state.ClsViolations.Add
         addTypeDef<InterfaceDef> intf state
 
-    let referenceType typeRef (state: MetadataBuilderState): BuilderResult<_> = state.TypeRef.GetHandle typeRef
+    let referenceType typeRef (state: MetadataBuilderState) = state.TypeRef.GetIndex typeRef
 
-    let referenceMethod method (state: MetadataBuilderState): BuilderResult<_> = state.MemberRef.GetHandle method
+    let referenceMethod method (state: MetadataBuilderState): MemberRefIndex<MethodRef> = state.MemberRef.GetIndex method
 
     // TODO: Better way of adding custom attributes, have a function: CustomAttribute -> target: _ -> MetadataBuilderState -> _
     let attribute attr (state: MetadataBuilderState) = state.CustomAttribute.Add attr
@@ -317,7 +315,7 @@ module CliMetadata =
     let setAssembly assembly (state: MetadataBuilderState) = state.SetAssembly assembly
 
     /// Adds a reference to an assembly.
-    let referenceAssembly assembly (state: MetadataBuilderState) = state.AssemblyRef.GetHandle assembly
+    let referenceAssembly assembly (state: MetadataBuilderState) = state.AssemblyRef.GetIndex assembly
 
     /// <summary>
     /// Applies the given function to each string in the <c>#Strings</c> heap referenced in

@@ -22,7 +22,7 @@ let write index table (writer: ChunkWriter) =
 
 let callee (metadata: CliMetadata) =
     function
-    | Callee.MethodRef { MemberRefHandle = method } ->
+    | Callee.MethodRef (SimpleIndex method) ->
         write (metadata.MemberRef.IndexOf method) 0xAuy
 
 let userString str (us: UserStringHeap) =

@@ -2,10 +2,10 @@
 
 open Expecto
 
-open Mono.Cecil
-
 open System
 open System.Collections.Immutable
+
+open Mono.Cecil
 
 open FSharpIL.Generate
 
@@ -45,7 +45,7 @@ let tests =
                 metadata {
                     let! methodList = methods { StaticClassMethod.Method entrypoint }
 
-                    let! (program: TypeHandle<_>) =
+                    let! program =
                         addStaticClass
                             { Access = TypeVisibility.Public
                               Extends = Extends.Null
@@ -67,17 +67,20 @@ let tests =
             Expect.equal metadata.EntryPoint.Name (string entrypoint.MethodName) "name of entrypoint should match"
 
         testCase "error skips rest of metadata expression" <| fun() ->
+            let error = ValidationError.DuplicateValue()
             let mutable skipped = true
 
             let result =
                 metadata {
-                    do! fun _ -> ValidationError.DuplicateValue() |> Error
+                    do! fun _ -> Error error
                     skipped <- false
                 }
                 |> CliMetadata.createMetadata
                     { Mvid = Guid.NewGuid()
                       Name = Identifier.ofStr "Empty" }
 
-            ValidationExpect.isError result "expression should evaluate to an error"
+            ValidationExpect.isSpecificError result error "expression should evaluate to an error"
             Expect.isTrue skipped "rest of expression should not be evaluated if an error occurs"
+
+        // TODO: Add test to check that types cannot form loops in their inheritance chain.
     ]
