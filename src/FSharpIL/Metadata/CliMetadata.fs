@@ -192,7 +192,7 @@ module CliMetadata =
                 definingType.Value.MethodList
         state.EntryPoint <- SimpleIndex(state.Owner, main) |> Some
 
-    let private addTypeDef<'Type> (typeDef: TypeDef) (state: MetadataBuilderState) =
+    let private addTypeDef<'Type> (typeDef: TypeDefRow) (state: MetadataBuilderState) =
         state.TypeDef.GetIndex typeDef
         |> Option.map (TypeIndex<'Type> >> Ok)
         |> Option.defaultValue (DuplicateValue typeDef |> Error) // TODO: Figure out how to handle error case.

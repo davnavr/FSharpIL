@@ -3,15 +3,24 @@
 open System
 open System.Collections.Generic
 
-type IIndex =
-    abstract Owner: obj
+type IndexOwner internal () =
+    member internal this.EnsureEqual(other: IndexOwner) =
+        if Object.ReferenceEquals(this, other) |> not then
+            invalidOp "Cannot use an object owned by another state"
+
+    member internal this.CheckOwner(value: #IIndexValue) = value.CheckOwner this
+
+and IIndexValue =
+    abstract CheckOwner: IndexOwner -> unit
+
+type IIndex = abstract Owner: IndexOwner
 
 // TODO: Figure out how to allow equality and comparison? This problem might be made easier if multiple specific handle types existed.
 // TODO: See if this being a struct is a performance advantage.
 // TODO: Consider creating unique index types for each table
 [<CustomEquality; CustomComparison>]
 [<System.Runtime.CompilerServices.IsReadOnlyAttribute; Struct>]
-type SimpleIndex<'Value> internal (owner: obj, value: 'Value) =
+type SimpleIndex<'Value> internal (owner: IndexOwner, value: 'Value) =
     member _.Owner = owner
     member _.Value = value
 
@@ -50,3 +59,5 @@ type TaggedIndex<'Tag, 'Value> internal (index: SimpleIndex<'Value>) =
 module IndexHelpers =
     let inline (|SimpleIndex|) (index: ^Index) =
         (^Index : (member Index : SimpleIndex<'T>) index)
+
+    let internal (|IndexOwner|) (index: #IIndex) = index.Owner

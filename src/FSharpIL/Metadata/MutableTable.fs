@@ -3,7 +3,7 @@
 open System.Collections.Generic
 
 [<Sealed>]
-type MutableTable<'Value> internal (owner: obj) =
+type MutableTable<'Value when 'Value :> IIndexValue> internal (owner: IndexOwner) =
     let set = HashSet<'Value>()
 
     member _.Count = set.Count
@@ -11,7 +11,7 @@ type MutableTable<'Value> internal (owner: obj) =
     member _.GetEnumerator() = set.GetEnumerator()
 
     member _.GetIndex(value: 'Value) =
-        // state.EnsureOwner value // TODO: Check that "sub" indices match the owner.
+        owner.CheckOwner value
         if set.Add value
         then SimpleIndex(owner, value) |> Some
         else None

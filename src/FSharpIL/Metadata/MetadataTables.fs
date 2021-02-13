@@ -75,8 +75,18 @@ type TypeRef =
       TypeName: Identifier
       TypeNamespace: string }
 
+    interface IIndexValue with
+        member this.CheckOwner actual =
+            match this.ResolutionScope with
+            | ResolutionScope.Module
+            | ResolutionScope.Null -> ()
+            | ResolutionScope.ModuleRef (IndexOwner owner)
+            | ResolutionScope.AssemblyRef (IndexOwner owner)
+            | ResolutionScope.TypeRef (IndexOwner owner) ->
+                actual.EnsureEqual owner
+
 [<Sealed>]
-type TypeRefTable internal (owner: obj, warnings: ImmutableArray<_>.Builder) =
+type TypeRefTable internal (owner: IndexOwner, warnings: ImmutableArray<_>.Builder) =
     let table = MutableTable<_> owner
     let search = Dictionary<string * Identifier, TypeRef> 8
 
@@ -98,12 +108,15 @@ type TypeRefTable internal (owner: obj, warnings: ImmutableArray<_>.Builder) =
                 table
 
     member _.GetIndex typeRef =
+        let index = table.GetIndex typeRef
+
         // TODO: Check that the name is a "valid CLS identifier".
         match typeRef.ResolutionScope with
-        | ResolutionScope.Module -> TypeRefUsesModuleResolutionScope typeRef |> warnings.Add
+        | ResolutionScope.Module ->
+            TypeRefUsesModuleResolutionScope typeRef |> warnings.Add
         | _ -> ()
 
-        table.GetIndex typeRef |> Option.defaultWith (fun() -> SimpleIndex(owner, typeRef))
+        Option.defaultWith (fun() -> SimpleIndex(owner, typeRef)) index
 
     member _.GetEnumerator() = table.GetEnumerator()
 
@@ -133,16 +146,16 @@ type Extends =
 type TypeVisibility =
     | NotPublic
     | Public
-    | NestedPublic of SimpleIndex<TypeDef>
-    | NestedPrivate of SimpleIndex<TypeDef>
+    | NestedPublic of SimpleIndex<TypeDefRow>
+    | NestedPrivate of SimpleIndex<TypeDefRow>
     /// <summary>Equivalent to the C# <see langword="protected"/> keyword.</summary>
-    | NestedFamily of SimpleIndex<TypeDef>
+    | NestedFamily of SimpleIndex<TypeDefRow>
     /// <summary>Equivalent to the C# <see langword="internal"/> keyword.</summary>
-    | NestedAssembly of SimpleIndex<TypeDef>
+    | NestedAssembly of SimpleIndex<TypeDefRow>
     /// <summary>Equivalent to the C# <see langword="private protected"/> keyword.</summary>
-    | NestedFamilyAndAssembly of SimpleIndex<TypeDef>
+    | NestedFamilyAndAssembly of SimpleIndex<TypeDefRow>
     /// <summary>Equivalent to the C# <see langword="protected internal"/> keyword.</summary>
-    | NestedFamilyOrAssembly of SimpleIndex<TypeDef>
+    | NestedFamilyOrAssembly of SimpleIndex<TypeDefRow>
 
     /// <summary>Retrieves the enclosing class of this nested class.</summary>
     /// <remarks>In the actual metadata, nested type information is actually stored in the NestedClass table (II.22.32).</remarks>
@@ -235,7 +248,7 @@ type StructDef =
      Fields: FieldList<FieldChoice>
      Methods: unit }
 
-type TypeIndex<'Type> = TaggedIndex<'Type, TypeDef>
+type TypeIndex<'Type> = TaggedIndex<'Type, TypeDefRow>
 
 /// <summary>
 /// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
@@ -246,41 +259,49 @@ type TypeIndex<'Type> = TaggedIndex<'Type, TypeDef>
 /// <seealso cref="T:FSharpIL.Metadata.InterfaceDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.StructDef"/>
 [<Sealed>]
-type TypeDef internal (flags, name, ns, extends, fields, methods, parent) = // TODO: Rename to TypeDefRow.
+type TypeDefRow internal (flags, name, ns, extends, fields, methods, parent) =
     member _.Flags: TypeAttributes = flags
     member _.TypeName: Identifier = name
     member _.TypeNamespace: string = ns
     member _.Extends: Extends = extends
     member _.FieldList: ImmutableArray<FieldRow> = fields
     member _.MethodList: ImmutableArray<MethodDef> = methods
-    member _.EnclosingClass: SimpleIndex<TypeDef> option = parent
+    member _.EnclosingClass: SimpleIndex<TypeDefRow> option = parent
 
     override this.Equals obj =
         match obj with
-        | :? TypeDef as other -> (this :> IEquatable<_>).Equals other
+        | :? TypeDefRow as other -> (this :> IEquatable<_>).Equals other
         | _ -> false
 
     override _.GetHashCode() = hash(name, ns)
 
-    interface IEquatable<TypeDef> with
-        member _.Equals other =
-            ns = other.TypeNamespace && name = other.TypeName
+    interface IEquatable<TypeDefRow> with
+        member _.Equals other = ns = other.TypeNamespace && name = other.TypeName
 
-type TypeDefRow = TypeDef
+    interface IIndexValue with
+        member _.CheckOwner actual =
+            match extends with
+            | Extends.ConcreteClass (IndexOwner owner)
+            | Extends.AbstractClass (IndexOwner owner)
+            | Extends.TypeRef (IndexOwner owner) -> actual.EnsureEqual owner
+            | Extends.Null -> ()
+
+            if parent.IsSome then
+                actual.EnsureEqual parent.Value.Owner
 
 [<Sealed>]
-type TypeDefTable internal (owner: obj) =
-    let defs = MutableTable<TypeDef> owner
+type TypeDefTable internal (owner: IndexOwner) =
+    let defs = MutableTable<TypeDefRow> owner
 
     // TODO: Add the <Module> class used for global variables and functions, which should be the first entry.
 
     member _.Count = defs.Count
 
     // TODO: Enforce common CLS checks and warnings for types.
-    member _.GetIndex(t: TypeDef) =
+    member _.GetIndex(t: TypeDefRow) =
         defs.GetIndex t
 
-    interface IReadOnlyCollection<TypeDef> with
+    interface IReadOnlyCollection<TypeDefRow> with
         member _.Count = defs.Count
         member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
@@ -490,6 +511,12 @@ type MemberRefParent =
     | TypeRef of SimpleIndex<TypeRef>
     // | TypeSpec // of ?
 
+    interface IIndexValue with
+        member this.CheckOwner actual =
+            match this with
+            | TypeRef (IndexOwner owner) ->
+                actual.EnsureEqual owner
+
 type MemberRef<'Signature> =
     { Class: MemberRefParent
       MemberName: Identifier
@@ -516,11 +543,18 @@ type MemberRefRow =
         match this with
         | MethodRef { MemberName = name } -> name
 
+    interface IIndexValue with
+        member this.CheckOwner actual =
+            match this with
+            | MethodRef method ->
+                actual.CheckOwner method.Class
+                () // TODO: Check method ref signature for valid index owner.
+
 type MemberRefIndex<'Member> = TaggedIndex<'Member, MemberRefRow>
 
 // TODO: Create an equality comparer for MemberRefRow or have MemberRefRow implement IEquatable.
 [<Sealed>]
-type MemberRefTable internal (owner: obj) =
+type MemberRefTable internal (owner: IndexOwner) =
     let members = MutableTable<MemberRefRow> owner
 
     member _.Count = members.Count
@@ -548,7 +582,7 @@ type CustomAttributeParent =
     // | MethodDef // of ?
     // | Field // of ?
     // | TypeRef // of ?
-    | TypeDef of SimpleIndex<TypeDef>
+    | TypeDef of SimpleIndex<TypeDefRow>
     // | Param // of ?
     // | InterfaceImpl // of ?
     // | MemberRef of SimpleIndex<MemberRefRow>
@@ -580,14 +614,27 @@ type CustomAttribute =
       Type: CustomAttributeType // TODO: How to ensure that the MethodRef points to a .ctor?
       Value: CustomAttributeSignature option } // TODO: How to validate signature to ensure types of fixed arguments match method signature?
 
+    interface IIndexValue with
+        member this.CheckOwner actual =
+            match this.Parent with
+            | CustomAttributeParent.TypeDef (IndexOwner owner)
+            | CustomAttributeParent.Assembly (IndexOwner owner) ->
+                actual.EnsureEqual owner
+
+            match this.Type with
+            | CustomAttributeType.MemberRef (IndexOwner owner) ->
+                actual.EnsureEqual owner
+
+            () // TODO: Ensure signature references valid things with the same owner.
+
 [<Sealed>]
-type CustomAttributeTable internal (owner: obj) =
+type CustomAttributeTable internal (owner: IndexOwner) =
     let attrs = List<CustomAttribute>()
 
     member _.Count = attrs.Count
 
     member _.Add(attr: CustomAttribute) =
-        // state.EnsureOwner attr // TODO: Ensure signature reference valid things with the same owner.
+        owner.CheckOwner attr
         attrs.Add attr
 
     interface IReadOnlyCollection<CustomAttribute> with
@@ -613,13 +660,17 @@ type ModuleRef =
     /// </summary>
     member this.Name = this.File.Value.FileName
 
+    interface IIndexValue with
+        member this.CheckOwner actual = actual.EnsureEqual this.File.Owner
+
 [<Sealed>]
-type ModuleRefTable internal (owner: obj) =
+type ModuleRefTable internal (owner: IndexOwner) =
     let modules = HashSet<ModuleRef>()
 
     member _.Count = modules.Count
 
     member _.Add moduleRef =
+        owner.CheckOwner moduleRef
         modules.Add moduleRef |> ignore
         SimpleIndex(owner, moduleRef)
 
@@ -665,7 +716,7 @@ type AssemblyRef =
 
 // TODO: Create new class as this shares code with ModuleRefTable
 [<Sealed>]
-type AssemblyRefTable internal (owner: obj) =
+type AssemblyRefTable internal (owner: IndexOwner) =
     let set = HashSet<AssemblyRef>()
 
     member _.Count = set.Count
@@ -704,7 +755,7 @@ type File =
         member this.CompareTo obj = compare this.FileName (obj :?> File).FileName
 
 [<Sealed>]
-type FileTable internal (owner: obj) =
+type FileTable internal (owner: IndexOwner) =
     let set = HashSet<File>()
 
     member _.Count = set.Count
@@ -726,8 +777,13 @@ type FileTable internal (owner: obj) =
 [<Struct; IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
 type NestedClass =
-    { NestedClass: SimpleIndex<TypeDef>
-      EnclosingClass: SimpleIndex<TypeDef> }
+    { NestedClass: SimpleIndex<TypeDefRow>
+      EnclosingClass: SimpleIndex<TypeDefRow> }
+
+    interface IIndexValue with
+        member this.CheckOwner actual =
+            actual.EnsureEqual this.NestedClass.Owner
+            actual.EnsureEqual this.EnclosingClass.Owner
 
 
 
@@ -802,7 +858,7 @@ type CustomModifier =
 
 /// II.23.2.8
 type TypeDefOrRefOrSpecEncoded =
-    | TypeDef of SimpleIndex<TypeDef>
+    | TypeDef of SimpleIndex<TypeDefRow>
     | TypeRef of SimpleIndex<TypeRef>
     // TypeSpec // of ?
 
@@ -972,7 +1028,7 @@ type MethodBody =
 
 [<Sealed>]
 type MetadataBuilderState (mdle: ModuleTable) =
-    let owner = Object()
+    let owner = IndexOwner()
 
     let warnings = ImmutableArray.CreateBuilder<ValidationWarning>()
     let clsViolations = ImmutableArray.CreateBuilder<ClsViolation>()
@@ -1074,7 +1130,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
     /// (0x29)
     member val NestedClass =
         Seq.choose
-            (fun (tdef: TypeDef) ->
+            (fun (tdef: TypeDefRow) ->
                 match tdef.EnclosingClass with
                 | Some parent ->
                     { NestedClass = SimpleIndex(owner, tdef)
@@ -1099,7 +1155,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
             | Some (main': SimpleIndex<_>) ->
                 if main'.Owner <> owner then
                     invalidArg "main" "The specified entrypoint cannot be owned by another state."
-                // this.EnsureOwner main'.Item // TODO: Check indices of main method is owned by this state.
+                // this.EnsureOwner main' // TODO: Check indices of main method is owned by this state.
                 entrypoint <- Some main'
             | None -> entrypoint <- None
 
