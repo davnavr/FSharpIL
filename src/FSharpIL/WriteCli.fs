@@ -148,9 +148,9 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
     // Calculate how big indices and coded indices should be.
     let resolutionScope =
-        // TODO: Include ModuleRef table when determine how big a ResolutionScope should be.
         let total =
             1 // Module
+            + tables.ModuleRef.Count
             + tables.AssemblyRef.Count
             + tables.TypeRef.Count
         function
@@ -171,8 +171,12 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         |> codedIndex total 2
 
     let memberRefParent =
-        // TODO: Include ModuleRef and TypeSpec tables.
-        let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.MethodDef.Count
+        // TODO: Include TypeSpec table.
+        let total =
+            tables.TypeDef.Count
+            + tables.TypeRef.Count
+            + tables.ModuleRef.Count
+            + tables.MethodDef.Count
         function
         | MemberRefParent.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
         |> codedIndex total 3
@@ -191,11 +195,11 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             // Property
             // Event
             // StandAloneSig
-            // ModuleRef
+            + tables.ModuleRef.Count
             // TypeSpec
             + if tables.Assembly.IsSome then 1 else 0
             + tables.AssemblyRef.Count
-            // File
+            + tables.File.Count
             // ExportedType
             // ManifestResource
             // GenericParam

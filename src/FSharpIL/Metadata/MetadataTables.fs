@@ -25,14 +25,6 @@ type ValidationWarning =
     /// (1d)
     | TypeRefUsesModuleResolutionScope of TypeRef
 
-    // TODO: Consider not generating warnings if a duplicate value is detected for certain tables since duplicate items are already silently removed,
-    // to avoid having users checking for duplicates themselves.
-
-    /// (2)
-    | DuplicateModuleRef of ModuleRef
-    /// (10)
-    | DuplicateAssemblyRef of AssemblyRef
-
 type ValidationError =
     // TODO: Have different cases for different duplicate values.
     /// Error used when a duplicate object was added to a table, or when a duplicate method or field is added to a type.
@@ -574,7 +566,9 @@ type MethodRef = MemberRef<MethodRefSignature>
 
 // type FieldRef = 
 
-/// <summary>Represents a row in the <c>MemberRef</c> table, which contains references to the methods and fields of a class (II.22.25).</summary>
+/// <summary>
+/// Represents a row in the <c>MemberRef</c> table, which contains references to the methods and fields of a class (II.22.25).
+/// </summary>
 /// <seealso cref="T:FSharpIL.Metadata.MethodRef"/>
 /// <seealso cref="T:FSharpIL.Metadata.FieldRef"/>
 type MemberRefRow =
@@ -720,8 +714,7 @@ type ModuleRefTable internal (state: MetadataBuilderState) =
     member _.Count = modules.Count
 
     member _.Add moduleRef =
-        if modules.Add moduleRef |> not then
-            DuplicateModuleRef moduleRef |> state.Warnings.Add
+        modules.Add moduleRef |> ignore
         state.CreateHandle moduleRef
 
     interface ITable<ModuleRef> with
@@ -773,13 +766,12 @@ type AssemblyRef =
 
 [<Sealed>]
 type AssemblyRefTable internal (state: MetadataBuilderState) =
-    let set = HashSet()
+    let set = HashSet<AssemblyRef>()
 
     member _.Count = set.Count
 
     member _.GetHandle assemblyRef =
-        if set.Add assemblyRef |> not then
-            DuplicateAssemblyRef assemblyRef |> state.Warnings.Add
+        set.Add assemblyRef |> ignore
         state.CreateHandle assemblyRef
 
     interface ITable<AssemblyRef> with

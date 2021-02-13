@@ -1,5 +1,6 @@
 ﻿namespace FSharpIL.Metadata
 
+open System.Collections.Generic
 open System.Collections.Immutable
 open System.Reflection
 
@@ -193,11 +194,13 @@ module CliMetadata =
             |> Some
         state.EntryPoint <- main
 
-    let private addTypeDef (def: 'Type) (typeDef: TypeDef) (state: MetadataBuilderState) =
-        state.TypeDef.GetHandle typeDef |> Result.map (fun def' -> { TypeHandle = def' }: TypeHandle<'Type>)
+    let private addTypeDef<'Type> (typeDef: TypeDef) (state: MetadataBuilderState) =
+        state.TypeDef.GetHandle typeDef
+        |> Result.map
+            (fun def' -> { TypeHandle = def' }: TypeHandle<'Type>)
 
     // TODO: Enforce CLS checks and warnings.
-    let private addClassImpl ({ Flags = Flags flags } as def: ClassDef<_, _, _>) (state: MetadataBuilderState) =
+    let private addClassImpl ({ Flags = Flags flags } as def: ClassDef<'Flags, 'Field, 'Method>) (state: MetadataBuilderState) =
         let typeDef =
             TypeDefRow (
                 flags ||| def.Access.Flags,
@@ -208,7 +211,7 @@ module CliMetadata =
                 def.Methods.ToImmutableArray(),
                 def.Access.EnclosingClass
             )
-        addTypeDef def typeDef state
+        addTypeDef<ClassDef<'Flags, 'Field, 'Method>> typeDef state
 
     /// <summary>
     /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is not marked abstract or marked sealed.
@@ -232,11 +235,11 @@ module CliMetadata =
     /// </summary>
     let addStaticClass (classDef: StaticClassDef): BuilderExpression<TypeHandle<StaticClassDef>> = addClassImpl classDef
 
-    let private addDerivedType extends f typeDef (state: MetadataBuilderState) =
+    let private addDerivedType extends f (typeDef: 'Type) (state: MetadataBuilderState) =
         match state.FindType extends with
         | Some extends' ->
             let def = f extends' typeDef
-            addTypeDef typeDef def state
+            addTypeDef<'Type> def state
         | None -> MissingType extends |> Error
 
     let addDelegate typeDef: BuilderExpression<_> =
@@ -301,7 +304,7 @@ module CliMetadata =
             )
         // TODO: Only add violation if type is successfully added.
         if typeDef.Fields.Count > 0 then InterfaceContainsFields typeDef |> state.ClsViolations.Add
-        addTypeDef typeDef intf state
+        addTypeDef<InterfaceDef> intf state
 
     let referenceType typeRef (state: MetadataBuilderState): BuilderResult<_> = state.TypeRef.GetHandle typeRef
 
