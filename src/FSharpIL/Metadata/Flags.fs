@@ -3,7 +3,7 @@
 open System.Reflection
 open System.Runtime.CompilerServices
 
-type IFlags<'Flags when 'Flags :> System.Enum> = abstract Flags: 'Flags // TODO: Rename to Value.
+type IFlags<'Flags when 'Flags :> System.Enum> = abstract Value: 'Flags
 
 [<IsReadOnly>]
 type ValidFlags<'Tag, 'Flags when 'Flags :> System.Enum> =
@@ -11,11 +11,11 @@ type ValidFlags<'Tag, 'Flags when 'Flags :> System.Enum> =
         val Value: 'Flags
         internal new(flags: 'Flags) = { Value = flags }
         override this.ToString() = this.Value.ToString()
-        interface IFlags<'Flags> with member this.Flags = this.Value
+        interface IFlags<'Flags> with member this.Value = this.Value
     end
 
 // TODO: Determine if flag types should be reference or value types.
-// TODO: Replace most flag types with ValidFlags<_, _>.
+// TODO: Instead of marker types, use the actual types themselves such as using ConcreteClassDef instead of ConcreteClassFlags.
 
 type LayoutFlag =
     | AutoLayout
@@ -29,8 +29,6 @@ type LayoutFlag =
         | SequentialLayout -> TypeAttributes.SequentialLayout
         | ExplicitLayout -> TypeAttributes.ExplicitLayout
 
-    static member Zero = AutoLayout
-
 type StringFormattingFlag =
     | AnsiClass
     | UnicodeClass
@@ -43,8 +41,6 @@ type StringFormattingFlag =
         | UnicodeClass -> TypeAttributes.UnicodeClass
         | AutoClass -> TypeAttributes.AutoClass
 
-    static member Zero = AnsiClass
-
 [<IsReadOnly; Struct>]
 type ClassFlags =
     { Layout: LayoutFlag
@@ -55,8 +51,19 @@ type ClassFlags =
       BeforeFieldInit: bool
       RTSpecialName: bool }
 
-    member this.Flags =
-        let mutable flags = this.Layout.Flags ||| this.StringFormat.Flags
+    member this.Value =
+        let mutable flags =
+            let layout =
+                match this.Layout with
+                | AutoLayout -> TypeAttributes.AutoLayout
+                | SequentialLayout -> TypeAttributes.SequentialLayout
+                | ExplicitLayout -> TypeAttributes.ExplicitLayout
+            let stringf =
+                match this.StringFormat with
+                | AnsiClass -> TypeAttributes.AnsiClass
+                | UnicodeClass -> TypeAttributes.UnicodeClass
+                | AutoClass -> TypeAttributes.AutoClass
+            layout ||| stringf
         if this.SpecialName then flags <- flags ||| TypeAttributes.SpecialName
         if this.Import then flags <- flags ||| TypeAttributes.Import
         if this.Serializable then flags <- flags ||| TypeAttributes.Serializable
@@ -64,62 +71,46 @@ type ClassFlags =
         if this.RTSpecialName then flags <- flags ||| TypeAttributes.RTSpecialName
         flags
 
-    static member Zero =
-        { Layout = LayoutFlag.Zero
+    interface IFlags<TypeAttributes> with member this.Value = this.Value
+
+    static member None =
+        { Layout = AutoLayout
           SpecialName = false
           Import = false
           Serializable = false
-          StringFormat = StringFormattingFlag.Zero
+          StringFormat = AnsiClass
           BeforeFieldInit = false
           RTSpecialName = false }
 
-[<IsReadOnly; Struct>]
-type ConcreteClassFlags private (flags: TypeAttributes) =
-    new (flags: ClassFlags) = ConcreteClassFlags(flags.Flags)
-    interface IFlags<TypeAttributes> with member _.Flags = flags
-
-[<IsReadOnly; Struct>]
-type AbstractClassFlags private (flags: TypeAttributes) =
-    new (flags: ClassFlags) = AbstractClassFlags(flags.Flags ||| TypeAttributes.Abstract)
-    interface IFlags<TypeAttributes> with member _.Flags = flags
-
-[<IsReadOnly; Struct>]
-type SealedClassFlags private (flags: TypeAttributes) =
-   new (flags: ClassFlags) = SealedClassFlags(flags.Flags ||| TypeAttributes.Sealed)
-   interface IFlags<TypeAttributes> with member _.Flags = flags
-
-[<IsReadOnly; Struct>]
-type StaticClassFlags private (flags: TypeAttributes) =
-   new (flags: ClassFlags) = StaticClassFlags(flags.Flags ||| TypeAttributes.Abstract ||| TypeAttributes.Sealed)
-   interface IFlags<TypeAttributes> with member _.Flags = flags
+[<AbstractClass; Sealed>] type ConcreteClassFlags = class end
+[<AbstractClass; Sealed>] type AbstractClassFlags = class end
+[<AbstractClass; Sealed>] type SealedClassFlags = class end
+[<AbstractClass; Sealed>] type StaticClassFlags = class end
 
 [<Struct; IsReadOnly>]
 type DelegateFlags =
     { Serializable: bool }
 
-    interface IFlags<TypeAttributes> with
-        member this.Flags =
-            let mutable flags = TypeAttributes.Sealed
-            if this.Serializable then flags <- flags ||| TypeAttributes.Serializable
-            flags
+    member this.Value =
+        let mutable flags = TypeAttributes.Sealed
+        if this.Serializable then flags <- flags ||| TypeAttributes.Serializable
+        flags
+
+    interface IFlags<TypeAttributes> with member this.Value = this.Value
 
 [<Struct; IsReadOnly>]
 [<RequireQualifiedAccess>]
 type InterfaceFlags =
     { Import: bool }
 
-    interface IFlags<TypeAttributes> with
-        member this.Flags =
-            let mutable flags = TypeAttributes.Abstract ||| TypeAttributes.Interface
-            if this.Import then flags <- flags ||| TypeAttributes.Import
-            flags
+    member this.Value =
+        let mutable flags = TypeAttributes.Abstract ||| TypeAttributes.Interface
+        if this.Import then flags <- flags ||| TypeAttributes.Import
+        flags
 
-[<IsReadOnly; Struct>]
-type StructFlags private (flags: TypeAttributes) =
-    new (flags: ClassFlags) = StructFlags(flags.Flags ||| TypeAttributes.Sealed)
-    interface IFlags<TypeAttributes> with member _.Flags = flags
+    interface IFlags<TypeAttributes> with member this.Value = this.Value
 
-    static member Zero = { ClassFlags.Zero with Layout = LayoutFlag.SequentialLayout } |> StructFlags
+[<AbstractClass; Sealed>] type StructFlags = class end
 
 type Visibility =
     | CompilerControlled
@@ -131,7 +122,7 @@ type Visibility =
     | Public
 
     interface IFlags<FieldAttributes> with
-        member this.Flags =
+        member this.Value =
             match this with
             | CompilerControlled -> FieldAttributes.PrivateScope
             | Private -> FieldAttributes.Private
@@ -142,7 +133,7 @@ type Visibility =
             | Public -> FieldAttributes.Public
 
     interface IFlags<MethodAttributes> with
-        member this.Flags =
+        member this.Value =
             match this with
             | CompilerControlled -> MethodAttributes.PrivateScope
             | Private -> MethodAttributes.Private
@@ -162,7 +153,7 @@ type GlobalVisibility =
     | Private
 
     interface IFlags<FieldAttributes> with
-        member this.Flags =
+        member this.Value =
             match this with
             | Public -> FieldAttributes.Public
             | CompilerControlled -> FieldAttributes.PrivateScope
@@ -176,26 +167,17 @@ type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> =
       /// Sets the `SpecialName` and `RTSpecialName` flags. // TODO: SpecialName is required to be set if RTSpecialName is set, so allow fields that set special name but don't set RTSpecialName.
       SpecialName: bool }
 
-    member this.Flags =
-        let mutable flags = this.Visibility.Flags
+    member this.Value =
+        let mutable flags = this.Visibility.Value
         if this.NotSerialized then flags <- flags ||| FieldAttributes.NotSerialized
         if this.SpecialName then flags <- flags ||| FieldAttributes.SpecialName ||| FieldAttributes.RTSpecialName
         flags
 
-[<IsReadOnly; Struct>]
-type InstanceFieldFlags private (flags: FieldAttributes) =
-    new (flags: FieldFlags<Visibility>) = InstanceFieldFlags(flags.Flags)
-    interface IFlags<FieldAttributes> with member _.Flags = flags
+    interface IFlags<FieldAttributes> with member this.Value = this.Value
 
-[<IsReadOnly; Struct>]
-type StaticFieldFlags private (flags: FieldAttributes) =
-    new (flags: FieldFlags<Visibility>) = StaticFieldFlags(flags.Flags)
-    interface IFlags<FieldAttributes> with member _.Flags = flags // TODO: Set special flags.
-
-[<IsReadOnly; Struct>]
-type GlobalFieldFlags private (flags: FieldAttributes) =
-    new (flags: FieldFlags<GlobalVisibility>) = GlobalFieldFlags(flags.Flags)
-    interface IFlags<FieldAttributes> with member _.Flags = flags // TODO: Set special flags.
+[<AbstractClass; Sealed>] type InstanceFieldFlags = class end
+[<AbstractClass; Sealed>] type StaticFieldFlags = class end
+[<AbstractClass; Sealed>] type GlobalFieldFlags = class end
 
 // NOTE: For methods, SpecialName has to be set if RTSpecialName is set.
 // NOTE: For methods, RTSpecialName and SpecialName is set when it is a ctor or cctor
@@ -204,25 +186,19 @@ type VTableLayout =
     | ReuseSlot
     | NewSlot
 
-    interface IFlags<MethodAttributes> with
-        member this.Flags =
-            match this with
-            | ReuseSlot -> MethodAttributes.ReuseSlot
-            | NewSlot -> MethodAttributes.NewSlot
-
-    static member Zero = ReuseSlot
-
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type StaticMethodDefFlags<'Visibility when 'Visibility :> IFlags<MethodAttributes>> =
     { Visibility: 'Visibility
       HideBySig: bool }
 
-    member this.Flags =
-        let flags = this.Visibility.Flags
+    member this.Value =
+        let flags = this.Visibility.Value
         if this.HideBySig
         then flags ||| MethodAttributes.HideBySig
         else flags
+
+    interface IFlags<MethodAttributes> with member this.Value = this.Value
 
 [<IsReadOnly; Struct>]
 type InstanceMethodDefFlags =
@@ -230,10 +206,16 @@ type InstanceMethodDefFlags =
       HideBySig: bool
       VTableLayout: VTableLayout }
 
-    member this.Flags =
-        let mutable flags = (this.Visibility :> IFlags<MethodAttributes>).Flags
+    member this.Value =
+        let vtable =
+            match this.VTableLayout with
+            | ReuseSlot -> MethodAttributes.ReuseSlot
+            | NewSlot -> MethodAttributes.NewSlot
+        let mutable flags = (this.Visibility :> IFlags<MethodAttributes>).Value
         if this.HideBySig then flags <- flags ||| MethodAttributes.HideBySig
-        flags ||| (this.VTableLayout :> IFlags<_>).Flags
+        flags ||| vtable
+
+    interface IFlags<MethodAttributes> with member this.Value = this.Value
 
 [<IsReadOnly; Struct>]
 type MethodImplFlags =
@@ -242,51 +224,31 @@ type MethodImplFlags =
       NoInlining: bool
       NoOptimization: bool }
 
-    member this.Flags =
-        let mutable flags = enum<MethodImplAttributes > 0
+    member this.Value =
+        let mutable flags = enum<MethodImplAttributes> 0
         if this.ForwardRef then flags <- flags ||| MethodImplAttributes.ForwardRef
         if this.PreserveSig then flags <- flags ||| MethodImplAttributes.PreserveSig
         if this.NoInlining then flags <- flags ||| MethodImplAttributes.NoInlining
         if this.NoOptimization then flags <- flags ||| MethodImplAttributes.NoOptimization
         flags
 
-    static member Zero =
+    interface IFlags<MethodImplAttributes> with member this.Value = this.Value
+
+    static member None =
         { ForwardRef = false
           PreserveSig = false
           NoInlining = false
           NoOptimization = false }
 
-[<IsReadOnly; Struct>]
-type InstanceMethodFlags private (flags: MethodAttributes) =
-    new (flags: InstanceMethodDefFlags) = InstanceMethodFlags(flags.Flags)
-    interface IFlags<MethodAttributes> with member _.Flags = flags
-
-[<IsReadOnly; Struct>]
-type AbstractMethodFlags private (flags: MethodAttributes) =
-    new (flags: InstanceMethodDefFlags) = AbstractMethodFlags(flags.Flags ||| MethodAttributes.Abstract ||| MethodAttributes.Virtual)
-    interface IFlags<MethodAttributes> with member _.Flags = flags
-
-[<IsReadOnly; Struct>]
-type FinalMethodFlags private (flags: MethodAttributes) =
-    interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.Final ||| MethodAttributes.Virtual
-
-[<IsReadOnly; Struct>]
-type StaticMethodFlags private (flags: MethodAttributes) =
-    new (flags: StaticMethodDefFlags<Visibility>) = StaticMethodFlags(flags.Flags ||| MethodAttributes.Static)
-    interface IFlags<MethodAttributes> with member _.Flags = flags
-
-// type GlobalMethodFlags
+[<AbstractClass; Sealed>] type InstanceMethodFlags = class end
+[<AbstractClass; Sealed>] type AbstractMethodFlags = class end
+[<AbstractClass; Sealed>] type FinalMethodFlags = class end
+[<AbstractClass; Sealed>] type StaticMethodFlags = class end
+[<AbstractClass; Sealed>] type GlobalMethodFlags = class end
 
 // NOTE: Constructors and Class Constructors cannot be marked CompilerControlled.
-[<IsReadOnly; Struct>]
-type ConstructorFlags private (flags: MethodAttributes) =
-    interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName // TODO: Move setting of flags into a constructor.
-
-[<IsReadOnly; Struct>]
-type ClassConstructorFlags private (flags: MethodAttributes) =
-    interface IFlags<MethodAttributes> with member _.Flags = flags ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| MethodAttributes.Static
-
-// TODO: Reduce number of struct types by using the records directly or by using functions instead.
+[<AbstractClass; Sealed>] type ConstructorFlags = class end
+[<AbstractClass; Sealed>] type ClassConstructorFlags = class end
 
 [<IsReadOnly; Struct>]
 type ParamFlags =
@@ -294,15 +256,16 @@ type ParamFlags =
       Out: bool
       Optional: bool }
 
-    member this.Flags =
+    member this.Value =
         let mutable flags = ParameterAttributes.None
         if this.In then flags <- flags ||| ParameterAttributes.In
         if this.Out then flags <- flags ||| ParameterAttributes.Out
         if this.Optional then flags <- flags ||| ParameterAttributes.Optional
         flags
 
-    // TODO: Rename default flags from Zero to None
-    static member Zero = { In = false; Out = false; Optional = false }
+    interface IFlags<ParameterAttributes> with member this.Value = this.Value
+
+    static member None = { In = false; Out = false; Optional = false }
 
 [<IsReadOnly; Struct>]
 type GenericParamFlags =
@@ -320,15 +283,36 @@ type GenericParamFlags =
 
     static member None = { ReferenceType = false; ValueType = false; DefaultConstructor = false }
 
-    interface IFlags<GenericParameterAttributes> with member this.Flags = this.Value
+    interface IFlags<GenericParameterAttributes> with member this.Value = this.Value
 
 [<AbstractClass; Sealed>] type NonVariantGenericParamFlags = class end
 [<AbstractClass; Sealed>] type CovariantGenericParamFlags = class end
 [<AbstractClass; Sealed>] type ContravariantGenericParamFlags = class end
 
+type TypeFlags<'Tag> = ValidFlags<'Tag, TypeAttributes>
+
 [<AutoOpen>]
 module Flags =
-    let (|Flags|) (flags: #IFlags<_>) = flags.Flags
+    let (|Flags|) (flags: #IFlags<_>) = flags.Value
+
+    let concreteClassFlags (Flags flags: ClassFlags) = TypeFlags<ConcreteClassFlags> flags
+    let abstractClassFlags (Flags flags: ClassFlags) = TypeFlags<AbstractClassFlags>(TypeAttributes.Abstract ||| flags)
+    let sealedClassFlags (Flags flags: ClassFlags) = TypeFlags<SealedClassFlags>(TypeAttributes.Sealed ||| flags)
+    let staticClassFlags (Flags flags: ClassFlags) = TypeFlags<StaticClassFlags>(TypeAttributes.Abstract ||| TypeAttributes.Sealed ||| flags)
+    let structFlags (Flags flags: ClassFlags) = TypeFlags<StructFlags>(TypeAttributes.Sealed ||| flags)
+
+    let instanceFieldFlags (Flags flags: FieldFlags<Visibility>) = ValidFlags<InstanceFieldFlags, _> flags
+    let staticFieldFlags (Flags flags: FieldFlags<Visibility>) = ValidFlags<StaticFieldFlags, _>(flags ||| FieldAttributes.Static)
+    let globalFieldFlags (Flags flags: FieldFlags<GlobalVisibility>) = ValidFlags<GlobalFieldFlags, _>(flags ||| FieldAttributes.Static) // TODO: Set other special flags
+
+    let instanceMethodFlags (Flags flags: InstanceMethodDefFlags) = ValidFlags<InstanceMethodFlags, _> flags
+    let abstractMethodFlags (Flags flags: InstanceMethodDefFlags) = ValidFlags<AbstractMethodFlags, _>(MethodAttributes.Abstract ||| MethodAttributes.Virtual ||| flags)
+    let finalMethodFlags (Flags flags: InstanceMethodDefFlags) = ValidFlags<FinalMethodFlags, _>(MethodAttributes.Final ||| MethodAttributes.Virtual ||| flags)
+    let staticMethodFlags (Flags flags: StaticMethodDefFlags<Visibility>) = ValidFlags<StaticMethodFlags, _>(MethodAttributes.Static ||| flags)
+    // let globalMethodFlags (Flags flags: StaticMethodDefFlags<GlobalVisibility>) = invalidOp ""
+
+    // let constructorFlags (Flags flags: _) = ValidFlags<ConstructorFlags, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| flags)
+    // let classConstructorFlags (Flags flags: _) = ValidFlags<ClassConstructorFlags, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| MethodAttributes.Static ||| flags)
 
     /// Flags for non-variant generic parameters.
     let invariantFlags (Flags flags: GenericParamFlags) = ValidFlags<NonVariantGenericParamFlags, _> flags

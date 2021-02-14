@@ -77,7 +77,7 @@ type Generate() =
                                 // TODO: Add support for nested visibility.
                             |]
                             |> Gen.oneof
-                        let! flags = Arb.generate<ClassFlags> |> Gen.map StaticClassFlags
+                        let! flags = Arb.generate<ClassFlags> |> Gen.map staticClassFlags
                         let! name = identifier
                         let! (NonEmptyString ns) = Arb.generate
                         let! extends =

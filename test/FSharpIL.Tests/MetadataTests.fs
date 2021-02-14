@@ -35,8 +35,8 @@ let tests =
         testCase "entrypoint is set correctly" <| fun() ->
             let entrypoint =
                 { Body = ImmutableArray.Create Opcode.Ret
-                  ImplFlags = MethodImplFlags.Zero
-                  Flags = StaticMethodFlags { Visibility = Visibility.Public; HideBySig = true }
+                  ImplFlags = MethodImplFlags.None
+                  Flags = staticMethodFlags { Visibility = Visibility.Public; HideBySig = true }
                   MethodName = Identifier.ofStr "Main"
                   Signature = StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, ImmutableArray.Empty)
                   ParamList = fun _ -> failwith "no parameters" }
@@ -51,7 +51,7 @@ let tests =
                               Extends = Extends.Null
                               ClassName = Identifier.ofStr "Program"
                               TypeNamespace = ""
-                              Flags = StaticClassFlags ClassFlags.Zero
+                              Flags = staticClassFlags ClassFlags.None
                               Fields = FieldList.Empty
                               Methods = methodList }
 

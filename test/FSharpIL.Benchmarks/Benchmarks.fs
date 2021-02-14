@@ -100,19 +100,19 @@ type HelloWorld () =
                                 Ret
                             |]
                             |> ImmutableArray.Create<Opcode>
-                          ImplFlags = MethodImplFlags.Zero
+                          ImplFlags = MethodImplFlags.None
                           MethodName = Identifier.ofStr "Main"
                           Flags =
                             { Visibility = Public
                               HideBySig = true }
-                            |> StaticMethodFlags
+                            |> staticMethodFlags
                           Signature =
                             let args =
                                 { CustomMod = ImmutableArray.Empty
                                   ParamType = EncodedType.Array(EncodedType.String, ArrayShape.OneDimension) }
                                 |> ImmutableArray.Create
                             StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, args)
-                          ParamList = fun _ _ -> Param { Flags = ParamFlags.Zero; ParamName = "args" } }
+                          ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
                 }
 
             let! program =
@@ -121,7 +121,7 @@ type HelloWorld () =
                       ClassName = Identifier.ofStr "Program"
                       Extends = Extends.TypeRef object
                       Fields = FieldList.Empty
-                      Flags = StaticClassFlags ClassFlags.Zero
+                      Flags = staticClassFlags ClassFlags.None
                       TypeNamespace = "HelloWorld"
                       Methods = methodList }
             

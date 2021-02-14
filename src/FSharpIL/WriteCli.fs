@@ -277,7 +277,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
     // Param (0x08)
     for sequence, row in tables.Param do
-        writer.WriteU2 row.Flags.Flags
+        writer.WriteU2 row.Flags.Value
         writer.WriteU2(sequence + 1)
         info.StringsStream.WriteIndex(row.ParamName, writer)
 

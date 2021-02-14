@@ -188,12 +188,12 @@ type TypeVisibility =
 /// <seealso cref="T:FSharpIL.Metadata.AbstractClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.SealedClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.StaticClassDef"/>
-type ClassDef<'Flags, 'Field, 'Method when 'Flags :> IFlags<TypeAttributes> and 'Field :> IField and 'Method :> IMethod> =
+type ClassDef<'Flags, 'Field, 'Method when 'Field :> IField and 'Method :> IMethod> =
     { /// <summary>
       /// Corresponds to the <c>VisibilityMask</c> flags of a type, as well as an entry in the <c>NestedClass</c> table if the current type is nested.
       /// </summary>
       Access: TypeVisibility
-      Flags: 'Flags
+      Flags: ValidFlags<'Flags, TypeAttributes>
       ClassName: Identifier
       TypeNamespace: string
       Extends: Extends
@@ -242,7 +242,7 @@ type InterfaceDef =
 /// <seealso cref="T:FSharpIL.Metadata.EnumDef"/>
 type StructDef =
    { Access: TypeVisibility
-     Flags: StructFlags
+     Flags: TypeFlags<StructFlags>
      StructName: Identifier
      TypeNamespace: string
      Fields: FieldList<FieldChoice>
@@ -335,12 +335,12 @@ type IField =
 type FieldList<'Field when 'Field :> IField> = MemberList<'Field, FieldRow>
 
 [<StructuralComparison; StructuralEquality>]
-type Field<'Flags, 'Signature when 'Flags :> IFlags<FieldAttributes> and 'Signature : equality> =
-    { Flags: 'Flags
+type Field<'Flags, 'Signature when 'Signature : equality> =
+    { Flags: ValidFlags<'Flags, FieldAttributes>
       FieldName: Identifier
       Signature: 'Signature }
 
-    interface IField with member this.Row() = FieldRow(this.Flags.Flags, this.FieldName, ())
+    interface IField with member this.Row() = FieldRow(this.Flags.Value, this.FieldName, ())
 
 /// <summary>Represents a non-static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
 type InstanceField = Field<InstanceFieldFlags, FieldSignature>
@@ -396,17 +396,17 @@ type IMethod =
 
 type MethodList<'Method when 'Method :> IMethod> = MemberList<'Method, MethodDef>
 
-type Method<'Body, 'Flags, 'Signature when 'Flags :> IFlags<MethodAttributes> and 'Signature :> IMethodDefSignature> =
+type Method<'Body, 'Flags, 'Signature when 'Signature :> IMethodDefSignature> =
     { Body: MethodBody
       ImplFlags: MethodImplFlags
-      Flags: 'Flags
+      Flags: ValidFlags<'Flags, MethodAttributes>
       MethodName: Identifier
       Signature: 'Signature
       // TODO: Add ParamRow to represent method return type, allowing custom attributes to be applied to the return type.
       ParamList: ParamItem -> int -> ParamRow }
 
     interface IMethod with
-        member this.Definition() = MethodDef(this.Body, this.ImplFlags.Flags, this.Flags.Flags, this.MethodName, this.Signature.Signature(), this.ParamList)
+        member this.Definition() = MethodDef(this.Body, this.ImplFlags.Value, this.Flags.Value, this.MethodName, this.Signature.Signature(), this.ParamList)
 
 // TODO: Create different method body types for different methods.
 type InstanceMethodDef = Method<MethodBody, InstanceMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
