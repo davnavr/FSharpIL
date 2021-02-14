@@ -7,6 +7,7 @@ open Microsoft.FSharp.Core.Operators.Checked
 
 open FSharpIL.Writing
 
+// TODO: Rename to MetadataTable?
 type ImmutableTable<'Index, 'T when 'Index :> IIndex and 'Index : equality> internal (table: IReadOnlyCollection<'T>, own: 'T -> 'Index) =
     let items = Array.zeroCreate<'T> table.Count
     let dict = Dictionary<'Index, uint32> table.Count

@@ -192,6 +192,7 @@ module CliMetadata =
                 definingType.Value.MethodList
         state.EntryPoint <- SimpleIndex(state.Owner, main) |> Some
 
+    // TODO: Currently, methods and fields cannot reference the defining type, meaning that methods that return the current object cannot be made.
     let private addTypeDef<'Type> (typeDef: TypeDefRow) (state: MetadataBuilderState) =
         state.TypeDef.GetIndex typeDef
         |> Option.map (TypeIndex<'Type> >> Ok)
