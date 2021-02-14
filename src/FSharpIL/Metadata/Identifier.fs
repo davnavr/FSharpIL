@@ -2,7 +2,7 @@
 
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
-type Identifier = // TODO: Rename to Identifier.
+type Identifier =
     internal
     | Identifier of string
 

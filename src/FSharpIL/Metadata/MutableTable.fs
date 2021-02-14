@@ -3,7 +3,7 @@
 open System.Collections.Generic
 
 [<Sealed>]
-type MutableTable<'Value when 'Value :> IIndexValue> internal (owner: IndexOwner) =
+type MutableTable<'Value when 'Value :> IIndexValue and 'Value : equality> internal (owner: IndexOwner) =
     let set = HashSet<'Value>()
 
     member _.Count = set.Count

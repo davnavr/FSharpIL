@@ -81,6 +81,4 @@ let tests =
 
             ValidationExpect.isSpecificError result error "expression should evaluate to an error"
             Expect.isTrue skipped "rest of expression should not be evaluated if an error occurs"
-
-        // TODO: Add test to check that types cannot form loops in their inheritance chain.
     ]

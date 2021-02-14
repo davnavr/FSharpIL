@@ -15,7 +15,7 @@ type ImmutableTable<'Index, 'T when 'Index :> IIndex and 'Index : equality> inte
         let mutable i = 0
         for item in table do
             Array.set items i item
-            i <- i + 1 // TODO: Figure out if 1 refers to the first item for ALL tables.
+            i <- i + 1
             dict.Item <- own item, uint32 i
 
     member val Handles = dict.Keys :> IReadOnlyCollection<_>

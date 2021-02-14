@@ -531,6 +531,7 @@ type MethodRef = MemberRef<MethodRefSignature>
 /// </summary>
 /// <seealso cref="T:FSharpIL.Metadata.MethodRef"/>
 /// <seealso cref="T:FSharpIL.Metadata.FieldRef"/>
+[<StructuralComparison; StructuralEquality>]
 type MemberRefRow =
     | MethodRef of MethodRef
     // | FieldRef // of ?
@@ -552,7 +553,6 @@ type MemberRefRow =
 
 type MemberRefIndex<'Member> = TaggedIndex<'Member, MemberRefRow>
 
-// TODO: Create an equality comparer for MemberRefRow or have MemberRefRow implement IEquatable.
 [<Sealed>]
 type MemberRefTable internal (owner: IndexOwner) =
     let members = MutableTable<MemberRefRow> owner
@@ -612,7 +612,8 @@ type CustomAttribute =
     { Parent: CustomAttributeParent
       /// Specifies the constructor method used to create the custom attribute.
       Type: CustomAttributeType // TODO: How to ensure that the MethodRef points to a .ctor?
-      Value: CustomAttributeSignature option } // TODO: How to validate signature to ensure types of fixed arguments match method signature?
+      Value: CustomAttributeSignature option }
+      // TODO: How to validate signature to ensure types of fixed arguments match method signature? Maybe have FixedArgs field of signature type be ParamItem -> int -> FixedArg?
 
     interface IIndexValue with
         member this.CheckOwner actual =
@@ -1155,7 +1156,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
             | Some (main': SimpleIndex<_>) ->
                 if main'.Owner <> owner then
                     invalidArg "main" "The specified entrypoint cannot be owned by another state."
-                // this.EnsureOwner main' // TODO: Check indices of main method is owned by this state.
+                owner.EnsureEqual main'.Owner
                 entrypoint <- Some main'
             | None -> entrypoint <- None
 
