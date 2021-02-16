@@ -90,42 +90,41 @@ type HelloWorld () =
                     |> Some }
                 |> attribute
 
-            let! methodList =
-                methods {
-                    StaticClassMethod.Method
-                        { Body =
-                            [|
-                                Ldstr "Hello World!"
-                                Call (Callee.MethodRef writeLine)
-                                Ret
-                            |]
-                            |> ImmutableArray.Create<Opcode>
-                          ImplFlags = MethodImplFlags.None
-                          MethodName = Identifier.ofStr "Main"
-                          Flags =
-                            { Visibility = Public
-                              HideBySig = true }
-                            |> staticMethodFlags
-                          Signature =
-                            let args =
-                                { CustomMod = ImmutableArray.Empty
-                                  ParamType = EncodedType.Array(EncodedType.String, ArrayShape.OneDimension) }
-                                |> ImmutableArray.Create
-                            StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, args)
-                          ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
-                }
+            let main =
+                { Body =
+                    [|
+                        Ldstr "Hello World!"
+                        Call (Callee.MethodRef writeLine)
+                        Ret
+                    |]
+                    |> ImmutableArray.Create<Opcode>
+                  ImplFlags = MethodImplFlags.None
+                  MethodName = Identifier.ofStr "Main"
+                  Flags =
+                    { Visibility = Public
+                      HideBySig = true }
+                    |> staticMethodFlags
+                  Signature =
+                    let args =
+                        { CustomMod = ImmutableArray.Empty
+                          ParamType = EncodedType.Array(EncodedType.String, ArrayShape.OneDimension) }
+                        |> ImmutableArray.Create
+                    StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, args)
+                  ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
+                |>  StaticClassMethod.Method
 
-            let! program =
-                addStaticClass
+            let! programBuilder =
+                buildStaticClass
                     { Access = TypeVisibility.Public
                       ClassName = Identifier.ofStr "Program"
                       Extends = Extends.TypeRef object
-                      Fields = FieldList.Empty
                       Flags = staticClassFlags ClassFlags.None
-                      TypeNamespace = "HelloWorld"
-                      Methods = methodList }
-            
-            do! selectEntrypoint (fun _ -> true) program
+                      TypeNamespace = "HelloWorld" }
+
+            let main' = IndexedList.add main programBuilder.Methods |> ValueOption.get
+            // setEntrypoint main' // TODO: Convert from StaticClassMethod to MethodDef
+
+            programBuilder.BuildType() |> ValueOption.get |> ignore // TODO: Create better way to call BuildType method.
         }
         |> CliMetadata.createMetadata
             { Name = Identifier.ofStr "HelloWorld.dll"

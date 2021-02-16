@@ -3,6 +3,8 @@
 open System
 open System.Collections.Immutable
 
+// TODO: Move these types near to where they are used.
+
 // II.25.3.3.1
 [<Flags>]
 type CorFlags =

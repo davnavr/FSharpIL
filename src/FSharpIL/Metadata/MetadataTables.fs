@@ -8,7 +8,7 @@ open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 
-// TODO: Consider moving some table types and the MetadataBuilder class to a file below this one.
+// TODO: Consider moving some table types and the MetadataBuilder class to a file below this one. Maybe move each table and its related types to a separate file?
 
 [<RequireQualifiedAccess>]
 module internal SystemType =
@@ -23,10 +23,12 @@ type ClsViolation =
     /// A violation of rule 19, which states that "CLS-compliant interfaces shall not define...fields".
     | InterfaceContainsFields of InterfaceDef
 
+// TODO: Replace warning DU with interface?
 type ValidationWarning =
     /// (1d)
     | TypeRefUsesModuleResolutionScope of TypeRef
 
+// TODO: Replace error DU with interface, or maybe use exceptions?
 type ValidationError =
     // TODO: Have different cases for different duplicate values.
     // TODO: Consider replacing errors that occur for duplicate values with something else.
@@ -196,10 +198,7 @@ type ClassDef<'Flags, 'Field, 'Method when 'Field :> IField and 'Method :> IMeth
       Flags: ValidFlags<'Flags, TypeAttributes>
       ClassName: Identifier
       TypeNamespace: string
-      Extends: Extends
-      /// <summary>Corresponds to the fields of the type declared in the <c>Field</c> table.</summary>
-      Fields: FieldList<'Field>
-      Methods: MethodList<'Method> }
+      Extends: Extends }
 
 /// Represents a class that is not sealed or abstract.
 type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, ConcreteClassMethod>
@@ -251,6 +250,7 @@ type StructDef =
 type TypeIndex<'Type> = TaggedIndex<'Type, TypeDefRow>
 
 // TODO: Have FieldList and MethodList types have an Owner field that shows which TypeDef owns the members, and whose Add methods return a SimpleIndex<_>.
+// TODO: Rename to TypeDefBuilder and create an immutable version called TypeDefRow
 /// <summary>
 /// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
 /// </summary>
@@ -260,7 +260,7 @@ type TypeIndex<'Type> = TaggedIndex<'Type, TypeDefRow>
 /// <seealso cref="T:FSharpIL.Metadata.InterfaceDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.StructDef"/>
 [<Sealed>]
-type TypeDefRow internal (flags, name, ns, extends, fields, methods, parent) =
+type TypeDefRow internal (flags, name, ns, extends, fields, methods, parent, genericParams) =
     member _.Flags: TypeAttributes = flags
     member _.TypeName: Identifier = name
     member _.TypeNamespace: string = ns
@@ -268,6 +268,7 @@ type TypeDefRow internal (flags, name, ns, extends, fields, methods, parent) =
     member _.FieldList: ImmutableArray<FieldRow> = fields
     member _.MethodList: ImmutableArray<MethodDef> = methods
     member _.EnclosingClass: SimpleIndex<TypeDefRow> option = parent
+    member _.GenericParams: ImmutableArray<GenericParam<unit>> = genericParams
 
     override this.Equals obj =
         match obj with
@@ -329,7 +330,11 @@ type FieldRow internal (flags, name, signature) = // TODO: How to allow differen
             then false
             else name = other.Name && signature = other.Signature
 
+    interface IIndexValue with
+        member this.CheckOwner actual = invalidOp "bad"
+
 type IField =
+    inherit IIndexValue
     abstract Row : unit -> FieldRow
 
 type FieldList<'Field when 'Field :> IField> = MemberList<'Field, FieldRow>
@@ -340,7 +345,9 @@ type Field<'Flags, 'Signature when 'Signature : equality> =
       FieldName: Identifier
       Signature: 'Signature }
 
-    interface IField with member this.Row() = FieldRow(this.Flags.Value, this.FieldName, ())
+    interface IField with
+        member this.CheckOwner actual = invalidOp "bad"
+        member this.Row() = FieldRow(this.Flags.Value, this.FieldName, ())
 
 /// <summary>Represents a non-static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
 type InstanceField = Field<InstanceFieldFlags, FieldSignature>
@@ -354,6 +361,7 @@ type FieldChoice =
     | StaticField of StaticField
 
     interface IField with
+        member this.CheckOwner actual = invalidOp "bad"
         member this.Row() =
             
             match this with
@@ -365,7 +373,7 @@ type FieldChoice =
 /// </summary>
 type GlobalField = Field<GlobalFieldFlags, FieldSignature>
 
-// TODO: Create better way to get SimpleIndex<MethodDef> to allow easy use when setting the entrypoint or adding custom attributes.
+// TODO: Rename to MethodDefRow.
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
 type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
@@ -391,12 +399,17 @@ type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature
             then false
             else this.Name = other.Name && this.Signature = other.Signature
 
+    interface IIndexValue with
+        member this.CheckOwner actual = invalidOp "bad"
+
 type IMethod =
+    inherit IIndexValue
     abstract Definition : unit -> MethodDef
 
 type MethodList<'Method when 'Method :> IMethod> = MemberList<'Method, MethodDef>
 
-type Method<'Body, 'Flags, 'Signature when 'Signature :> IMethodDefSignature> =
+[<CustomEquality; NoComparison>]
+type Method<'Body, 'Flags, 'Signature when 'Signature :> IMethodDefSignature and 'Signature : equality> =
     { Body: MethodBody
       ImplFlags: MethodImplFlags
       Flags: ValidFlags<'Flags, MethodAttributes>
@@ -405,7 +418,17 @@ type Method<'Body, 'Flags, 'Signature when 'Signature :> IMethodDefSignature> =
       // TODO: Add ParamRow to represent method return type, allowing custom attributes to be applied to the return type.
       ParamList: ParamItem -> int -> ParamRow }
 
+    // TODO: Remove duplicate equality code shared with MethodDef class.
+    member internal this.SkipDuplicateChecking = this.Flags.Value &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
+    
+    interface IEquatable<Method<'Body, 'Flags, 'Signature>> with
+        member this.Equals other =
+            if this.SkipDuplicateChecking || other.SkipDuplicateChecking
+            then false
+            else this.MethodName = other.MethodName && this.Signature = other.Signature
+
     interface IMethod with
+        member this.CheckOwner actual = invalidOp "bad"
         member this.Definition() = MethodDef(this.Body, this.ImplFlags.Value, this.Flags.Value, this.MethodName, this.Signature.Signature(), this.ParamList)
 
 // TODO: Create different method body types for different methods.
@@ -429,6 +452,7 @@ type ConcreteClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
+        member this.CheckOwner actual = invalidOp "bad"
         member this.Definition() =
             match this with
             | Method (MethodDef def)
@@ -445,6 +469,7 @@ type AbstractClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
+        member this.CheckOwner actual = invalidOp "bad"
         member this.Definition() =
             match this with
             | Method (MethodDef def)
@@ -462,6 +487,7 @@ type SealedClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
+        member this.CheckOwner actual = invalidOp "bad"
         member this.Definition() =
             match this with
             | Method (MethodDef def)
@@ -476,6 +502,7 @@ type StaticClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
+        member this.CheckOwner actual = invalidOp "bad"
         member this.Definition() =
             match this with
             | Method (MethodDef def)
@@ -789,7 +816,7 @@ type NestedClass =
 
 // II.22.20
 [<NoComparison; CustomEquality>]
-type GenericParam<'Flags> = // TODO: Make this type generic, since covariant or contravariant type parameters are only allowed in certain places.
+type GenericParam<'Flags> =
     { Flags: ValidFlags<'Flags, GenericParameterAttributes>
       Name: Identifier
       /// <summary>Represents the corresponding rows in the <c>GenericParamConstraint</c> table for this generic parameter.</summary>
@@ -798,14 +825,10 @@ type GenericParam<'Flags> = // TODO: Make this type generic, since covariant or 
     interface IEquatable<GenericParam<'Flags>> with
         member this.Equals other = this.Name = other.Name
 
-[<NoComparison; CustomEquality>]
-type GenericParamList<'Flags> =
-    { Owner: unit
-      GenericParameters: ImmutableArray<GenericParam<'Flags>> }
-
-    interface IEquatable<GenericParamList<'Flags>> with
-        member this.Equals other = this.Owner = other.Owner
-
+    interface IIndexValue with
+        member this.CheckOwner actual =
+            // TODO: Iterate through the generic constraints and check owners.
+            ()
 // II.22.21
 [<StructuralComparison; StructuralEquality>]
 type GenericParamConstraint =
@@ -1182,10 +1205,10 @@ type MetadataBuilderState (mdle: ModuleTable) =
     // (0x2C)
     // member GenericParamConstraint
 
-    // TODO: How to specify the entrypoint in a multi-file assembly?
+    // TODO: How to specify the entrypoint in a multi-file assembly? Create an EntryPoint DU.
     /// <summary>Gets or sets the entrypoint of the assembly.</summary>
     /// <remarks>The entrypoint of the assembly is specified by the <c>EntryPointToken</c> field of the CLI header (II.25.3.3).</remarks>
-    member this.EntryPoint
+    member _.EntryPoint
         with get(): SimpleIndex<MethodDef> option = entrypoint
         and set main =
             match main with

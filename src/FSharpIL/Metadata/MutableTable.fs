@@ -11,7 +11,7 @@ type MutableTable<'Value when 'Value :> IIndexValue and 'Value : equality> inter
 
     member _.GetEnumerator() = set.GetEnumerator()
 
-    member _.GetIndex(value: 'Value) =
+    member _.GetIndex(value: 'Value) = // TODO: Use value option.
         owner.CheckOwner value
         if set.Add value
         then SimpleIndex(owner, value) |> Some

@@ -4,6 +4,7 @@ open System.Collections.Generic
 open System.Collections.Immutable
 
 /// Represents a list of methods or fields.
+[<System.Obsolete>]
 [<Struct; System.Runtime.CompilerServices.IsReadOnly>]
 type MemberList<'Member, 'Row> internal (members: ImmutableArray<'Row>) =
     member _.Count = members.Length
@@ -21,6 +22,7 @@ type MemberList<'Member, 'Row> internal (members: ImmutableArray<'Row>) =
         member _.GetEnumerator() = (members :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (members :> System.Collections.IEnumerable).GetEnumerator()
 
+[<System.Obsolete>]
 [<Sealed>]
 type MemberListBuilder<'Member, 'Row> internal (row: 'Member -> 'Row) =
     member inline _.Combine(x: _ -> Result<_, 'Member>, y: _ -> Result<unit, _>) =

@@ -1,7 +1,6 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Collections.Immutable
-open System.Reflection
 
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
 [<Sealed>]
@@ -134,25 +133,77 @@ type BuilderResult<'T> = Result<'T, ValidationError>
 
 type BuilderExpression<'T> = MetadataBuilderState -> BuilderResult<'T>
 
+// TODO: Move this to another file.
+[<System.Runtime.CompilerServices.IsReadOnlyAttribute>]
+[<NoEquality; NoComparison>]
+type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and 'Field : equality and 'Method :> IMethod and 'Method : equality> =
+    struct
+        val private builder: unit -> SimpleIndex<TypeDefRow> option
+        val private validate: unit -> unit
+        // TODO: Fix, forgetting to call the BuildType function will result in missing fields and methods!
+        val Fields: IndexedList<'Field>
+        val Methods: IndexedList<'Method>
+        val GenericParameters: IndexedList<GenericParam<'GenericParam>>
+
+        internal new (validate, flags, typeName, typeNamespace, extends, parent, state: MetadataBuilderState) =
+            let fields = IndexedList.empty<'Field> state.Owner
+            let methods = IndexedList.empty<'Method> state.Owner
+            let genericParams = IndexedList.empty<GenericParam<'GenericParam>> state.Owner
+            let builder() =
+                TypeDefRow (
+                    flags,
+                    typeName,
+                    typeNamespace,
+                    extends,
+                    invalidOp "bad", // TODO: Map fields and methods
+                    invalidOp "bad",
+                    parent,
+                    TypeBuilder<'Type, 'Field, 'Method, 'GenericParam>.GetGenericParameters genericParams
+                )
+                |> state.TypeDef.GetIndex
+            { builder = builder
+              validate = validate
+              Fields = fields
+              Methods = methods
+              GenericParameters = genericParams }
+
+        member this.BuildType() =
+            match this.builder() with
+            | Some index ->
+                this.validate()
+                ValueSome index
+            | None -> ValueNone
+
+        static member GetGenericParameters(list: IndexedList<GenericParam<'GenericParam>>) =
+            let builder = ImmutableArray.CreateBuilder list.Count
+            for genericParam in list do
+                { Flags = ValidFlags<unit, _> genericParam.Flags.Value
+                  Name = genericParam.Name
+                  Constaints = genericParam.Constaints }
+                |> builder.Add
+            builder.ToImmutable()
+    end
+
 [<Sealed>]
 type CliMetadataBuilder internal () =
     member inline _.Bind(expr: BuilderExpression<'T>, body: 'T -> BuilderExpression<_>): BuilderExpression<_> =
         fun state ->
             expr state |> Result.bind (fun result -> body result state)
 
-    member inline _.Bind(expr: MetadataBuilderState -> #IIndex, body: _ -> _): BuilderExpression<_> =
+    member inline _.Bind(expr: unit -> BuilderResult<'T>, body: 'T -> BuilderExpression<_>): BuilderExpression<_> =
         fun state ->
-            let result = expr state
-            body result state
-
-    member inline _.Bind(members: Result<MemberList<'Member, _>, 'Member>, body: _ -> BuilderExpression<_>): BuilderExpression<_> =
-        fun state ->
-            match members with
-            | Ok members' -> body members' state
-            | Error duplicate -> DuplicateValue duplicate |> Error
+            expr() |> Result.bind (fun result -> body result state)
 
     member inline _.Bind(expr: _ -> unit, body: _ -> BuilderExpression<_>): BuilderExpression<_> =
         fun state -> expr state; body () state
+
+    member inline _.BindCommon(expr: MetadataBuilderState -> 'T, body: _ -> BuilderExpression<_>): BuilderExpression<_> =
+        fun state ->
+            let result = expr state in body result state
+
+    member inline this.Bind(expr: _ -> SimpleIndex<_>, body) = this.BindCommon(expr, body)
+    member inline this.Bind(expr: _ -> TaggedIndex<_, _>, body) = this.BindCommon(expr, body)
+    member inline this.Bind(expr: _ -> TypeBuilder<_, _, _, _>, body) = this.BindCommon(expr, body)
 
     member inline _.Return result: BuilderExpression<_> = fun _ -> Ok result
 
@@ -185,6 +236,7 @@ module CliMetadata =
     /// </summary>
     /// <param name="predicate">A function used to determine which method is the entrypoint.</param>
     /// <param name="definingType">The type definition containing the entrypoint of the assembly.</param>
+    [<System.Obsolete("Use setEntrypoint instead.")>]
     let selectEntrypoint (predicate: MethodDef -> bool) (definingType: TypeIndex<_>) (state: MetadataBuilderState) =
         let main =
             Seq.find
@@ -192,118 +244,139 @@ module CliMetadata =
                 definingType.Value.MethodList
         state.EntryPoint <- SimpleIndex(state.Owner, main) |> Some
 
-    // TODO: Currently, methods and fields cannot reference the defining type, meaning that methods that return the current object cannot be made.
-    let private addTypeDef<'Type> (typeDef: TypeDefRow) (state: MetadataBuilderState) =
-        state.TypeDef.GetIndex typeDef
-        |> Option.map (TypeIndex<'Type> >> Ok)
-        |> Option.defaultValue (DuplicateValue typeDef |> Error) // TODO: Figure out how to handle error case.
+    let setEntrypoint (main: SimpleIndex<MethodDef>) (state: MetadataBuilderState) =
+        state.Owner.EnsureEqual main.Owner // TODO: Create function to check that owner is equal, and that value has its CheckOwner method called.
+        state.Owner.CheckOwner main.Value
+        state.EntryPoint <- Some main
+
+    [<RequiresExplicitTypeArguments>]
+    let private buildTypeDef<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and 'Field : equality and 'Method :> IMethod and 'Method : equality>
+            validate
+            flags
+            typeName
+            typeNamespace
+            extends
+            parent
+            (state: MetadataBuilderState) =
+        TypeBuilder<'Type, 'Field, 'Method, 'GenericParam> (
+            validate,
+            flags,
+            typeName,
+            typeNamespace,
+            extends,
+            parent,
+            state
+        )
+
+    //// TODO: Make fieldList and methodList generic.
+    //let private buildTypeDef<'Type, 'GenericParamFlag> validate flags typeName typeNamespace extends parent (state: MetadataBuilderState) =
+    //    let fields = IndexedList.empty<_> state.Owner
+    //    let methods = IndexedList.empty<_> state.Owner
+    //    let generics = IndexedList.empty<GenericParam<'GenericParamFlag>> state.Owner
+    //    let builder() =
+    //        let generics' =
+    //            let builder = ImmutableArray.CreateBuilder generics.Count
+    //            for genericParam in generics do
+    //                { Flags = ValidFlags<unit, _> genericParam.Flags.Value
+    //                  Name = genericParam.Name
+    //                  Constaints = genericParam.Constaints }
+    //                |> builder.Add
+    //            builder.ToImmutable()
+
+    //        let typeDef =
+    //            TypeDefRow (
+    //                flags,
+    //                typeName,
+    //                typeNamespace,
+    //                extends,
+    //                IndexedList.toBlock fields,
+    //                IndexedList.toBlock methods,
+    //                parent,
+    //                generics'
+    //            )
+    //        state.TypeDef.GetIndex typeDef
+    //        |> Option.map
+    //            (fun i ->
+    //                validate()
+    //                TypeIndex<'Type> i |> Ok)
+    //        |> Option.defaultValue (DuplicateValue typeDef |> Error) // TODO: Figure out how to handle error case.
+    //    struct(fields, methods, generics, builder)
 
     // TODO: Enforce CLS checks and warnings.
-    let private addClassImpl ({ Flags = Flags flags } as def: ClassDef<'Flags, 'Field, 'Method>) (state: MetadataBuilderState) =
-        let typeDef =
-            TypeDefRow (
-                flags ||| def.Access.Flags,
-                def.ClassName,
-                def.TypeNamespace,
-                def.Extends,
-                def.Fields.ToImmutableArray(),
-                def.Methods.ToImmutableArray(),
-                def.Access.EnclosingClass
-            )
-        addTypeDef<ClassDef<'Flags, 'Field, 'Method>> typeDef state
+    [<RequiresExplicitTypeArguments>]
+    let private buildClassImpl<'Flags, 'Field, 'Method, 'GenericParam when 'Field :> IField and 'Field : equality and 'Method :> IMethod and 'Method : equality>
+            (def: ClassDef<'Flags, 'Field, 'Method>)
+            state =
+        TypeBuilder<ClassDef<'Flags, 'Field, 'Method>, 'Field, 'Method, 'GenericParam> (
+            ignore,
+            (def.Flags.Value ||| def.Access.Flags),
+            def.ClassName,
+            def.TypeNamespace,
+            def.Extends,
+            def.Access.EnclosingClass,
+            state
+        )
 
-    /// <summary>
-    /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is not marked abstract or marked sealed.
-    /// </summary>
-    let addClass (classDef: ConcreteClassDef): BuilderExpression<TypeIndex<ConcreteClassDef>> = addClassImpl classDef
+    let buildClass (classDef: ConcreteClassDef) state: TypeBuilder<ConcreteClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
+    let buildAbstractClass (classDef: AbstractClassDef) state: TypeBuilder<AbstractClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
+    let buildSealedClass (classDef: SealedClassDef) state: TypeBuilder<SealedClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
+    let buildStaticClass (classDef: StaticClassDef) state: TypeBuilder<StaticClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
 
-    /// <summary>
-    /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is marked abstract,
-    /// meaning that it contains abstract methods that must be overriden by deriving classes.
-    /// </summary>
-    let addAbstractClass (classDef: AbstractClassDef): BuilderExpression<TypeIndex<AbstractClassDef>> = addClassImpl classDef
-
-    /// <summary>
-    /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is marked sealed,
-    /// meaning that it cannot be derived from by other classes.
-    /// </summary>
-    let addSealedClass (classDef: SealedClassDef): BuilderExpression<TypeIndex<SealedClassDef>> = addClassImpl classDef
-
-    /// <summary>
-    /// Adds a <see cref="T:FSharpIL.Metadata.TypeDef"/> representing a reference type that is marked both sealed and abstract.
-    /// </summary>
-    let addStaticClass (classDef: StaticClassDef): BuilderExpression<TypeIndex<StaticClassDef>> = addClassImpl classDef
-
-    let private addDerivedType extends f (typeDef: 'Type) (state: MetadataBuilderState) =
+    let private buildDerivedTypeDef extends def (typeDef: 'Type) (state: MetadataBuilderState) =
         match state.FindType extends with
-        | Some extends' ->
-            let def = f extends' typeDef
-            addTypeDef<'Type> def state
+        | Some extends' -> def extends' typeDef state |> Ok
         | None -> MissingType extends |> Error
 
-    let addDelegate typeDef: BuilderExpression<_> =
-        addDerivedType
+    let buildDelegate typeDef: BuilderExpression<TypeBuilder<DelegateDef, _, _, _>> = // TODO: How to automatically add methods to delegates?
+        buildDerivedTypeDef
             SystemType.Delegate
-            (fun extends ({ DelegateDef.Flags = Flags flags } as def) ->
-                TypeDefRow (
-                    flags ||| def.Access.Flags,
-                    def.DelegateName,
-                    def.TypeNamespace,
-                    Extends.TypeRef extends,
-                    ImmutableArray.Empty,
-                    ImmutableArray.Empty, // TODO: Add delegate methods.
-                    def.Access.EnclosingClass
-                ))
+            (fun extends (def: DelegateDef) ->
+                buildTypeDef<DelegateDef, _, _, unit> // TODO: What flags to use for generic parameters in delegates?
+                    ignore
+                    (def.Flags.Value ||| def.Access.Flags)
+                    def.DelegateName
+                    def.TypeNamespace
+                    (Extends.TypeRef extends)
+                    def.Access.EnclosingClass)
             typeDef
 
-    let addEnum typeDef: BuilderExpression<_> =
-        addDerivedType
-            SystemType.Enum
+    let buildEnum typeDef: BuilderExpression<TypeBuilder<EnumDef, _, _, _>> = // TODO: Use custom enum field type
+        buildDerivedTypeDef
+            SystemType.Delegate
             (fun extends (def: EnumDef) ->
-                TypeDefRow (
-                    def.Access.Flags ||| TypeAttributes.Sealed ||| TypeAttributes.Serializable,
-                    def.EnumName,
-                    def.TypeNamespace,
-                    Extends.TypeRef extends,
-                    ImmutableArray.Empty, // TODO: Add enum values.
-                    ImmutableArray.Empty,
-                    def.Access.EnclosingClass
-                ))
+                buildTypeDef<EnumDef, _, _, unit> // TODO: What flags to use for generic parameters in enum?
+                    ignore
+                    def.Access.Flags
+                    def.EnumName
+                    def.TypeNamespace
+                    (Extends.TypeRef extends)
+                    def.Access.EnclosingClass)
             typeDef
 
-    /// <summary>
-    /// Adds a user-defined value type, which is a sealed <see cref="T:FSharpIL.Metadata.TypeDef"/>
-    /// that inherits from <see cref="T:System.ValueType"/>.
-    /// </summary>
-    let addStruct typeDef: BuilderExpression<_> =
-        addDerivedType
+    let buildStruct typeDef: BuilderExpression<TypeBuilder<StructDef, FieldChoice, _, _>> =
+        buildDerivedTypeDef
             SystemType.ValueType
-            (fun extends ({ StructDef.Flags = Flags flags } as def) ->
-                TypeDefRow (
-                    flags ||| def.Access.Flags,
-                    def.StructName,
-                    def.TypeNamespace,
-                    Extends.TypeRef extends,
-                    def.Fields.ToImmutableArray(),
-                    ImmutableArray.Empty, // def.Methods.ToImmutableArray(), // TODO: Add struct methods.
-                    def.Access.EnclosingClass
-                ))
+            (fun extends (def: StructDef) ->
+                buildTypeDef<StructDef, _, _, CovariantGenericParamFlags> // TODO: What flags to use for generic parameters in structs?
+                    ignore
+                    (def.Flags.Value ||| def.Access.Flags)
+                    def.StructName
+                    def.TypeNamespace
+                    (Extends.TypeRef extends)
+                    def.Access.EnclosingClass)
             typeDef
 
-    let addInterface ({ InterfaceDef.Flags = Flags flags } as typeDef) (state: MetadataBuilderState): BuilderResult<_> =
-        let intf =
-            TypeDefRow (
-                flags ||| typeDef.Access.Flags,
-                typeDef.InterfaceName,
-                typeDef.TypeNamespace,
-                Extends.Null,
-                typeDef.Fields.ToImmutableArray(),
-                ImmutableArray.Empty, //def.Methods.ToImmutableArray(), // TODO: Add interface methods.
-                typeDef.Access.EnclosingClass
-            )
-        // TODO: Only add violation if type is successfully added.
-        if typeDef.Fields.Count > 0 then InterfaceContainsFields typeDef |> state.ClsViolations.Add
-        addTypeDef<InterfaceDef> intf state
+    // TODO: What generic parameter to use in interfaces? Take advantage of the fact that the tag can be generic. Maybe add constraint?
+    let buildInterface (typeDef: InterfaceDef) (state: MetadataBuilderState): TypeBuilder<InterfaceDef, StaticField, _, _> =
+        buildTypeDef<_, _, _, _>
+            (fun() ->
+                if typeDef.Fields.Count > 0 then InterfaceContainsFields typeDef |> state.ClsViolations.Add)
+            (typeDef.Flags.Value ||| typeDef.Access.Flags)
+            typeDef.InterfaceName
+            typeDef.TypeNamespace
+            Extends.Null
+            typeDef.Access.EnclosingClass
+            state
 
     let referenceType typeRef (state: MetadataBuilderState) = state.TypeRef.GetIndex typeRef
 

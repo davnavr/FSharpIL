@@ -10,9 +10,11 @@ type IndexOwner internal () =
         if Object.ReferenceEquals(this, other) |> not then
             invalidOp "Cannot use an object owned by another state"
 
+    /// <exception cref="T:System.InvalidOperation"/>
     member internal this.CheckOwner(value: #IIndexValue) = value.CheckOwner this
 
 and IIndexValue =
+    /// <exception cref="T:System.InvalidOperation"/>
     abstract CheckOwner: IndexOwner -> unit
 
 type IIndex = abstract Owner: IndexOwner

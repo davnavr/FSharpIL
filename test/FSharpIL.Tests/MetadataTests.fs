@@ -43,19 +43,19 @@ let tests =
 
             let pe =
                 metadata {
-                    let! methodList = methods { StaticClassMethod.Method entrypoint }
-
                     let! program =
-                        addStaticClass
+                        buildStaticClass
                             { Access = TypeVisibility.Public
                               Extends = Extends.Null
                               ClassName = Identifier.ofStr "Program"
                               TypeNamespace = ""
-                              Flags = staticClassFlags ClassFlags.None
-                              Fields = FieldList.Empty
-                              Methods = methodList }
+                              Flags = staticClassFlags ClassFlags.None }
 
-                    do! selectEntrypoint (fun _ -> true) program
+                    let main = IndexedList.add (StaticClassMethod.Method entrypoint) program.Methods
+
+                    program.BuildType |> ignore
+
+                    // do! selectEntrypoint (fun _ -> true) program
                 }
                 |> createMetadata
                     { Mvid = Guid.NewGuid()
@@ -72,7 +72,7 @@ let tests =
 
             let result =
                 metadata {
-                    do! fun _ -> Error error
+                    do! fun () -> Error error
                     skipped <- false
                 }
                 |> CliMetadata.createMetadata

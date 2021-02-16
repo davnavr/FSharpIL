@@ -20,6 +20,7 @@
     <Compile Include="Metadata\AssemblyName.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\Index.fs" />
+    <Compile Include="Metadata\IndexedList.fs" />
     <Compile Include="Metadata\MutableTable.fs" />
     <Compile Include="Metadata\ImmutableTable.fs" />
     <Compile Include="Metadata\MemberList.fs" />

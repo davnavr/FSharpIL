@@ -295,6 +295,8 @@ type TypeFlags<'Tag> = ValidFlags<'Tag, TypeAttributes>
 module Flags =
     let (|Flags|) (flags: #IFlags<_>) = flags.Value
 
+    // TODO: Move Flags functions to separate module marked RequireQualifiedAccess
+
     let concreteClassFlags (Flags flags: ClassFlags) = TypeFlags<ConcreteClassFlags> flags
     let abstractClassFlags (Flags flags: ClassFlags) = TypeFlags<AbstractClassFlags>(TypeAttributes.Abstract ||| flags)
     let sealedClassFlags (Flags flags: ClassFlags) = TypeFlags<SealedClassFlags>(TypeAttributes.Sealed ||| flags)
@@ -316,7 +318,15 @@ module Flags =
 
     /// Flags for non-variant generic parameters.
     let invariantFlags (Flags flags: GenericParamFlags) = ValidFlags<NonVariantGenericParamFlags, _> flags
-    /// Flags for covariant generic parameters.
-    let covariantFlags (Flags flags: GenericParamFlags) = ValidFlags<CovariantGenericParamFlags, _>(GenericParameterAttributes.Covariant ||| flags)
-    /// Flags for contravariant generic parameters.
-    let contravariantFlags (Flags flags: GenericParamFlags) = ValidFlags<ContravariantGenericParamFlags, _>(GenericParameterAttributes.Contravariant ||| flags)
+    /// Flags for generic parameters that can be covariant.
+    let covariantFlags (covariant: bool) (Flags flags: GenericParamFlags) =
+        if covariant
+        then GenericParameterAttributes.Covariant ||| flags
+        else flags
+        |> ValidFlags<CovariantGenericParamFlags, _>
+    /// Flags fo generic parameters that can be contravariant.
+    let contravariantFlags (contravariant: bool) (Flags flags: GenericParamFlags) =
+        if contravariant
+        then GenericParameterAttributes.Contravariant ||| flags
+        else flags
+        |> ValidFlags<ContravariantGenericParamFlags, _>
