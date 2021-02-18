@@ -139,8 +139,10 @@ type BuilderExpression<'T> = MetadataBuilderState -> BuilderResult<'T>
 type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and 'Field : equality and 'Method :> IMethod and 'Method : equality> =
     struct
         val private builder: unit -> SimpleIndex<TypeDefRow> option
-        val private validate: unit -> unit
+        val private validate: TypeDefRow -> unit
         // TODO: Fix, forgetting to call the BuildType function will result in missing fields and methods!
+        // Maybe have second index type that represent a method that might soon exist?
+        // Maybe store (unit -> TypeDefRow) instances in the TypeDef table so that BuildType method is implicitly called when creating the immutable CliMetadata.
         val Fields: IndexedList<'Field>
         val Methods: IndexedList<'Method>
         val GenericParameters: IndexedList<GenericParam<'GenericParam>>
@@ -168,9 +170,9 @@ type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and
               GenericParameters = genericParams }
 
         member this.BuildType() =
-            match this.builder() with
+            match this.builder() with // TODO: Figure out if usage of voption will result in excess copying when used in computation expression.
             | Some index ->
-                this.validate()
+                this.validate index.Value
                 ValueSome index
             | None -> ValueNone
 
@@ -183,6 +185,8 @@ type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and
                 |> builder.Add
             builder.ToImmutable()
     end
+
+// TODO: IMPORTANT, make builder CE return a (MetadataBuilderState -> 'T) instead of a BuilderExpression<_>
 
 [<Sealed>]
 type CliMetadataBuilder internal () =
@@ -231,19 +235,7 @@ module CliMetadata =
             else ValidationSuccess(metadata, cls)
         | _, Error err -> ValidationError err
 
-    /// <summary>
-    /// Searches for the specified method definition and sets it as the entrypoint of the assembly.
-    /// </summary>
-    /// <param name="predicate">A function used to determine which method is the entrypoint.</param>
-    /// <param name="definingType">The type definition containing the entrypoint of the assembly.</param>
-    [<System.Obsolete("Use setEntrypoint instead.")>]
-    let selectEntrypoint (predicate: MethodDef -> bool) (definingType: TypeIndex<_>) (state: MetadataBuilderState) =
-        let main =
-            Seq.find
-                predicate
-                definingType.Value.MethodList
-        state.EntryPoint <- SimpleIndex(state.Owner, main) |> Some
-
+    /// Sets the entrypoint of the assembly.
     let setEntrypoint (main: SimpleIndex<MethodDef>) (state: MetadataBuilderState) =
         state.Owner.EnsureEqual main.Owner // TODO: Create function to check that owner is equal, and that value has its CheckOwner method called.
         state.Owner.CheckOwner main.Value
@@ -366,11 +358,12 @@ module CliMetadata =
                     def.Access.EnclosingClass)
             typeDef
 
+    // TODO: Allow static methods in interfaces, though they violate CLS rules.
     // TODO: What generic parameter to use in interfaces? Take advantage of the fact that the tag can be generic. Maybe add constraint?
     let buildInterface (typeDef: InterfaceDef) (state: MetadataBuilderState): TypeBuilder<InterfaceDef, StaticField, _, _> =
         buildTypeDef<_, _, _, _>
-            (fun() ->
-                if typeDef.Fields.Count > 0 then InterfaceContainsFields typeDef |> state.ClsViolations.Add)
+            (fun row ->
+                if row.FieldList.Length > 0 then InterfaceContainsFields typeDef |> state.ClsViolations.Add)
             (typeDef.Flags.Value ||| typeDef.Access.Flags)
             typeDef.InterfaceName
             typeDef.TypeNamespace

@@ -231,9 +231,7 @@ type InterfaceDef =
     { Access: TypeVisibility
       Flags: InterfaceFlags
       InterfaceName: Identifier
-      TypeNamespace: string
-      Fields: FieldList<StaticField>
-      Methods: unit } // TODO: Allow static methods in interfaces, though they violate CLS rules.
+      TypeNamespace: string }
 
 /// <summary>
 /// Represents a user-defined value type, which is a <see cref="T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:System.ValueType"/>.
@@ -243,9 +241,7 @@ type StructDef =
    { Access: TypeVisibility
      Flags: TypeFlags<StructFlags>
      StructName: Identifier
-     TypeNamespace: string
-     Fields: FieldList<FieldChoice>
-     Methods: unit }
+     TypeNamespace: string }
 
 type TypeIndex<'Type> = TaggedIndex<'Type, TypeDefRow>
 
@@ -337,8 +333,6 @@ type IField =
     inherit IIndexValue
     abstract Row : unit -> FieldRow
 
-type FieldList<'Field when 'Field :> IField> = MemberList<'Field, FieldRow>
-
 [<StructuralComparison; StructuralEquality>]
 type Field<'Flags, 'Signature when 'Signature : equality> =
     { Flags: ValidFlags<'Flags, FieldAttributes>
@@ -405,8 +399,6 @@ type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature
 type IMethod =
     inherit IIndexValue
     abstract Definition : unit -> MethodDef
-
-type MethodList<'Method when 'Method :> IMethod> = MemberList<'Method, MethodDef>
 
 [<CustomEquality; NoComparison>]
 type Method<'Body, 'Flags, 'Signature when 'Signature :> IMethodDefSignature and 'Signature : equality> =
