@@ -14,8 +14,59 @@ type ValidFlags<'Tag, 'Flags when 'Flags :> System.Enum> =
         interface IFlags<'Flags> with member this.Value = this.Value
     end
 
-// TODO: Determine if flag types should be reference or value types.
+[<AutoOpen>]
+module FlagPatterns =
+    let (|Flags|) (flags: #IFlags<_>) = flags.Value
+
+type Visibility =
+    | CompilerControlled
+    | Private
+    | FamilyAndAssembly
+    | Assembly
+    | Family
+    | FamilyOrAssembly
+    | Public
+
+    interface IFlags<FieldAttributes> with
+        member this.Value =
+            match this with
+            | CompilerControlled -> FieldAttributes.PrivateScope
+            | Private -> FieldAttributes.Private
+            | FamilyAndAssembly -> FieldAttributes.FamANDAssem
+            | Assembly -> FieldAttributes.Assembly
+            | Family -> FieldAttributes.Family
+            | FamilyOrAssembly -> FieldAttributes.FamORAssem
+            | Public -> FieldAttributes.Public
+
+    interface IFlags<MethodAttributes> with
+        member this.Value =
+            match this with
+            | CompilerControlled -> MethodAttributes.PrivateScope
+            | Private -> MethodAttributes.Private
+            | FamilyAndAssembly -> MethodAttributes.FamANDAssem
+            | Assembly -> MethodAttributes.Assembly
+            | Family -> MethodAttributes.Family
+            | FamilyOrAssembly -> MethodAttributes.FamORAssem
+            | Public -> MethodAttributes.Public
+
+/// <summary>
+/// Visibility for fields and methods defined in the <c>&lt;Module&gt;</c> pseudo-class.
+/// </summary>
+[<RequireQualifiedAccess>]
+type GlobalVisibility =
+    | Public
+    | CompilerControlled
+    | Private
+
+    interface IFlags<FieldAttributes> with
+        member this.Value =
+            match this with
+            | Public -> FieldAttributes.Public
+            | CompilerControlled -> FieldAttributes.PrivateScope
+            | Private -> FieldAttributes.Private
+
 // TODO: Instead of marker types, use the actual types themselves such as using ConcreteClassDef instead of ConcreteClassFlags.
+// TODO: Move specific flag types into corresponding files.
 
 type LayoutFlag =
     | AutoLayout
@@ -112,72 +163,9 @@ type InterfaceFlags =
 
 [<AbstractClass; Sealed>] type StructFlags = class end
 
-type Visibility =
-    | CompilerControlled
-    | Private
-    | FamilyAndAssembly
-    | Assembly
-    | Family
-    | FamilyOrAssembly
-    | Public
 
-    interface IFlags<FieldAttributes> with
-        member this.Value =
-            match this with
-            | CompilerControlled -> FieldAttributes.PrivateScope
-            | Private -> FieldAttributes.Private
-            | FamilyAndAssembly -> FieldAttributes.FamANDAssem
-            | Assembly -> FieldAttributes.Assembly
-            | Family -> FieldAttributes.Family
-            | FamilyOrAssembly -> FieldAttributes.FamORAssem
-            | Public -> FieldAttributes.Public
 
-    interface IFlags<MethodAttributes> with
-        member this.Value =
-            match this with
-            | CompilerControlled -> MethodAttributes.PrivateScope
-            | Private -> MethodAttributes.Private
-            | FamilyAndAssembly -> MethodAttributes.FamANDAssem
-            | Assembly -> MethodAttributes.Assembly
-            | Family -> MethodAttributes.Family
-            | FamilyOrAssembly -> MethodAttributes.FamORAssem
-            | Public -> MethodAttributes.Public
 
-/// <summary>
-/// Visibility for fields and methods defined in the <c>&lt;Module&gt;</c> pseudo-class.
-/// </summary>
-[<RequireQualifiedAccess>]
-type GlobalVisibility =
-    | Public
-    | CompilerControlled
-    | Private
-
-    interface IFlags<FieldAttributes> with
-        member this.Value =
-            match this with
-            | Public -> FieldAttributes.Public
-            | CompilerControlled -> FieldAttributes.PrivateScope
-            | Private -> FieldAttributes.Private
-
-[<IsReadOnly; Struct>]
-[<StructuralComparison; StructuralEquality>]
-type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> =
-    { Visibility: 'Visibility
-      NotSerialized: bool
-      /// Sets the `SpecialName` and `RTSpecialName` flags. // TODO: SpecialName is required to be set if RTSpecialName is set, so allow fields that set special name but don't set RTSpecialName.
-      SpecialName: bool }
-
-    member this.Value =
-        let mutable flags = this.Visibility.Value
-        if this.NotSerialized then flags <- flags ||| FieldAttributes.NotSerialized
-        if this.SpecialName then flags <- flags ||| FieldAttributes.SpecialName ||| FieldAttributes.RTSpecialName
-        flags
-
-    interface IFlags<FieldAttributes> with member this.Value = this.Value
-
-[<AbstractClass; Sealed>] type InstanceFieldFlags = class end
-[<AbstractClass; Sealed>] type StaticFieldFlags = class end
-[<AbstractClass; Sealed>] type GlobalFieldFlags = class end
 
 // NOTE: For methods, SpecialName has to be set if RTSpecialName is set.
 // NOTE: For methods, RTSpecialName and SpecialName is set when it is a ctor or cctor
@@ -290,43 +278,3 @@ type GenericParamFlags =
 [<AbstractClass; Sealed>] type ContravariantGenericParamFlags = class end
 
 type TypeFlags<'Tag> = ValidFlags<'Tag, TypeAttributes>
-
-[<AutoOpen>]
-module Flags =
-    let (|Flags|) (flags: #IFlags<_>) = flags.Value
-
-    // TODO: Move Flags functions to separate module marked RequireQualifiedAccess
-
-    let concreteClassFlags (Flags flags: ClassFlags) = TypeFlags<ConcreteClassFlags> flags
-    let abstractClassFlags (Flags flags: ClassFlags) = TypeFlags<AbstractClassFlags>(TypeAttributes.Abstract ||| flags)
-    let sealedClassFlags (Flags flags: ClassFlags) = TypeFlags<SealedClassFlags>(TypeAttributes.Sealed ||| flags)
-    let staticClassFlags (Flags flags: ClassFlags) = TypeFlags<StaticClassFlags>(TypeAttributes.Abstract ||| TypeAttributes.Sealed ||| flags)
-    let structFlags (Flags flags: ClassFlags) = TypeFlags<StructFlags>(TypeAttributes.Sealed ||| flags)
-
-    let instanceFieldFlags (Flags flags: FieldFlags<Visibility>) = ValidFlags<InstanceFieldFlags, _> flags
-    let staticFieldFlags (Flags flags: FieldFlags<Visibility>) = ValidFlags<StaticFieldFlags, _>(flags ||| FieldAttributes.Static)
-    let globalFieldFlags (Flags flags: FieldFlags<GlobalVisibility>) = ValidFlags<GlobalFieldFlags, _>(flags ||| FieldAttributes.Static) // TODO: Set other special flags
-
-    let instanceMethodFlags (Flags flags: InstanceMethodDefFlags) = ValidFlags<InstanceMethodFlags, _> flags
-    let abstractMethodFlags (Flags flags: InstanceMethodDefFlags) = ValidFlags<AbstractMethodFlags, _>(MethodAttributes.Abstract ||| MethodAttributes.Virtual ||| flags)
-    let finalMethodFlags (Flags flags: InstanceMethodDefFlags) = ValidFlags<FinalMethodFlags, _>(MethodAttributes.Final ||| MethodAttributes.Virtual ||| flags)
-    let staticMethodFlags (Flags flags: StaticMethodDefFlags<Visibility>) = ValidFlags<StaticMethodFlags, _>(MethodAttributes.Static ||| flags)
-    // let globalMethodFlags (Flags flags: StaticMethodDefFlags<GlobalVisibility>) = invalidOp ""
-
-    // let constructorFlags (Flags flags: _) = ValidFlags<ConstructorFlags, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| flags)
-    // let classConstructorFlags (Flags flags: _) = ValidFlags<ClassConstructorFlags, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| MethodAttributes.Static ||| flags)
-
-    /// Flags for non-variant generic parameters.
-    let invariantFlags (Flags flags: GenericParamFlags) = ValidFlags<NonVariantGenericParamFlags, _> flags
-    /// Flags for generic parameters that can be covariant.
-    let covariantFlags (covariant: bool) (Flags flags: GenericParamFlags) =
-        if covariant
-        then GenericParameterAttributes.Covariant ||| flags
-        else flags
-        |> ValidFlags<CovariantGenericParamFlags, _>
-    /// Flags fo generic parameters that can be contravariant.
-    let contravariantFlags (contravariant: bool) (Flags flags: GenericParamFlags) =
-        if contravariant
-        then GenericParameterAttributes.Contravariant ||| flags
-        else flags
-        |> ValidFlags<ContravariantGenericParamFlags, _>

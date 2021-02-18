@@ -10,23 +10,12 @@ open FSharpIL.Metadata
 
 // TODO: Consider moving some table types and the MetadataBuilder class to a file below this one. Maybe move each table and its related types to a separate file?
 
-[<RequireQualifiedAccess>]
-module internal SystemType =
-    let Delegate = "System", Identifier "Delegate"
-    let Enum = "System", Identifier "Enum"
-    let ValueType = "System", Identifier "ValueType"
-
 /// <summary>
 /// Represents a violation of a Common Language Specification rule (I.7).
 /// </summary>
 type ClsViolation =
     /// A violation of rule 19, which states that "CLS-compliant interfaces shall not define...fields".
     | InterfaceContainsFields of InterfaceDef
-
-// TODO: Replace warning DU with interface?
-type ValidationWarning =
-    /// (1d)
-    | TypeRefUsesModuleResolutionScope of TypeRef
 
 // TODO: Replace error DU with interface, or maybe use exceptions?
 type ValidationError =
@@ -47,85 +36,8 @@ type ValidationError =
             | _ -> sprintf "%s.%A" ns name
             |> sprintf "Unable to find type \"%s\", perhaps a TypeDef or TypeRef is missing"
 
-/// II.22.30
-type ModuleTable =
-    { // Generation
-      Name: Identifier
-      Mvid: Guid
-      // EncId
-      // EncBaseId
-      }
 
-/// <summary>
-/// Indicates where the target <see cref="T:FSharpIL.Metadata.TypeRef"/> is defined (II.22.38).
-/// </summary>
-[<RequireQualifiedAccess>]
-type ResolutionScope =
-    /// Indicates that "the target type is defined in the current module", and produces a warning as this value should not be used.
-    | Module
-    /// Indicates that the target type "is defined in another module within the same assembly as this one".
-    | ModuleRef of SimpleIndex<ModuleRef>
-    /// Indicates that "The target type is defined in a different assembly".
-    | AssemblyRef of SimpleIndex<AssemblyRef>
-    | TypeRef of SimpleIndex<TypeRef>
-    | Null // of SimpleIndex<ExportedTypeRow> // TODO: How to enforce that a row exists in the ExportedType table?
 
-/// II.22.38
-[<StructuralComparison; StructuralEquality>]
-type TypeRef =
-    { ResolutionScope: ResolutionScope
-      TypeName: Identifier
-      TypeNamespace: string }
-
-    interface IIndexValue with
-        member this.CheckOwner actual =
-            match this.ResolutionScope with
-            | ResolutionScope.Module
-            | ResolutionScope.Null -> ()
-            | ResolutionScope.ModuleRef (IndexOwner owner)
-            | ResolutionScope.AssemblyRef (IndexOwner owner)
-            | ResolutionScope.TypeRef (IndexOwner owner) ->
-                actual.EnsureEqual owner
-
-[<Sealed>]
-type TypeRefTable internal (owner: IndexOwner, warnings: ImmutableArray<_>.Builder) =
-    let table = MutableTable<_> owner
-    let search = Dictionary<string * Identifier, TypeRef> 8
-
-    member _.Count = table.Count
-
-    /// <summary>
-    /// Searches for a type with the specified name and namespace, with a resolution scope of <see cref="T:FSharpIL.Metadata.ResolutionScope.AssemblyRef"/>.
-    /// </summary>
-    member internal _.FindType((ns, name) as t) =
-        match search.TryGetValue(t) with
-        | (true, existing) -> SimpleIndex(owner, existing) |> Some
-        | (false, _) ->
-            Seq.tryPick
-                (function
-                | { ResolutionScope = ResolutionScope.AssemblyRef _ } as t' when t'.TypeName = name && t'.TypeNamespace = ns ->
-                    search.Item <- (ns, name), t'
-                    SimpleIndex(owner, t') |> Some
-                | _ -> None)
-                table
-
-    member _.GetIndex typeRef =
-        let index = table.GetIndex typeRef
-
-        // TODO: Check that the name is a "valid CLS identifier".
-        match typeRef.ResolutionScope with
-        | ResolutionScope.Module ->
-            TypeRefUsesModuleResolutionScope typeRef |> warnings.Add
-        | _ -> ()
-
-        Option.defaultWith (fun() -> SimpleIndex(owner, typeRef)) index
-
-    member _.GetEnumerator() = table.GetEnumerator()
-
-    interface IReadOnlyCollection<TypeRef> with
-        member this.Count = this.Count
-        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
-        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
 
 /// <summary>
 /// Specifies which type a <see cref="T:FSharpIL.Metadata.TypeDef"/> extends.
@@ -304,221 +216,12 @@ type TypeDefTable internal (owner: IndexOwner) =
         member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
 
-/// <summary>Represents a row in the <c>Field</c> table (II.22.15).</summary>
-[<Sealed>]
-type FieldRow internal (flags, name, signature) = // TODO: How to allow different types for signature.
-    member _.Flags: FieldAttributes = flags
-    member _.Name: Identifier = name
-    member _.Signature = signature
 
-    member internal _.SkipDuplicateChecking = flags &&& FieldAttributes.FieldAccessMask = FieldAttributes.PrivateScope
 
-    override this.Equals obj =
-        match obj with
-        | :? FieldRow as other -> (this :> IEquatable<_>).Equals other
-        | _ -> false
 
-    override _.GetHashCode() = hash(name, signature)
 
-    interface IEquatable<FieldRow> with
-        member this.Equals other =
-            if this.SkipDuplicateChecking || other.SkipDuplicateChecking
-            then false
-            else name = other.Name && signature = other.Signature
 
-    interface IIndexValue with
-        member this.CheckOwner actual = invalidOp "bad"
 
-type IField =
-    inherit IIndexValue
-    abstract Row : unit -> FieldRow
-
-[<StructuralComparison; StructuralEquality>]
-type Field<'Flags, 'Signature when 'Signature : equality> =
-    { Flags: ValidFlags<'Flags, FieldAttributes>
-      FieldName: Identifier
-      Signature: 'Signature }
-
-    interface IField with
-        member this.CheckOwner actual = invalidOp "bad"
-        member this.Row() = FieldRow(this.Flags.Value, this.FieldName, ())
-
-/// <summary>Represents a non-static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
-type InstanceField = Field<InstanceFieldFlags, FieldSignature>
-
-/// <summary>Represents a static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
-type StaticField = Field<StaticFieldFlags, FieldSignature>
-
-// TODO: Come up with a better name for the type.
-type FieldChoice =
-    | InstanceField of InstanceField
-    | StaticField of StaticField
-
-    interface IField with
-        member this.CheckOwner actual = invalidOp "bad"
-        member this.Row() =
-            
-            match this with
-            | InstanceField (FieldRow row)
-            | StaticField (FieldRow row) -> row
-
-/// <summary>
-/// Represents a static <see cref="T:FSharpIL.Metadata.FieldRow"/> defined inside of the <c>&lt;Module&gt;</c> pseudo-class.
-/// </summary>
-type GlobalField = Field<GlobalFieldFlags, FieldSignature>
-
-// TODO: Rename to MethodDefRow.
-/// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
-[<Sealed>]
-type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
-    /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the address of the method body.</summary>
-    member _.Body: MethodBody = body
-    member _.ImplFlags: MethodImplAttributes = iflags
-    member _.Flags: MethodAttributes = attr
-    member _.Name: Identifier = name
-    member _.Signature: MethodDefSignature = signature
-    member val ParamList =
-        let len = signature.Parameters.Length
-        let parameters = ImmutableArray.CreateBuilder<ParamRow> len
-        for i = 0 to len - 1 do
-            let item = signature.Parameters.Item i
-            paramList item i |> parameters.Add
-        parameters.ToImmutable()
-
-    member internal _.SkipDuplicateChecking = attr &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
-
-    interface IEquatable<MethodDef> with
-        member this.Equals other =
-            if this.SkipDuplicateChecking || other.SkipDuplicateChecking
-            then false
-            else this.Name = other.Name && this.Signature = other.Signature
-
-    interface IIndexValue with
-        member this.CheckOwner actual = invalidOp "bad"
-
-type IMethod =
-    inherit IIndexValue
-    abstract Definition : unit -> MethodDef
-
-[<CustomEquality; NoComparison>]
-type Method<'Body, 'Flags, 'Signature when 'Signature :> IMethodDefSignature and 'Signature : equality> =
-    { Body: MethodBody
-      ImplFlags: MethodImplFlags
-      Flags: ValidFlags<'Flags, MethodAttributes>
-      MethodName: Identifier
-      Signature: 'Signature
-      // TODO: Add ParamRow to represent method return type, allowing custom attributes to be applied to the return type.
-      ParamList: ParamItem -> int -> ParamRow }
-
-    // TODO: Remove duplicate equality code shared with MethodDef class.
-    member internal this.SkipDuplicateChecking = this.Flags.Value &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
-    
-    interface IEquatable<Method<'Body, 'Flags, 'Signature>> with
-        member this.Equals other =
-            if this.SkipDuplicateChecking || other.SkipDuplicateChecking
-            then false
-            else this.MethodName = other.MethodName && this.Signature = other.Signature
-
-    interface IMethod with
-        member this.CheckOwner actual = invalidOp "bad"
-        member this.Definition() = MethodDef(this.Body, this.ImplFlags.Value, this.Flags.Value, this.MethodName, this.Signature.Signature(), this.ParamList)
-
-// TODO: Create different method body types for different methods.
-type InstanceMethodDef = Method<MethodBody, InstanceMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
-// TODO: Figure out how to make it so that abstract methods do not have a body.
-type AbstractMethodDef = Method<MethodBody (*unit*), AbstractMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
-type FinalMethodDef = Method<MethodBody, FinalMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
-type StaticMethodDef = Method<MethodBody, StaticMethodFlags, StaticMethodSignature>
-// TODO: Prevent constructors from having generic parameters (an entry in the GenericParam table).
-/// <summary>Represents a method named <c>.ctor</c>, which is an object constructor method.</summary>
-type ConstructorDef = Method<MethodBody, ConstructorFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
-/// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
-type ClassConstructorDef = Method<MethodBody, ClassConstructorFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
-
-// TODO: Figure out how to avoid having users type out the full name of the method type (ex: ConcreteClassMethod.Method)
-[<RequireQualifiedAccess>]
-type ConcreteClassMethod =
-    | Method of InstanceMethodDef
-    | StaticMethod of StaticMethodDef
-    | Constructor of ConstructorDef
-    | ClassConstructor of ClassConstructorDef
-
-    interface IMethod with
-        member this.CheckOwner actual = invalidOp "bad"
-        member this.Definition() =
-            match this with
-            | Method (MethodDef def)
-            | StaticMethod (MethodDef def)
-            | Constructor (MethodDef def)
-            | ClassConstructor (MethodDef def) -> def
-
-[<RequireQualifiedAccess>]
-type AbstractClassMethod =
-    | Method of InstanceMethodDef
-    | AbstractMethod of AbstractMethodDef
-    | StaticMethod of StaticMethodDef
-    | Constructor of ConstructorDef
-    | ClassConstructor of ClassConstructorDef
-
-    interface IMethod with
-        member this.CheckOwner actual = invalidOp "bad"
-        member this.Definition() =
-            match this with
-            | Method (MethodDef def)
-            | AbstractMethod (MethodDef def)
-            | StaticMethod (MethodDef def)
-            | Constructor (MethodDef def)
-            | ClassConstructor (MethodDef def) -> def
-
-[<RequireQualifiedAccess>]
-type SealedClassMethod =
-    | Method of InstanceMethodDef
-    | FinalMethod of FinalMethodDef
-    | StaticMethod of StaticMethodDef
-    | Constructor of ConstructorDef
-    | ClassConstructor of ClassConstructorDef
-
-    interface IMethod with
-        member this.CheckOwner actual = invalidOp "bad"
-        member this.Definition() =
-            match this with
-            | Method (MethodDef def)
-            | FinalMethod (MethodDef def)
-            | StaticMethod (MethodDef def)
-            | Constructor (MethodDef def)
-            | ClassConstructor (MethodDef def) -> def
-
-[<RequireQualifiedAccess>]
-type StaticClassMethod =
-    | Method of StaticMethodDef
-    | ClassConstructor of ClassConstructorDef
-
-    interface IMethod with
-        member this.CheckOwner actual = invalidOp "bad"
-        member this.Definition() =
-            match this with
-            | Method (MethodDef def)
-            | ClassConstructor (MethodDef def) -> def
-
-/// Represents a parameter.
-[<IsReadOnly; Struct>]
-type Param =
-    { Flags: ParamFlags
-      /// The name of the parameter.
-      ParamName: string }
-
-/// <summary>Represents a row in the <c>Param</c> table (II.22.33)</summary>
-type ParamRow =
-    | Param of Param
-    // | SomeParamWithADefaultValueInTheConstantTable // of Param * ?
-
-    member this.Flags =
-        match this with
-        | Param { Flags = name } -> name
-
-    member this.ParamName =
-        match this with
-        | Param { ParamName = name } -> name
 
 
 
@@ -666,133 +369,6 @@ type CustomAttributeTable internal (owner: IndexOwner) =
 
 
 
-/// <seealso cref="T:FSharpIL.Metadata.FileTable"/>
-[<IsReadOnly; Struct>]
-[<RequireQualifiedAccess>]
-[<StructuralComparison; StructuralEquality>]
-type ModuleRef =
-    { /// <summary>
-      /// The corresponding entry in the <c>File</c> table that allows "the CLI to locate the target module".
-      /// </summary>
-      File: SimpleIndex<File> }
-
-    /// <summary>
-    /// Corresponds to the <c>Name</c> column, which matches an entry in the <c>File</c> table.
-    /// </summary>
-    member this.Name = this.File.Value.FileName
-
-    interface IIndexValue with
-        member this.CheckOwner actual = actual.EnsureEqual this.File.Owner
-
-[<Sealed>]
-type ModuleRefTable internal (owner: IndexOwner) =
-    let modules = HashSet<ModuleRef>()
-
-    member _.Count = modules.Count
-
-    member _.Add moduleRef =
-        owner.CheckOwner moduleRef
-        modules.Add moduleRef |> ignore
-        SimpleIndex(owner, moduleRef)
-
-    interface IReadOnlyCollection<ModuleRef> with
-        member _.Count = modules.Count
-        member _.GetEnumerator() = modules.GetEnumerator() :> IEnumerator<_>
-        member _.GetEnumerator() = modules.GetEnumerator() :> System.Collections.IEnumerator
-
-
-
-
-/// II.22.2
-type Assembly =
-    { HashAlgId: unit
-      Version: Version
-      Flags: unit
-      PublicKey: unit option
-      Name: AssemblyName
-      Culture: AssemblyCulture }
-
-type AssemblyIndex = TaggedIndex<AssemblyRef, unit>
-
-/// II.22.5
-[<CustomEquality; NoComparison>]
-type AssemblyRef =
-    { Version: Version
-      PublicKeyOrToken: PublicKeyOrToken
-      Name: AssemblyName
-      Culture: AssemblyCulture
-      HashValue: unit option }
-
-    member this.Flags =
-        match this.PublicKeyOrToken with
-        | PublicKey _ -> 1u
-        | _ -> 0u
-
-    interface IEquatable<AssemblyRef> with
-        member this.Equals other =
-            this.Version = other.Version
-            && this.PublicKeyOrToken = other.PublicKeyOrToken
-            && this.Name = other.Name
-            && this.Culture = other.Culture
-
-// TODO: Create new class as this shares code with ModuleRefTable
-[<Sealed>]
-type AssemblyRefTable internal (owner: IndexOwner) =
-    let set = HashSet<AssemblyRef>()
-
-    member _.Count = set.Count
-
-    member _.GetIndex assemblyRef =
-        set.Add assemblyRef |> ignore
-        SimpleIndex(owner, assemblyRef)
-
-    interface IReadOnlyCollection<AssemblyRef> with
-        member _.Count = set.Count
-        member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
-        member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
-
-
-
-
-
-/// <summary>Represents a row in the <c>File</c> table (II.22.19).</summary>
-[<CustomComparison; CustomEquality>]
-type File =
-    { /// <summary>
-      /// Corresponds to the <c>Flags</c> row, indicates whether a file "is a resource file or
-      /// other non-metadata-containing file" (II.23.1.6).
-      /// </summary>
-      ContainsMetadata: bool
-      FileName: Identifier
-      HashValue: byte[] }
-
-    override this.Equals obj = (this :> IEquatable<File>).Equals(obj :?> File)
-    override this.GetHashCode() = this.FileName.GetHashCode()
-
-    interface IEquatable<File> with
-        member this.Equals other = this.FileName = other.FileName
-
-    interface IComparable with
-        member this.CompareTo obj = compare this.FileName (obj :?> File).FileName
-
-[<Sealed>]
-type FileTable internal (owner: IndexOwner) =
-    let set = HashSet<File>()
-
-    member _.Count = set.Count
-
-    member _.GetIndex file =
-        if set.Add file
-        then SimpleIndex(owner, file) |> Ok
-        else DuplicateFile file |> Error
-
-    interface IReadOnlyCollection<File> with
-        member _.Count = set.Count
-        member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
-        member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
-
-
-
 
 // II.22.32
 [<Struct; IsReadOnly>]
@@ -839,30 +415,6 @@ type GenericParamConstraint =
 
 
 
-// TODO: Have different signature types for different kinds of methods.
-/// <summary>Represents a <c>MethodDefSig</c>, which captures the signature of a method or global function (II.23.2.1).</summary>
-[<IsReadOnly; Struct>]
-type MethodDefSignature internal (hasThis: bool, explicitThis: bool, cconv: MethodCallingConventions, retType: ReturnTypeItem, parameters: ImmutableArray<ParamItem>) =
-    member _.CallingConventions = cconv
-    member internal _.Flags =
-        let mutable flags =
-            match cconv with
-            | Default -> CallingConvention.Default
-            | VarArg -> CallingConvention.VarArg
-        if hasThis then flags <- flags ||| CallingConvention.HasThis
-        if explicitThis then flags <- flags ||| CallingConvention.ExplicitThis
-        flags
-    member _.ReturnType = retType
-    member _.Parameters: ImmutableArray<ParamItem> = parameters
-
-type IMethodDefSignature =
-    abstract Signature: unit -> MethodDefSignature
-
-type MethodCallingConventions =
-    | Default
-    | VarArg
-    // | Generic // of count: int
-
 [<RequireQualifiedAccess>]
 type MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile =
     | AAAAA
@@ -902,92 +454,9 @@ type FieldSignature =
     { CustomMod: ImmutableArray<CustomModifier>
       FieldType: ReturnTypeItem }
 
-/// II.23.2.7
-[<IsReadOnly; Struct>]
-type CustomModifier =
-    { Required: bool
-      ModifierType: TypeDefOrRefOrSpecEncoded }
 
-/// II.23.2.8
-type TypeDefOrRefOrSpecEncoded =
-    | TypeDef of SimpleIndex<TypeDefRow>
-    | TypeRef of SimpleIndex<TypeRef>
-    // TypeSpec // of ?
 
-/// <summary>Represents a <c>Param</c> item used in signatures (II.23.2.10).</summary>
-[<IsReadOnly; Struct>]
-type ParamItem =
-    { CustomMod: ImmutableArray<CustomModifier>
-      // ByRef: unit
-      // TypedByRef: unit
-      /// <summary>Corresponds to the <c>Type</c> of the parameter.</summary>
-      ParamType: EncodedType }
 
-/// <summary>Represents a <c>RetType</c> used in a signature (II.23.2.11).</summary>
-[<IsReadOnly; Struct>]
-type ReturnTypeItem =
-    { CustomMod: ImmutableArray<CustomModifier>
-      ReturnType: ReturnType }
-
-    static member Void =
-        { CustomMod = ImmutableArray.Empty
-          ReturnType = ReturnType.Void }
-
-/// <summary>Represents all different possible return types encoded in a <c>RetType</c> (II.23.2.11).</summary>
-/// <seealso cref="T:FSharpIL.Metadata.ReturnTypeItem"/>
-[<RequireQualifiedAccess>]
-type ReturnType =
-    // | Type of byRef: bool * EncodedType
-    // | TypedByRef // of ?
-    | Void
-
-//type ReturnType = unit
-
-/// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
-[<RequireQualifiedAccess>]
-type EncodedType =
-    /// <summary>Represents the <see cref="T:System.Boolean"/> type.</summary>
-    | Boolean
-    /// <summary>Represents the <see cref="T:System.Char"/> type.</summary>
-    | Char
-    /// <summary>Represents the <see cref="T:System.SByte"/> type.</summary>
-    | I1
-    /// <summary>Represents the <see cref="T:System.Byte"/> type.</summary>
-    | U1
-    /// <summary>Represents the <see cref="T:System.Int16"/> type.</summary>
-    | I2
-    /// <summary>Represents the <see cref="T:System.UInt16"/> type.</summary>
-    | U2
-    /// <summary>Represents the <see cref="T:System.Int32"/> type.</summary>
-    | I4
-    /// <summary>Represents the <see cref="T:System.UInt32"/> type.</summary>
-    | U4
-    /// <summary>Represents the <see cref="T:System.Int64"/> type.</summary>
-    | I8
-    /// <summary>Represents the <see cref="T:System.UInt64"/> type.</summary>
-    | U8
-    /// <summary>Represents the <see cref="T:System.Single"/> type.</summary>
-    | R4
-    /// <summary>Represents the <see cref="T:System.Double"/> type.</summary>
-    | R8
-    /// <summary>Represents the <see cref="T:System.IntPtr"/> type.</summary>
-    | I
-    /// <summary>Represents the <see cref="T:System.UIntPtr"/> type.</summary>
-    | U
-    | Array of EncodedType * ArrayShape
-    | FunctionPointer // of MethodDefSig
-    //| FunctionPointer // of MethodRefSig
-    | GenericInstantiation // of ?
-    //| MVAR // of ?
-    /// <summary>Represents the <see cref="T:System.Object"/> type.</summary>
-    | Object
-    //| PTR // of ?
-    //| PTR // of ?
-    /// <summary>Represents the <see cref="T:System.String"/> type.</summary>
-    | String
-    | SZArray // of ?
-    | ValueType // of TypeDefOrRefOrSpecEncoded
-    //| Var // of ?
 
 /// II.23.2.13
 [<IsReadOnly; Struct>]
@@ -1078,17 +547,24 @@ type Opcode =
 type MethodBody =
     ImmutableArray<Opcode>
 
+/// <summary>(0x00) Represents the single row of the <c>Module</c> table (II.22.30).</summary>
+type ModuleTable =
+    { // Generation
+      Name: Identifier
+      Mvid: Guid
+      // EncId
+      // EncBaseId
+      }
+
 [<Sealed>]
 type MetadataBuilderState (mdle: ModuleTable) =
     let owner = IndexOwner()
-
     let warnings = ImmutableArray.CreateBuilder<ValidationWarning>()
     let clsViolations = ImmutableArray.CreateBuilder<ClsViolation>()
+    let mutable entrypoint = None
 
     let typeDef = TypeDefTable owner
     let mutable assembly = None
-
-    let mutable entrypoint = None
 
     member internal _.Owner = owner
 
@@ -1223,5 +699,4 @@ type MetadataBuilderState (mdle: ModuleTable) =
 
 [<AutoOpen>]
 module ExtraPatterns =
-    let internal (|FieldRow|) (f: IField) = f.Row()
     let internal (|MethodDef|) (mthd: IMethod) = mthd.Definition()

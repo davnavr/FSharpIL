@@ -213,6 +213,12 @@ type CliMetadataBuilder internal () =
 
     member inline this.Zero() = this.Return()
 
+[<RequireQualifiedAccess>]
+module internal SystemType =
+    let Delegate = "System", Identifier "Delegate"
+    let Enum = "System", Identifier "Enum"
+    let ValueType = "System", Identifier "ValueType"
+
 /// <summary>
 /// Contains functions for use with the <see cref="T:FSharpIL.Metadata.CliMetadataBuilder"/> computation expression.
 /// </summary>
