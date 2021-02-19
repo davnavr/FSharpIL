@@ -2,6 +2,9 @@
 
 open System.Collections.Immutable
 
+/// <summary>
+/// Represents a violation of a Common Language Specification rule (I.7).
+/// </summary>
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type ClsViolation =
     { Number: uint8
