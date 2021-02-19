@@ -10,6 +10,7 @@ type AssemblyName =
 
     override this.ToString() = let (AssemblyName name) = this in name
 
+/// (II.23.1.3)
 type AssemblyCulture = // TODO: Add more cultures
     | NullCulture
     | Ar_SA
@@ -22,6 +23,12 @@ type AssemblyCulture = // TODO: Add more cultures
         | Ar_SA -> "ar-SA"
         | En_US -> "en-US"
         | Div_MV -> "div-MV"
+
+/// (II.23.1.1)
+type HashAlgorithmId =
+    | None = 0u
+    | MD5 = 0x8003u
+    | SHA1 = 0x8004u
 
 /// <summary>(0x20) Represents the optional row in the <c>Assembly</c> table (II.22.2)</summary>.
 type Assembly =

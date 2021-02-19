@@ -4,7 +4,104 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Reflection
+open System.Runtime.CompilerServices
 
+type LayoutFlag =
+    | AutoLayout
+    /// Used as the default layout for structs by the C# and F# compilers.
+    | SequentialLayout
+    | ExplicitLayout
+
+    member this.Flags =
+        match this with
+        | AutoLayout -> TypeAttributes.AutoLayout
+        | SequentialLayout -> TypeAttributes.SequentialLayout
+        | ExplicitLayout -> TypeAttributes.ExplicitLayout
+
+type StringFormattingFlag =
+    | AnsiClass
+    | UnicodeClass
+    | AutoClass
+    // | CustomFormatClass
+
+    member this.Flags =
+        match this with
+        | AnsiClass -> TypeAttributes.AnsiClass
+        | UnicodeClass -> TypeAttributes.UnicodeClass
+        | AutoClass -> TypeAttributes.AutoClass
+
+[<IsReadOnly; Struct>]
+type ClassFlags =
+    { Layout: LayoutFlag
+      SpecialName: bool
+      Import: bool
+      Serializable: bool
+      StringFormat: StringFormattingFlag
+      BeforeFieldInit: bool
+      RTSpecialName: bool }
+
+    member this.Value =
+        let mutable flags =
+            let layout =
+                match this.Layout with
+                | AutoLayout -> TypeAttributes.AutoLayout
+                | SequentialLayout -> TypeAttributes.SequentialLayout
+                | ExplicitLayout -> TypeAttributes.ExplicitLayout
+            let stringf =
+                match this.StringFormat with
+                | AnsiClass -> TypeAttributes.AnsiClass
+                | UnicodeClass -> TypeAttributes.UnicodeClass
+                | AutoClass -> TypeAttributes.AutoClass
+            layout ||| stringf
+        if this.SpecialName then flags <- flags ||| TypeAttributes.SpecialName
+        if this.Import then flags <- flags ||| TypeAttributes.Import
+        if this.Serializable then flags <- flags ||| TypeAttributes.Serializable
+        if this.BeforeFieldInit then flags <- flags ||| TypeAttributes.BeforeFieldInit
+        if this.RTSpecialName then flags <- flags ||| TypeAttributes.RTSpecialName
+        flags
+
+    interface IFlags<TypeAttributes> with member this.Value = this.Value
+
+    static member None =
+        { Layout = AutoLayout
+          SpecialName = false
+          Import = false
+          Serializable = false
+          StringFormat = AnsiClass
+          BeforeFieldInit = false
+          RTSpecialName = false }
+
+[<AbstractClass; Sealed>] type ConcreteClassFlags = class end
+[<AbstractClass; Sealed>] type AbstractClassFlags = class end
+[<AbstractClass; Sealed>] type SealedClassFlags = class end
+[<AbstractClass; Sealed>] type StaticClassFlags = class end
+
+[<Struct; IsReadOnly>]
+type DelegateFlags =
+    { Serializable: bool }
+
+    member this.Value =
+        let mutable flags = TypeAttributes.Sealed
+        if this.Serializable then flags <- flags ||| TypeAttributes.Serializable
+        flags
+
+    interface IFlags<TypeAttributes> with member this.Value = this.Value
+
+[<Struct; IsReadOnly>]
+[<RequireQualifiedAccess>]
+type InterfaceFlags =
+    { Import: bool }
+
+    member this.Value =
+        let mutable flags = TypeAttributes.Abstract ||| TypeAttributes.Interface
+        if this.Import then flags <- flags ||| TypeAttributes.Import
+        flags
+
+    interface IFlags<TypeAttributes> with member this.Value = this.Value
+
+[<AbstractClass; Sealed>] type StructFlags = class end
+
+type TypeFlags<'Tag> = ValidFlags<'Tag, TypeAttributes>
 type TypeIndex<'Type> = TaggedIndex<'Type, TypeDefRow>
 
 /// <summary>
@@ -24,8 +121,6 @@ type Extends =
     /// </summary>
     | Null
 
-// TODO: Have FieldList and MethodList types have an Owner field that shows which TypeDef owns the members, and whose Add methods return a SimpleIndex<_>.
-// TODO: Rename to TypeDefBuilder and create an immutable version called TypeDefRow
 /// <summary>
 /// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
 /// </summary>

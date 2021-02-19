@@ -1,7 +1,25 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Collections.Immutable
+open System.Reflection
 open System.Runtime.CompilerServices
+
+[<IsReadOnly; Struct>]
+type ParamFlags =
+    { In: bool
+      Out: bool
+      Optional: bool }
+
+    member this.Value =
+        let mutable flags = ParameterAttributes.None
+        if this.In then flags <- flags ||| ParameterAttributes.In
+        if this.Out then flags <- flags ||| ParameterAttributes.Out
+        if this.Optional then flags <- flags ||| ParameterAttributes.Optional
+        flags
+
+    interface IFlags<ParameterAttributes> with member this.Value = this.Value
+
+    static member None = { In = false; Out = false; Optional = false }
 
 /// Represents a parameter.
 [<IsReadOnly; Struct>]

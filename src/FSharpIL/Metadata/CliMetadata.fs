@@ -181,7 +181,7 @@ type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and
             for genericParam in list do
                 { Flags = ValidFlags<unit, _> genericParam.Flags.Value
                   Name = genericParam.Name
-                  Constaints = genericParam.Constaints }
+                  Constraints = genericParam.Constraints }
                 |> builder.Add
             builder.ToImmutable()
     end

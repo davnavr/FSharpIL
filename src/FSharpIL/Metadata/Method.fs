@@ -7,6 +7,76 @@ open System.Runtime.CompilerServices
 
 open FSharpIL.Writing
 
+// NOTE: For methods, SpecialName has to be set if RTSpecialName is set.
+// NOTE: For methods, RTSpecialName and SpecialName is set when it is a ctor or cctor
+type VTableLayout =
+    | ReuseSlot
+    | NewSlot
+
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type StaticMethodDefFlags<'Visibility when 'Visibility :> IFlags<MethodAttributes>> =
+    { Visibility: 'Visibility
+      HideBySig: bool }
+
+    member this.Value =
+        let flags = this.Visibility.Value
+        if this.HideBySig
+        then flags ||| MethodAttributes.HideBySig
+        else flags
+
+    interface IFlags<MethodAttributes> with member this.Value = this.Value
+
+[<IsReadOnly; Struct>]
+type InstanceMethodDefFlags =
+    { Visibility: Visibility
+      HideBySig: bool
+      VTableLayout: VTableLayout }
+
+    member this.Value =
+        let vtable =
+            match this.VTableLayout with
+            | ReuseSlot -> MethodAttributes.ReuseSlot
+            | NewSlot -> MethodAttributes.NewSlot
+        let mutable flags = (this.Visibility :> IFlags<MethodAttributes>).Value
+        if this.HideBySig then flags <- flags ||| MethodAttributes.HideBySig
+        flags ||| vtable
+
+    interface IFlags<MethodAttributes> with member this.Value = this.Value
+
+[<IsReadOnly; Struct>]
+type MethodImplFlags =
+    { ForwardRef: bool
+      PreserveSig: bool
+      NoInlining: bool
+      NoOptimization: bool }
+
+    member this.Value =
+        let mutable flags = enum<MethodImplAttributes> 0
+        if this.ForwardRef then flags <- flags ||| MethodImplAttributes.ForwardRef
+        if this.PreserveSig then flags <- flags ||| MethodImplAttributes.PreserveSig
+        if this.NoInlining then flags <- flags ||| MethodImplAttributes.NoInlining
+        if this.NoOptimization then flags <- flags ||| MethodImplAttributes.NoOptimization
+        flags
+
+    interface IFlags<MethodImplAttributes> with member this.Value = this.Value
+
+    static member None =
+        { ForwardRef = false
+          PreserveSig = false
+          NoInlining = false
+          NoOptimization = false }
+
+[<AbstractClass; Sealed>] type InstanceMethodFlags = class end
+[<AbstractClass; Sealed>] type AbstractMethodFlags = class end
+[<AbstractClass; Sealed>] type FinalMethodFlags = class end
+[<AbstractClass; Sealed>] type StaticMethodFlags = class end
+[<AbstractClass; Sealed>] type GlobalMethodFlags = class end
+
+// NOTE: Constructors and Class Constructors cannot be marked CompilerControlled.
+[<AbstractClass; Sealed>] type ConstructorFlags = class end
+[<AbstractClass; Sealed>] type ClassConstructorFlags = class end
+
 type MethodCallingConventions =
     | Default
     | VarArg

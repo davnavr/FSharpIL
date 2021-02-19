@@ -3,6 +3,15 @@
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
+/// Represents an element type used in a signature (II.23.1.16).
+type internal ElementType =
+    | End = 0uy
+    | Void = 0x1uy
+
+    | String = 0xEuy
+
+    | Array = 0x14uy
+
 [<Interface>] type internal ITypeDefOrRefOrSpec = inherit IIndexValue
 
 /// (II.23.2.7)
