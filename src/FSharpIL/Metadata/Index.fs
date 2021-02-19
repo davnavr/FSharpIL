@@ -71,7 +71,7 @@ module internal IndexOwner =
 
 [<AutoOpen>]
 module IndexHelpers =
-    let inline (|SimpleIndex|) (index: ^Index) =
+    let inline internal (|SimpleIndex|) (index: ^Index) =
         (^Index : (member Index : SimpleIndex<'T>) index)
 
     let internal (|IndexOwner|) (index: #IIndex) = index.Owner

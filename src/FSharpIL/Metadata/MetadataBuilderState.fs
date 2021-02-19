@@ -382,35 +382,6 @@ type NestedClass =
             actual.EnsureEqual this.NestedClass.Owner
             actual.EnsureEqual this.EnclosingClass.Owner
 
-// II.22.20
-[<NoComparison; CustomEquality>]
-type GenericParam<'Flags> =
-    { Flags: ValidFlags<'Flags, GenericParameterAttributes>
-      Name: Identifier
-      /// <summary>Represents the corresponding rows in the <c>GenericParamConstraint</c> table for this generic parameter.</summary>
-      Constaints: ImmutableHashSet<GenericParamConstraint> }
-
-    interface IEquatable<GenericParam<'Flags>> with
-        member this.Equals other = this.Name = other.Name
-
-    interface IIndexValue with
-        member this.CheckOwner actual =
-            // TODO: Iterate through the generic constraints and check owners.
-            ()
-// II.22.21
-[<StructuralComparison; StructuralEquality>]
-type GenericParamConstraint =
-    | ClassConstraint of TypeIndex<ConcreteClassDef>
-    /// <summary>
-    /// Indicates that the generic parameter is constrainted to derive from a <c>TypeDef</c> representing an abstract class.
-    /// </summary>
-    | AbstractClassConstraint of TypeIndex<AbstractClassDef>
-    | InterfaceConstraint of TypeIndex<InterfaceDef>
-    /// <summary>
-    /// Indicates that the generic parameter is constrainted to derive from a <c>TypeRef</c> representing a class or interface.
-    /// </summary>
-    | TypeRefConstraint of SimpleIndex<TypeRef>
-    // | TypeSpecConstraint
 
 
 

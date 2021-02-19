@@ -23,7 +23,11 @@ type IMethodBody =
     /// <returns><c>Some</c> if a method body was written; or <c>None</c> if the method has no body.</returns>
     abstract WriteBody: MethodBodyWriter -> unit option
 
+/// <summary>Represents a method whose <c>RVA</c> column has a value of zero, indicating that it does not have a body.</summary>
+[<Sealed>]
+type NullMethodBody internal () =
+    interface IMethodBody with member _.WriteBody _ = None
+
 [<RequireQualifiedAccess>]
 module MethodBody =
-    /// <summary>Represents a method whose <c>RVA</c> column has a value of zero, indicating that it does not have a body.</summary>
-    let none = { new IMethodBody with member _.WriteBody _ = None }
+    let none = NullMethodBody()

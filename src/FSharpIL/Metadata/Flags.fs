@@ -255,26 +255,6 @@ type ParamFlags =
 
     static member None = { In = false; Out = false; Optional = false }
 
-[<IsReadOnly; Struct>]
-type GenericParamFlags =
-    { ReferenceType: bool
-      /// <summary><c>NotNullableValueType</c></summary>
-      ValueType: bool
-      DefaultConstructor: bool }
 
-    member this.Value =
-        let mutable flags = GenericParameterAttributes.None
-        if this.ReferenceType then flags <- GenericParameterAttributes.ReferenceTypeConstraint
-        if this.ValueType then flags <- GenericParameterAttributes.NotNullableValueTypeConstraint
-        if this.DefaultConstructor then flags <- GenericParameterAttributes.DefaultConstructorConstraint
-        flags
-
-    static member None = { ReferenceType = false; ValueType = false; DefaultConstructor = false }
-
-    interface IFlags<GenericParameterAttributes> with member this.Value = this.Value
-
-[<AbstractClass; Sealed>] type NonVariantGenericParamFlags = class end
-[<AbstractClass; Sealed>] type CovariantGenericParamFlags = class end
-[<AbstractClass; Sealed>] type ContravariantGenericParamFlags = class end
 
 type TypeFlags<'Tag> = ValidFlags<'Tag, TypeAttributes>

@@ -127,7 +127,7 @@ type StaticMethodSignature =
 // TODO: Create different method body types for different methods.
 type InstanceMethodDef = Method<IMethodBody, InstanceMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 // TODO: Figure out how to make it so that abstract methods do not have a body.
-type AbstractMethodDef = Method<IMethodBody (*unit*), AbstractMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type AbstractMethodDef = Method<NullMethodBody, AbstractMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 type FinalMethodDef = Method<IMethodBody, FinalMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 type StaticMethodDef = Method<IMethodBody, StaticMethodFlags, StaticMethodSignature>
 // TODO: Prevent constructors from having generic parameters (an entry in the GenericParam table).
