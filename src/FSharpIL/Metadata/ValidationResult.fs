@@ -6,11 +6,15 @@ open System.Collections.Immutable
 /// Represents a violation of a Common Language Specification rule (I.7).
 /// </summary>
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-type ClsViolation =
+type ClsViolationMessage =
     { Number: uint8
       Message: string }
 
-    override this.ToString() = this.Message
+    override this.ToString() = sprintf "Rule %i: %s" this.Number this.Message
+
+[<AbstractClass>]
+type ClsViolation internal (message: ClsViolationMessage) =
+    member _.Message = message
 
 [<AbstractClass>]
 type ValidationWarning internal () = class end
@@ -42,10 +46,20 @@ module ValidationResultPatterns =
 
 [<RequireQualifiedAccess>]
 module ValidationResult =
-    let success value =
-        { ClsViolations = ImmutableArray.Empty
+    let inline success value cls =
+        { ClsViolations = cls
           Warnings = ImmutableArray.Empty
           Result = Ok value }
+
+    let inline warning value cls warnings =
+        { ClsViolations = cls
+          Warnings = warnings
+          Result = Ok value }
+
+    let inline error err cls warnings =
+        { ClsViolations = cls
+          Warnings = warnings
+          Result = Error err }
 
     /// <summary>
     /// Retrieves the value associated with the result.
@@ -61,11 +75,8 @@ module ValidationResult =
 
     let ofOption none value =
         match value with
-        | Some value' -> success value'
-        | None ->
-            { ClsViolations = ImmutableArray.Empty
-              Warnings = ImmutableArray.Empty
-              Result = Error none }
+        | Some value' -> success value' ImmutableArray.Empty
+        | None -> error none ImmutableArray.Empty ImmutableArray.Empty
 
     let toOption value =
         match value with

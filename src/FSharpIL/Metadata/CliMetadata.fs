@@ -179,10 +179,8 @@ type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and
         static member GetGenericParameters(list: IndexedList<GenericParam<'GenericParam>>) =
             let builder = ImmutableArray.CreateBuilder list.Count
             for genericParam in list do
-                { Flags = ValidFlags<unit, _> genericParam.Flags.Value
-                  Name = genericParam.Name
-                  Constraints = genericParam.Constraints }
-                |> builder.Add
+                let flags = ValidFlags<unit, _> genericParam.Flags.Value
+                GenericParam<unit>(flags, genericParam.Name, genericParam.ConstraintSet) |> builder.Add
             builder.ToImmutable()
     end
 
@@ -213,16 +211,33 @@ type CliMetadataBuilder internal () =
 
     member inline this.Zero() = this.Return()
 
-[<RequireQualifiedAccess>]
-module internal SystemType =
-    let Delegate = "System", Identifier "Delegate"
-    let Enum = "System", Identifier "Enum"
-    let ValueType = "System", Identifier "ValueType"
-
 /// <summary>
 /// Contains functions for use with the <see cref="T:FSharpIL.Metadata.CliMetadataBuilder"/> computation expression.
 /// </summary>
 module CliMetadata =
+    [<RequireQualifiedAccess>]
+    module private SystemType =
+        let Delegate = "System", Identifier "Delegate"
+        let Enum = "System", Identifier "Enum"
+        let ValueType = "System", Identifier "ValueType"
+
+    /// Represents a violation of CLS rule 19, which states that "CLS-compliant interfaces shall not define...fields".
+    [<Sealed>]
+    type InterfaceContainsFields (intf: InterfaceDef) =
+        inherit ClsViolation({ Number = 19uy; Message = sprintf "Interfaces should not define fields" }) // TODO: Mention name of offending interface
+        member _.Interface = intf
+
+    [<Sealed>]
+    type MissingTypeError (ns: string, name: Identifier) =
+        inherit ValidationError()
+        member _.Namespace = ns
+        member _.Name = name
+        override _.ToString() =
+            match ns with
+            | "" -> string name
+            | _ -> sprintf "%s.%A" ns name
+            |> sprintf "Unable to find type \"%s\", perhaps a TypeDef or TypeRef is missing"
+
     let createState (moduleTable: ModuleTable) (expr: BuilderExpression<_>) =
         let state = MetadataBuilderState moduleTable
         state, expr state
@@ -232,19 +247,21 @@ module CliMetadata =
     /// </summary>
     /// <seealso cref="T:FSharpIL.Builders.metadata"/>
     let createMetadata (moduleTable: ModuleTable) (expr: BuilderExpression<_>) =
-        match createState moduleTable expr with
-        | state, Ok() ->
+        let state, result = createState moduleTable expr
+        let cls = state.ClsViolations.ToImmutable()
+        let warnings = state.Warnings.ToImmutable()
+
+        match result with
+        | Ok() ->
             let metadata = CliMetadata state
-            let cls = state.ClsViolations.ToImmutable()
-            if state.Warnings.Count > 0
-            then ValidationWarning(metadata, cls, state.Warnings.ToImmutable())
-            else ValidationSuccess(metadata, cls)
-        | _, Error err -> ValidationError err
+            if warnings.IsEmpty
+            then ValidationResult.success metadata cls
+            else ValidationResult.warning metadata cls warnings
+        | Error err -> ValidationResult.error err cls warnings
 
     /// Sets the entrypoint of the assembly.
     let setEntrypoint (main: SimpleIndex<MethodDef>) (state: MetadataBuilderState) =
-        state.Owner.EnsureEqual main.Owner // TODO: Create function to check that owner is equal, and that value has its CheckOwner method called.
-        state.Owner.CheckOwner main.Value
+        IndexOwner.checkIndex state.Owner main
         state.EntryPoint <- Some main
 
     [<RequiresExplicitTypeArguments>]
@@ -265,40 +282,6 @@ module CliMetadata =
             parent,
             state
         )
-
-    //// TODO: Make fieldList and methodList generic.
-    //let private buildTypeDef<'Type, 'GenericParamFlag> validate flags typeName typeNamespace extends parent (state: MetadataBuilderState) =
-    //    let fields = IndexedList.empty<_> state.Owner
-    //    let methods = IndexedList.empty<_> state.Owner
-    //    let generics = IndexedList.empty<GenericParam<'GenericParamFlag>> state.Owner
-    //    let builder() =
-    //        let generics' =
-    //            let builder = ImmutableArray.CreateBuilder generics.Count
-    //            for genericParam in generics do
-    //                { Flags = ValidFlags<unit, _> genericParam.Flags.Value
-    //                  Name = genericParam.Name
-    //                  Constaints = genericParam.Constaints }
-    //                |> builder.Add
-    //            builder.ToImmutable()
-
-    //        let typeDef =
-    //            TypeDefRow (
-    //                flags,
-    //                typeName,
-    //                typeNamespace,
-    //                extends,
-    //                IndexedList.toBlock fields,
-    //                IndexedList.toBlock methods,
-    //                parent,
-    //                generics'
-    //            )
-    //        state.TypeDef.GetIndex typeDef
-    //        |> Option.map
-    //            (fun i ->
-    //                validate()
-    //                TypeIndex<'Type> i |> Ok)
-    //        |> Option.defaultValue (DuplicateValue typeDef |> Error) // TODO: Figure out how to handle error case.
-    //    struct(fields, methods, generics, builder)
 
     // TODO: Enforce CLS checks and warnings.
     [<RequiresExplicitTypeArguments>]
@@ -323,7 +306,7 @@ module CliMetadata =
     let private buildDerivedTypeDef extends def (typeDef: 'Type) (state: MetadataBuilderState) =
         match state.FindType extends with
         | Some extends' -> def extends' typeDef state |> Ok
-        | None -> MissingType extends |> Error
+        | None -> MissingTypeError extends :> ValidationError |> Error
 
     let buildDelegate typeDef: BuilderExpression<TypeBuilder<DelegateDef, _, _, _>> = // TODO: How to automatically add methods to delegates?
         buildDerivedTypeDef
@@ -340,7 +323,7 @@ module CliMetadata =
 
     let buildEnum typeDef: BuilderExpression<TypeBuilder<EnumDef, _, _, _>> = // TODO: Use custom enum field type
         buildDerivedTypeDef
-            SystemType.Delegate
+            SystemType.Enum
             (fun extends (def: EnumDef) ->
                 buildTypeDef<EnumDef, _, _, unit> // TODO: What flags to use for generic parameters in enum?
                     ignore
