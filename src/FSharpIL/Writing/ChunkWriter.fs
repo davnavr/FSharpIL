@@ -8,7 +8,7 @@ open Microsoft.FSharp.Core.Operators.Checked
 open FSharpIL.Bytes
 
 // TODO: Since only append operations are used, consider something other than LinkedList such as FSharpList.
-// TODO: See if making this a struct is a performance improvement.
+// TODO: See if making this a struct or a ref struct is a performance improvement.
 [<Sealed>]
 type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, defaultCapacity: int32) =
     do if position < 0 || position > chunk.Value.Length then

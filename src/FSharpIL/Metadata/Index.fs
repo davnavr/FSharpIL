@@ -64,6 +64,7 @@ module internal IndexOwner =
     /// </exception>
     let inline checkOwner owner (value: #IIndexValue) = value.CheckOwner owner
 
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
     let checkIndex owner (index: SimpleIndex<_>) =
         ensureEqual owner index.Owner
         checkOwner owner index.Value

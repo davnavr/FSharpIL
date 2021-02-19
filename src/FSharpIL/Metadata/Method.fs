@@ -5,6 +5,8 @@ open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
 
+open FSharpIL.Writing
+
 type MethodCallingConventions =
     | Default
     | VarArg
@@ -34,6 +36,7 @@ type MethodDefSignature internal (hasThis: bool, explicitThis: bool, cconv: Meth
     member _.ReturnType = retType
     member _.Parameters: ImmutableArray<ParamItem> = parameters
 
+// TODO: Come up with better name for this interface.
 type IMethodDefSignature =
     abstract Signature: unit -> MethodDefSignature
 
@@ -41,7 +44,7 @@ type IMethodDefSignature =
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
 type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
-    member internal _.Rva: IMethodBody = body // Body
+    member _.Body: IMethodBody = body
     member _.ImplFlags: MethodImplAttributes = iflags
     member _.Flags: MethodAttributes = attr
     member _.Name: Identifier = name
@@ -69,9 +72,19 @@ type IMethod =
     inherit IIndexValue
     abstract Definition : unit -> MethodDef
 
-[<CustomEquality; NoComparison>]
-type Method<'Body, 'Flags, 'Signature when 'Signature :> IMethodDefSignature and 'Signature : equality> =
-    { Body: FSharpIL.Metadata.MethodBody
+[<AutoOpen>]
+module MethodHelpers =
+    let internal (|MethodDef|) (mthd: #IMethod) = mthd.Definition()
+
+[<RequireQualifiedAccess>]
+type MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile =
+    | AAAAA
+
+    interface IMethodDefSignature with member _.Signature() = invalidOp "uh oh signature"
+
+[<NoComparison; CustomEquality>]
+type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :> IMethodDefSignature and 'Signature : equality> =
+    { Body: 'Body
       ImplFlags: MethodImplFlags
       Flags: ValidFlags<'Flags, MethodAttributes>
       MethodName: Identifier
@@ -81,7 +94,7 @@ type Method<'Body, 'Flags, 'Signature when 'Signature :> IMethodDefSignature and
 
     // TODO: Remove duplicate equality code shared with MethodDef class.
     member internal this.SkipDuplicateChecking = this.Flags.Value &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
-    
+
     interface IEquatable<Method<'Body, 'Flags, 'Signature>> with
         member this.Equals other =
             if this.SkipDuplicateChecking || other.SkipDuplicateChecking
@@ -92,17 +105,36 @@ type Method<'Body, 'Flags, 'Signature when 'Signature :> IMethodDefSignature and
         member this.CheckOwner actual = invalidOp "bad"
         member this.Definition() = MethodDef(this.Body, this.ImplFlags.Value, this.Flags.Value, this.MethodName, this.Signature.Signature(), this.ParamList)
 
+[<IsReadOnly>]
+[<NoComparison; StructuralEquality>]
+type StaticMethodSignature =
+    struct
+        val CallingConventions: MethodCallingConventions
+        val ReturnType: ReturnTypeItem
+        val Parameters: ImmutableArray<ParamItem>
+
+        new (cconv, rtype, parameters) =
+            { CallingConventions = cconv
+              ReturnType = rtype
+              Parameters = parameters }
+
+        member this.Signature() =
+            MethodDefSignature(false, false, this.CallingConventions, this.ReturnType, this.Parameters)
+
+        interface IMethodDefSignature with member this.Signature() = this.Signature()
+    end
+
 // TODO: Create different method body types for different methods.
-type InstanceMethodDef = Method<MethodBody, InstanceMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type InstanceMethodDef = Method<IMethodBody, InstanceMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 // TODO: Figure out how to make it so that abstract methods do not have a body.
-type AbstractMethodDef = Method<MethodBody (*unit*), AbstractMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
-type FinalMethodDef = Method<MethodBody, FinalMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
-type StaticMethodDef = Method<MethodBody, StaticMethodFlags, StaticMethodSignature>
+type AbstractMethodDef = Method<IMethodBody (*unit*), AbstractMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type FinalMethodDef = Method<IMethodBody, FinalMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type StaticMethodDef = Method<IMethodBody, StaticMethodFlags, StaticMethodSignature>
 // TODO: Prevent constructors from having generic parameters (an entry in the GenericParam table).
 /// <summary>Represents a method named <c>.ctor</c>, which is an object constructor method.</summary>
-type ConstructorDef = Method<MethodBody, ConstructorFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type ConstructorDef = Method<IMethodBody, ConstructorFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 /// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
-type ClassConstructorDef = Method<MethodBody, ClassConstructorFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type ClassConstructorDef = Method<IMethodBody, ClassConstructorFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 
 // TODO: Figure out how to avoid having users type out the full name of the method type (ex: ConcreteClassMethod.Method)
 [<RequireQualifiedAccess>]

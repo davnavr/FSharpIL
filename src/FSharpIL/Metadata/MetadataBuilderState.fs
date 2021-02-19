@@ -415,19 +415,7 @@ type GenericParamConstraint =
 
 
 
-[<RequireQualifiedAccess>]
-type MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile =
-    | AAAAA
 
-    interface IMethodDefSignature with member _.Signature() = invalidOp "uh oh signature"
-
-type StaticMethodSignature =
-    | StaticMethodSignature of MethodCallingConventions * ReturnTypeItem * ImmutableArray<ParamItem>
-
-    interface IMethodDefSignature with
-        member this.Signature() =
-            let (StaticMethodSignature (cconv, rtype, parameters)) = this
-            MethodDefSignature(false, false, cconv, rtype, parameters)
 
 /// <summary>Represents a <c>MethodRefSig</c>, which "provides the call site Signature for a method" (II.23.2.2).</summary>
 [<IsReadOnly; Struct>]
@@ -515,37 +503,6 @@ type CustomAttributeSignature =
 
 
 
-
-/// <summary>Specifies the method that is called by a <see cref="T:FSharpIL.Metadata.Opcode.Call"/> instruction.</summary>
-[<IsReadOnly; Struct>]
-[<RequireQualifiedAccess>]
-type Callee =
-    | MethodRef of MemberRefIndex<MethodRef>
-
-/// (III.1.2.1)
-type Opcode =
-    /// An instruction that does nothing (III.3.51).
-    | Nop
-    /// An instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been tripped" (III.3.16).
-    | Break
-    /// An instruction that calls a method (III.3.19).
-    | Call of Callee // TODO: Allow call to accept a MethodDef, MethodRef, or MethodSpec.
-    | Calli // of ?
-    /// An instruction used to return from the current method (III.3.56).
-    | Ret
-    // TODO: Include other opcodes.
-
-    // Ldnull
-
-    /// An instruction that loads a literal string (III.4.16).
-    | Ldstr of string // TODO: How to disallow null? Maybe usage of null here is same as Ldnull?
-
-// TODO: Figure out how exception handling information will be included.
-// TODO: Figure out how to prevent (some) invalid method bodies.
-// TODO: Ensure index objects used in opcodes have the correct owner.
-/// II.25.4
-type MethodBody =
-    ImmutableArray<Opcode>
 
 /// <summary>(0x00) Represents the single row of the <c>Module</c> table (II.22.30).</summary>
 type ModuleTable =
@@ -696,7 +653,3 @@ type MetadataBuilderState (mdle: ModuleTable) =
         this.TypeRef.FindType t
 
     member internal _.CreateTable table = ImmutableTable(table, fun item -> SimpleIndex(owner, item))
-
-[<AutoOpen>]
-module ExtraPatterns =
-    let internal (|MethodDef|) (mthd: IMethod) = mthd.Definition()

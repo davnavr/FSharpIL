@@ -1,5 +1,5 @@
 ﻿[<AutoOpen>]
-module FSharpIL.Metadata.Items
+module FSharpIL.Metadata.Items // TODO: Move types to namespace, move functions and extensions into module.
 
 /// II.23.2.8
 type TypeDefOrRefOrSpecEncoded =

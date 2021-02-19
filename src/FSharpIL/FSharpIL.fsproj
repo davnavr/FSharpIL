@@ -37,6 +37,7 @@
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\MetadataBuilderState.fs" />
     <Compile Include="Metadata\Items.fs" />
+    <Compile Include="Metadata\MethodBodyWriterExtensions.fs" />
     <Compile Include="Metadata\CliMetadata.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\ChunkWriterExtensions.fs" />
