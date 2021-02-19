@@ -67,7 +67,7 @@ module internal IndexOwner =
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
     let checkIndex owner (index: SimpleIndex<_>) =
         ensureEqual owner index.Owner
-        checkOwner owner index.Value
+        checkOwner owner index.Value // TODO: Fix, this function call might be redundant.
 
 [<AutoOpen>]
 module IndexHelpers =
