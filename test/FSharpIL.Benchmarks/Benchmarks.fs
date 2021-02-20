@@ -118,9 +118,8 @@ type HelloWorld () =
                       Flags = Flags.staticClass ClassFlags.None
                       TypeNamespace = "HelloWorld" }
 
-            let main' = IndexedList.add main programBuilder.Methods |> ValueOption.get
-            // setEntrypoint main' // TODO: Convert from StaticClassMethod to MethodDef
-
+            let main' = programBuilder.Methods.Add main |> ValueOption.get
+            do! setEntrypoint main'
             programBuilder.BuildType() |> ValueOption.get |> ignore // TODO: Create better way to call BuildType method.
         }
         |> CliMetadata.createMetadata

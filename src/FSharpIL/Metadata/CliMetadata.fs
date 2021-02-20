@@ -131,11 +131,6 @@ type CliMetadata (state: MetadataBuilderState) =
     /// </summary>
     member _.RowCounts = rowCounts
 
-// TODO: Move these aliasas to the same file containing the builder.
-type BuilderResult<'T> = Result<'T, ValidationError>
-
-type BuilderExpression<'T> = MetadataBuilderState -> BuilderResult<'T>
-
 // TODO: Move this to another file.
 [<System.Runtime.CompilerServices.IsReadOnlyAttribute>]
 [<NoEquality; NoComparison>]
@@ -146,24 +141,28 @@ type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and
         // TODO: Fix, forgetting to call the BuildType function will result in missing fields and methods!
         // Maybe have second index type that represent a method that might soon exist?
         // Maybe store (unit -> TypeDefRow) instances in the TypeDef table so that BuildType method is implicitly called when creating the immutable CliMetadata.
-        val Fields: IndexedList<'Field>
-        val Methods: IndexedList<'Method>
-        val GenericParameters: IndexedList<GenericParam<'GenericParam>> // TODO: Create MemberList type.
+        val Fields: IndexedList<FieldRow, 'Field>
+        val Methods: IndexedList<MethodDef, 'Method>
+        val GenericParameters: IndexedList<GenericParam<unit>, GenericParam<'GenericParam>> // TODO: Create MemberList type.
 
         internal new (validate, flags, typeName, typeNamespace, extends, parent, state: MetadataBuilderState) =
-            let fields = IndexedList.empty<'Field> state.Owner
-            let methods = IndexedList.empty<'Method> state.Owner
-            let genericParams = IndexedList.empty<GenericParam<'GenericParam>> state.Owner
+            let fields = IndexedList(state.Owner, (|FieldRow|))
+            let methods = IndexedList(state.Owner, (|MethodDef|))
+            let genericParams =
+                let mapper (param: GenericParam<_>) =
+                    let flags = ValidFlags<unit, _> param.Flags.Value
+                    GenericParam<unit>(flags, param.Name, param.ConstraintSet)
+                IndexedList(state.Owner, mapper)
             let builder() =
                 TypeDefRow (
                     flags,
                     typeName,
                     typeNamespace,
                     extends,
-                    invalidOp "bad", // TODO: Map fields and methods
-                    invalidOp "bad",
+                    fields.ToImmutable(),
+                    methods.ToImmutable(),
                     parent,
-                    TypeBuilder<'Type, 'Field, 'Method, 'GenericParam>.GetGenericParameters genericParams
+                    genericParams.ToImmutable()
                 )
                 |> state.TypeDef.GetIndex
             { builder = builder
@@ -179,13 +178,6 @@ type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and
                 (fun (index: SimpleIndex<_>) -> validate index.Value)
                 result
             result
-
-        static member GetGenericParameters(list: IndexedList<GenericParam<'GenericParam>>) =
-            let builder = ImmutableArray.CreateBuilder list.Count
-            for genericParam in list do
-                let flags = ValidFlags<unit, _> genericParam.Flags.Value
-                GenericParam<unit>(flags, genericParam.Name, genericParam.ConstraintSet) |> builder.Add
-            builder.ToImmutable()
     end
 
 module CliMetadata =
@@ -214,7 +206,7 @@ module CliMetadata =
             | _ -> sprintf "%s.%A" ns name
             |> sprintf "Unable to find type \"%s\", perhaps a TypeDef or TypeRef is missing"
 
-    let createState (moduleTable: ModuleTable) (expr: BuilderExpression<_>) =
+    let createState (moduleTable: ModuleTable) (expr: MetadataBuilderState -> _) =
         let state = MetadataBuilderState moduleTable
         state, expr state
 
@@ -222,7 +214,7 @@ module CliMetadata =
     /// Creates CLI metadata from the results of the <see cref="T:FSharpIL.Metadata.CliMetadataBuilder"/> computation expression.
     /// </summary>
     /// <seealso cref="T:FSharpIL.Builders.metadata"/>
-    let createMetadata (moduleTable: ModuleTable) (expr: BuilderExpression<_>) =
+    let createMetadata (moduleTable: ModuleTable) (expr: MetadataBuilderState -> Result<unit, ValidationError>) =
         let state, result = createState moduleTable expr
         let cls = state.ClsViolations.ToImmutable()
         let warnings = state.Warnings.ToImmutable()
@@ -284,7 +276,7 @@ module CliMetadata =
         | Some extends' -> def extends' typeDef state |> Ok
         | None -> MissingTypeError extends :> ValidationError |> Error
 
-    let buildDelegate typeDef: BuilderExpression<TypeBuilder<DelegateDef, _, _, _>> = // TODO: How to automatically add methods to delegates?
+    let buildDelegate typeDef state: Result<TypeBuilder<DelegateDef, _, _, _>, _> = // TODO: How to automatically add methods to delegates?
         buildDerivedTypeDef
             SystemType.Delegate
             (fun extends (def: DelegateDef) ->
@@ -296,8 +288,9 @@ module CliMetadata =
                     (Extends.TypeRef extends)
                     def.Access.EnclosingClass)
             typeDef
+            state
 
-    let buildEnum typeDef: BuilderExpression<TypeBuilder<EnumDef, _, _, _>> = // TODO: Use custom enum field type
+    let buildEnum typeDef state: Result<TypeBuilder<EnumDef, _, _, _>, _> = // TODO: Use custom enum field type
         buildDerivedTypeDef
             SystemType.Enum
             (fun extends (def: EnumDef) ->
@@ -309,8 +302,9 @@ module CliMetadata =
                     (Extends.TypeRef extends)
                     def.Access.EnclosingClass)
             typeDef
+            state
 
-    let buildStruct typeDef: BuilderExpression<TypeBuilder<StructDef, FieldChoice, _, _>> =
+    let buildStruct typeDef state: Result<TypeBuilder<StructDef, FieldChoice, _, _>, _> =
         buildDerivedTypeDef
             SystemType.ValueType
             (fun extends (def: StructDef) ->
@@ -322,6 +316,7 @@ module CliMetadata =
                     (Extends.TypeRef extends)
                     def.Access.EnclosingClass)
             typeDef
+            state
 
     // TODO: Allow static methods in interfaces, though they violate CLS rules.
     // TODO: What generic parameter to use in interfaces? Take advantage of the fact that the tag can be generic. Maybe add constraint?

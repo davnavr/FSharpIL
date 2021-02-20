@@ -3,37 +3,25 @@
 open System.Collections.Generic
 open System.Collections.Immutable
 
-[<NoEquality; NoComparison>]
-type IndexedList<'Item when 'Item : equality and 'Item :> IIndexValue> =
-    private
-        { Owner: IndexOwner
-          IndexedList: ImmutableArray<'Item>.Builder }
+[<Sealed>]
+type IndexedList<'Tag, 'Item when 'Tag : equality and 'Item :> IIndexValue> internal (owner: IndexOwner, mapper: 'Item -> _) =
+    let items = ImmutableArray.CreateBuilder<'Tag>()
 
-    member this.Count = this.IndexedList.Count
-    member this.ToImmutable() = this.IndexedList.ToImmutable()
+    member _.Count = items.Count
+    member _.ToImmutable() = items.ToImmutable()
 
-    interface IReadOnlyList<'Item> with
-        member this.Count = this.IndexedList.Count
-        member this.Item with get i = this.IndexedList.[i]
-        member this.GetEnumerator() = this.IndexedList.GetEnumerator()
-        member this.GetEnumerator() = this.IndexedList.GetEnumerator() :> System.Collections.IEnumerator
-
-[<RequireQualifiedAccess>]
-module IndexedList =
-    [<RequiresExplicitTypeArguments>]
-    let internal empty<'Item when 'Item : equality and 'Item :> IIndexValue> owner =
-        { Owner = owner
-          IndexedList = ImmutableArray.CreateBuilder<'Item>() }
-
-    let length { IndexedList = items } = items.Count
-
-    let add value list =
-        IndexOwner.checkOwner list.Owner value
+    member _.Add(value: 'Item) =
+        IndexOwner.checkOwner owner value
+        let value' = mapper value
         // TODO: Make lookup of duplicate items in IndexedList<_> more efficient.
-        if list.IndexedList.Contains value
+        if items.Contains value'
         then ValueNone
         else
-            list.IndexedList.Add value
-            SimpleIndex(list.Owner, value) |> ValueSome
+            items.Add value'
+            SimpleIndex(owner, value') |> ValueSome
 
-    let inline toBlock (list: IndexedList<_>) = list.ToImmutable()
+    interface IReadOnlyList<'Tag> with
+        member this.Count = this.Count
+        member _.Item with get i = items.[i]
+        member _.GetEnumerator() = items.GetEnumerator()
+        member _.GetEnumerator() = items.GetEnumerator() :> System.Collections.IEnumerator

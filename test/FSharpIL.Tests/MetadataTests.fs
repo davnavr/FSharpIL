@@ -54,14 +54,8 @@ let tests =
                               TypeNamespace = ""
                               Flags = Flags.staticClass ClassFlags.None }
 
-                    let main =
-                        IndexedList.add
-                            (StaticClassMethod.Method entrypoint)
-                            program.Methods
-                        |> ValueOption.get
-
+                    let main = program.Methods.Add(StaticClassMethod.Method entrypoint) |> ValueOption.get
                     program.BuildType |> ignore
-
                     do! setEntrypoint main
                 }
                 |> createMetadata
