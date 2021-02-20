@@ -34,9 +34,12 @@ let tests =
 
         testCase "entrypoint is set correctly" <| fun() ->
             let entrypoint =
-                { Body = ImmutableArray.Create Opcode.Ret
+                { Body =
+                    MethodBody.create <| fun content ->
+                        let writer = MethodBodyWriter content
+                        writer.Ret()
                   ImplFlags = MethodImplFlags.None
-                  Flags = staticMethodFlags { Visibility = Visibility.Public; HideBySig = true }
+                  Flags = Flags.staticMethod { Visibility = Visibility.Public; HideBySig = true }
                   MethodName = Identifier.ofStr "Main"
                   Signature = StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, ImmutableArray.Empty)
                   ParamList = fun _ -> failwith "no parameters" }
@@ -49,7 +52,7 @@ let tests =
                               Extends = Extends.Null
                               ClassName = Identifier.ofStr "Program"
                               TypeNamespace = ""
-                              Flags = staticClassFlags ClassFlags.None }
+                              Flags = Flags.staticClass ClassFlags.None }
 
                     let main =
                         IndexedList.add
@@ -59,7 +62,7 @@ let tests =
 
                     program.BuildType |> ignore
 
-                    // do! setEntrypoint main
+                    do! setEntrypoint main
                 }
                 |> createMetadata
                     { Mvid = Guid.NewGuid()

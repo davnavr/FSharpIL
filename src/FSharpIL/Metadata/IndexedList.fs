@@ -28,7 +28,7 @@ module IndexedList =
     let length { IndexedList = items } = items.Count
 
     let add value list =
-        list.Owner.CheckOwner value
+        IndexOwner.checkOwner list.Owner value
         // TODO: Make lookup of duplicate items in IndexedList<_> more efficient.
         if list.IndexedList.Contains value
         then ValueNone

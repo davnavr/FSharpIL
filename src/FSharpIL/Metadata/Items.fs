@@ -44,12 +44,9 @@ type ReturnType =
 
 type ReturnTypeItem with
     member this.ReturnType = this.RetType :?> ReturnType
+    static member Void = ReturnTypeItem(ImmutableArray.Empty, ReturnType.Void)
 
 let returnType modifiers (returnType: ReturnType) = ReturnTypeItem(modifiers, returnType)
-
-type MethodDef with
-    /// <summary>Corresponds to the <c>RVA</c> column of the <c>MethodDef</c> table containing the address of the method body.</summary>
-    member this.MethodBody = ()
 
 /// II.23.2.13
 [<IsReadOnly; Struct>]
@@ -137,3 +134,5 @@ type EncodedType =
 
 type ParamItem with
     member this.ParamType = this.Type :?> EncodedType
+
+let paramItem modifiers (paramType: EncodedType) = ParamItem(modifiers, paramType)

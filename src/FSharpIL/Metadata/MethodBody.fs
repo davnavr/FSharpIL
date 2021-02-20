@@ -19,10 +19,14 @@ type NullMethodBody internal () =
         member _.Exists = false
         member _.WriteBody _ = NotSupportedException "Abstract methods do not have method bodies" |> raise
 
+// TODO: Move this module to another file.
 [<RequireQualifiedAccess>]
 module MethodBody =
     let create (writer: MethodBodyContent -> unit) =
         { new IMethodBody with
             member _.Exists = true
             member _.WriteBody content = writer content }
+    /// Represents a method body that does not exist, used for abstract methods.
     let none = NullMethodBody()
+    ///// A method body containing a single <c>ret</c> instruction.
+    //let empty = { new IMethodBody with

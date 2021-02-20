@@ -35,7 +35,6 @@
     <Compile Include="Metadata\CustomAttribute.fs" />
     <Compile Include="Metadata\IndexedList.fs" />
     <Compile Include="Metadata\ImmutableTable.fs" />
-    <Compile Include="Metadata\MemberList.fs" />
     <Compile Include="Metadata\FlagsModule.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\MetadataBuilderState.fs" />

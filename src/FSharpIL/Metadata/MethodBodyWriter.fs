@@ -13,6 +13,8 @@ type internal MethodBodyContentImpl (writer, metadata, us: UserStringHeap) =
 // TODO: Figure out how to prevent (some) invalid method bodies.
 [<System.Runtime.CompilerServices.IsByRefLike; Struct>]
 type MethodBodyWriter internal (content: MethodBodyContentImpl) =
+    new (content: MethodBodyContent) = MethodBodyWriter(content :?> MethodBodyContentImpl)
+
     /// Writes an instruction that does nothing (III.3.51).
     member _.Nop() = content.Writer.WriteU1 0uy
     /// Writes an instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been tripped" (III.3.16).
@@ -25,10 +27,10 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     // TODO: Allow call to accept a MethodDef, MethodRef, or MethodSpec.
     /// <summary>Writes an instruction that calls a method (III.3.19).</summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member _.Call(method: MemberRefIndex<MethodRef>, table: ImmutableTable<_, MemberRefRow>) =
-        IndexOwner.checkIndex content.Metadata.Owner method.Index
+    member _.Call(SimpleIndex method: MemberRefIndex<MethodRef>) =
+        IndexOwner.checkIndex content.Metadata.Owner method
         content.Writer.WriteU1 0x28uy
-        MetadataToken.write (table.IndexOf method) 0xAuy content.Writer
+        MetadataToken.write (content.Metadata.MemberRef.IndexOf method) 0xAuy content.Writer
 
     /// <summary>
     /// Writes an instruction that loads a string from the <c>#Strings</c> heap (III.4.16).

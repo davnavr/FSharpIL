@@ -58,7 +58,7 @@ type HelloWorld () =
                     { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
                       TypeNamespace = "System.Runtime.Versioning"
                       ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-            let string = { CustomMod = ImmutableArray.Empty; ParamType = EncodedType.String }
+            let string = paramItem ImmutableArray.Empty EncodedType.String
 
             let! writeLine =
                 referenceMethod
@@ -92,22 +92,19 @@ type HelloWorld () =
 
             let main =
                 { Body =
-                    [|
-                        Ldstr "Hello World!"
-                        Call (Callee.MethodRef writeLine)
-                        Ret
-                    |]
-                    |> ImmutableArray.Create<Opcode>
+                    fun content ->
+                        let writer = MethodBodyWriter content
+                        writer.Ldstr "Hello World!"
+                        writer.Call writeLine
+                        writer.Ret()
+                    |> MethodBody.create
                   ImplFlags = MethodImplFlags.None
                   MethodName = Identifier.ofStr "Main"
-                  Flags =
-                    { Visibility = Public
-                      HideBySig = true }
-                    |> staticMethodFlags
+                  Flags = Flags.staticMethod { Visibility = Public; HideBySig = true }
                   Signature =
                     let args =
-                        { CustomMod = ImmutableArray.Empty
-                          ParamType = EncodedType.Array(EncodedType.String, ArrayShape.OneDimension) }
+                        EncodedType.Array(EncodedType.String, ArrayShape.OneDimension)
+                        |> paramItem ImmutableArray.Empty
                         |> ImmutableArray.Create
                     StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, args)
                   ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
@@ -118,7 +115,7 @@ type HelloWorld () =
                     { Access = TypeVisibility.Public
                       ClassName = Identifier.ofStr "Program"
                       Extends = Extends.TypeRef object
-                      Flags = staticClassFlags ClassFlags.None
+                      Flags = Flags.staticClass ClassFlags.None
                       TypeNamespace = "HelloWorld" }
 
             let main' = IndexedList.add main programBuilder.Methods |> ValueOption.get
