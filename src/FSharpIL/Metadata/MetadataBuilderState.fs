@@ -6,14 +6,6 @@ open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 
-/// <summary>
-/// Represents a violation of a Common Language Specification rule (I.7).
-/// </summary>
-[<Obsolete("Use classes to represent violations instead.", true)>]
-type ClsViolationOld =
-    /// A violation of rule 19, which states that "CLS-compliant interfaces shall not define...fields".
-    | InterfaceContainsFields of InterfaceDef
-
 /// (II.25.3.3)
 type CliHeaderFields =
     { // HeaderSize = 0x48u

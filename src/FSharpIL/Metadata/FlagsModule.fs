@@ -7,7 +7,7 @@ let concreteClass (Flags flags: ClassFlags) = TypeFlags<ConcreteClassFlags> flag
 let abstractClass (Flags flags: ClassFlags) = TypeFlags<AbstractClassFlags>(TypeAttributes.Abstract ||| flags)
 let sealedClass (Flags flags: ClassFlags) = TypeFlags<SealedClassFlags>(TypeAttributes.Sealed ||| flags)
 let staticClass (Flags flags: ClassFlags) = TypeFlags<StaticClassFlags>(TypeAttributes.Abstract ||| TypeAttributes.Sealed ||| flags)
-let struct (Flags flags: ClassFlags) = TypeFlags<StructFlags>(TypeAttributes.Sealed ||| flags)
+let valueType (Flags flags: ClassFlags) = TypeFlags<StructFlags>(TypeAttributes.Sealed ||| flags)
 
 let instanceField (Flags flags: FieldFlags<Visibility>) = ValidFlags<InstanceFieldFlags, _> flags
 let staticField (Flags flags: FieldFlags<Visibility>) = ValidFlags<StaticFieldFlags, _>(flags ||| FieldAttributes.Static)

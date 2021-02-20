@@ -46,6 +46,7 @@ type ReturnTypeItem with
     member this.ReturnType = this.RetType :?> ReturnType
     static member Void = ReturnTypeItem(ImmutableArray.Empty, ReturnType.Void)
 
+// TODO: Move "constructor" functions into their own modules.
 let returnType modifiers (returnType: ReturnType) = ReturnTypeItem(modifiers, returnType)
 
 /// II.23.2.13
