@@ -41,6 +41,7 @@
     <Compile Include="Metadata\GenericParamConstraint.fs" />
     <Compile Include="Metadata\Items.fs" />
     <Compile Include="Metadata\CliMetadata.fs" />
+    <Compile Include="Metadata\CliMetadataBuilder.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\ChunkWriterExtensions.fs" />
     <Compile Include="Metadata\Heaps\HeapExtensions.fs" />

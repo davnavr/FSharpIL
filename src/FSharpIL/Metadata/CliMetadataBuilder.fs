@@ -1,17 +1,5 @@
 ﻿namespace FSharpIL.Metadata
 
-// TODO: IMPORTANT, make builder CE return a (MetadataBuilderState -> 'T) instead of a BuilderExpression<_>
-
-[<Sealed>]
-type CliMetadataBuilder___New internal () =
-
-    member inline _.BindCommon(expr: _ -> _, body: _ -> _ -> _) =
-        fun (state: MetadataBuilderState) ->
-            let result = expr state
-            body result state
-
-    member inline _.Zero() = ()
-
 [<Sealed>]
 type CliMetadataBuilder internal () =
     member inline _.Bind(expr: BuilderExpression<'T>, body: 'T -> BuilderExpression<_>): BuilderExpression<_> =

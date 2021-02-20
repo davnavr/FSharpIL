@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
 
 type PublicKeyOrToken =
     /// Stores the full public key.
@@ -24,6 +25,23 @@ type AssemblyRef =
         | PublicKey _ -> 1u
         | _ -> 0u
 
+    override this.ToString() =
+        let culture =
+            match string this.Culture with
+            | "" -> "neutral"
+            | name -> name
+        let token =
+            match this.PublicKeyOrToken with
+            | PublicKeyToken(b1, b2, b3, b4, b5, b6, b7, b8) ->
+                sprintf ", PublicKeyToken=%02x%02x%02x%02x%02x%02x%02x%02x" b1 b2 b3 b4 b5 b6 b7 b8
+            | _ -> ""
+        sprintf
+            "%O, Version=%O, Culture=%s%s"
+            this.Name
+            this.Version
+            culture
+            token
+
     interface IEquatable<AssemblyRef> with
         member this.Equals other =
             this.Version = other.Version
@@ -31,19 +49,34 @@ type AssemblyRef =
             && this.Name = other.Name
             && this.Culture = other.Culture
 
+/// <summary>Warning used when there is a duplicate row in the <c>AssemblyRef</c> table (10).</summary>
+/// <category>Warnings</category>
+[<Sealed>]
+type DuplicateAssemblyRefWarning (duplicate: AssemblyRef) =
+    inherit ValidationWarning()
+    member _.Duplicate = duplicate
+    override this.ToString() =
+        sprintf
+            "A duplicate reference to \"%O\" was added when a reference to an assembly with the same version, public key, name, and culture already exists"
+            this.Duplicate
+
 // TODO: Create new class as this shares code with ModuleRefTable
 [<Sealed>]
-type AssemblyRefTable internal (owner: IndexOwner) =
-    let set = HashSet<AssemblyRef>()
+type AssemblyRefTable internal (owner: IndexOwner, warnings: ImmutableArray<ValidationWarning>.Builder) =
+    let references = List<AssemblyRef>()
+    let lookup = HashSet<AssemblyRef>()
 
-    member _.Count = set.Count
+    member _.Count = references.Count
 
     member _.GetIndex assemblyRef =
-        if set.Add assemblyRef
-        then SimpleIndex(owner, assemblyRef) |> ValueSome
-        else ValueNone
+        if lookup.Add assemblyRef |> not then
+            DuplicateAssemblyRefWarning assemblyRef |> warnings.Add
+        references.Add assemblyRef
+        SimpleIndex(owner, assemblyRef)
+
+    member _.GetEnumerator() = references.GetEnumerator()
 
     interface IReadOnlyCollection<AssemblyRef> with
-        member _.Count = set.Count
-        member _.GetEnumerator() = set.GetEnumerator() :> IEnumerator<_>
-        member _.GetEnumerator() = set.GetEnumerator() :> System.Collections.IEnumerator
+        member _.Count = references.Count
+        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
+        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator

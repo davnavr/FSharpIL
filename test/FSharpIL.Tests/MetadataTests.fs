@@ -74,7 +74,7 @@ let tests =
             Expect.equal metadata.EntryPoint.Name (string entrypoint.MethodName) "name of entrypoint should match"
 
         testCase "error skips rest of metadata expression" <| fun() ->
-            let error = ValidationError.DuplicateValue()
+            let error = MissingTypeError("test", Identifier.ofStr "test") :> ValidationError
             let mutable skipped = true
 
             let result =
@@ -88,6 +88,4 @@ let tests =
 
             ValidationExpect.isSpecificError result error "expression should evaluate to an error"
             Expect.isTrue skipped "rest of expression should not be evaluated if an error occurs"
-
-
     ]

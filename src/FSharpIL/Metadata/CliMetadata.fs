@@ -131,6 +131,7 @@ type CliMetadata (state: MetadataBuilderState) =
     /// </summary>
     member _.RowCounts = rowCounts
 
+// TODO: Move these aliasas to the same file containing the builder.
 type BuilderResult<'T> = Result<'T, ValidationError>
 
 type BuilderExpression<'T> = MetadataBuilderState -> BuilderResult<'T>
@@ -140,14 +141,14 @@ type BuilderExpression<'T> = MetadataBuilderState -> BuilderResult<'T>
 [<NoEquality; NoComparison>]
 type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and 'Field : equality and 'Method :> IMethod and 'Method : equality> =
     struct
-        val private builder: unit -> SimpleIndex<TypeDefRow> option
+        val private builder: unit -> SimpleIndex<TypeDefRow> voption
         val private validate: TypeDefRow -> unit
         // TODO: Fix, forgetting to call the BuildType function will result in missing fields and methods!
         // Maybe have second index type that represent a method that might soon exist?
         // Maybe store (unit -> TypeDefRow) instances in the TypeDef table so that BuildType method is implicitly called when creating the immutable CliMetadata.
         val Fields: IndexedList<'Field>
         val Methods: IndexedList<'Method>
-        val GenericParameters: IndexedList<GenericParam<'GenericParam>>
+        val GenericParameters: IndexedList<GenericParam<'GenericParam>> // TODO: Create MemberList type.
 
         internal new (validate, flags, typeName, typeNamespace, extends, parent, state: MetadataBuilderState) =
             let fields = IndexedList.empty<'Field> state.Owner
@@ -171,12 +172,13 @@ type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and
               Methods = methods
               GenericParameters = genericParams }
 
-        member this.BuildType() =
-            match this.builder() with // TODO: Figure out if usage of voption will result in excess copying when used in computation expression.
-            | Some index ->
-                this.validate index.Value
-                ValueSome index
-            | None -> ValueNone
+        member this.BuildType() = // TODO: Figure out if usage of voption will result in excess copying when used in computation expression.
+            let result = this.builder()
+            let validate = this.validate
+            ValueOption.iter
+                (fun (index: SimpleIndex<_>) -> validate index.Value)
+                result
+            result
 
         static member GetGenericParameters(list: IndexedList<GenericParam<'GenericParam>>) =
             let builder = ImmutableArray.CreateBuilder list.Count
@@ -193,12 +195,14 @@ module CliMetadata =
         let Enum = "System", Identifier "Enum"
         let ValueType = "System", Identifier "ValueType"
 
-    /// Represents a violation of CLS rule 19, which states that "CLS-compliant interfaces shall not define...fields".
+    /// <summary>Represents a violation of CLS rule 19, which states that "CLS-compliant interfaces shall not define...fields".</summary>
+    /// <category>CLS Rules</category>
     [<Sealed>]
     type InterfaceContainsFields (intf: InterfaceDef) =
         inherit ClsViolation({ Number = 19uy; Message = sprintf "Interfaces should not define fields" }) // TODO: Mention name of offending interface
         member _.Interface = intf
 
+    /// <category>Errors</category>
     [<Sealed>]
     type MissingTypeError (ns: string, name: Identifier) =
         inherit ValidationError()

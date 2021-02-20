@@ -77,7 +77,7 @@ type Generate() =
                                 // TODO: Add support for nested visibility.
                             |]
                             |> Gen.oneof
-                        let! flags = Arb.generate<ClassFlags> |> Gen.map staticClassFlags
+                        let! flags = Arb.generate<ClassFlags> |> Gen.map Flags.staticClass
                         let! name = identifier
                         let! (NonEmptyString ns) = Arb.generate
                         let! extends =
@@ -88,17 +88,8 @@ type Generate() =
                             |]
                             |> Gen.oneof
 
-                        // TODO: Add support for other classes.
-                        CliMetadata.addStaticClass
-                            { Access = visibility
-                              Flags = flags
-                              ClassName = name
-                              TypeNamespace = ns
-                              Extends = extends
-                              Fields = MemberList.Empty
-                              Methods = MemberList.Empty }
-                            state
-                        |> ignore
+                        // TODO: Add support for classes.
+                        ()
 
                     return CliMetadata state
                 }

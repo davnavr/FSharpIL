@@ -64,15 +64,19 @@ type TypeRefTable internal (owner: IndexOwner, warnings: ImmutableArray<Validati
                 table
 
     member _.GetIndex typeRef =
-        let index = table.GetIndex typeRef
+        match table.GetIndex typeRef with
+        | ValueSome index ->
+            search.Item <- (typeRef.TypeNamespace, typeRef.TypeName), typeRef
 
-        // TODO: Check that the name is a "valid CLS identifier".
-        match typeRef.ResolutionScope with
-        | ResolutionScope.Module ->
-            TypeRefUsesModuleResolutionScope typeRef |> warnings.Add
-        | _ -> ()
+            // TODO: Check that the name is a "valid CLS identifier".
 
-        Option.defaultWith (fun() -> SimpleIndex(owner, typeRef)) index
+            match typeRef.ResolutionScope with
+            | ResolutionScope.Module ->
+                TypeRefUsesModuleResolutionScope typeRef |> warnings.Add
+            | _ -> ()
+
+            Ok index
+        | ValueNone -> DuplicateRowError typeRef :> ValidationError |> Error
 
     member _.GetEnumerator() = table.GetEnumerator()
 

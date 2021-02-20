@@ -111,7 +111,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
     // (0x09)
     // member InterfaceImpl
     /// (0x0A)
-    member val MemberRef: MemberRefTable = MemberRefTable owner
+    member val MemberRef: MemberRefTable = MemberRefTable(owner, warnings)
     // (0x0B)
     // member Constant
     /// (0x0C)
@@ -151,7 +151,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// (0x23)
-    member val AssemblyRef: AssemblyRefTable = AssemblyRefTable owner
+    member val AssemblyRef: AssemblyRefTable = AssemblyRefTable(owner, warnings)
     // AssemblyRefProcessor // 0x24 // Not used when writing a PE file
     // AssemblyRefOS // 0x25 // Not used when writing a PE file
     /// (0x26)

@@ -12,15 +12,30 @@ type ClsViolationMessage =
 
     override this.ToString() = sprintf "Rule %i: %s" this.Number this.Message
 
+/// <category>CLS Rules</category>
 [<AbstractClass>]
 type ClsViolation internal (message: ClsViolationMessage) =
     member _.Message = message
 
+/// <summary>Base type of all <c>WARNING</c> checks (II.22.1).</summary>
+/// <category>Warnings</category>
 [<AbstractClass>]
 type ValidationWarning internal () = class end
 
+/// <summary>
+/// Base type of all <c>ERROR</c> checks, which indicate that the generated CLI metadata is invalid (II.22.1).
+/// </summary>
+/// <category>Errors</category>
 [<AbstractClass>]
 type ValidationError internal () = class end
+
+/// <summary>Error used when an item is added to a table that does not allow duplicates.</summary>
+/// <category>Errors</category>
+[<Sealed>]
+type DuplicateRowError<'Item> (item: 'Item) =
+    inherit ValidationError()
+    member _.Item = item
+    override this.ToString() = sprintf "Cannot add duplicate item %O" this.Item
 
 /// II.22.1
 type ValidationResult<'Result> =

@@ -3,6 +3,7 @@
 open System.Collections.Generic
 
 // TODO: Rename to MetadataTableBuilder?
+// TODO: Make this an internal type.
 [<Sealed>]
 type MutableTable<'Value when 'Value :> IIndexValue and 'Value : equality> internal (owner: IndexOwner) =
     let set = HashSet<'Value>()

@@ -78,17 +78,33 @@ type MemberRefRow =
 type MemberRefIndex<'Member> = TaggedIndex<'Member, MemberRefRow>
 
 [<Sealed>]
-type MemberRefTable internal (owner: IndexOwner) =
-    let members = MutableTable<MemberRefRow> owner
+type DuplicateMemberRefWarning (row: MemberRefRow) =
+    inherit ValidationWarning()
+    member _.Member = row
+    override this.ToString() =
+        sprintf
+            "A duplicate member reference \"%O\" was added when an existing row with the same class, name, and signature already exists"
+            this.Member
+
+[<Sealed>]
+type MemberRefTable internal (owner: IndexOwner, warnings: ImmutableArray<ValidationWarning>.Builder) =
+    let members = List<MemberRefRow>()
+    let lookup = HashSet<MemberRefRow>()
 
     member _.Count = members.Count
+
+    // TODO: Instead of a union type, have two overloaded GetIndex methods for adding MethodRefs and FieldRefs.
 
     // TODO: Enforce CLS checks.
     // NOTE: Duplicates (based on owning class, name, and signature) are allowed, but produce a warning.
     member private _.GetIndex<'MemberRef>(row: MemberRefRow) =
-        members.GetIndex row
-        |> Option.map MemberRefIndex
-        |> Option.defaultWith (fun() -> MemberRefIndex<'MemberRef>(owner, row))
+        IndexOwner.checkOwner owner row
+
+        if lookup.Add row |> not then
+            DuplicateMemberRefWarning row |> warnings.Add
+
+        members.Add row
+        MemberRefIndex<'MemberRef>(owner, row)
 
     member this.GetIndex(method: MethodRef) = this.GetIndex<MethodRef>(MethodRef method)
     // member this.GetIndex(field: FieldRef) = this.GetIndex<FieldRef>(FieldRef field)
