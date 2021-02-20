@@ -87,37 +87,22 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
     let mutable offset = rva
 
     for method in info.Cli.MethodDef.Items do
-        // TODO: Ensure that MethodDefs with the same method bodies point to the same RVA.
-        // TODO: Write fat format when necessary.
-        // NOTE: For fat (and tiny) formats, "two least significant bits of first byte" indicate the type.
-        // TODO: Check conditions to see if tiny format can be used.
-        let header = writer.CreateWriter()
-        writer.SkipBytes 1u
-        let body = writer.CreateWriter()
+        if method.Body.Exists then
+            // TODO: Ensure that MethodDefs with the same method bodies point to the same RVA.
+            // TODO: Write fat format when necessary.
+            // NOTE: For fat (and tiny) formats, "two least significant bits of first byte" indicate the type.
+            // TODO: Check conditions to see if tiny format can be used.
+            let header = writer.CreateWriter()
+            writer.SkipBytes 1u
+            let body = MethodBodyContentImpl(writer.CreateWriter(), info.Cli, info.UserStringStream)
+            method.Body.WriteBody body
+            let size = body.Writer.Size
+            0x2uy ||| (byte size <<< 2) |> header.WriteU1
+            info.MethodBodies.Item <- method, offset
+            offset <- offset + size
+            writer.SkipBytes size
 
-        for opcode in method.Body do
-            match opcode with
-            | Opcode.Nop -> body.WriteU1 0uy
-            | Opcode.Break -> body.WriteU1 1uy
-            | Opcode.Call callee ->
-                body.WriteU1 0x28uy
-                MetadataToken.callee info.Cli callee body
-
-            | Opcode.Ret -> body.WriteU1 0x2Auy
-
-            | Opcode.Ldstr str ->
-                body.WriteU1 0x72uy
-                MetadataToken.userString str info.UserStringStream body
-
-            | _ -> failwithf "TODO: Implement support for more opcodes (%A)" opcode
-
-        let size = body.Size
-        0x2uy ||| (byte size <<< 2) |> header.WriteU1
-        info.MethodBodies.Item <- method, offset
-        offset <- offset + size
-        writer.SkipBytes size
-
-        // TODO: Write extra method data sections.
+            // TODO: Write extra method data sections.
 
     writer.AlignTo 4u
 

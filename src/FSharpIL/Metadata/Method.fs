@@ -5,8 +5,6 @@ open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
 
-open FSharpIL.Writing
-
 // NOTE: For methods, SpecialName has to be set if RTSpecialName is set.
 // NOTE: For methods, RTSpecialName and SpecialName is set when it is a ctor or cctor
 type VTableLayout =
@@ -194,6 +192,7 @@ type StaticMethodSignature =
         interface IMethodDefSignature with member this.Signature() = this.Signature()
     end
 
+// TODO: Prevent NullMethodBody from being used in non-abstract method defs.
 // TODO: Create different method body types for different methods.
 type InstanceMethodDef = Method<IMethodBody, InstanceMethodFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 // TODO: Figure out how to make it so that abstract methods do not have a body.

@@ -86,6 +86,8 @@ type CliMetadata (state: MetadataBuilderState) =
 
         bits, counts
 
+    member val internal Owner = state.Owner
+
     member val Header = state.Header
     /// <summary>Corresponds to the <c>Flags</c> field of the CLI header (II.25.3.3).</summary>
     member val HeaderFlags = state.HeaderFlags

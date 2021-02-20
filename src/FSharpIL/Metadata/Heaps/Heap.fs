@@ -201,6 +201,7 @@ module internal Heap =
                         writer.WriteU1 b8
                     | _ -> failwithf "Invalid public key or token %A" token)
             (fun bytes ->
+                // if ?.Add bytes
                 uint32 bytes.Length |> writer.WriteBlobSize
                 writer.WriteBytes bytes)
             metadata

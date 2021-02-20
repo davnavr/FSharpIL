@@ -20,11 +20,6 @@ let write index table (writer: ChunkWriter) =
     (index >>> 16) &&& 0xFFu |> writer.WriteU1
     writer.WriteU1 table
 
-let callee (metadata: CliMetadata) =
-    function
-    | Callee.MethodRef (SimpleIndex method) ->
-        write (metadata.MemberRef.IndexOf method) 0xAuy
-
 let userString str (us: UserStringHeap) =
     us.Add str
     let { BlobIndex.Index = i } = us.IndexOf str

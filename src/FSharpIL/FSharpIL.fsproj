@@ -41,7 +41,6 @@
     <Compile Include="Metadata\MetadataBuilderState.fs" />
     <Compile Include="Metadata\GenericParamConstraint.fs" />
     <Compile Include="Metadata\Items.fs" />
-    <Compile Include="Metadata\MethodBodyWriterExtensions.fs" />
     <Compile Include="Metadata\CliMetadata.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\ChunkWriterExtensions.fs" />
@@ -50,6 +49,7 @@
     <Compile Include="Metadata\Heaps\UserString.fs" />
     <Compile Include="Metadata\Heaps\Heap.fs" />
     <Compile Include="Metadata\MetadataToken.fs" />
+    <Compile Include="Metadata\MethodBodyWriter.fs" />
     <Compile Include="Metadata\Builders.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
