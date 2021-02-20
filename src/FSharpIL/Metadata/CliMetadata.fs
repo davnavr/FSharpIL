@@ -136,7 +136,7 @@ type CliMetadata (state: MetadataBuilderState) =
 [<NoEquality; NoComparison>]
 type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and 'Field : equality and 'Method :> IMethod and 'Method : equality> =
     struct
-        val private builder: unit -> SimpleIndex<TypeDefRow> voption
+        val private builder: unit -> Result<SimpleIndex<TypeDefRow>, ValidationError>
         val private validate: TypeDefRow -> unit
         // TODO: Fix, forgetting to call the BuildType function will result in missing fields and methods!
         // Maybe have second index type that represent a method that might soon exist?
@@ -171,13 +171,12 @@ type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and
               Methods = methods
               GenericParameters = genericParams }
 
-        member this.BuildType() = // TODO: Figure out if usage of voption will result in excess copying when used in computation expression.
-            let result = this.builder()
-            let validate = this.validate
-            ValueOption.iter
-                (fun (index: SimpleIndex<_>) -> validate index.Value)
-                result
-            result
+        member this.BuildType() =
+            match this.builder() with
+            | Ok tdef ->
+                this.validate tdef.Value
+                Ok tdef
+            | err -> err
     end
 
 module CliMetadata =

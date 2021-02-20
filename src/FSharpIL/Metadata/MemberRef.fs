@@ -77,6 +77,10 @@ type MemberRefRow =
 
 type MemberRefIndex<'Member> = TaggedIndex<'Member, MemberRefRow>
 
+/// <summary>
+/// Error used when there is a duplicate row in the <c>MemberRef</c> table (6).
+/// </summary>
+/// <category>Warnings</category>
 [<Sealed>]
 type DuplicateMemberRefWarning (row: MemberRefRow) =
     inherit ValidationWarning()

@@ -120,7 +120,8 @@ type HelloWorld () =
 
             let main' = programBuilder.Methods.Add main |> ValueOption.get
             do! setEntrypoint main'
-            programBuilder.BuildType() |> ValueOption.get |> ignore // TODO: Create better way to call BuildType method.
+            let! _ = programBuilder.BuildType
+            ()
         }
         |> CliMetadata.createMetadata
             { Name = Identifier.ofStr "HelloWorld.dll"

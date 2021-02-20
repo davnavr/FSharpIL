@@ -259,17 +259,33 @@ type StructDef =
      StructName: Identifier
      TypeNamespace: string }
 
+/// <summary>
+/// Error used when there is a duplicate row in the <c>TypeDef</c> table (29, 30).
+/// </summary>
+/// <category>Errors</category>
+type DuplicateTypeDefError (duplicate: TypeDefRow) =
+    inherit ValidationError()
+    member _.Type = duplicate
+    override this.ToString() =
+        sprintf
+            "Unable to add type definition \"%O\", a type with the same namespace, name, and parent already exists"
+            this.Type
+
 [<Sealed>]
 type TypeDefTable internal (owner: IndexOwner) =
-    let defs = MutableTable<TypeDefRow> owner
+    let defs = List<TypeDefRow>()
+    let lookup = HashSet<TypeDefRow>()
 
     // TODO: Add the <Module> class used for global variables and functions, which should be the first entry.
 
     member _.Count = defs.Count
 
     // TODO: Enforce common CLS checks and warnings for types.
-    member _.GetIndex(t: TypeDefRow) =
-        defs.GetIndex t
+    member _.GetIndex(tdef: TypeDefRow) =
+        IndexOwner.checkOwner owner tdef
+        if lookup.Add tdef
+        then SimpleIndex(owner, tdef) |> Ok
+        else DuplicateTypeDefError tdef :> ValidationError |> Error
 
     interface IReadOnlyCollection<TypeDefRow> with
         member _.Count = defs.Count

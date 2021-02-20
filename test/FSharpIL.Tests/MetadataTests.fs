@@ -55,7 +55,7 @@ let tests =
                               Flags = Flags.staticClass ClassFlags.None }
 
                     let main = program.Methods.Add(StaticClassMethod.Method entrypoint) |> ValueOption.get
-                    program.BuildType |> ignore
+                    let! _ = program.BuildType
                     do! setEntrypoint main
                 }
                 |> createMetadata
