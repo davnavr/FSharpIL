@@ -284,7 +284,9 @@ type TypeDefTable internal (owner: IndexOwner) =
     member _.GetIndex(tdef: TypeDefRow) =
         IndexOwner.checkOwner owner tdef
         if lookup.Add tdef
-        then SimpleIndex(owner, tdef) |> Ok
+        then
+            defs.Add tdef
+            SimpleIndex(owner, tdef) |> Ok
         else DuplicateTypeDefError tdef :> ValidationError |> Error
 
     interface IReadOnlyCollection<TypeDefRow> with
