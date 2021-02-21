@@ -131,7 +131,7 @@ type EncodedType =
             | Object
             | String -> ()
             | Array(item, _) -> IndexOwner.checkOwner owner item
-            | _ -> invalidOp "Cannot validate owner of unsupported encoded type"
+            | _ -> failwith "Cannot validate owner of unsupported encoded type"
 
 type ParamItem with
     member this.ParamType = this.Type :?> EncodedType

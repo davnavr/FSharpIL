@@ -47,6 +47,8 @@ type ParamItem =
     struct
         val CustomMod: ImmutableArray<CustomModifier>
         val internal Type: IEncodedType // ParamType
-
         internal new(modifiers, paramType) = { CustomMod = modifiers; Type = paramType }
+        member internal this.CheckOwner owner =
+            for modifier in this.CustomMod do modifier.CheckOwner owner
+            this.Type.CheckOwner owner
     end

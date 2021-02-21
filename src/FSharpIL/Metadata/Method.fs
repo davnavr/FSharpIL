@@ -104,6 +104,10 @@ type MethodDefSignature internal (hasThis: bool, explicitThis: bool, cconv: Meth
     member _.ReturnType = retType
     member _.Parameters: ImmutableArray<ParamItem> = parameters
 
+    member internal this.CheckOwner owner =
+        retType.CheckOwner owner
+        for param in this.Parameters do param.CheckOwner owner
+
 // TODO: Come up with better name for this interface.
 type IMethodDefSignature =
     abstract Signature: unit -> MethodDefSignature
@@ -133,8 +137,7 @@ type MethodDef internal (body, iflags, attr, name, signature: MethodDefSignature
             then false
             else this.Name = other.Name && this.Signature = other.Signature
 
-    interface IIndexValue with
-        member this.CheckOwner actual = invalidOp "bad"
+    interface IIndexValue with member this.CheckOwner owner = this.Signature.CheckOwner owner
 
 type IMethod =
     inherit IIndexValue
@@ -148,7 +151,7 @@ module MethodHelpers =
 type MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile =
     | AAAAA
 
-    interface IMethodDefSignature with member _.Signature() = invalidOp "uh oh signature"
+    interface IMethodDefSignature with member _.Signature() = failwith "uh oh signature"
 
 [<NoComparison; CustomEquality>]
 type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :> IMethodDefSignature and 'Signature : equality> =
@@ -170,8 +173,10 @@ type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :
             else this.MethodName = other.MethodName && this.Signature = other.Signature
 
     interface IMethod with
-        member this.CheckOwner actual = invalidOp "bad"
-        member this.Definition() = MethodDef(this.Body, this.ImplFlags.Value, this.Flags.Value, this.MethodName, this.Signature.Signature(), this.ParamList)
+        // TODO: See if IMethod is required to implement IIndexValue.
+        member _.CheckOwner _ = ()
+        member this.Definition() =
+            MethodDef(this.Body, this.ImplFlags.Value, this.Flags.Value, this.MethodName, this.Signature.Signature(), this.ParamList)
 
 [<IsReadOnly>]
 [<NoComparison; StructuralEquality>]
@@ -214,7 +219,14 @@ type ConcreteClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
-        member this.CheckOwner actual = invalidOp "bad"
+        member this.CheckOwner owner =
+            match this with
+            | Method (IndexValue method)
+            | StaticMethod (IndexValue method)
+            | Constructor (IndexValue method)
+            | ClassConstructor (IndexValue method)->
+                IndexOwner.checkOwner owner method
+
         member this.Definition() =
             match this with
             | Method (MethodDef def)
@@ -231,7 +243,15 @@ type AbstractClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
-        member this.CheckOwner actual = invalidOp "bad"
+        member this.CheckOwner owner =
+            match this with
+            | Method (IndexValue method)
+            | AbstractMethod (IndexValue method)
+            | StaticMethod (IndexValue method)
+            | Constructor (IndexValue method)
+            | ClassConstructor (IndexValue method)->
+                IndexOwner.checkOwner owner method
+
         member this.Definition() =
             match this with
             | Method (MethodDef def)
@@ -249,7 +269,15 @@ type SealedClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
-        member this.CheckOwner actual = invalidOp "bad"
+        member this.CheckOwner owner =
+            match this with
+            | Method (IndexValue method)
+            | FinalMethod (IndexValue method)
+            | StaticMethod (IndexValue method)
+            | Constructor (IndexValue method)
+            | ClassConstructor (IndexValue method)->
+                IndexOwner.checkOwner owner method
+
         member this.Definition() =
             match this with
             | Method (MethodDef def)
@@ -264,7 +292,12 @@ type StaticClassMethod =
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
-        member this.CheckOwner actual = invalidOp "bad"
+        member this.CheckOwner owner =
+            match this with
+            | Method (IndexValue method)
+            | ClassConstructor (IndexValue method)->
+                IndexOwner.checkOwner owner method
+
         member this.Definition() =
             match this with
             | Method (MethodDef def)

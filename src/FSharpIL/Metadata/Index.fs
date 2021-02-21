@@ -5,17 +5,9 @@ open System.Collections.Generic
 
 #nowarn "342" // Class that implements IComparable should override Object.Equals
 
-type IndexOwner internal () = // class end
-    [<Obsolete("Use module functions instead", true)>]
-    member internal this.EnsureEqual(other: IndexOwner) =
-        if Object.ReferenceEquals(this, other) |> not then
-            invalidOp "Cannot use an object owned by another state"
+type IndexOwner internal () = class end
 
-    [<Obsolete("Use module functions instead", true)>]
-    /// <exception cref="T:System.InvalidOperation"/>
-    member internal this.CheckOwner(value: #IIndexValue) = value.CheckOwner this
-
-and IIndexValue =
+type IIndexValue =
     /// <exception cref="T:System.InvalidOperation">The owner objects do not refer to the same object.</exception>
     abstract CheckOwner: IndexOwner -> unit
 
@@ -70,8 +62,9 @@ module internal IndexOwner =
         checkOwner owner index.Value // TODO: Fix, this function call might be redundant.
 
 [<AutoOpen>]
-module IndexHelpers =
-    let inline internal (|SimpleIndex|) (index: ^Index) =
+module internal IndexHelpers =
+    let inline (|SimpleIndex|) (index: ^Index) =
         (^Index : (member Index : SimpleIndex<'T>) index)
 
-    let internal (|IndexOwner|) (index: #IIndex) = index.Owner
+    let (|IndexOwner|) (index: #IIndex) = index.Owner
+    let (|IndexValue|) (value: #IIndexValue) = value :> IIndexValue

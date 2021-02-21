@@ -17,7 +17,7 @@ let instanceMethod (Flags flags: InstanceMethodDefFlags) = ValidFlags<InstanceMe
 let abstractMethod (Flags flags: InstanceMethodDefFlags) = ValidFlags<AbstractMethodFlags, _>(MethodAttributes.Abstract ||| MethodAttributes.Virtual ||| flags)
 let finalMethod (Flags flags: InstanceMethodDefFlags) = ValidFlags<FinalMethodFlags, _>(MethodAttributes.Final ||| MethodAttributes.Virtual ||| flags)
 let staticMethod (Flags flags: StaticMethodDefFlags<Visibility>) = ValidFlags<StaticMethodFlags, _>(MethodAttributes.Static ||| flags)
-// let globalMethod (Flags flags: StaticMethodDefFlags<GlobalVisibility>) = invalidOp ""
+// let globalMethod (Flags flags: StaticMethodDefFlags<GlobalVisibility>) = failwith ""
 
 // let constructor (Flags flags: _) = ValidFlags<ConstructorFlags, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| flags)
 // let classConstructor (Flags flags: _) = ValidFlags<ClassConstructorFlags, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| MethodAttributes.Static ||| flags)
