@@ -135,10 +135,10 @@ type TypeDefRow internal (flags, name, ns, extends, fields, methods, parent, gen
     member _.TypeName: Identifier = name
     member _.TypeNamespace: string = ns
     member _.Extends: Extends = extends
-    member _.FieldList: ImmutableArray<FieldRow> = fields
-    member _.MethodList: ImmutableArray<MethodDef> = methods
+    member _.FieldList: IndexedList<FieldRow> = fields
+    member _.MethodList: IndexedList<MethodDef> = methods
     member _.EnclosingClass: SimpleIndex<TypeDefRow> option = parent
-    member _.GenericParams: ImmutableArray<GenericParam> = genericParams
+    member _.GenericParams: IndexedList<GenericParam> = genericParams
 
     override this.Equals obj =
         match obj with

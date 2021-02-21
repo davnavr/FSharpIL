@@ -52,7 +52,7 @@ type internal GenericParamList<'Flags> (owner: IndexOwner) =
     let gparams = ImmutableArray.CreateBuilder<GenericParam>()
 
     member _.Count = gparams.Count
-    member _.ToImmutable() = gparams.ToImmutable()
+    member _.ToImmutable() = IndexedList(owner, gparams)
 
     member _.Add(Flags flags: ValidFlags<'Flags, GenericParameterAttributes>, name, constraints: GenericParamConstraintSet) =
         IndexOwner.checkOwner owner constraints

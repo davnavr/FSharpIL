@@ -133,7 +133,6 @@ type CliMetadata (state: MetadataBuilderState) =
 
 // TODO: Move this to another file.
 // TODO: Make this a class.
-// TODO: Rename to TypeDefBuilder
 [<System.Runtime.CompilerServices.IsReadOnlyAttribute>]
 [<NoEquality; NoComparison>]
 type TypeDefBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and 'Field : equality and 'Method :> IMethod and 'Method : equality> =
@@ -141,13 +140,13 @@ type TypeDefBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField 
         val private builder: unit -> Result<SimpleIndex<TypeDefRow>, ValidationError>
         val private validate: TypeDefRow -> unit
         // TODO: Fix, forgetting to call the BuildType function will result in missing fields and methods!
-        val private fields: IndexedList<FieldRow>
-        val private methods: IndexedList<MethodDef>
+        val private fields: IndexedListBuilder<FieldRow>
+        val private methods: IndexedListBuilder<MethodDef>
         val private genericParams: GenericParamList<'GenericParam>
 
         internal new (validate, flags, typeName, typeNamespace, extends, parent, state: MetadataBuilderState) =
-            let fields = IndexedList state.Owner
-            let methods = IndexedList state.Owner
+            let fields = IndexedListBuilder state.Owner
+            let methods = IndexedListBuilder state.Owner
             let genericParams = GenericParamList<'GenericParam> state.Owner
             let builder() =
                 TypeDefRow (
@@ -331,7 +330,7 @@ module CliMetadata =
     let buildInterface (typeDef: InterfaceDef) (state: MetadataBuilderState): TypeDefBuilder<InterfaceDef, StaticField, _, _> =
         buildTypeDef<_, _, _, _>
             (fun row ->
-                if row.FieldList.Length > 0 then InterfaceContainsFields typeDef |> state.ClsViolations.Add)
+                if row.FieldList.Count > 0 then InterfaceContainsFields typeDef |> state.ClsViolations.Add)
             (typeDef.Flags.Value ||| typeDef.Access.Flags)
             typeDef.InterfaceName
             typeDef.TypeNamespace

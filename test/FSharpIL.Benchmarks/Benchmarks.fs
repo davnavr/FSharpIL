@@ -119,10 +119,9 @@ type HelloWorld () =
                       TypeNamespace = "HelloWorld" }
 
             let! main' = programBuilder.AddMethod main
-            let! program = programBuilder.BuildType
+            let! program = programBuilder.BuildType()
 
-            do! setEntrypoint program.Value.MethodList.[main']
-            ()
+            do! program.Value.MethodList.GetIndex main' |> setEntrypoint
         }
         |> CliMetadata.createMetadata
             { Name = Identifier.ofStr "HelloWorld.dll"

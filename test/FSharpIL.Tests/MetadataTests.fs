@@ -55,8 +55,8 @@ let tests =
                               Flags = Flags.staticClass ClassFlags.None }
 
                     let! main = program.AddMethod(StaticClassMethod.Method entrypoint)
-                    let! program' = program.BuildType
-                    do! setEntrypoint program'.Value.MethodList.[main]
+                    let! program' = program.BuildType()
+                    do! program'.Value.MethodList.GetIndex main |> setEntrypoint
                 }
                 |> createMetadata
                     { Mvid = Guid.NewGuid()
@@ -73,7 +73,7 @@ let tests =
 
             let result =
                 metadata {
-                    do! fun () -> Error error
+                    do! fun _ -> Error error
                     skipped <- false
                 }
                 |> CliMetadata.createMetadata

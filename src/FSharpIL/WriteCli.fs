@@ -227,12 +227,12 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
             // Field
             let field' = if tdef.FieldList.IsEmpty then 0u else field
-            field <- uint32 tdef.FieldList.Length
+            field <- uint32 tdef.FieldList.Count
             tables.Field.WriteSimpleIndex(field', writer)
 
             // Method
             let method' = if tdef.MethodList.IsEmpty then 0u else method
-            method <- uint32 tdef.MethodList.Length
+            method <- uint32 tdef.MethodList.Count
             tables.Field.WriteSimpleIndex(method', writer)
 
     // Field (0x04)

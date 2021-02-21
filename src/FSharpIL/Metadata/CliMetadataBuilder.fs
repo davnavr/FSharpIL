@@ -6,10 +6,9 @@ type CliMetadataBuilder internal () =
         fun (state: MetadataBuilderState) ->
             expr state |> Result.bind (fun result -> body result state)
 
-    [<System.Obsolete>]
-    member inline _.Bind(expr: unit -> Result<'T, ValidationError>, body: 'T -> _ -> _) =
+    member inline _.Bind(expr: Result<'T, ValidationError>, body: 'T -> _ -> _) =
         fun (state: MetadataBuilderState) ->
-            expr() |> Result.bind (fun result -> body result state)
+            Result.bind (fun result -> body result state) expr
 
     member inline _.Bind(expr: _ -> unit, body: _ -> _ -> Result<_, ValidationError>) =
         fun (state: MetadataBuilderState) -> expr state; body () state
