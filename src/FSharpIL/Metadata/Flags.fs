@@ -15,7 +15,7 @@ type ValidFlags<'Tag, 'Flags when 'Flags :> System.Enum> =
     end
 
 [<AutoOpen>]
-module FlagPatterns =
+module internal FlagPatterns =
     let (|Flags|) (flags: #IFlags<_>) = flags.Value
 
 type Visibility =

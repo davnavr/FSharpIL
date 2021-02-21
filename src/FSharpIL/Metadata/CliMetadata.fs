@@ -132,27 +132,23 @@ type CliMetadata (state: MetadataBuilderState) =
     member _.RowCounts = rowCounts
 
 // TODO: Move this to another file.
+// TODO: Make this a class.
+// TODO: Rename to TypeDefBuilder
 [<System.Runtime.CompilerServices.IsReadOnlyAttribute>]
 [<NoEquality; NoComparison>]
-type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and 'Field : equality and 'Method :> IMethod and 'Method : equality> =
+type TypeDefBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and 'Field : equality and 'Method :> IMethod and 'Method : equality> =
     struct
         val private builder: unit -> Result<SimpleIndex<TypeDefRow>, ValidationError>
         val private validate: TypeDefRow -> unit
         // TODO: Fix, forgetting to call the BuildType function will result in missing fields and methods!
-        // Maybe have second index type that represent a method that might soon exist?
-        // Maybe store (unit -> TypeDefRow) instances in the TypeDef table so that BuildType method is implicitly called when creating the immutable CliMetadata.
-        val Fields: IndexedList<FieldRow, 'Field>
-        val Methods: IndexedList<MethodDef, 'Method>
-        val GenericParameters: IndexedList<GenericParam<unit>, GenericParam<'GenericParam>> // TODO: Create MemberList type.
+        val private fields: IndexedList<FieldRow>
+        val private methods: IndexedList<MethodDef>
+        val private genericParams: GenericParamList<'GenericParam>
 
         internal new (validate, flags, typeName, typeNamespace, extends, parent, state: MetadataBuilderState) =
-            let fields = IndexedList(state.Owner, (|FieldRow|))
-            let methods = IndexedList(state.Owner, (|MethodDef|))
-            let genericParams =
-                let mapper (param: GenericParam<_>) =
-                    let flags = ValidFlags<unit, _> param.Flags.Value
-                    GenericParam<unit>(flags, param.Name, param.ConstraintSet)
-                IndexedList(state.Owner, mapper)
+            let fields = IndexedList state.Owner
+            let methods = IndexedList state.Owner
+            let genericParams = GenericParamList<'GenericParam> state.Owner
             let builder() =
                 TypeDefRow (
                     flags,
@@ -167,9 +163,19 @@ type TypeBuilder<'Type, 'Field, 'Method, 'GenericParam when 'Field :> IField and
                 |> state.TypeDef.GetIndex
             { builder = builder
               validate = validate
-              Fields = fields
-              Methods = methods
-              GenericParameters = genericParams }
+              fields = fields
+              methods = methods
+              genericParams = genericParams }
+
+        member this.AddMethod(MethodDef method: 'Method) =
+            match this.methods.Add method with
+            | ValueSome i -> Ok i
+            | ValueNone -> DuplicateMethodError method :> ValidationError |> Error
+
+        // AddField
+        // TODO: Figure out how to add generic parameters.
+
+        // TODO: Create functions for adding things to a TypeBuilder.
 
         member this.BuildType() =
             match this.builder() with
@@ -193,6 +199,9 @@ module CliMetadata =
         inherit ClsViolation({ Number = 19uy; Message = sprintf "Interfaces should not define fields" }) // TODO: Mention name of offending interface
         member _.Interface = intf
 
+    /// <summary>
+    /// Error used when a system type such as <see cref="T:System.ValueType"/> or <see cref="T:System.Delegate"/> could not be found.
+    /// </summary>
     /// <category>Errors</category>
     [<Sealed>]
     type MissingTypeError (ns: string, name: Identifier) =
@@ -240,7 +249,7 @@ module CliMetadata =
             extends
             parent
             (state: MetadataBuilderState) =
-        TypeBuilder<'Type, 'Field, 'Method, 'GenericParam> (
+        TypeDefBuilder<'Type, 'Field, 'Method, 'GenericParam> (
             validate,
             flags,
             typeName,
@@ -255,7 +264,7 @@ module CliMetadata =
     let private buildClassImpl<'Flags, 'Field, 'Method, 'GenericParam when 'Field :> IField and 'Field : equality and 'Method :> IMethod and 'Method : equality>
             (def: ClassDef<'Flags, 'Field, 'Method>)
             state =
-        TypeBuilder<ClassDef<'Flags, 'Field, 'Method>, 'Field, 'Method, 'GenericParam> (
+        TypeDefBuilder<ClassDef<'Flags, 'Field, 'Method>, 'Field, 'Method, 'GenericParam> (
             ignore,
             (def.Flags.Value ||| def.Access.Flags),
             def.ClassName,
@@ -265,17 +274,17 @@ module CliMetadata =
             state
         )
 
-    let buildClass (classDef: ConcreteClassDef) state: TypeBuilder<ConcreteClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
-    let buildAbstractClass (classDef: AbstractClassDef) state: TypeBuilder<AbstractClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
-    let buildSealedClass (classDef: SealedClassDef) state: TypeBuilder<SealedClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
-    let buildStaticClass (classDef: StaticClassDef) state: TypeBuilder<StaticClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
+    let buildClass (classDef: ConcreteClassDef) state: TypeDefBuilder<ConcreteClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
+    let buildAbstractClass (classDef: AbstractClassDef) state: TypeDefBuilder<AbstractClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
+    let buildSealedClass (classDef: SealedClassDef) state: TypeDefBuilder<SealedClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
+    let buildStaticClass (classDef: StaticClassDef) state: TypeDefBuilder<StaticClassDef, _, _, _> = buildClassImpl<_, _, _, CovariantGenericParamFlags> classDef state
 
     let private buildDerivedTypeDef extends def (typeDef: 'Type) (state: MetadataBuilderState) =
         match state.FindType extends with
         | Some extends' -> def extends' typeDef state |> Ok
         | None -> MissingTypeError extends :> ValidationError |> Error
 
-    let buildDelegate typeDef state: Result<TypeBuilder<DelegateDef, _, _, _>, _> = // TODO: How to automatically add methods to delegates?
+    let buildDelegate typeDef state: Result<TypeDefBuilder<DelegateDef, _, _, _>, _> = // TODO: How to automatically add methods to delegates?
         buildDerivedTypeDef
             SystemType.Delegate
             (fun extends (def: DelegateDef) ->
@@ -289,7 +298,7 @@ module CliMetadata =
             typeDef
             state
 
-    let buildEnum typeDef state: Result<TypeBuilder<EnumDef, _, _, _>, _> = // TODO: Use custom enum field type
+    let buildEnum typeDef state: Result<TypeDefBuilder<EnumDef, _, _, _>, _> = // TODO: Use custom enum field type
         buildDerivedTypeDef
             SystemType.Enum
             (fun extends (def: EnumDef) ->
@@ -303,7 +312,7 @@ module CliMetadata =
             typeDef
             state
 
-    let buildStruct typeDef state: Result<TypeBuilder<StructDef, FieldChoice, _, _>, _> =
+    let buildStruct typeDef state: Result<TypeDefBuilder<StructDef, FieldChoice, _, _>, _> =
         buildDerivedTypeDef
             SystemType.ValueType
             (fun extends (def: StructDef) ->
@@ -319,7 +328,7 @@ module CliMetadata =
 
     // TODO: Allow static methods in interfaces, though they violate CLS rules.
     // TODO: What generic parameter to use in interfaces? Take advantage of the fact that the tag can be generic. Maybe add constraint?
-    let buildInterface (typeDef: InterfaceDef) (state: MetadataBuilderState): TypeBuilder<InterfaceDef, StaticField, _, _> =
+    let buildInterface (typeDef: InterfaceDef) (state: MetadataBuilderState): TypeDefBuilder<InterfaceDef, StaticField, _, _> =
         buildTypeDef<_, _, _, _>
             (fun row ->
                 if row.FieldList.Length > 0 then InterfaceContainsFields typeDef |> state.ClsViolations.Add)

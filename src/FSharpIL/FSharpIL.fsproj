@@ -38,7 +38,7 @@
     <Compile Include="Metadata\FlagsModule.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\MetadataBuilderState.fs" />
-    <Compile Include="Metadata\GenericParamConstraint.fs" />
+    <Compile Include="Metadata\GenericParamModule.fs" />
     <Compile Include="Metadata\Items.fs" />
     <Compile Include="Metadata\CliMetadata.fs" />
     <Compile Include="Metadata\CliMetadataBuilder.fs" />

@@ -302,3 +302,12 @@ type StaticClassMethod =
             match this with
             | Method (MethodDef def)
             | ClassConstructor (MethodDef def) -> def
+
+/// <summary>
+/// Error used when there is a duplicate row in the <c>MethodDef</c> table (21).
+/// </summary>
+/// <category>Errors</category>
+[<Sealed>]
+type DuplicateMethodError (method: MethodDef) =
+    inherit ValidationError()
+    member _.Method = method

@@ -54,9 +54,9 @@ let tests =
                               TypeNamespace = ""
                               Flags = Flags.staticClass ClassFlags.None }
 
-                    let main = program.Methods.Add(StaticClassMethod.Method entrypoint) |> ValueOption.get
-                    let! _ = program.BuildType
-                    do! setEntrypoint main
+                    let! main = program.AddMethod(StaticClassMethod.Method entrypoint)
+                    let! program' = program.BuildType
+                    do! setEntrypoint program'.Value.MethodList.[main]
                 }
                 |> createMetadata
                     { Mvid = Guid.NewGuid()

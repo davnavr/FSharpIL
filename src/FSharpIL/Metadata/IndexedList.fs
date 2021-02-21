@@ -4,24 +4,18 @@ open System.Collections.Generic
 open System.Collections.Immutable
 
 [<Sealed>]
-type IndexedList<'Tag, 'Item when 'Tag : equality and 'Item :> IIndexValue> internal (owner: IndexOwner, mapper: 'Item -> _) =
-    let items = ImmutableArray.CreateBuilder<'Tag>()
+type internal IndexedList<'T when 'T : equality and 'T :> IIndexValue> (owner: IndexOwner) =
+    let lookup = HashSet<'T>()
+    let items = ImmutableArray.CreateBuilder<'T>()
 
     member _.Count = items.Count
     member _.ToImmutable() = items.ToImmutable()
 
-    member _.Add(value: 'Item) =
+    member _.Add(value: 'T) =
         IndexOwner.checkOwner owner value
-        let value' = mapper value
-        // TODO: Make lookup of duplicate items in IndexedList<_> more efficient.
-        if items.Contains value'
-        then ValueNone
-        else
-            items.Add value'
-            SimpleIndex(owner, value') |> ValueSome
-
-    interface IReadOnlyList<'Tag> with
-        member this.Count = this.Count
-        member _.Item with get i = items.[i]
-        member _.GetEnumerator() = items.GetEnumerator()
-        member _.GetEnumerator() = items.GetEnumerator() :> System.Collections.IEnumerator
+        if lookup.Add value
+        then
+            let i = items.Count
+            items.Add value
+            ValueSome i
+        else ValueNone

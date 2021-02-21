@@ -6,6 +6,7 @@ type CliMetadataBuilder internal () =
         fun (state: MetadataBuilderState) ->
             expr state |> Result.bind (fun result -> body result state)
 
+    [<System.Obsolete>]
     member inline _.Bind(expr: unit -> Result<'T, ValidationError>, body: 'T -> _ -> _) =
         fun (state: MetadataBuilderState) ->
             expr() |> Result.bind (fun result -> body result state)
@@ -19,7 +20,7 @@ type CliMetadataBuilder internal () =
 
     member inline this.Bind(expr: _ -> SimpleIndex<_>, body) = this.BindCommon(expr, body)
     member inline this.Bind(expr: _ -> TaggedIndex<_, _>, body) = this.BindCommon(expr, body)
-    member inline this.Bind(expr: _ -> TypeBuilder<_, _, _, _>, body) = this.BindCommon(expr, body)
+    member inline this.Bind(expr: _ -> TypeDefBuilder<_, _, _, _>, body) = this.BindCommon(expr, body)
 
     member inline _.Return result = fun (_: MetadataBuilderState) -> Result<_, ValidationError>.Ok result
 

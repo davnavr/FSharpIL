@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
 open System
+open System.Collections.Generic
 open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
@@ -28,7 +29,7 @@ type FieldRow internal (flags, name, signature) = // TODO: How to allow differen
             else name = other.Name && signature = other.Signature
 
     interface IIndexValue with
-        member this.CheckOwner actual = failwith "TODO: Check owner of field signature"
+        member this.CheckOwner owner = failwith "TODO: Check owner of field signature"
 
 type IField =
     inherit IIndexValue

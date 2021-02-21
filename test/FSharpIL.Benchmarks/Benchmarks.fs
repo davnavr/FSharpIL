@@ -118,9 +118,10 @@ type HelloWorld () =
                       Flags = Flags.staticClass ClassFlags.None
                       TypeNamespace = "HelloWorld" }
 
-            let main' = programBuilder.Methods.Add main |> ValueOption.get
-            do! setEntrypoint main'
-            let! _ = programBuilder.BuildType
+            let! main' = programBuilder.AddMethod main
+            let! program = programBuilder.BuildType
+
+            do! setEntrypoint program.Value.MethodList.[main']
             ()
         }
         |> CliMetadata.createMetadata
