@@ -7,9 +7,11 @@ nuget Fake.IO.FileSystem //"
 open Fake.Core
 open Fake.Core.TargetOperators
 open Fake.DotNet
+open Fake.IO
 open Fake.IO.FileSystemOperators
 
 let rootDir = __SOURCE_DIRECTORY__
+let outDir = rootDir </> "out"
 let testDir = rootDir </> "test"
 
 let slnFile = rootDir </> "FSharpIL.sln"
@@ -21,9 +23,8 @@ let handleErr msg: ProcessResult -> _ =
     | _ -> ()
 
 Target.create "Clean" (fun _ ->
-    slnFile
-    |> DotNet.exec id "clean"
-    |> ignore
+    Shell.cleanDir outDir
+    DotNet.exec id "clean" slnFile |> handleErr "Error occured while cleaning project output"
 )
 
 Target.create "Build" (fun _ ->

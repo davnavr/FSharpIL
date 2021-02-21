@@ -19,6 +19,7 @@ open FSharpIL.PortableExecutable
 type HelloWorld () =
     [<Benchmark>]
     member _.FSharpIL_ComputationExpression() =
+        // TODO: Figure out how to share this code with the Hello World documentation file.
         metadata {
             let! assm =
                 setAssembly
