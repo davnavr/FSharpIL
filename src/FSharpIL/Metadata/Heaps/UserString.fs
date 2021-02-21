@@ -3,7 +3,12 @@
 open System.Collections.Generic
 open System.Text
 
-/// <summary>Represents the <c>#US</c> heap, which stores string literals (II.24.2.4).</summary>
+/// <summary>
+/// Represents the <c>#US</c> heap, which stores string literals (II.24.2.4).
+/// </summary>
+/// <remarks>
+/// Because strings in the <c>#US</c> heap include their length and are not null-terminated, they can safely contain null characters.
+/// </remarks>
 type internal UserStringHeap internal (capacity: int32) =
     let strings = List<string> capacity
     let lookup = Dictionary<string, BlobIndex> capacity

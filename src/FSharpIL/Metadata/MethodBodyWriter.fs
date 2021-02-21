@@ -33,14 +33,15 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         MetadataToken.write (content.Metadata.MemberRef.IndexOf method) 0xAuy content.Writer
 
     /// <summary>
-    /// Writes an instruction that loads a string from the <c>#Strings</c> heap (III.4.16).
+    /// Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
     /// </summary>
     /// <remarks>
-    /// If the string to load is <see langword="null"/>, then generates the <c>ldnull</c> opcode.
+    /// To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.
     /// </remarks>
-    member this.Ldstr(str: string) =
+    /// <exception cref="T:System.ArgumentNullException">Thrown when the input string is <see langword="null"/>.</exception>
+    member _.Ldstr(str: string) =
         match str with
-        | null -> this.Ldnull()
+        | null -> nullArg "str"
         | _ -> MetadataToken.userString str content.UserString content.Writer
 
 [<AutoOpen>]
