@@ -41,7 +41,7 @@ let tests =
                   ImplFlags = MethodImplFlags.None
                   Flags = Flags.staticMethod { Visibility = Visibility.Public; HideBySig = true }
                   MethodName = Identifier.ofStr "Main"
-                  Signature = StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, ImmutableArray.Empty)
+                  Signature = StaticMethodSignature(MethodCallingConventions.Default, ReturnType.voidItem, ImmutableArray.Empty)
                   ParamList = fun _ -> failwith "no parameters" }
 
             let pe =

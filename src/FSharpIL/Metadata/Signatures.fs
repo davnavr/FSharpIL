@@ -38,6 +38,7 @@ type ReturnTypeItem =
         val internal RetType: IReturnType // ReturnType
 
         internal new (modifiers, returnType) = { CustomMod = modifiers; RetType = returnType }
+        internal new (returnType) = ReturnTypeItem(ImmutableArray.Empty, returnType)
 
         member internal this.CheckOwner owner =
             for cmod in this.CustomMod do cmod.CheckOwner owner

@@ -1,5 +1,4 @@
-﻿[<AutoOpen>]
-module FSharpIL.Metadata.Items // TODO: Move types to namespace, move functions and extensions into module.
+﻿namespace FSharpIL.Metadata
 
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
@@ -17,16 +16,11 @@ type TypeDefOrRefOrSpecEncoded =
             | TypeDef tdef -> IndexOwner.checkIndex owner tdef
             | TypeRef tref -> IndexOwner.checkIndex owner tref
 
-type CustomModifier with
-    member this.ModifierType = this.CMod :?> TypeDefOrRefOrSpecEncoded
-
-let customMod required (modifierType: TypeDefOrRefOrSpecEncoded) = CustomModifier(required, modifierType)
-
-let inline (|OptionalCustomModifier|RequiredCustomModifier|) (cmod: CustomModifier) =
-    let modifierType = cmod.ModifierType
-    if cmod.Required
-    then RequiredCustomModifier modifierType
-    else OptionalCustomModifier modifierType
+[<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module CustomModifier =
+    let optional (modifierType: TypeDefOrRefOrSpecEncoded) = CustomModifier(false, modifierType)
+    let required (modifierType: TypeDefOrRefOrSpecEncoded) = CustomModifier(true, modifierType)
 
 /// <summary>Represents all different possible return types encoded in a <c>RetType</c> (II.23.2.11).</summary>
 /// <seealso cref="T:FSharpIL.Metadata.ReturnTypeItem"/>
@@ -42,12 +36,12 @@ type ReturnType =
             match this with
             | Void -> ()
 
-type ReturnTypeItem with
-    member this.ReturnType = this.RetType :?> ReturnType
-    static member Void = ReturnTypeItem(ImmutableArray.Empty, ReturnType.Void)
-
-// TODO: Move "constructor" functions into their own modules.
-let returnType modifiers (returnType: ReturnType) = ReturnTypeItem(modifiers, returnType)
+[<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module ReturnType =
+    let voidItem = ReturnTypeItem ReturnType.Void
+    let create (returnType: ReturnType) = ReturnTypeItem returnType
+    let modified modifiers (returnType: ReturnType) = ReturnTypeItem(modifiers, returnType)
 
 /// II.23.2.13
 [<IsReadOnly; Struct>]
@@ -133,7 +127,8 @@ type EncodedType =
             | Array(item, _) -> IndexOwner.checkOwner owner item
             | _ -> failwith "Cannot validate owner of unsupported encoded type"
 
-type ParamItem with
-    member this.ParamType = this.Type :?> EncodedType
-
-let paramItem modifiers (paramType: EncodedType) = ParamItem(modifiers, paramType)
+[<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module ParamItem =
+    let modified modifiers (paramType: EncodedType) = ParamItem(modifiers, paramType)
+    let inline create paramType = modified ImmutableArray.Empty paramType

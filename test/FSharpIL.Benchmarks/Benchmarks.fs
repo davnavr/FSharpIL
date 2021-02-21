@@ -58,7 +58,7 @@ type HelloWorld () =
                     { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
                       TypeNamespace = "System.Runtime.Versioning"
                       ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-            let string = paramItem ImmutableArray.Empty EncodedType.String
+            let string = ParamItem.create EncodedType.String
 
             let! writeLine =
                 referenceMethod
@@ -67,7 +67,7 @@ type HelloWorld () =
                       Signature =
                         { HasThis = false
                           ExplicitThis = false
-                          ReturnType = ReturnTypeItem.Void
+                          ReturnType = ReturnType.voidItem
                           Parameters = ImmutableArray.Create string
                           VarArgParameters = ImmutableArray.Empty } }
             let! tfmAttrCtor =
@@ -77,7 +77,7 @@ type HelloWorld () =
                       Signature =
                         { HasThis = true // TODO: Figure out flags.
                           ExplicitThis = false
-                          ReturnType = ReturnTypeItem.Void
+                          ReturnType = ReturnType.voidItem
                           Parameters = ImmutableArray.Create string
                           VarArgParameters = ImmutableArray.Empty } }
 
@@ -104,9 +104,9 @@ type HelloWorld () =
                   Signature =
                     let args =
                         EncodedType.Array(EncodedType.String, ArrayShape.OneDimension)
-                        |> paramItem ImmutableArray.Empty
+                        |> ParamItem.create
                         |> ImmutableArray.Create
-                    StaticMethodSignature(MethodCallingConventions.Default, ReturnTypeItem.Void, args)
+                    StaticMethodSignature(MethodCallingConventions.Default, ReturnType.voidItem, args)
                   ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
                 |>  StaticClassMethod.Method
 
