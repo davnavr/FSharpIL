@@ -1,9 +1,13 @@
 (*** hide ***)
 #r "../../src/FSharpIL/bin/Release/netstandard2.1/FSharpIL.dll"
+#r "nuget: System.Collections.Immutable"
 (**
 # Hello World
+
+The following example creates a simple .NET 5 console application.
 *)
 open System
+open System.Collections.Immutable
 
 open FSharpIL
 open FSharpIL.Metadata
@@ -11,6 +15,7 @@ open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
 metadata {
+    // Define information for the current assembly.
     let! assm =
         setAssembly
             { Name = AssemblyName.ofStr "HelloWorld"
@@ -19,6 +24,8 @@ metadata {
               Flags = ()
               PublicKey = None
               Culture = NullCulture }
+
+    // Add references to other assemblies.
     let! mscorlib =
         referenceAssembly
             { Version = Version(5, 0, 0, 0)
@@ -34,6 +41,7 @@ metadata {
               Culture = NullCulture
               HashValue = None }
 
+    // Add references to types defined in referenced assemblies.
     let! console =
         referenceType
             { TypeName = Identifier.ofStr "Console"
@@ -49,6 +57,8 @@ metadata {
             { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
               TypeNamespace = "System.Runtime.Versioning"
               ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+
+    // Add references to methods defined in the types of referenced assemblies.
     let string = ParamItem.create EncodedType.String
 
     let! writeLine =
@@ -72,15 +82,17 @@ metadata {
                   Parameters = ImmutableArray.Create string
                   VarArgParameters = ImmutableArray.Empty } }
 
+    // Defines a custom attribute on the current assembly specifying the target framework.
     do!
         { Parent = CustomAttributeParent.Assembly assm
           Type = CustomAttributeType.MemberRef tfmAttrCtor
           Value =
             { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
-              NamedArg = ImmutableArray.Empty (* FrameworkDisplayName = "" *) }
+              NamedArg = ImmutableArray.Empty }
             |> Some }
         |> attribute
 
+    // Create the entrypoint method of the current assembly.
     let main =
         { Body =
             fun content ->
@@ -101,6 +113,7 @@ metadata {
           ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
         |>  StaticClassMethod.Method
 
+    // Create the class that will contain the entrypoint method.
     let! programBuilder =
         buildStaticClass
             { Access = TypeVisibility.Public
