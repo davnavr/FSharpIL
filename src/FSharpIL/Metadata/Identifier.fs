@@ -1,26 +1,42 @@
 ﻿namespace FSharpIL.Metadata
 
-[<Struct; System.Runtime.CompilerServices.IsReadOnly>]
+/// <summary>
+/// Represents a <see cref="T:System.String"/> that cannot be <see langword="null"/>, be empty, or contain any null characters.
+/// </summary>
+[<System.Runtime.CompilerServices.IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
 type Identifier =
-    internal
-    | Identifier of string // TODO: Make this a record to avoid generation of Tag member.
-
-    override this.ToString() = let (Identifier name) = this in name
+    struct
+        val private identifier: string
+        internal new (str) = { identifier = str }
+        override this.ToString() = this.identifier
+    end
 
 [<RequireQualifiedAccess>]
 module Identifier =
-    let tryOfStr str =
-        match str with
-        | null
-        | "" -> None
-        | _ -> Identifier str |> Some
+    let inline private create nulli empty nullc valid =
+        function
+        | null -> nulli()
+        | "" -> empty()
+        | str when str.Contains '\000' -> nullc()
+        | str -> Identifier str |> valid
 
+    /// <summary>Tries to create an identifier from the specified string.</summary>
+    let tryOfStr str =
+        let inline none() = None
+        create none none none Some str
+
+    /// <summary>Creates an identifier from the specified string.</summary>
+    /// <exception cref="T:System.ArgumentNullException">Thrown when the input string is <see langword="null"/>.</exception>
+    /// <exception cref="T:System.ArgumentException">Thrown when the input string is empty or contains a null character.</exception>
     let ofStr str =
-        match tryOfStr str with
-        | Some name -> name
-        | None -> invalidArg "str" "The name cannot be empty."
+        create
+            (fun() -> nullArg "str")
+            (fun() -> invalidArg "str" "The string cannot be null or empty")
+            (fun() -> invalidArg "str" "The string cannot contain any null characters")
+            id
+            str
 
 [<AutoOpen>]
 module IdentifierPatterns =
-    let (|Identifier|) (Identifier name) = name
+    let (|Identifier|) (name: Identifier) = name.ToString()
