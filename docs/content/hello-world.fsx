@@ -134,4 +134,6 @@ metadata {
 |> PEFile.ofMetadata IsExe
 // |> WritePE.toFile
 
+printfn "TODO: Write assembly to file in example."
+
 (*** include-output ***)

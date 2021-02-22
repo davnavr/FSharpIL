@@ -35,9 +35,13 @@ Target.create "Build" <| fun _ ->
         slnFile
 
 Target.create "Build Documentation" <| fun _ ->
-    rootDir </> "docs" </> "build-docs.fsx"
-    |> sprintf "--exec --nologo --optimize --targetprofile:netcore %s"
-    |> DotNet.exec id "fsi"
+    let docsDir = rootDir </> "docs"
+    sprintf
+        "-p %s -c Release --no-build --no-restore -- --content-directory %s --output-directory %s"
+        (docsDir </> "FSharpIL.Documentation.fsproj")
+        (docsDir </> "content")
+        (outDir </> "docs")
+    |> DotNet.exec id "run"
     |> handleErr "Error occured while generating documentation"
 
 Target.create "Test" <| fun _ ->
