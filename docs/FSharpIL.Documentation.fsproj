@@ -7,10 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="style\global.css" />
     <Compile Include="Html.fs" />
     <Compile Include="Article.fs" />
     <Compile Include="Generator.fs" />
+
+    <None Include="style\global.css" />
 
     <None Include="content/hello-world.fsx" />
 

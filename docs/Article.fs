@@ -40,12 +40,13 @@ module internal Article =
             ]
             body [] [
                 tag "nav" [] [
-                    // TODO: Figure out how to get list of all other pages
+                    // TODO: Figure out how to get list of all other pages.
                 ]
                 tag "main" [] [
                     fun writer -> Literate.WriteHtml(doc, writer, lineNumbers = true, generateAnchors = true)
                 ]
                 tag "article" [] [
+                    h2 [] "Table of Contents"
                     ul [] [
                         for section in info.Sections do
                             let href = section.Replace(' ', '-') |> sprintf "#%s"

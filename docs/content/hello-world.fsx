@@ -5,6 +5,8 @@
 # Hello World
 
 The following example creates a simple .NET 5 console application.
+
+## Example
 *)
 open System
 open System.Collections.Immutable

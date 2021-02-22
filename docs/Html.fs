@@ -45,5 +45,6 @@ let body attributes content: Element = tag "body" attributes content
 let a attributes href content: Element =
     let attributes' = seq { yield! attributes; "href", href }
     tag "a" attributes' content
+let h2 attributes text: Element = tag "h2" attributes [ !^text ]
 let li attributes content: Element = tag "li" attributes content
 let ul attributes content: Element = tag "ul" attributes content
