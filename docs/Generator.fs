@@ -31,12 +31,11 @@ let private write (content: DirectoryInfo) (output: DirectoryInfo) =
                 let name = Path.GetFileNameWithoutExtension script.FullName
                 let path = Path.Combine(output.FullName, sprintf $"{name}.html")
                 FileInfo path
-            let article = Article.create evaluator script
 
             if output.Exists then
                 failwithf "Duplicate documentation file %s generated from %s" output.FullName script.FullName
 
-            output.Create() |> Article.write article
+            output.Create() |> Article.write script evaluator
     with
     | ex -> raise (GenerationException ex)
 

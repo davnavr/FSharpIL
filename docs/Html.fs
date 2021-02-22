@@ -26,6 +26,11 @@ let tag (name: string) attributes content (writer: StreamWriter) =
         writer.Write name
         writer.Write '>'
 
+let comment (content: seq<string>) (writer: StreamWriter) =
+    writer.Write "<!--"
+    for str in content do writer.Write str
+    writer.Write "-->"
+
 let html (stream: Stream) attributes content =
     use writer = new StreamWriter(stream)
     writer.WriteLine("<!DOCTYPE html>")
@@ -36,4 +41,6 @@ let meta attributes: Element = tag "meta" attributes Seq.empty
 let title name: Element = tag "title" Seq.empty [ !^name ]
 
 let body attributes content: Element = tag "body" attributes content
+let code attributes content: Element = tag "code" attributes content
 let main attributes content: Element = tag "main" attributes content
+let pre attributes content: Element = tag "pre" attributes content
