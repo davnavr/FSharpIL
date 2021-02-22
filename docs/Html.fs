@@ -5,7 +5,10 @@ open System.IO
 
 type Element = StreamWriter -> unit
 
-let tag (name: string) attributes (content: Element[]) (writer: StreamWriter) =
+let inline (!^) (text: string) =
+    fun (writer: StreamWriter) -> writer.Write text
+
+let tag (name: string) attributes content (writer: StreamWriter) =
     writer.Write '<'
     writer.Write name
     for (attr: string, value: string) in attributes do
@@ -14,11 +17,11 @@ let tag (name: string) attributes (content: Element[]) (writer: StreamWriter) =
         writer.Write "=\""
         writer.Write value
         writer.Write '"'
-    match content with
-    | [||] -> writer.Write "/>"
-    | _ ->
+    if Seq.isEmpty content
+    then writer.Write "/>"
+    else
         writer.Write '>'
-        for elem in content do elem writer
+        for (elem: Element) in content do elem writer
         writer.Write "</"
         writer.Write name
         writer.Write '>'
@@ -28,5 +31,9 @@ let html (stream: Stream) attributes content =
     writer.WriteLine("<!DOCTYPE html>")
     tag "html" attributes content writer
 
-let head attributes content = tag "head" attributes content
-let body attributes content = tag "body" attributes content
+let head content: Element = tag "head" Seq.empty content
+let meta attributes: Element = tag "meta" attributes Seq.empty
+let title name: Element = tag "title" Seq.empty [ !^name ]
+
+let body attributes content: Element = tag "body" attributes content
+let main attributes content: Element = tag "main" attributes content
