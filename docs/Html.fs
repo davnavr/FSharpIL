@@ -37,10 +37,13 @@ let html (stream: Stream) attributes content =
     tag "html" attributes content writer
 
 let head content: Element = tag "head" Seq.empty content
+let link rel href: Element = tag "link" [| "rel", rel; "href", href |] Seq.empty
 let meta attributes: Element = tag "meta" attributes Seq.empty
-let title name: Element = tag "title" Seq.empty [ !^name ]
+let title name: Element = tag "title" Seq.empty [| !^name |]
 
 let body attributes content: Element = tag "body" attributes content
-let code attributes content: Element = tag "code" attributes content
-let main attributes content: Element = tag "main" attributes content
-let pre attributes content: Element = tag "pre" attributes content
+let a attributes href content: Element =
+    let attributes' = seq { yield! attributes; "href", href }
+    tag "a" attributes' content
+let li attributes content: Element = tag "li" attributes content
+let ul attributes content: Element = tag "ul" attributes content

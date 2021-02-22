@@ -31,18 +31,27 @@ module internal Article =
             | Header 2 section -> info.Sections.Add section
             | _ -> ()
 
-        let content =
-            main [] [
-                fun writer -> Literate.WriteHtml(doc, writer, lineNumbers = true, generateAnchors = true)
-            ]
-
         html output [ "lang", "us" ] [
             head [
                 meta [ "charset", "utf-8" ]
                 meta [ "name", "viewport"; "content", "width=device-width" ]
                 title info.Title
+                link "stylesheet" "./style/global.css"
             ]
             body [] [
-                content
+                tag "nav" [] [
+                    // TODO: Figure out how to get list of all other pages
+                ]
+                tag "main" [] [
+                    fun writer -> Literate.WriteHtml(doc, writer, lineNumbers = true, generateAnchors = true)
+                ]
+                tag "article" [] [
+                    ul [] [
+                        for section in info.Sections do
+                            let href = section.Replace(' ', '-') |> sprintf "#%s"
+                            let link = a [] href [ !^section ]
+                            li [] [ link ]
+                    ]
+                ]
             ]
         ]

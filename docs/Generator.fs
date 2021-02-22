@@ -11,6 +11,7 @@ exception private GenerationException of exn
 type Arguments =
     | [<ExactlyOnce>] Content_Directory of content: string
     | [<ExactlyOnce>] Output_Directory of path: string
+    | [<ExactlyOnce>] Style_Directory of style: string
     | [<Unique>] Launch_Debugger
 
     interface IArgParserTemplate with
@@ -18,13 +19,18 @@ type Arguments =
             match this with
             | Content_Directory _ -> "specify the directory containing the documentation files"
             | Output_Directory _ -> "specify the directory where the resulting HTML documentation is written to"
+            | Style_Directory _ -> "specify the directory containing CSS files"
             | Launch_Debugger -> "calls the Debugger.Launch method"
 
-let private write (content: DirectoryInfo) (output: DirectoryInfo) =
+let private write (content: DirectoryInfo) (style: DirectoryInfo) (output: DirectoryInfo) =
     try
         if not output.Exists then output.Create()
 
         let evaluator = FsiEvaluator()
+
+        let style' = output.CreateSubdirectory "style"
+        for file in style.GetFiles() do
+            file.CopyTo(Path.Combine(style'.FullName, file.Name)) |> ignore
 
         for script in content.GetFiles("*.fsx", SearchOption.AllDirectories) do
             let output =
@@ -49,8 +55,9 @@ let main args =
             System.Diagnostics.Debugger.Launch() |> ignore
 
         let content = results.GetResult Content_Directory |> DirectoryInfo
+        let style = results.GetResult Style_Directory |> DirectoryInfo
         let output = results.GetResult Output_Directory |> DirectoryInfo
-        write content output
+        write content style output
         0
     with
     | GenerationException e -> stderr.WriteLine e.Message; -1

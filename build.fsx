@@ -37,9 +37,10 @@ Target.create "Build" <| fun _ ->
 Target.create "Build Documentation" <| fun _ ->
     let docsDir = rootDir </> "docs"
     sprintf
-        "-p %s -c Release --no-build --no-restore -- --content-directory %s --output-directory %s"
+        "-p %s -c Release --no-build --no-restore -- --content-directory %s --style-directory %s --output-directory %s"
         (docsDir </> "FSharpIL.Documentation.fsproj")
         (docsDir </> "content")
+        (docsDir </> "style")
         (outDir </> "docs")
     |> DotNet.exec id "run"
     |> handleErr "Error occured while generating documentation"
