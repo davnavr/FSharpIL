@@ -208,9 +208,8 @@ let write pe =
               CliHeaderRva = uninitialized
               Sections = Array.zeroCreate pe.SectionTable.Length }
         let content = LinkedList<byte[]>()
-        let writer =
-            let size = int32 pe.NTSpecificFields.FileAlignment
-            ChunkWriter(Array.zeroCreate size |> content.AddFirst)
+        let falignment = int32 pe.NTSpecificFields.FileAlignment
+        let writer = ChunkWriter(Array.zeroCreate falignment |> content.AddFirst)
 
         writer.WriteBytes Magic.DosStub
         writer.WriteBytes Magic.PESignature
@@ -236,15 +235,18 @@ let write pe =
 
         writer.MoveToEnd() // Padding before sections
 
+        let headerChunks = uint32 content.Count
+
         sections info writer
 
         // Calculate the image size
-        let falignment = uint32 pe.NTSpecificFields.FileAlignment
-        let salignment = uint32 pe.NTSpecificFields.SectionAlignment
-        let size = uint32 content.Count * falignment
-        Round.upTo salignment size |> info.ImageSize.WriteU4
+        let imageSize =
+            let falignment' = uint32 pe.NTSpecificFields.FileAlignment
+            let round = uint32 pe.NTSpecificFields.SectionAlignment / falignment' |> Round.upTo
+            (round headerChunks + round(uint32 content.Count - headerChunks)) * falignment'
+        info.ImageSize.WriteU4 imageSize
 
-        int32 size, content
+        content.Count * falignment, content
     with
     | ex -> InternalException ex |> raise
 
