@@ -17,7 +17,7 @@ val toArray : PEFile -> byte[]
 val toBlock : PEFile -> ImmutableArray<byte>
 
 /// <summary>
-/// Creates a <see cref="T:System.IO.Stream"/> used to read over the Portable Executable file.
+/// Creates a read-only <see cref="T:System.IO.Stream"/> used to read over the Portable Executable file.
 /// </summary>
 val stream : PEFile -> Stream
 
@@ -26,16 +26,16 @@ val stream : PEFile -> Stream
 /// </summary>
 /// <exception cref="T:System.ArgumentException">The <paramref name="stream"/> does not support writing.</exception>
 /// <exception cref="T:System.ArgumentNullException">The <paramref name="stream"/> is <see langword="null"/>.</exception>
-val toStream : PEFile -> stream: Stream -> unit
+val toStream : stream: Stream -> PEFile -> unit
 
 /// <summary>
 /// Writes the Portable Executable to the specified file.
 /// </summary>
 /// <exception cref="T:System.ArgumentNullException">The <paramref name="file"/> is <see langword="null"/>.</exception>
-val toFile : PEFile -> file: FileInfo -> unit
+val toFile : file: FileInfo -> PEFile -> unit
 
 /// <summary>
 /// Writes the Portable Executable to a file specified by the path.
 /// </summary>
 /// <exception cref="T:System.ArgumentNullException">The <paramref name="path"/> is <see langword="null"/>.</exception>
-val toPath : PEFile -> path: string -> unit
+val toPath : path: string -> PEFile -> unit

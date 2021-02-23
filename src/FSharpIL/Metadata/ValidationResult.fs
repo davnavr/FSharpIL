@@ -29,6 +29,8 @@ type ValidationWarning internal () = class end
 [<AbstractClass>]
 type ValidationError internal () = class end
 
+exception ValidationErrorException of ValidationError
+
 /// <summary>Error used when an item is added to a table that does not allow duplicates.</summary>
 /// <category>Errors</category>
 [<Sealed>]
@@ -79,14 +81,12 @@ module ValidationResult =
     /// <summary>
     /// Retrieves the value associated with the result.
     /// </summary>
-    /// <exception cref="T:System.ArgumentException">
-    /// The <paramref name="value"/> is a <see cref="T:FSharpIL.Metadata.ValidationResult`1.ValidationError"/>.
-    /// </exception>
+    /// <exception cref="T:FSharpIL.Metadata.ValidationErrorException"/>
     let get value =
         match value with
         | ValidationSuccess (result, _)
         | ValidationWarning (result, _, _) -> result
-        | ValidationError err -> string err |> invalidArg (nameof value)
+        | ValidationError err -> ValidationErrorException err |> raise
 
     let ofOption none value =
         match value with

@@ -11,6 +11,7 @@ open Fake.IO
 open Fake.IO.FileSystemOperators
 
 let rootDir = __SOURCE_DIRECTORY__
+let docsDir = rootDir </> "docs"
 let outDir = rootDir </> "out"
 let testDir = rootDir </> "test"
 
@@ -23,7 +24,8 @@ let handleErr msg: ProcessResult -> _ =
     | _ -> ()
 
 Target.create "Clean" <| fun _ ->
-    Shell.cleanDir outDir
+    List.iter Shell.cleanDir [ outDir; docsDir </> "out" ]
+
     DotNet.exec id "clean" slnFile |> handleErr "Error occured while cleaning project output"
 
 Target.create "Build" <| fun _ ->
@@ -35,7 +37,6 @@ Target.create "Build" <| fun _ ->
         slnFile
 
 Target.create "Build Documentation" <| fun _ ->
-    let docsDir = rootDir </> "docs"
     sprintf
         "-p %s -c Release --no-build --no-restore -- --content-directory %s --style-directory %s --output-directory %s"
         (docsDir </> "FSharpIL.Documentation.fsproj")
@@ -44,6 +45,9 @@ Target.create "Build Documentation" <| fun _ ->
         (outDir </> "docs")
     |> DotNet.exec id "run"
     |> handleErr "Error occured while generating documentation"
+
+// TODO: Since exceptions may not be handled well in documentation .fsx files, consider running them by calling the F# interactive here.
+// Target.create "Test Examples"
 
 Target.create "Test" <| fun _ ->
     let proj = testDir </> "FSharpIL.Tests" </> "FSharpIL.Tests.fsproj"

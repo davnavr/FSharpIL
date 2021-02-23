@@ -26,7 +26,36 @@ let private write (content: DirectoryInfo) (style: DirectoryInfo) (output: Direc
     try
         if not output.Exists then output.Create()
 
-        let evaluator = FsiEvaluator()
+        let fsi = FsiEvaluator(strict = true)
+        let evaluator =
+            let fsi' = fsi :> IFsiEvaluator
+            { new IFsiEvaluator with
+                member _.Evaluate(code, asExpression, file) =
+                    printfn "Evaluating: %s" code
+
+                    let result = fsi'.Evaluate(code, asExpression, file)
+
+                    printfn "Result: %A" result
+#if DEBUG
+                    // Workaround to stop generation of documentation if the script is invalid.
+                    match result :?> FsiEvaluationResult with
+                    | { FsiOutput = Some output } when output.Contains "file may be locked" || output.Contains "Binding session to" -> ()
+                    | { Output = Some ""; FsiOutput = Some error; ItValue = None; Result = None } ->
+                        let file' =
+                            Option.map (sprintf "while evaluating file %s") file |> Option.defaultValue ""
+                        failwithf "Possible evaluation error %s: %s" file' error
+                    | { Output = Some "" }
+                    | { Output = None }
+                    | { FsiOutput = Some "" }
+                    | { FsiOutput = None } as result ->
+                        failwithf "Empty output for file %A, result is %A" file result
+                    | _ -> ()
+#endif
+                    result
+                member _.Format(result, kind, executionCount) =
+                    fsi'.Format(result, kind, executionCount) }
+
+        fsi.EvaluationFailed.Add (failwithf "Exception thrown while evaluating expression: %A")
 
         let style' = output.CreateSubdirectory "style"
         for file in style.GetFiles() do

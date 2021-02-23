@@ -25,7 +25,7 @@ module internal Article =
             { Title = null
               Sections = List<_>() }
 
-        for paragraph in doc.Paragraphs do
+        for paragraph in doc.Paragraphs do // TODO: Use customizeDocument to set the values.
             match paragraph with
             | Header 1 title when info.Title = null -> info.Title <- title
             | Header 2 section -> info.Sections.Add section
