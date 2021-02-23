@@ -34,6 +34,7 @@ type PEInfo =
       mutable UninitializedDataSize: ChunkWriter
       mutable BaseOfCode: ChunkWriter
       mutable BaseOfData: ChunkWriter
+      mutable ImageSize: ChunkWriter
       mutable CliHeaderRva: ChunkWriter
       Sections: ChunkWriter[] }
 
@@ -68,15 +69,15 @@ let standardFields info (writer: ChunkWriter) =
     // NOTE: The EntryPointRva always has a value regardless of whether or not it is a .dll or .exe, and points to somewhere special (see the end of II.25.2.3.1)
     writer.WriteU4 0u // EntryPointRva // TODO: Figure out what this value should be.
 
-    info.BaseOfCode <- writer.CreateWriter() // RVA of the .text section // TODO: Set BaseOfCode? Though everything seems to work without this value ever being set.
+    info.BaseOfCode <- writer.CreateWriter() // RVA of the .text section
     writer.SkipBytes 4u
 
     info.BaseOfData <- writer.CreateWriter() // RVA of the .rsrc section
     writer.SkipBytes 4u
 
 // II.25.2.3.2
-let ntSpecificFields pe (writer: ChunkWriter) =
-    let nt = pe.NTSpecificFields
+let ntSpecificFields info (writer: ChunkWriter) =
+    let nt = info.File.NTSpecificFields
     writer.WriteU4 nt.ImageBase
     writer.WriteU4 nt.SectionAlignment
     writer.WriteU4 nt.FileAlignment
@@ -87,8 +88,11 @@ let ntSpecificFields pe (writer: ChunkWriter) =
     writer.WriteU2 nt.SubSysMajor
     writer.WriteU2 nt.SubSysMinor
     writer.WriteU4 nt.Win32VersionValue
-    writer.WriteU4 0u // ImageSize // TODO: Figure out how to calculate the ImageSize
-    writer.WriteU4 pe.NTSpecificFields.FileAlignment
+
+    info.ImageSize <- writer.CreateWriter()
+    writer.SkipBytes 4u
+
+    writer.WriteU4 nt.FileAlignment
     writer.WriteU4 nt.FileChecksum
     writer.WriteU2 nt.Subsystem
     writer.WriteU2 nt.DllFlags
@@ -177,12 +181,18 @@ let sections (info: PEInfo) (writer: ChunkWriter) =
         header.WriteU4 roundedSize // SizeOfRawData, size of section rounded up to file alignment
         header.WriteU4 fileOffset // PointerToRawData
 
+        // TODO: Come up with a better name to check section name
+        if info.BaseOfCode.Size = 0u && string section.Header.SectionName = ".text" then
+            info.BaseOfCode.WriteU4 virtualAddress
+        if info.BaseOfData.Size = 0u && string section.Header.SectionName = ".rsrc" then
+            info.BaseOfData.WriteU4 virtualAddress
+
         fileOffset <- fileOffset + roundedSize
         virtualAddress <- Round.upTo salignment (virtualAddress + size)
 
     info.CodeSize.WriteU4 codeSize
-    info.InitializedDataSize.WriteU4 codeSize
-    info.UninitializedDataSize.WriteU4 codeSize
+    info.InitializedDataSize.WriteU4 initializedDataSize
+    info.UninitializedDataSize.WriteU4 uninitializedDataSize
 
 let write pe =
     try
@@ -194,17 +204,19 @@ let write pe =
               UninitializedDataSize = uninitialized
               BaseOfCode = uninitialized
               BaseOfData = uninitialized
+              ImageSize = uninitialized
               CliHeaderRva = uninitialized
               Sections = Array.zeroCreate pe.SectionTable.Length }
-        let falignment = int32 pe.NTSpecificFields.FileAlignment
         let content = LinkedList<byte[]>()
-        let writer = ChunkWriter(Array.zeroCreate falignment |> content.AddFirst)
+        let writer =
+            let size = int32 pe.NTSpecificFields.FileAlignment
+            ChunkWriter(Array.zeroCreate size |> content.AddFirst)
 
         writer.WriteBytes Magic.DosStub
         writer.WriteBytes Magic.PESignature
         coffHeader pe writer
         standardFields info writer
-        ntSpecificFields pe writer
+        ntSpecificFields info writer
         dataDirectories info writer
 
         // Section headers
@@ -226,7 +238,13 @@ let write pe =
 
         sections info writer
 
-        content.Count * falignment, content
+        // Calculate the image size
+        let falignment = uint32 pe.NTSpecificFields.FileAlignment
+        let salignment = uint32 pe.NTSpecificFields.SectionAlignment
+        let size = uint32 content.Count * falignment
+        Round.upTo salignment size |> info.ImageSize.WriteU4
+
+        int32 size, content
     with
     | ex -> InternalException ex |> raise
 

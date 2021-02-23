@@ -159,7 +159,7 @@ let file =
 let path =
     Path.Combine(output.FullName, "HelloWorld.runtimeconfig.json")
 
-let options = JsonSerializerOptions()
+let options = JsonSerializerOptions(WriteIndented = true)
 options.Converters.Add(JsonFSharpConverter())
 
 let config =
