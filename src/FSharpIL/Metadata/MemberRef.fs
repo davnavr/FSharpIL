@@ -46,7 +46,10 @@ type MethodRefSignature =
         flags
 
     interface IIndexValue with
-        member this.CheckOwner owner = failwith ""
+        member this.CheckOwner owner =
+            this.ReturnType.CheckOwner owner
+            for parameter in this.Parameters do parameter.CheckOwner owner
+            for parameter in this.VarArgParameters do parameter.CheckOwner owner
 
 type MethodRef = MemberRef<MethodRefSignature>
 

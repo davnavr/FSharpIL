@@ -5,7 +5,7 @@
 (**
 # Hello World
 
-The following example creates a simple .NET 5 console application, before running it using `dotnet exec`.
+The following example creates a simple .NET 5 console application, before running it with `dotnet exec`.
 
 ## Examples
 *)
@@ -13,17 +13,21 @@ open System
 open System.Collections.Immutable
 open System.Diagnostics
 open System.IO
+open System.Text.Json
 
 open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
-let output = Path.Combine(__SOURCE_DIRECTORY__, "out")
-let file = Path.Combine(output, "HelloWorld.dll")
+let output =
+    Path.Combine(__SOURCE_DIRECTORY__, "..", "out") |> Directory.CreateDirectory
+
+let file =
+    Path.Combine(output.FullName, "HelloWorld.dll")
 
 try
-    metadata {
+metadata {
         // Define information for the current assembly.
         let! assm =
             setAssembly
@@ -136,21 +140,57 @@ try
     
         do! program.Value.MethodList.GetIndex main' |> setEntrypoint
     }
-    |> CliMetadata.createMetadata
-        { Name = Identifier.ofStr "HelloWorld.dll"
-          Mvid = Guid.NewGuid() }
-    |> ValidationResult.get
-    |> PEFile.ofMetadata IsExe
-    |> WritePE.toPath file
-
+|> CliMetadata.createMetadata
+    { Name = Identifier.ofStr "HelloWorld.exe"
+      Mvid = Guid.NewGuid() }
+|> ValidationResult.get
+|> PEFile.ofMetadata IsExe
+|> WritePE.toPath file
 with
-| ex ->
-    printfn "Error: %A" ex
-    Unchecked.defaultof<_>
+| ex -> printfn "%A %A" (ex.GetType()) ex
 
-// PEFile.ofMetadata IsExe hello_world |> WritePE.toPath file
+// Write the "runtimeconfig.json" file that a .NET application needs to run.
+// You can use any JSON library you want to generate this file.
+// For more information, see https://docs.microsoft.com/en-us/dotnet/core/run-time-config
 
-// TODO: Ensure any exceptions thrown here result in documentation files not being built"
-// TODO: Run the generated .dll file"
+try
+    use config = Path.Combine(output.FullName, "HelloWorld.runtimeconfig.json") |> File.Create
+    use writer = new Utf8JsonWriter(config, JsonWriterOptions(Indented = true))
+    writer.WriteStartObject()
+    writer.WriteStartObject "runtimeOptions"
+    writer.WriteString("tfm", "net5.0") // Indicates that .NET 5.0 should be used
+    writer.WriteStartObject "framework"
+    writer.WriteString("name", "Microsoft.NETCore.App")
+    writer.WriteString("version", "5.0.0")
+    writer.WriteEndObject()
+    writer.WriteEndObject()
+    writer.WriteEndObject()
 
-(*** include-fsi-merged-output ***)
+// Run the application.
+    let config =
+        """{
+            "runtimeOptions": {
+                "tfm": "net5.0",
+                "framework": {
+                    "name": "Microsoft.NETCore.App",
+                    "version": "5.0.0"
+                }
+            }
+        }"""
+
+    use dotnet =
+        ProcessStartInfo (
+            fileName = "dotnet",
+            arguments = sprintf "exec %s" file,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        )
+        |> Process.Start
+
+    // Runs the application and prints the message to the console.
+    dotnet.StandardOutput.ReadLine() |> printfn "%s"
+    dotnet.WaitForExit()
+with
+| ex -> printfn "%A %A" (ex.GetType()) ex
+
+(*** include-output ***)

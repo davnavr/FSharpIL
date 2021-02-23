@@ -35,6 +35,12 @@ type NamedArg =
     | Field // of FieldOrPropType * string * FixedArg
     | Property // of FieldOrPropType * string * FixedArg
 
+    interface IIndexValue with
+        member this.CheckOwner owner =
+            match this with
+            | Field
+            | Property -> ()
+
 /// <summary>
 /// Represents a <c>CustomAttrib</c>, which stores the arguments provided to a custom attribute's constructor,
 /// as well as any values assigned to its fields or properties. (II.23.3).
@@ -42,6 +48,11 @@ type NamedArg =
 type CustomAttributeSignature =
     { FixedArg: ImmutableArray<FixedArg>
       NamedArg: ImmutableArray<NamedArg> }
+
+    interface IIndexValue with
+        member this.CheckOwner owner =
+            for namedArg in this.NamedArg do
+                IndexOwner.checkOwner owner namedArg
 
 [<RequireQualifiedAccess>]
 type CustomAttributeParent =
@@ -90,7 +101,7 @@ type CustomAttribute =
             match this.Type with
             | CustomAttributeType.MemberRef mref -> IndexOwner.checkIndex owner mref.Index
 
-            failwith "TODO: Ensure signature references valid things with the same owner."
+            Option.iter (IndexOwner.checkOwner owner) this.Value
 
 [<Sealed>]
 type CustomAttributeTable internal (owner: IndexOwner) =
