@@ -15,17 +15,17 @@ type internal MethodBodyContentImpl (writer, metadata, us: UserStringHeap) =
 type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     new (content: MethodBodyContent) = MethodBodyWriter(content :?> MethodBodyContentImpl)
 
-    /// Writes an instruction that does nothing (III.3.51).
+    /// (0x00) Writes an instruction that does nothing (III.3.51).
     member _.Nop() = content.Writer.WriteU1 0uy
-    /// Writes an instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been tripped" (III.3.16).
+    /// (0x01) Writes an instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been tripped" (III.3.16).
     member _.Break() = content.Writer.WriteU1 1uy
-    /// Writes an instruction used to return from the current method (III.3.56).
+    /// (0x2A) Writes an instruction used to return from the current method (III.3.56).
     member _.Ret() = content.Writer.WriteU1 0x2Auy
-    /// Writes an instruction used to load a null pointer (III.3.45).
+    /// (0x14) Writes an instruction used to load a null pointer (III.3.45).
     member _.Ldnull() = content.Writer.WriteU1 0x14uy
 
     // TODO: Allow call to accept a MethodDef, MethodRef, or MethodSpec.
-    /// <summary>Writes an instruction that calls a method (III.3.19).</summary>
+    /// <summary>(0x28) Writes an instruction that calls a method (III.3.19).</summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
     member _.Call(SimpleIndex method: MemberRefIndex<MethodRef>) =
         IndexOwner.checkIndex content.Metadata.Owner method
@@ -33,7 +33,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         MetadataToken.write (content.Metadata.MemberRef.IndexOf method) 0xAuy content.Writer
 
     /// <summary>
-    /// Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
+    /// (0x72) Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
     /// </summary>
     /// <remarks>
     /// To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.
@@ -42,7 +42,9 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member _.Ldstr(str: string) =
         match str with
         | null -> nullArg "str"
-        | _ -> MetadataToken.userString str content.UserString content.Writer
+        | _ ->
+            content.Writer.WriteU1 0x72uy
+            MetadataToken.userString str content.UserString content.Writer
 
 [<AutoOpen>]
 module MethodBodyContentExtensions =
