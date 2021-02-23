@@ -259,7 +259,7 @@ let stream pe =
 
 // TODO: Add toSeq function.
 
-let toStream pe (stream: Stream) =
+let toStream (stream: Stream) pe =
     match stream with
     | null -> nameof stream |> nullArg
     | _ when not stream.CanWrite -> invalidArg (nameof stream) "The stream must support writing"
@@ -271,12 +271,13 @@ let toStream pe (stream: Stream) =
         finally
             stream.Close()
 
-let toFile pe =
-    function
+let toFile (file: FileInfo) pe =
+    match file with
     | null -> nullArg "file"
-    | (file: FileInfo) -> file.OpenWrite() |> toStream pe
+    | _ ->
+        let stream = file.OpenWrite()
+        toStream stream pe
 
-let toPath pe =
-    function
-    | null -> nullArg "path"
-    | path -> File.OpenWrite path |> toStream pe
+let toPath path pe =
+    let stream = File.OpenWrite path
+    toStream stream pe

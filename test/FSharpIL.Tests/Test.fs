@@ -4,4 +4,4 @@ open Expecto
 
 [<EntryPoint>]
 let main argv =
-    runTestsInAssemblyWithCLIArgs Seq.empty [| "--sequenced" |] // TODO: Replace this temporary array with argv
+    runTestsInAssemblyWithCLIArgs Seq.empty argv

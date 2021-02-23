@@ -220,7 +220,6 @@ module CliMetadata =
     /// <summary>
     /// Creates CLI metadata from the results of the <see cref="T:FSharpIL.Metadata.CliMetadataBuilder"/> computation expression.
     /// </summary>
-    /// <seealso cref="T:FSharpIL.Builders.metadata"/>
     let createMetadata (moduleTable: ModuleTable) (expr: MetadataBuilderState -> Result<unit, ValidationError>) =
         let state, result = createState moduleTable expr
         let cls = state.ClsViolations.ToImmutable()
