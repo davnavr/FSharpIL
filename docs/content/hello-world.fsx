@@ -151,34 +151,31 @@ open System.Text.Json.Serialization
 
 open FSharpIL
 
+let mutable out = Unchecked.defaultof<string>
 let output =
     Path.Combine(__SOURCE_DIRECTORY__, "..", "out") |> Directory.CreateDirectory
-
 let file =
     Path.Combine(output.FullName, "HelloWorld.dll")
+let path =
+    Path.Combine(output.FullName, "HelloWorld.runtimeconfig.json")
 
+let options = JsonSerializerOptions()
+options.Converters.Add(JsonFSharpConverter())
+
+let config =
+    JsonSerializer.SerializeToUtf8Bytes(
+        {|
+            runtimeOptions =
+                {|
+                    tfm = "net5.0"
+                    framework = {| name = "Microsoft.NETCore.App"; version = "5.0.0" |}
+                |}
+        |},
+        options
+    )
+
+File.WriteAllBytes(path, config)
 WritePE.toPath file hello_world
-
-let mutable out = Unchecked.defaultof<string>
-
-do
-    let path = Path.Combine(output.FullName, "HelloWorld.runtimeconfig.json")
-    let options = JsonSerializerOptions()
-    options.Converters.Add(JsonFSharpConverter())
-
-    let config =
-        JsonSerializer.SerializeToUtf8Bytes(
-            {|
-                runtimeOptions =
-                    {|
-                        tfm = "net5.0"
-                        framework = {| name = "Microsoft.NETCore.App"; version = "5.0.0" |}
-                    |}
-            |},
-            options
-        )
-
-    File.WriteAllBytes(path, config)
 
 do // Run the application.
     use dotnet =

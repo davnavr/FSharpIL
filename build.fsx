@@ -23,6 +23,9 @@ let handleErr msg: ProcessResult -> _ =
     function
     | { ExitCode = ecode } when ecode <> 0 ->
         failwithf "Process exited with code %i: %s" ecode msg
+    | { ExitCode = 0; Results = messages } ->
+        for { IsError = err; Message = msg } in messages do
+            if err || msg.Contains "Test failed" then failwith msg
     | _ -> ()
 
 Target.create "Clean" <| fun _ ->
