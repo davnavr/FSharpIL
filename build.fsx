@@ -9,9 +9,11 @@ open Fake.Core.TargetOperators
 open Fake.DotNet
 open Fake.IO
 open Fake.IO.FileSystemOperators
+open Fake.IO.Globbing.Operators
 
 let rootDir = __SOURCE_DIRECTORY__
 let docsDir = rootDir </> "docs"
+let docsContentDir = docsDir </> "content"
 let outDir = rootDir </> "out"
 let testDir = rootDir </> "test"
 
@@ -36,11 +38,19 @@ Target.create "Build" <| fun _ ->
                 NoRestore = true })
         slnFile
 
+Target.create "Test Examples" <| fun _ ->
+    !!(docsContentDir </> "**/*.fsx")
+    |> Seq.map (sprintf "--use:%s")
+    |> String.concat " "
+    |> sprintf "--exec --quiet --nologo --targetprofile:netcore %s"
+    |> DotNet.exec id "fsi"
+    |> handleErr "One or more examples are invalid"
+
 Target.create "Build Documentation" <| fun _ ->
     sprintf
         "-p %s -c Release --no-build --no-restore -- --content-directory %s --style-directory %s --output-directory %s"
         (docsDir </> "FSharpIL.Documentation.fsproj")
-        (docsDir </> "content")
+        docsContentDir
         (docsDir </> "style")
         (outDir </> "docs")
     |> DotNet.exec id "run"
@@ -67,6 +77,9 @@ Target.create "Publish" <| fun _ ->
 ==> "Test"
 ==> "Publish"
 
-"Build" ==> "Build Documentation" ==> "Publish"
+"Build"
+==> "Test Examples"
+==> "Build Documentation"
+==> "Publish"
 
 Target.runOrDefault "Publish"

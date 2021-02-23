@@ -26,19 +26,9 @@ let private write (content: DirectoryInfo) (style: DirectoryInfo) (output: Direc
     try
         if not output.Exists then output.Create()
 
-        let fsi = FsiEvaluator(strict = true)
-        let evaluator =
-            let fsi' = fsi :> IFsiEvaluator
-            { new IFsiEvaluator with
-                member _.Evaluate(code, asExpression, file) =
-                    printfn "Evaluating: %s" code
-                    let result = fsi'.Evaluate(code, asExpression, file)
-                    printfn "Result: %A" result
-                    result
-                member _.Format(result, kind, executionCount) =
-                    fsi'.Format(result, kind, executionCount) }
+        let evaluator = FsiEvaluator(options = [| "--define:DOCUMENTATION" |], strict = true)
 
-        fsi.EvaluationFailed.Add (failwithf "Exception thrown while evaluating expression: %A")
+        evaluator.EvaluationFailed.Add (failwithf "Exception thrown while evaluating expression: %A")
 
         let style' = output.CreateSubdirectory "style"
         for file in style.GetFiles() do

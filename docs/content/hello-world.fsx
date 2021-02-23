@@ -1,33 +1,28 @@
 (*** hide ***)
 #r "nuget: System.Collections.Immutable"
-#r "nuget: System.Runtime"
 #r "../../src/FSharpIL/bin/Release/netstandard2.1/FSharpIL.dll"
+#if !DOCUMENTATION
+#r "nuget: FSharp.SystemTextJson"
+#r "nuget: System.Runtime"
+#r "nuget: System.Text.Json"
+#r "nuget: Unquote"
+#endif
 (**
 # Hello World
 
-The following example creates a simple .NET 5 console application, before running it with `dotnet exec`.
+The following example creates a simple .NET 5 console application.
 
-## Examples
+## Example
 *)
 open System
 open System.Collections.Immutable
-open System.Diagnostics
-open System.IO
-open System.Text.Json
 
-open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
-let output =
-    Path.Combine(__SOURCE_DIRECTORY__, "..", "out") |> Directory.CreateDirectory
-
-let file =
-    Path.Combine(output.FullName, "HelloWorld.dll")
-
-try
-metadata {
+let hello_world =
+    metadata {
         // Define information for the current assembly.
         let! assm =
             setAssembly
@@ -140,57 +135,67 @@ metadata {
     
         do! program.Value.MethodList.GetIndex main' |> setEntrypoint
     }
-|> CliMetadata.createMetadata
-    { Name = Identifier.ofStr "HelloWorld.exe"
-      Mvid = Guid.NewGuid() }
-|> ValidationResult.get
-|> PEFile.ofMetadata IsExe
-|> WritePE.toPath file
-with
-| ex -> printfn "%A %A" (ex.GetType()) ex
+    |> CliMetadata.createMetadata
+        { Name = Identifier.ofStr "HelloWorld.exe"
+          Mvid = Guid.NewGuid() }
+    |> ValidationResult.get
+    |> PEFile.ofMetadata IsExe
+(*** hide ***)
+#if !DOCUMENTATION
+open Swensen.Unquote
 
-// Write the "runtimeconfig.json" file that a .NET application needs to run.
-// You can use any JSON library you want to generate this file.
-// For more information, see https://docs.microsoft.com/en-us/dotnet/core/run-time-config
+open System.Diagnostics
+open System.IO
+open System.Text.Json
+open System.Text.Json.Serialization
 
-try
-    use config = Path.Combine(output.FullName, "HelloWorld.runtimeconfig.json") |> File.Create
-    use writer = new Utf8JsonWriter(config, JsonWriterOptions(Indented = true))
-    writer.WriteStartObject()
-    writer.WriteStartObject "runtimeOptions"
-    writer.WriteString("tfm", "net5.0") // Indicates that .NET 5.0 should be used
-    writer.WriteStartObject "framework"
-    writer.WriteString("name", "Microsoft.NETCore.App")
-    writer.WriteString("version", "5.0.0")
-    writer.WriteEndObject()
-    writer.WriteEndObject()
-    writer.WriteEndObject()
+open FSharpIL
 
-// Run the application.
+let output =
+    Path.Combine(__SOURCE_DIRECTORY__, "..", "out") |> Directory.CreateDirectory
+
+let file =
+    Path.Combine(output.FullName, "HelloWorld.dll")
+
+WritePE.toPath file hello_world
+
+let mutable out = Unchecked.defaultof<string>
+
+do
+    let path = Path.Combine(output.FullName, "HelloWorld.runtimeconfig.json")
+    let options = JsonSerializerOptions()
+    options.Converters.Add(JsonFSharpConverter())
+
     let config =
-        """{
-            "runtimeOptions": {
-                "tfm": "net5.0",
-                "framework": {
-                    "name": "Microsoft.NETCore.App",
-                    "version": "5.0.0"
-                }
-            }
-        }"""
+        JsonSerializer.SerializeToUtf8Bytes(
+            {|
+                runtimeOptions =
+                    {|
+                        tfm = "net5.0"
+                        framework = {| name = "Microsoft.NETCore.App"; version = "5.0.0" |}
+                    |}
+            |},
+            options
+        )
 
+    File.WriteAllBytes(path, config)
+
+do // Run the application.
     use dotnet =
         ProcessStartInfo (
             fileName = "dotnet",
             arguments = sprintf "exec %s" file,
             RedirectStandardOutput = true,
+            RedirectStandardError = true,
             UseShellExecute = false
         )
         |> Process.Start
 
-    // Runs the application and prints the message to the console.
-    dotnet.StandardOutput.ReadLine() |> printfn "%s"
+    dotnet.StandardError.ReadToEnd() |> stderr.Write
+    out <- dotnet.StandardOutput.ReadLine()
     dotnet.WaitForExit()
-with
-| ex -> printfn "%A %A" (ex.GetType()) ex
 
-(*** include-output ***)
+    if dotnet.ExitCode <> 0 then exit dotnet.ExitCode
+
+test <@ "Hello World!" = out @>
+#endif
