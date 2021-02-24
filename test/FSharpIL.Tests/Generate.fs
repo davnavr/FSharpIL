@@ -33,7 +33,7 @@ module private Helpers =
 type Generate() =
     static member ValidAssembly() =
         gen {
-            let! kind = Arb.generate<IsDll>
+            let! kind = Arb.generate<ImageFileFlags>
 
             let! cli =
                 gen {

@@ -139,7 +139,7 @@ let hello_world =
         { Name = Identifier.ofStr "HelloWorld.exe"
           Mvid = Guid.NewGuid() }
     |> ValidationResult.get
-    |> PEFile.ofMetadata IsExe
+    |> PEFile.ofMetadata ImageFileFlags.dll
 (*** hide ***)
 #if !DOCUMENTATION
 open Swensen.Unquote

@@ -128,7 +128,7 @@ type HelloWorld () =
             { Name = Identifier.ofStr "HelloWorld.dll"
               Mvid = Guid.NewGuid() }
         |> ValidationResult.get
-        |> PEFile.ofMetadata IsDll
+        |> PEFile.ofMetadata ImageFileFlags.exe
         |> WritePE.toArray
 
     [<Benchmark>]

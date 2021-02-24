@@ -62,7 +62,7 @@ let tests =
                     { Mvid = Guid.NewGuid()
                       Name = Identifier.ofStr "Program.exe" }
                 |> ValidationResult.get
-                |> PEFile.ofMetadata IsExe
+                |> PEFile.ofMetadata ImageFileFlags.FileExecutableImage
 
             use metadata = WritePE.stream pe |> ModuleDefinition.ReadModule
             Expect.equal metadata.EntryPoint.Name (string entrypoint.MethodName) "name of entrypoint should match"

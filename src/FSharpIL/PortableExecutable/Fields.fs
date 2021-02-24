@@ -2,9 +2,10 @@
 
 open System
 
+[<Obsolete>]
 type IsDll =
-    | IsDll
-    | IsExe
+    | [<Obsolete>] IsDll
+    | [<Obsolete>] IsExe
 
 // II.25.2.2.1
 /// Flags that specify file characteristics in the PE file header.
@@ -15,16 +16,10 @@ type ImageFileFlags =
     | File32BitMachine = 0x0100us // TODO This flag depends on a flag from the CLI header, should it be validated?
     | FileDll = 0x2000us
 
-type FileCharacteristics =
-    | FileType of IsDll
-    | FileFlags of ImageFileFlags
-
-    static member op_Implicit(characteristics: FileCharacteristics) =
-        match characteristics with
-        | FileType IsExe -> ImageFileFlags.FileExecutableImage
-        | FileType IsDll -> ImageFileFlags.FileExecutableImage ||| ImageFileFlags.FileDll
-        | FileFlags flags -> flags
-        |> uint16
+[<RequireQualifiedAccess>]
+module ImageFileFlags =
+    let dll = ImageFileFlags.FileExecutableImage ||| ImageFileFlags.FileDll
+    let exe = ImageFileFlags.FileExecutableImage
 
 type MachineFlags =
     | I386 = 0x14Cus
@@ -37,7 +32,7 @@ type CoffHeader =
       SymbolTablePointer: uint32
       SymbolCount: uint32
       // OptionalHeaderSize
-      Characteristics: FileCharacteristics }
+      Characteristics: ImageFileFlags }
 
     /// Default PE file header indicating that the file is a <c>.dll</c> file.
     static member Default =
@@ -45,7 +40,7 @@ type CoffHeader =
           TimeDateStamp = 0u
           SymbolTablePointer = 0u
           SymbolCount = 0u
-          Characteristics = FileType IsDll }
+          Characteristics = ImageFileFlags.dll }
 
 // II.25.2.3.1
 type StandardFields =
