@@ -167,7 +167,7 @@ module internal Heap =
                     writer.WriteParameters signature.Parameters)
             (fun signature ->
                 if methodRef.Add signature then
-                    writer.WriteBlobSize blobs.MethodRef.[signature].Index
+                    writer.WriteBlobSize blobs.MethodRef.[signature].Size
                     writer.WriteU1 signature.CallingConventions
                     writer.WriteCompressed signature.Parameters.Length // ParamCount
                     writer.WriteRetType signature.ReturnType

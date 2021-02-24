@@ -93,7 +93,7 @@ let ofMethodRefSignature (signature: MethodRefSignature) =
     let varargs =
         if signature.VarArgParameters.IsEmpty
         then 0u
-        else 1u + uint32 (signature.VarArgParameters.Length)
+        else invalidOp "TODO: Calculate size of varargs"
     1u
     + ofUnsigned signature.ParamCount
     + ofRetType signature.ReturnType

@@ -36,6 +36,9 @@ type MethodRefSignature =
       Parameters: ImmutableArray<ParamItem>
       VarArgParameters: ImmutableArray<ParamItem> }
 
+    /// <remarks>
+    /// If this method is marked <c>VARARG</c>, then this holds the total number of <c>Param</c> items before and after the sentinel byte.
+    /// </remarks>
     member this.ParamCount = uint32 (this.Parameters.Length + this.VarArgParameters.Length)
 
     member internal this.CallingConventions =
