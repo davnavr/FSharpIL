@@ -217,7 +217,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // TypeDef (0x02)
     if tables.TypeDef.Count > 0 then
         let mutable field = 1u
-        let mutable method = 1u
+        let mutable method = 1u // TODO: Fix bug where method index is not set correctly if a type with no methods exists.
 
         for tdef in tables.TypeDef.Items do
             writer.WriteU4 tdef.Flags
@@ -300,7 +300,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // Assembly (0x20)
     if tables.Assembly.IsSome then
         let assembly = tables.Assembly.Value
-        writer.WriteU4 0u // TODO: Determine what HashAlgId should be.
+        writer.WriteU4 0x8004u // TODO: Determine what HashAlgId should be.
         writer.WriteU2 assembly.Version.Major
         writer.WriteU2 assembly.Version.Minor
         writer.WriteU2 (max assembly.Version.Build 0)
@@ -391,9 +391,9 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     let inline stream (header: ChunkWriter) content =
         let heap = writer.CreateWriter()
         content heap
+        heap.AlignTo 4u
         header.WriteU4 offset
         header.WriteU4 heap.Size
-        heap.AlignTo 4u
         let size = heap.Size
         offset <- offset + size
         writer.SkipBytes size
@@ -440,7 +440,8 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
     header info writer
     rva <- rva + Size.CliHeader
 
-    do // Strong Name Signature
+    // Strong Name Signature
+    if not cli.Header.StrongNameSignature.IsEmpty then
         info.StrongNameSignature.WriteU4 rva
         writer.ResetSize()
         writer.WriteBytes(cli.Header.StrongNameSignature)
@@ -448,17 +449,17 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
         writer.AlignTo 4u
         rva <- rva + writer.Size
 
-    do // Method Bodies
-        writer.ResetSize()
-        bodies rva info writer
-        writer.AlignTo 4u
-        rva <- rva + writer.Size
+    // Method Bodies
+    writer.ResetSize()
+    bodies rva info writer
+    writer.AlignTo 4u
+    rva <- rva + writer.Size
 
-    do // CLI metadata
-        info.Metadata.WriteU4 rva
-        writer.ResetSize()
-        root info writer
-        info.Metadata.WriteU4 writer.Size
-        rva <- rva + writer.Size
+    // CLI metadata
+    info.Metadata.WriteU4 rva
+    writer.ResetSize()
+    root info writer
+    info.Metadata.WriteU4 writer.Size
+    rva <- rva + writer.Size
 
     section.SkipBytes (rva - headerRva)

@@ -129,10 +129,10 @@ let hello_world =
                   Extends = Extends.TypeRef object
                   Flags = Flags.staticClass ClassFlags.None
                   TypeNamespace = "HelloWorld" }
-    
+
         let! main' = programBuilder.AddMethod main
         let! program = programBuilder.BuildType()
-    
+
         do! program.Value.MethodList.GetIndex main' |> setEntrypoint
     }
     |> CliMetadata.createMetadata
@@ -181,18 +181,31 @@ WritePE.toPath file hello_world
 
 do // Run the application.
     use dotnet =
-        ProcessStartInfo (
-            fileName = "dotnet",
-            arguments = sprintf "exec %s" file,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        )
-        |> Process.Start
+        let info =
+            ProcessStartInfo (
+                fileName = "dotnet",
+                arguments = sprintf "exec %s" file,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            )
+        //info.Environment.Add("COREHOST_TRACE", "1")
+        //info.Environment.Add("COREHOST_TRACEFILE", Path.Combine(output.FullName, "trace.txt"))
+        //info.Environment.Add("COREHOST_TRACE_VERBOSITY", "4")
+        Process.Start info
+
+    //use trace =
+    //    ProcessStartInfo (
+    //        fileName = "dotnet-trace",
+    //        arguments = sprintf "collect --process-id %i --clrevents loader --clreventlevel informational -o %s" dotnet.Id (Path.Combine(output.FullName, "trace.nettrace"))
+    //    )
+    //    |> Process.Start
 
     dotnet.StandardError.ReadToEnd() |> stderr.Write
-    out <- dotnet.StandardOutput.ReadLine()
+    out <- dotnet.StandardOutput.ReadToEnd()
     dotnet.WaitForExit()
+
+    // trace.WaitForExit()
 
     if dotnet.ExitCode <> 0 then exit dotnet.ExitCode
 
