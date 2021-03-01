@@ -1,11 +1,25 @@
-(*** hide ***)
+﻿(*** hide ***)
+#if INTERACTIVE
 #r "nuget: System.Collections.Immutable"
 #r "../../src/FSharpIL/bin/Release/netstandard2.1/FSharpIL.dll"
-#if !DOCUMENTATION
-#r "nuget: FSharp.SystemTextJson"
-#r "nuget: System.Runtime"
-#r "nuget: System.Text.Json"
-#r "nuget: Unquote"
+#else
+module FSharpIL.HelloWorld
+
+open Expecto
+
+open Swensen.Unquote
+
+open System
+open System.Diagnostics
+open System.IO
+open System.Text
+
+open Newtonsoft.Json
+open Newtonsoft.Json.Linq
+
+open Mono.Cecil
+
+open FSharpIL
 #endif
 (**
 # Hello World
@@ -21,7 +35,7 @@ open FSharpIL.Metadata
 open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
-let hello_world =
+let example() =
     metadata {
         // Define information for the current assembly.
         let! assm =
@@ -32,7 +46,7 @@ let hello_world =
                   Flags = ()
                   PublicKey = None
                   Culture = NullCulture }
-    
+
         // Add references to other assemblies.
         let! mscorlib =
             referenceAssembly
@@ -48,7 +62,7 @@ let hello_world =
                   Name = AssemblyName.ofStr "System.Console"
                   Culture = NullCulture
                   HashValue = None }
-    
+
         // Add references to types defined in referenced assemblies.
         let! console =
             referenceType
@@ -65,10 +79,10 @@ let hello_world =
                 { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
                   TypeNamespace = "System.Runtime.Versioning"
                   ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-    
+
         // Add references to methods defined in the types of referenced assemblies.
         let string = ParamItem.create EncodedType.String
-    
+
         let! writeLine =
             referenceMethod
                 { Class = MemberRefParent.TypeRef console
@@ -89,7 +103,7 @@ let hello_world =
                       ReturnType = ReturnType.voidItem
                       Parameters = ImmutableArray.Create string
                       VarArgParameters = ImmutableArray.Empty } }
-    
+
         // Defines a custom attribute on the current assembly specifying the target framework.
         do!
             { Parent = CustomAttributeParent.Assembly assm
@@ -99,7 +113,7 @@ let hello_world =
                   NamedArg = ImmutableArray.Empty }
                 |> Some }
             |> attribute
-    
+
         // Create the entrypoint method of the current assembly.
         let main =
             { Body =
@@ -120,7 +134,7 @@ let hello_world =
                 StaticMethodSignature(MethodCallingConventions.Default, ReturnType.voidItem, args)
               ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
             |>  StaticClassMethod.Method
-    
+
         // Create the class that will contain the entrypoint method.
         let! programBuilder =
             buildStaticClass
@@ -141,73 +155,65 @@ let hello_world =
     |> ValidationResult.get
     |> PEFile.ofMetadata ImageFileFlags.dll
 (*** hide ***)
-#if !DOCUMENTATION
-open Swensen.Unquote
+[<Tests>]
+let tests =
+    let testCaseCecil name test =
+        fun() ->
+            use metadata = example() |> WritePE.stream |> ModuleDefinition.ReadModule
+            test metadata
+        |> testCase name
 
-open System.Diagnostics
-open System.IO
-open System.Text.Json
-open System.Text.Json.Serialization
+    testList "hello world" [
+        testCaseCecil "has entrypoint" <| fun metadata -> test <@ metadata.EntryPoint.Name = "Main" @>
+        testCaseCecil "has method references only" <| fun metadata ->
+            test <@ metadata.GetMemberReferences() |> Seq.forall (fun mref -> mref :? MethodReference) @>
+        testCaseCecil "type has correct names" <| fun metadata ->
+            <@
+                let program = Seq.head metadata.Types
+                program.Name = "Program" && program.Namespace = "HelloWorld"
+            @>
+            |> test
+        testCaseCecil "has target framework attribute" <| fun metadata ->
+            <@
+                let attribute = Seq.head metadata.Assembly.CustomAttributes
+                let value = Seq.head attribute.ConstructorArguments
+                attribute.AttributeType.Name = "TargetFrameworkAttribute" && ".NETCoreApp,Version=v5.0".Equals value.Value
+            @>
+            |> test
 
-open FSharpIL
+        testCase "runs correctly" <| fun() ->
+            let output = Path.Combine(__SOURCE_DIRECTORY__, "tmp")
+            let executable = Path.Combine(output, "HelloWorld.dll")
+            let config =
+                JObject ([|
+                    JProperty("runtimeOptions", JObject [|
+                        JProperty("tfm", "net5.0")
+                        JProperty("framework", JObject [|
+                            JProperty("name", "Microsoft.NETCore.App")
+                            JProperty("version", "5.0.0")
+                        |])
+                    |])
+                |])
 
-// TODO: Create an Expecto test list.
+            example() |> WritePE.toPath executable
 
-let mutable out = Unchecked.defaultof<string>
-let output =
-    Path.Combine(__SOURCE_DIRECTORY__, "..", "out") |> Directory.CreateDirectory
-let file =
-    Path.Combine(output.FullName, "HelloWorld.dll")
-let path =
-    Path.Combine(output.FullName, "HelloWorld.runtimeconfig.json")
+            using (new JsonTextWriter(new StreamWriter(Path.Combine(output, "HelloWorld.runtimeconfig.json")))) config.WriteTo
 
-let options = JsonSerializerOptions(WriteIndented = true)
-options.Converters.Add(JsonFSharpConverter())
+            use dotnet =
+                ProcessStartInfo (
+                    fileName = "dotnet",
+                    arguments = sprintf "exec %s" executable,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false
+                )
+                |> Process.Start
 
-let config =
-    JsonSerializer.SerializeToUtf8Bytes(
-        {|
-            runtimeOptions =
-                {|
-                    tfm = "net5.0"
-                    framework = {| name = "Microsoft.NETCore.App"; version = "5.0.0" |}
-                |}
-        |},
-        options
-    )
+            let out = dotnet.StandardOutput.ReadToEnd()
+            dotnet.StandardError.ReadToEnd() |> stderr.Write
+            dotnet.WaitForExit()
 
-File.WriteAllBytes(path, config)
-WritePE.toPath file hello_world
+            let code = dotnet.ExitCode
 
-do // Run the application.
-    use dotnet =
-        let info =
-            ProcessStartInfo (
-                fileName = "dotnet",
-                arguments = sprintf "exec %s" file,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false
-            )
-        //info.Environment.Add("COREHOST_TRACE", "1")
-        //info.Environment.Add("COREHOST_TRACEFILE", Path.Combine(output.FullName, "trace.txt"))
-        //info.Environment.Add("COREHOST_TRACE_VERBOSITY", "4")
-        Process.Start info
-
-    //use trace =
-    //    ProcessStartInfo (
-    //        fileName = "dotnet-trace",
-    //        arguments = sprintf "collect --process-id %i --clrevents loader --clreventlevel informational -o %s" dotnet.Id (Path.Combine(output.FullName, "trace.nettrace"))
-    //    )
-    //    |> Process.Start
-
-    dotnet.StandardError.ReadToEnd() |> stderr.Write
-    out <- dotnet.StandardOutput.ReadToEnd()
-    dotnet.WaitForExit()
-
-    // trace.WaitForExit()
-
-    if dotnet.ExitCode <> 0 then exit dotnet.ExitCode
-
-test <@ "Hello World!" = out @>
-#endif
+            test <@ code = 0 && out = "Hello World!" @>
+    ]

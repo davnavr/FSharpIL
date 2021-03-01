@@ -34,7 +34,7 @@ let private write (content: DirectoryInfo) (style: DirectoryInfo) (output: Direc
         for file in style.GetFiles() do
             file.CopyTo(Path.Combine(style'.FullName, file.Name)) |> ignore
 
-        for script in content.GetFiles("*.fsx", SearchOption.AllDirectories) do
+        for script in content.GetFiles("*.fs", SearchOption.AllDirectories) do // TODO: Include .fsx files if necessary.
             let output =
                 let name = Path.GetFileNameWithoutExtension script.FullName
                 let path = Path.Combine(output.FullName, sprintf $"{name}.html")

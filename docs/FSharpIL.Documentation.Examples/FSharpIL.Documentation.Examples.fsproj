@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>FSharpIL.Documentation.Examples</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\content\HelloWorld.fs"/>
+    <Compile Include="$(RootDirectory)\test\FSharpIL.Tests\Test.fs"/>
+
+    <PackageReference Include="Expecto" Version="9.0.2" />
+    <PackageReference Include="Mono.Cecil" Version="0.11.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1-beta1" />
+    <PackageReference Include="Unquote" Version="5.0.0" />
+
+    <ProjectReference Include="$(RootDirectory)/src/FSharpIL/FSharpIL.fsproj" />
+  </ItemGroup>
+
+</Project>

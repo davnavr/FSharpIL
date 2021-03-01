@@ -13,7 +13,6 @@ open Fake.IO.Globbing.Operators
 
 let rootDir = __SOURCE_DIRECTORY__
 let docsDir = rootDir </> "docs"
-let docsContentDir = docsDir </> "content"
 let outDir = rootDir </> "out"
 let testDir = rootDir </> "test"
 
@@ -29,8 +28,14 @@ let handleErr msg: ProcessResult -> _ =
     | _ -> ()
 
 Target.create "Clean" <| fun _ ->
-    List.iter Shell.cleanDir [ outDir; docsDir </> "out" ]
+    [
+        outDir
+        docsDir </> "content" </> "tmp"
+        // TODO: Have .gitignore files be in the out directories, and figure out how to ignore them when deleting files.
+    ]
+    |> List.iter Shell.cleanDir
 
+    // TODO Clean bin and obj folders instead of calling "dotnet clean", since it doesn't clear out outputs for netstandard2.1 folders.
     DotNet.exec id "clean" slnFile |> handleErr "Error occured while cleaning project output"
 
 Target.create "Build" <| fun _ ->
@@ -42,18 +47,13 @@ Target.create "Build" <| fun _ ->
         slnFile
 
 Target.create "Test Examples" <| fun _ ->
-    !!(docsContentDir </> "**/*.fsx")
-    |> Seq.map (sprintf "--use:%s")
-    |> String.concat " "
-    |> sprintf "--exec --quiet --nologo --targetprofile:netcore %s"
-    |> DotNet.exec id "fsi"
-    |> handleErr "One or more examples are invalid"
+    invalidOp "TODO: Run examples test project"
 
 Target.create "Build Documentation" <| fun _ ->
     sprintf
         "-p %s -c Release --no-build --no-restore -- --content-directory %s --style-directory %s --output-directory %s"
         (docsDir </> "FSharpIL.Documentation.fsproj")
-        docsContentDir
+        (docsDir </> "content")
         (docsDir </> "style")
         (outDir </> "docs")
     |> DotNet.exec id "run"

@@ -32,41 +32,6 @@ let tests =
                 mdle.Types |> Seq.map (fun t -> t.Name, t.Namespace)
             Expect.sequenceEqual actual expected "type name and namespace should match"
 
-        testCase "entrypoint is set correctly" <| fun() ->
-            let entrypoint =
-                { Body =
-                    MethodBody.create <| fun content ->
-                        let writer = MethodBodyWriter content
-                        writer.Ret()
-                  ImplFlags = MethodImplFlags.None
-                  Flags = Flags.staticMethod { Visibility = Visibility.Public; HideBySig = true }
-                  MethodName = Identifier.ofStr "Main"
-                  Signature = StaticMethodSignature(MethodCallingConventions.Default, ReturnType.voidItem, ImmutableArray.Empty)
-                  ParamList = fun _ -> failwith "no parameters" }
-
-            let pe =
-                metadata {
-                    let! program =
-                        buildStaticClass
-                            { Access = TypeVisibility.Public
-                              Extends = Extends.Null
-                              ClassName = Identifier.ofStr "Program"
-                              TypeNamespace = ""
-                              Flags = Flags.staticClass ClassFlags.None }
-
-                    let! main = program.AddMethod(StaticClassMethod.Method entrypoint)
-                    let! program' = program.BuildType()
-                    do! program'.Value.MethodList.GetIndex main |> setEntrypoint
-                }
-                |> createMetadata
-                    { Mvid = Guid.NewGuid()
-                      Name = Identifier.ofStr "Program.exe" }
-                |> ValidationResult.get
-                |> PEFile.ofMetadata ImageFileFlags.FileExecutableImage
-
-            use metadata = WritePE.stream pe |> ModuleDefinition.ReadModule
-            Expect.equal metadata.EntryPoint.Name (string entrypoint.MethodName) "name of entrypoint should match"
-
         testCase "error skips rest of metadata expression" <| fun() ->
             let error = MissingTypeError("test", Identifier.ofStr "test") :> ValidationError
             let mutable skipped = true
