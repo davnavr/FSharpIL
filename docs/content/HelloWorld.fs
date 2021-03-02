@@ -1,5 +1,5 @@
 ﻿(*** hide ***)
-#if INTERACTIVE
+#if DOCUMENTATION
 #r "nuget: System.Collections.Immutable"
 #r "../../src/FSharpIL/bin/Release/netstandard2.1/FSharpIL.dll"
 #else
@@ -12,7 +12,6 @@ open Swensen.Unquote
 open System
 open System.Diagnostics
 open System.IO
-open System.Text
 
 open Newtonsoft.Json
 open Newtonsoft.Json.Linq
@@ -155,6 +154,7 @@ let example() =
     |> ValidationResult.get
     |> PEFile.ofMetadata ImageFileFlags.dll
 (*** hide ***)
+#if !DOCUMENTATION
 [<Tests>]
 let tests =
     let testCaseCecil name test =
@@ -217,3 +217,4 @@ let tests =
 
             test <@ code = 0 && out = "Hello World!" @>
     ]
+#endif

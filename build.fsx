@@ -47,12 +47,15 @@ Target.create "Build" <| fun _ ->
         slnFile
 
 Target.create "Test Examples" <| fun _ ->
-    invalidOp "TODO: Run examples test project"
+    docsDir </> "FSharpIL.Documentation.Examples" </> "FSharpIL.Documentation.Examples.fsproj"
+    |> sprintf "-p %s -c Release --no-build --no-restore"
+    |> DotNet.exec id "run"
+    |> handleErr "One or more examples is invalid"
 
 Target.create "Build Documentation" <| fun _ ->
     sprintf
         "-p %s -c Release --no-build --no-restore -- --content-directory %s --style-directory %s --output-directory %s"
-        (docsDir </> "FSharpIL.Documentation.fsproj")
+        (docsDir </> "FSharpIL.Documentation" </> "FSharpIL.Documentation.fsproj")
         (docsDir </> "content")
         (docsDir </> "style")
         (outDir </> "docs")
