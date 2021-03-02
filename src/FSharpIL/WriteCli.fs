@@ -215,9 +215,9 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         info.StringsStream.WriteIndex(tref.TypeNamespace, writer)
 
     // TypeDef (0x02)
-    if tables.TypeDef.Count > 0 then
+    if tables.TypeDef.Count > 0 then // TODO: Figure out how to generate correct field and method index.
         let mutable field = 1u
-        let mutable method = 1u // TODO: Fix bug where method index is not set correctly if a type with no methods exists.
+        let mutable method = 1u
 
         for tdef in tables.TypeDef.Items do
             writer.WriteU4 tdef.Flags
@@ -225,15 +225,11 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             info.StringsStream.WriteIndex(tdef.TypeNamespace, writer)
             extends.WriteIndex(tdef.Extends, writer)
 
-            // Field
-            let field' = if tdef.FieldList.IsEmpty then 0u else field
             field <- uint32 tdef.FieldList.Count
-            tables.Field.WriteSimpleIndex(field', writer)
+            tables.Field.WriteSimpleIndex(field, writer)
 
-            // Method
-            let method' = if tdef.MethodList.IsEmpty then 0u else method
             method <- uint32 tdef.MethodList.Count
-            tables.Field.WriteSimpleIndex(method', writer)
+            tables.Field.WriteSimpleIndex(method, writer)
 
     // Field (0x04)
     for row in tables.Field.Items do

@@ -11,7 +11,11 @@ type IndexedList<'T when 'T : equality> internal (owner: IndexOwner, items: Immu
     member _.IsEmpty = items.IsEmpty
     member _.Item with get i = items.[i]
     member _.AsSpan() = items.AsSpan()
-    member _.GetIndex i = SimpleIndex(owner, items.[i])
+    /// <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the index is negative or the list does not contain enough elements.</exception>
+    member _.GetIndex i =
+        if i < 0 || i >= items.Length
+        then System.IndexOutOfRangeException() |> raise
+        else SimpleIndex(owner, items.[i])
     member _.GetEnumerator() = items.GetEnumerator()
 
     interface IReadOnlyList<'T> with
@@ -19,6 +23,8 @@ type IndexedList<'T when 'T : equality> internal (owner: IndexOwner, items: Immu
         member this.Item with get i = this.[i]
         member _.GetEnumerator() = (items :> IEnumerable<_>).GetEnumerator()
         member _.GetEnumerator() = (items :> System.Collections.IEnumerable).GetEnumerator()
+
+    static member Empty = IndexedList(Unchecked.defaultof<IndexOwner>, ImmutableArray<'T>.Empty)
 
 [<Sealed>]
 type internal IndexedListBuilder<'T when 'T : equality and 'T :> IIndexValue> (owner: IndexOwner) =

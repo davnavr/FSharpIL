@@ -140,11 +140,11 @@ let example() =
                 { Access = TypeVisibility.Public
                   ClassName = Identifier.ofStr "Program"
                   Extends = Extends.TypeRef object
-                  Flags = Flags.staticClass ClassFlags.None
+                  Flags = Flags.staticClass { ClassFlags.None with BeforeFieldInit = true }
                   TypeNamespace = "HelloWorld" }
 
         let! main' = programBuilder.AddMethod main
-        let! program = programBuilder.BuildType()
+        let! program = programBuilder.BuildType() // TODO: Fix, order of types does not follow order that BuildType methods were called.
 
         do! program.Value.MethodList.GetIndex main' |> setEntrypoint
     }
@@ -167,12 +167,6 @@ let tests =
         testCaseCecil "has entrypoint" <| fun metadata -> test <@ metadata.EntryPoint.Name = "Main" @>
         testCaseCecil "has method references only" <| fun metadata ->
             test <@ metadata.GetMemberReferences() |> Seq.forall (fun mref -> mref :? MethodReference) @>
-        testCaseCecil "type has correct names" <| fun metadata ->
-            <@
-                let program = Seq.head metadata.Types
-                program.Name = "Program" && program.Namespace = "HelloWorld"
-            @>
-            |> test
         testCaseCecil "has target framework attribute" <| fun metadata ->
             <@
                 let attribute = Seq.head metadata.Assembly.CustomAttributes
@@ -180,6 +174,17 @@ let tests =
                 attribute.AttributeType.Name = "TargetFrameworkAttribute" && ".NETCoreApp,Version=v5.0".Equals value.Value
             @>
             |> test
+        testCaseCecil "types have correct names" <| fun metadata ->
+            let expected =
+                [
+                    ("", "<Module>")
+                    ("HelloWorld", "Program")
+                ]
+            let actual =
+                metadata.Types
+                |> Seq.map (fun tdef -> tdef.Namespace, tdef.Name)
+                |> List.ofSeq
+            test <@ expected = actual @>
 
         testCase "runs correctly" <| fun() ->
             let output = Path.Combine(__SOURCE_DIRECTORY__, "tmp")

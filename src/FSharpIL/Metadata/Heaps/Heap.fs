@@ -153,18 +153,6 @@ module internal Heap =
 
         writer.WriteU1 0uy // Empty blob
 
-        // TODO: Figure out why and what index is missing.
-        // TODO: Figure out if <Module> pseudo-type needs to be added (doesn't seem to make missing index problem go away, but maybe its because the MethodList index is not set correctly?).
-        // https://github.com/dotnet/runtime/blob/69e114c1abf91241a0eeecf1ecceab4711b8aa62/src/coreclr/inc/stgpool.h#L446
-        // https://github.com/dotnet/runtime/blob/4f3545e2d1466512f53a2cd8b0db71667810c083/src/coreclr/md/compiler/importhelper.cpp#L382
-        // https://github.com/dotnet/runtime/blob/69e114c1abf91241a0eeecf1ecceab4711b8aa62/src/coreclr/md/runtime/recordpool.cpp#L172
-        // https://github.com/dotnet/runtime/blob/69e114c1abf91241a0eeecf1ecceab4711b8aa62/src/coreclr/md/runtime/recordpool.cpp#L249
-        // https://github.com/dotnet/runtime/blob/69e114c1abf91241a0eeecf1ecceab4711b8aa62/src/coreclr/md/tables/table.h#L77
-        // https://github.com/dotnet/runtime/blob/69e114c1abf91241a0eeecf1ecceab4711b8aa62/src/coreclr/utilcode/stgpool.cpp#L728
-        // https://github.com/dotnet/runtime/blob/69e114c1abf91241a0eeecf1ecceab4711b8aa62/src/coreclr/utilcode/stgpoolreadonly.cpp#L110
-        // https://github.com/dotnet/runtime/blob/69e114c1abf91241a0eeecf1ecceab4711b8aa62/src/coreclr/utilcode/stgpoolreadonly.cpp#L114
-        // https://github.com/dotnet/runtime/blob/69e114c1abf91241a0eeecf1ecceab4711b8aa62/src/coreclr/utilcode/stgpoolreadonly.cpp#L140
-
         CliMetadata.iterBlobs
             (fun signature ->
                 if methodDef.Add signature then

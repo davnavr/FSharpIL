@@ -271,25 +271,72 @@ type DuplicateTypeDefError (duplicate: TypeDefRow) =
             "Unable to add type definition \"%O\", a type with the same namespace, name, and parent already exists"
             this.Type
 
+/// <summary>Represents the <c>&lt;Module&gt;</c> pseudo-class that contains global fields and methods (II.10.8).</summary>
+type ModuleType internal (owner: IndexOwner) =
+    let fields = IndexedListBuilder<FieldRow> owner
+    let methods = IndexedListBuilder<MethodDef> owner
+
+    // member _.AddField (field: GlobalField) = failwith "TODO: Implement generation of global fields"
+    // member _.AddMethod = failwith "TODO: Implement generation of global methods"
+
+    member internal _.Row() =
+        TypeDefRow(TypeAttributes.NotPublic, ModuleType.Name, String.Empty, Extends.Null, fields.ToImmutable(), methods.ToImmutable(), None, IndexedList.Empty)
+
+    static member val internal Name = Identifier "<Module>"
+
+type TypeDefTableEnumerator =
+    struct
+        val mutable private definitions: List<TypeDefRow>.Enumerator
+        val private moduleType: TypeDefRow
+        val mutable private state: uint8
+
+        internal new (moduleType: ModuleType, types: List<TypeDefRow>) =
+            { definitions = types.GetEnumerator()
+              moduleType = moduleType.Row()
+              state = 0uy }
+
+        member this.Current =
+            match this.state with
+            | 1uy -> this.moduleType
+            | _ -> this.definitions.Current
+
+        member this.MoveNext() =
+            match this.state with
+            | 0uy ->
+                this.state <- 1uy
+                true
+            | _ ->
+                if this.state = 1uy then this.state <- 2uy
+                this.definitions.MoveNext()
+
+        interface IEnumerator<TypeDefRow> with
+            member this.Current = this.Current
+            member this.Current = this.Current :> obj
+            member this.Dispose() = this.definitions.Dispose()
+            member this.MoveNext() = this.MoveNext()
+            member _.Reset() = NotSupportedException() |> raise
+    end
+
 [<Sealed>]
 type TypeDefTable internal (owner: IndexOwner) =
     let defs = List<TypeDefRow>()
     let lookup = HashSet<TypeDefRow>()
 
-    // TODO: Add the <Module> class used for global variables and functions, which should be the first entry.
-
-    member _.Count = defs.Count
+    member val Module = ModuleType owner
+    member _.Count = defs.Count + 1
 
     // TODO: Enforce common CLS checks and warnings for types.
     member _.GetIndex(tdef: TypeDefRow) =
         IndexOwner.checkOwner owner tdef
-        if lookup.Add tdef
+        if (tdef.TypeName = ModuleType.Name && String.IsNullOrEmpty tdef.TypeNamespace) || lookup.Add tdef
         then
             defs.Add tdef
             SimpleIndex(owner, tdef) |> Ok
         else DuplicateTypeDefError tdef :> ValidationError |> Error
 
+    member this.GetEnumerator() = new TypeDefTableEnumerator(this.Module, defs)
+
     interface IReadOnlyCollection<TypeDefRow> with
-        member _.Count = defs.Count
-        member _.GetEnumerator() = (defs :> IEnumerable<_>).GetEnumerator()
-        member _.GetEnumerator() = (defs :> System.Collections.IEnumerable).GetEnumerator()
+        member this.Count = this.Count
+        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
+        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
