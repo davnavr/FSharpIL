@@ -42,6 +42,7 @@ type ParamRow =
         | Param { ParamName = name } -> name
 
 /// <summary>Represents a <c>Param</c> item used in signatures (II.23.2.10).</summary>
+// TODO: How is BYREF and TYPEDBYREF modeled?
 [<IsReadOnly>]
 type ParamItem =
     struct

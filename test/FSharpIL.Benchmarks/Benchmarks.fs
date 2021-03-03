@@ -68,7 +68,7 @@ type HelloWorld () =
                       Signature =
                         { HasThis = false
                           ExplicitThis = false
-                          ReturnType = ReturnType.voidItem
+                          ReturnType = ReturnType.itemVoid
                           Parameters = ImmutableArray.Create string
                           VarArgParameters = ImmutableArray.Empty } }
             let! tfmAttrCtor =
@@ -78,7 +78,7 @@ type HelloWorld () =
                       Signature =
                         { HasThis = true // TODO: Figure out flags.
                           ExplicitThis = false
-                          ReturnType = ReturnType.voidItem
+                          ReturnType = ReturnType.itemVoid
                           Parameters = ImmutableArray.Create string
                           VarArgParameters = ImmutableArray.Empty } }
 
@@ -107,7 +107,7 @@ type HelloWorld () =
                         EncodedType.SZArray(ImmutableArray.Empty, EncodedType.String)
                         |> ParamItem.create
                         |> ImmutableArray.Create
-                    StaticMethodSignature(MethodCallingConventions.Default, ReturnType.voidItem, args)
+                    StaticMethodSignature(MethodCallingConventions.Default, ReturnType.itemVoid, args)
                   ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
                 |>  StaticClassMethod.Method
 

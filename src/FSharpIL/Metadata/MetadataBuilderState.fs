@@ -66,7 +66,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
     let owner = IndexOwner()
     let warnings = ImmutableArray.CreateBuilder<ValidationWarning>()
     let clsViolations = ImmutableArray.CreateBuilder<ClsViolation>()
-    let mutable entrypoint = None
+    let mutable entrypoint = ValueNone
 
     let typeDef = TypeDefTable owner
     let mutable assembly = None
@@ -182,18 +182,14 @@ type MetadataBuilderState (mdle: ModuleTable) =
     /// <summary>Gets or sets the entrypoint of the assembly.</summary>
     /// <remarks>The entrypoint of the assembly is specified by the <c>EntryPointToken</c> field of the CLI header (II.25.3.3).</remarks>
     member _.EntryPoint
-        with get(): SimpleIndex<MethodDef> option = entrypoint
+        with get(): EntryPointIndex voption = entrypoint
         and set main =
-            // TODO: Figure out why main method is invalid https://github.com/dotnet/runtime/blob/79ae74f5ca5c8a6fe3a48935e85bd7374959c570/src/coreclr/vm/assembly.cpp#L1434
-            // TODO: Create a separate EntryPointMethod type.
-            // TODO: Figure out flag requirements for entrypoint method.
             match main with
-            | Some (main': SimpleIndex<_>) ->
-                if main'.Owner <> owner then
-                    invalidArg "main" "The specified entrypoint cannot be owned by another state."
-                IndexOwner.checkIndex owner main'
-                entrypoint <- Some main'
-            | None -> entrypoint <- None
+            | ValueSome (main': EntryPointIndex) ->
+                IndexOwner.checkIndex owner main'.Index
+            | ValueNone -> ()
+
+            entrypoint <- main
 
     member _.SetAssembly(assm: Assembly) =
         assembly <- Some assm

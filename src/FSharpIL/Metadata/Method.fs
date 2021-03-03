@@ -210,9 +210,35 @@ type ConstructorDef = Method<IMethodBody, ConstructorFlags, MethodSignatureThatI
 /// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
 type ClassConstructorDef = Method<IMethodBody, ClassConstructorFlags, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 
+[<AbstractClass>]
+type EntryPointSignature internal () =
+    abstract Signature: unit -> MethodDefSignature
+    interface IMethodDefSignature with member this.Signature() = this.Signature()
+
+[<RequireQualifiedAccess>]
+type EntryPointMethod =
+    | Valid of Method<IMethodBody, StaticMethodFlags, EntryPointSignature>
+    /// An entrypoint method with no restrictions on the signature, parameters, or return type. Such a signature may not be valid in implementations of the CLR.
+    | Custom of StaticMethodDef
+
+    interface IMethod with
+        member this.CheckOwner owner =
+            match this with
+            | Valid (IndexValue method)
+            | Custom (IndexValue method) ->
+                IndexOwner.checkOwner owner method
+
+        member this.Definition() =
+            match this with
+            | Valid (MethodDef def)
+            | Custom (MethodDef def) -> def
+
+type EntryPointIndex = TaggedIndex<EntryPointMethod, MethodDef>
+
 // TODO: Figure out how to avoid having users type out the full name of the method type (ex: ConcreteClassMethod.Method)
 [<RequireQualifiedAccess>]
 type ConcreteClassMethod =
+    | EntryPoint of EntryPointMethod
     | Method of InstanceMethodDef
     | StaticMethod of StaticMethodDef
     | Constructor of ConstructorDef
@@ -221,6 +247,7 @@ type ConcreteClassMethod =
     interface IMethod with
         member this.CheckOwner owner =
             match this with
+            | EntryPoint (IndexValue method)
             | Method (IndexValue method)
             | StaticMethod (IndexValue method)
             | Constructor (IndexValue method)
@@ -229,6 +256,7 @@ type ConcreteClassMethod =
 
         member this.Definition() =
             match this with
+            | EntryPoint (MethodDef def)
             | Method (MethodDef def)
             | StaticMethod (MethodDef def)
             | Constructor (MethodDef def)
@@ -236,6 +264,7 @@ type ConcreteClassMethod =
 
 [<RequireQualifiedAccess>]
 type AbstractClassMethod =
+    | EntryPoint of EntryPointMethod
     | Method of InstanceMethodDef
     | AbstractMethod of AbstractMethodDef
     | StaticMethod of StaticMethodDef
@@ -245,6 +274,7 @@ type AbstractClassMethod =
     interface IMethod with
         member this.CheckOwner owner =
             match this with
+            | EntryPoint (IndexValue method)
             | Method (IndexValue method)
             | AbstractMethod (IndexValue method)
             | StaticMethod (IndexValue method)
@@ -254,6 +284,7 @@ type AbstractClassMethod =
 
         member this.Definition() =
             match this with
+            | EntryPoint (MethodDef def)
             | Method (MethodDef def)
             | AbstractMethod (MethodDef def)
             | StaticMethod (MethodDef def)
@@ -262,6 +293,7 @@ type AbstractClassMethod =
 
 [<RequireQualifiedAccess>]
 type SealedClassMethod =
+    | EntryPoint of EntryPointMethod
     | Method of InstanceMethodDef
     | FinalMethod of FinalMethodDef
     | StaticMethod of StaticMethodDef
@@ -271,6 +303,7 @@ type SealedClassMethod =
     interface IMethod with
         member this.CheckOwner owner =
             match this with
+            | EntryPoint (IndexValue method)
             | Method (IndexValue method)
             | FinalMethod (IndexValue method)
             | StaticMethod (IndexValue method)
@@ -280,6 +313,7 @@ type SealedClassMethod =
 
         member this.Definition() =
             match this with
+            | EntryPoint (MethodDef def)
             | Method (MethodDef def)
             | FinalMethod (MethodDef def)
             | StaticMethod (MethodDef def)
@@ -288,18 +322,21 @@ type SealedClassMethod =
 
 [<RequireQualifiedAccess>]
 type StaticClassMethod =
+    | EntryPoint of EntryPointMethod
     | Method of StaticMethodDef
     | ClassConstructor of ClassConstructorDef
 
     interface IMethod with
         member this.CheckOwner owner =
             match this with
+            | EntryPoint (IndexValue method)
             | Method (IndexValue method)
             | ClassConstructor (IndexValue method)->
                 IndexOwner.checkOwner owner method
 
         member this.Definition() =
             match this with
+            | EntryPoint (MethodDef def)
             | Method (MethodDef def)
             | ClassConstructor (MethodDef def) -> def
 

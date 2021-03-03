@@ -22,27 +22,6 @@ module CustomModifier =
     let optional (modifierType: TypeDefOrRefOrSpecEncoded) = CustomModifier(false, modifierType)
     let required (modifierType: TypeDefOrRefOrSpecEncoded) = CustomModifier(true, modifierType)
 
-/// <summary>Represents all different possible return types encoded in a <c>RetType</c> (II.23.2.11).</summary>
-/// <seealso cref="T:FSharpIL.Metadata.ReturnTypeItem"/>
-[<RequireQualifiedAccess>]
-type ReturnType =
-    // | Type of byRef: bool * EncodedType
-    // | TypedByRef // of ?
-    | Void
-
-    interface IReturnType
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | Void -> ()
-
-[<RequireQualifiedAccess>]
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module ReturnType =
-    let voidItem = ReturnTypeItem ReturnType.Void
-    let create (returnType: ReturnType) = ReturnTypeItem returnType
-    let modified modifiers (returnType: ReturnType) = ReturnTypeItem(modifiers, returnType)
-
 /// II.23.2.13
 [<IsReadOnly; Struct>]
 type ArrayShape =
@@ -126,6 +105,33 @@ type EncodedType =
                 for modifier in modifiers do modifier.CheckOwner owner
                 IndexOwner.checkOwner owner item
             | bad -> failwithf "Cannot validate owner of unsupported encoded type %A" bad
+
+/// <summary>Represents all different possible return types encoded in a <c>RetType</c> (II.23.2.11).</summary>
+/// <seealso cref="T:FSharpIL.Metadata.ReturnTypeItem"/>
+[<RequireQualifiedAccess>]
+type ReturnType =
+    | Type of EncodedType
+    | ByRefType of EncodedType
+    | TypedByRef
+    | Void
+
+    interface IReturnType
+    interface IIndexValue with
+        member this.CheckOwner owner =
+            match this with
+            | Type item
+            | ByRefType item -> IndexOwner.checkOwner owner item
+            | TypedByRef
+            | Void -> ()
+
+[<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module ReturnType =
+    let item (returnType: ReturnType) = ReturnTypeItem returnType
+    let encoded encodedType = ReturnTypeItem(ReturnType.Type encodedType)
+    let modified modifiers (returnType: ReturnType) = ReturnTypeItem(modifiers, returnType)
+    let itemVoid = ReturnTypeItem ReturnType.Void
+    let itemI4 = encoded EncodedType.I4
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
