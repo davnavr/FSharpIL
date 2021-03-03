@@ -50,6 +50,7 @@ type ChunkWriter with
         this.WriteCompressed shape.LowerBounds.Length // NumLoBounds
         for bound in shape.LowerBounds do this.WriteCompressedSigned bound // LoBound
 
+    // TODO: Consider automatically converting some Array to SZArray, since a user might use a one dimensional string array instead of an SZArray in the entrypoint, which means the exe cannot run. This won't be a problem if an EntryPointMethod union type is used.
     member this.WriteType(item: EncodedType) =
         match item with
         | EncodedType.Array(element, shape) ->
@@ -58,7 +59,13 @@ type ChunkWriter with
             this.WriteArrayShape shape
 
         | EncodedType.String -> this.WriteU1 ElementType.String
+        | EncodedType.SZArray(modifiers, element) ->
+            this.WriteU1 ElementType.SZArray
 
+            if not modifiers.IsEmpty then
+                failwith "Custom modifiers for SZArray is not yet supported"
+
+            this.WriteType element
         | bad -> failwithf "Unsupported type %A" bad
 
     member _.WriteCustomMod(modifiers: #IReadOnlyCollection<CustomModifier>) =

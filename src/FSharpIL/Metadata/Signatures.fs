@@ -12,6 +12,8 @@ type internal ElementType =
 
     | Array = 0x14uy
 
+    | SZArray = 0x1duy
+
 [<Interface>] type internal ITypeDefOrRefOrSpec = inherit IIndexValue
 
 /// (II.23.2.7)

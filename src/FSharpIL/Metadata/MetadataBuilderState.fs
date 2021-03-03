@@ -184,6 +184,9 @@ type MetadataBuilderState (mdle: ModuleTable) =
     member _.EntryPoint
         with get(): SimpleIndex<MethodDef> option = entrypoint
         and set main =
+            // TODO: Figure out why main method is invalid https://github.com/dotnet/runtime/blob/79ae74f5ca5c8a6fe3a48935e85bd7374959c570/src/coreclr/vm/assembly.cpp#L1434
+            // TODO: Create a separate EntryPointMethod type.
+            // TODO: Figure out flag requirements for entrypoint method.
             match main with
             | Some (main': SimpleIndex<_>) ->
                 if main'.Owner <> owner then

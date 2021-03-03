@@ -65,12 +65,17 @@ let rec ofType =
     | EncodedType.Object
     | EncodedType.String -> 1u
     | EncodedType.Array(item, shape) ->
-        ofType item
+        1u
+        + ofType item
         + ofUnsigned shape.Rank
         + ofUnsigned (uint32 shape.Sizes.Length)
         + Seq.sumBy ofUnsigned shape.Sizes
         + ofUnsigned (uint32 shape.LowerBounds.Length)
         + Seq.sumBy ofSigned shape.LowerBounds
+    | EncodedType.SZArray(modifiers, item) ->
+        if not modifiers.IsEmpty then
+            failwith "Cannot calculate size of blob, custom modifiers for SZArray not yet supported"
+        1u + ofType item
     | t -> failwithf "Cannot calculate size for unsupported type %A" t
 
 let ofParam (param: ParamItem) =
@@ -82,7 +87,8 @@ let ofMethodDefSignature (signature: MethodDefSignature) =
     let cconv =
         match signature.CallingConventions with
         | Default
-        | VarArg -> 1u
+        | VarArg -> 0u
+        // | Generic -> failwithf "TODO: Calculate size needed to store generic for method def"
     1u
     + cconv
     + ofUnsigned (uint32 signature.Parameters.Length)

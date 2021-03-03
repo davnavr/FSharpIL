@@ -19,7 +19,7 @@ open FSharpIL.PortableExecutable
 type HelloWorld () =
     [<Benchmark>]
     member _.FSharpIL_ComputationExpression() =
-        // TODO: Figure out how to share this code with the Hello World documentation file.
+        // TODO: Figure out how to share this code with the HelloWorld.fs example file.
         metadata {
             let! assm =
                 setAssembly
@@ -104,7 +104,7 @@ type HelloWorld () =
                   Flags = Flags.staticMethod { Visibility = Public; HideBySig = true }
                   Signature =
                     let args =
-                        EncodedType.Array(EncodedType.String, ArrayShape.OneDimension)
+                        EncodedType.SZArray(ImmutableArray.Empty, EncodedType.String)
                         |> ParamItem.create
                         |> ImmutableArray.Create
                     StaticMethodSignature(MethodCallingConventions.Default, ReturnType.voidItem, args)

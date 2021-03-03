@@ -159,8 +159,9 @@ module internal Heap =
                     writer.WriteBlobSize blobs.MethodDef.[signature].Size
                     writer.WriteU1 signature.Flags
 
-                    // match signature.CallingConventions with
-                    // | MethodCallingConventions.Generic count -> invalidOp "TODO: Write number of generic parameters."
+                    //match signature.CallingConventions with
+                    //| MethodCallingConventions.Generic count -> invalidOp "TODO: Write number of generic parameters."
+                    //| _ -> ()
 
                     writer.WriteCompressed signature.Parameters.Length // ParamCount
                     writer.WriteRetType signature.ReturnType

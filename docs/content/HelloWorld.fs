@@ -127,7 +127,7 @@ let example() =
               Flags = Flags.staticMethod { Visibility = Public; HideBySig = true }
               Signature =
                 let args =
-                    EncodedType.Array(EncodedType.String, ArrayShape.OneDimension)
+                    EncodedType.SZArray(ImmutableArray.Empty, EncodedType.String)
                     |> ParamItem.create
                     |> ImmutableArray.Create
                 StaticMethodSignature(MethodCallingConventions.Default, ReturnType.voidItem, args)
@@ -214,7 +214,7 @@ let tests =
                 )
                 |> Process.Start
 
-            let out = dotnet.StandardOutput.ReadToEnd()
+            let out = dotnet.StandardOutput.ReadLine()
             dotnet.StandardError.ReadToEnd() |> stderr.Write
             dotnet.WaitForExit()
 

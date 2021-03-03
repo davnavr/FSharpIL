@@ -55,9 +55,6 @@ type ArrayShape =
       /// <remarks>Corresponds to the <c>NumLoBounds</c> item and <c>LoBound</c> items in the signature.</remarks>
       LowerBounds: ImmutableArray<int32> }
 
-    /// Describes the shape of a single-dimensional array.
-    static member OneDimension = { Rank = 1u; Sizes = ImmutableArray.Empty; LowerBounds = ImmutableArray.Empty }
-
 /// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
 [<RequireQualifiedAccess>]
 type EncodedType =
@@ -100,7 +97,7 @@ type EncodedType =
     //| PTR // of ?
     /// <summary>Represents the <see cref="T:System.String"/> type.</summary>
     | String
-    | SZArray // of ?
+    | SZArray of ImmutableArray<CustomModifier> * EncodedType
     | ValueType // of TypeDefOrRefOrSpecEncoded
     //| Var // of ?
 
@@ -125,7 +122,10 @@ type EncodedType =
             | Object
             | String -> ()
             | Array(item, _) -> IndexOwner.checkOwner owner item
-            | _ -> failwith "Cannot validate owner of unsupported encoded type"
+            | SZArray(modifiers, item) ->
+                for modifier in modifiers do modifier.CheckOwner owner
+                IndexOwner.checkOwner owner item
+            | bad -> failwithf "Cannot validate owner of unsupported encoded type %A" bad
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
