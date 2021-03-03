@@ -215,7 +215,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         info.StringsStream.WriteIndex(tref.TypeNamespace, writer)
 
     // TypeDef (0x02)
-    if tables.TypeDef.Count > 0 then // TODO: Figure out how to generate correct field and method index.
+    if tables.TypeDef.Count > 0 then
         let mutable field = 1u
         let mutable method = 1u
 
@@ -225,11 +225,11 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             info.StringsStream.WriteIndex(tdef.TypeNamespace, writer)
             extends.WriteIndex(tdef.Extends, writer)
 
-            field <- uint32 tdef.FieldList.Count
             tables.Field.WriteSimpleIndex(field, writer)
+            field <- field + uint32 tdef.FieldList.Count
 
-            method <- uint32 tdef.MethodList.Count
             tables.Field.WriteSimpleIndex(method, writer)
+            method <- method + uint32 tdef.MethodList.Count
 
     // Field (0x04)
     for row in tables.Field.Items do
