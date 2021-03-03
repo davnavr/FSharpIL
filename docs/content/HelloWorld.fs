@@ -125,14 +125,9 @@ let example() =
               ImplFlags = MethodImplFlags.None
               MethodName = Identifier.ofStr "Main"
               Flags = Flags.staticMethod { Visibility = Public; HideBySig = true }
-              Signature =
-                let args =
-                    EncodedType.SZArray(ImmutableArray.Empty, EncodedType.String)
-                    |> ParamItem.create
-                    |> ImmutableArray.Create
-                StaticMethodSignature(MethodCallingConventions.Default, ReturnType.itemVoid, args)
+              Signature = EntryPointSignature.voidWithArgs
               ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
-            |>  StaticClassMethod.Method
+            |> EntryPointMethod
 
         // Create the class that will contain the entrypoint method.
         let! programBuilder =
@@ -145,8 +140,7 @@ let example() =
 
         let! main' = programBuilder.AddMethod main
         let! program = programBuilder.BuildType() // TODO: Fix, order of types does not follow order that BuildType methods were called.
-
-        do! program.Value.MethodList.GetIndex main' |> setEntrypoint
+        do! program.Value.MethodList.GetIndex main' |> setEntryPoint
     }
     |> CliMetadata.createMetadata
         { Name = Identifier.ofStr "HelloWorld.exe"

@@ -136,7 +136,7 @@ type TypeDefRow internal (flags, name, ns, extends, fields, methods, parent, gen
     member _.TypeNamespace: string = ns
     member _.Extends: Extends = extends
     member _.FieldList: IndexedList<FieldRow> = fields
-    member _.MethodList: IndexedList<MethodDef> = methods
+    member _.MethodList: IndexedList<MethodDefRow> = methods
     member _.EnclosingClass: SimpleIndex<TypeDefRow> option = parent
     member _.GenericParams: IndexedList<GenericParam> = genericParams
 
@@ -206,7 +206,7 @@ type TypeVisibility =
 /// <seealso cref="T:FSharpIL.Metadata.AbstractClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.SealedClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.StaticClassDef"/>
-type ClassDef<'Flags, 'Field, 'Method when 'Field :> IField and 'Method :> IMethod> =
+type ClassDef<'Flags> =
     { /// <summary>
       /// Corresponds to the <c>VisibilityMask</c> flags of a type, as well as an entry in the <c>NestedClass</c> table if the current type is nested.
       /// </summary>
@@ -217,13 +217,13 @@ type ClassDef<'Flags, 'Field, 'Method when 'Field :> IField and 'Method :> IMeth
       Extends: Extends }
 
 /// Represents a class that is not sealed or abstract.
-type ConcreteClassDef = ClassDef<ConcreteClassFlags, FieldChoice, ConcreteClassMethod>
+type ConcreteClassDef = ClassDef<ConcreteClassFlags>
 /// Represents an abstract class.
-type AbstractClassDef = ClassDef<AbstractClassFlags, FieldChoice, AbstractClassMethod>
-type SealedClassDef = ClassDef<SealedClassFlags, FieldChoice, SealedClassMethod>
+type AbstractClassDef = ClassDef<AbstractClassFlags>
+type SealedClassDef = ClassDef<SealedClassFlags>
 // TODO: Remove Extends field for static classes, and make them inherit from System.Object if this is a requirement by ECMA-335.
 /// Represents a sealed and abstract class, meaning that it can only contain static members.
-type StaticClassDef = ClassDef<StaticClassFlags, StaticField, StaticClassMethod>
+type StaticClassDef = ClassDef<StaticClassFlags>
 
 /// <summary>
 /// Represents a delegate type, which is a <see cref="T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:System.Delegate"/>.
@@ -274,7 +274,7 @@ type DuplicateTypeDefError (duplicate: TypeDefRow) =
 /// <summary>Represents the <c>&lt;Module&gt;</c> pseudo-class that contains global fields and methods (II.10.8).</summary>
 type ModuleType internal (owner: IndexOwner) =
     let fields = IndexedListBuilder<FieldRow> owner
-    let methods = IndexedListBuilder<MethodDef> owner
+    let methods = IndexedListBuilder<MethodDefRow> owner
 
     // member _.AddField (field: GlobalField) = failwith "TODO: Implement generation of global fields"
     // member _.AddMethod = failwith "TODO: Implement generation of global methods"

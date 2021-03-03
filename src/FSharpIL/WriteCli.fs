@@ -40,7 +40,7 @@ type CliInfo =
       mutable Metadata: ChunkWriter
       /// Specifies the RVA and size of the "hash data for this PE file" (II.25.3.3).
       mutable StrongNameSignature: ChunkWriter
-      MethodBodies: Dictionary<MethodDef, uint32>
+      MethodBodies: Dictionary<MethodDefRow, uint32>
       StringsStream: Heap<string>
       UserStringStream: UserStringHeap
       GuidStream: Heap<Guid>
@@ -59,11 +59,16 @@ let header info (writer: ChunkWriter) =
 
     writer.WriteU4 info.Cli.HeaderFlags // Flags
 
-    let entryPointToken =
-        info.Cli.EntryPointToken
-        |> Option.map info.Cli.MethodDef.IndexOf
-        |> Option.defaultValue 0u
-    MetadataToken.write entryPointToken 0x6uy writer
+    let entryPointTable, entryPointToken =
+        match info.Cli.EntryPointToken with
+        | ValueNone -> 0uy, 0u
+        | ValueSome (ValidEntryPoint (SimpleIndex main))
+        | ValueSome (CustomEntryPoint (SimpleIndex main)) ->
+            0x6uy, info.Cli.MethodDef.IndexOf main
+        | ValueSome (EntryPointFile file) ->
+            0x26uy, info.Cli.File.IndexOf file.Value.File
+
+    MetadataToken.write entryPointToken entryPointTable writer
 
     // Resources
     writer.WriteU4 0u

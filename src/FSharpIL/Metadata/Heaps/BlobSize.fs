@@ -36,7 +36,7 @@ let (|B4|B2|B1|) (value: uint32) =
     | _ -> invalidArg (nameof value) "Invalid compressed size."
 
 let ofCustomMod (customMod: CustomModifier) =
-    invalidOp "TODO: Calculate size of custom modifiers"
+    failwith "TODO: Calculate size of custom modifiers"
 
 let private customModifiers modifiers = Seq.sumBy ofCustomMod modifiers
 
@@ -44,6 +44,7 @@ let ofRetType (retType: ReturnTypeItem) =
     let size =
         match retType.ReturnType with
         | ReturnType.Void -> 1u
+        | bad -> failwithf "Unable to calculate size for unsupported return type %A" bad
     size + customModifiers retType.CustomMod
 
 let rec ofType =

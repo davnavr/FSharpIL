@@ -3,9 +3,11 @@ module FSharpIL.Metadata.EntryPointSignature
 
 open System.Collections.Immutable
 
-let inline private create signature =
+let inline private create (signature: MethodDefSignature) =
     let signature' = signature
-    { new EntryPointSignature() with member _.Signature() = signature' }
+    { new EntryPointSignature() with
+        member _.CheckOwner owner = signature'.CheckOwner owner
+        member _.Signature() = signature' }
 
 let private args = EncodedType.SZArray(ImmutableArray.Empty, EncodedType.String) |> ParamItem.create |> ImmutableArray.Create
 /// Represents the signature of an entrypoint method that takes an array of string arguments and returns an integer exit code.

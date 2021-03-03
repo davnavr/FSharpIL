@@ -102,14 +102,9 @@ type HelloWorld () =
                   ImplFlags = MethodImplFlags.None
                   MethodName = Identifier.ofStr "Main"
                   Flags = Flags.staticMethod { Visibility = Public; HideBySig = true }
-                  Signature =
-                    let args =
-                        EncodedType.SZArray(ImmutableArray.Empty, EncodedType.String)
-                        |> ParamItem.create
-                        |> ImmutableArray.Create
-                    StaticMethodSignature(MethodCallingConventions.Default, ReturnType.itemVoid, args)
+                  Signature = EntryPointSignature.voidWithArgs
                   ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
-                |>  StaticClassMethod.Method
+                |> EntryPointMethod
 
             let! programBuilder =
                 buildStaticClass
@@ -122,7 +117,7 @@ type HelloWorld () =
             let! main' = programBuilder.AddMethod main
             let! program = programBuilder.BuildType()
 
-            do! program.Value.MethodList.GetIndex main' |> setEntrypoint
+            do! program.Value.MethodList.GetIndex main' |> setEntryPoint
         }
         |> CliMetadata.createMetadata
             { Name = Identifier.ofStr "HelloWorld.dll"

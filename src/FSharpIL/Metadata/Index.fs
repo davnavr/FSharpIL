@@ -8,7 +8,7 @@ open System.Collections.Generic
 type IndexOwner internal () = class end
 
 type IIndexValue =
-    /// <exception cref="T:System.InvalidOperation">The owner objects do not refer to the same object.</exception>
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException">The owner objects do not refer to the same object.</exception>
     abstract CheckOwner: IndexOwner -> unit
 
 type IIndex = abstract Owner: IndexOwner

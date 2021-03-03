@@ -19,7 +19,7 @@ type CliMetadataBuilder internal () =
 
     member inline this.Bind(expr: _ -> SimpleIndex<_>, body) = this.BindCommon(expr, body)
     member inline this.Bind(expr: _ -> TaggedIndex<_, _>, body) = this.BindCommon(expr, body)
-    member inline this.Bind(expr: _ -> TypeDefBuilder<_, _, _, _>, body) = this.BindCommon(expr, body)
+    member inline this.Bind(expr: _ -> TypeDefBuilder<_, _, _>, body) = this.BindCommon(expr, body)
 
     member inline _.Return result = fun (_: MetadataBuilderState) -> Result<_, ValidationError>.Ok result
 

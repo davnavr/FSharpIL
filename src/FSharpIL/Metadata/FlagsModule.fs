@@ -13,10 +13,10 @@ let instanceField (Flags flags: FieldFlags<Visibility>) = ValidFlags<InstanceFie
 let staticField (Flags flags: FieldFlags<Visibility>) = ValidFlags<StaticFieldFlags, _>(flags ||| FieldAttributes.Static)
 let globalField (Flags flags: FieldFlags<GlobalVisibility>) = ValidFlags<GlobalFieldFlags, _>(flags ||| FieldAttributes.Static) // TODO: Set other special flags
 
-let instanceMethod (Flags flags: InstanceMethodDefFlags) = ValidFlags<InstanceMethodFlags, _> flags
-let abstractMethod (Flags flags: InstanceMethodDefFlags) = ValidFlags<AbstractMethodFlags, _>(MethodAttributes.Abstract ||| MethodAttributes.Virtual ||| flags)
-let finalMethod (Flags flags: InstanceMethodDefFlags) = ValidFlags<FinalMethodFlags, _>(MethodAttributes.Final ||| MethodAttributes.Virtual ||| flags)
-let staticMethod (Flags flags: StaticMethodDefFlags<Visibility>) = ValidFlags<StaticMethodFlags, _>(MethodAttributes.Static ||| flags)
+let instanceMethod (Flags flags: InstanceMethodFlags) = ValidFlags<InstanceMethod, _> flags
+let abstractMethod (Flags flags: InstanceMethodFlags) = ValidFlags<AbstractMethod, _>(MethodAttributes.Abstract ||| MethodAttributes.Virtual ||| flags)
+let finalMethod (Flags flags: InstanceMethodFlags) = ValidFlags<FinalMethod, _>(MethodAttributes.Final ||| MethodAttributes.Virtual ||| flags)
+let staticMethod (Flags flags: StaticMethodFlags<Visibility>) = ValidFlags<StaticMethod, _>(MethodAttributes.Static ||| flags)
 // let globalMethod (Flags flags: StaticMethodDefFlags<GlobalVisibility>) = failwith ""
 
 // let constructor (Flags flags: _) = ValidFlags<ConstructorFlags, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| flags)

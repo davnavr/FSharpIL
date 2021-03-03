@@ -12,10 +12,11 @@ type IndexedList<'T when 'T : equality> internal (owner: IndexOwner, items: Immu
     member _.Item with get i = items.[i]
     member _.AsSpan() = items.AsSpan()
     /// <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the index is negative or the list does not contain enough elements.</exception>
-    member _.GetIndex i =
+    member _.GetIndex(index: TaggedIndex<'Tag, int>) =
+        let i = index.Value
         if i < 0 || i >= items.Length
         then System.IndexOutOfRangeException() |> raise
-        else SimpleIndex(owner, items.[i])
+        else TaggedIndex<'Tag, _>(owner, items.[i])
     member _.GetEnumerator() = items.GetEnumerator()
 
     interface IReadOnlyList<'T> with

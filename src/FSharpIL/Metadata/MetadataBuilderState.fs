@@ -178,22 +178,16 @@ type MetadataBuilderState (mdle: ModuleTable) =
     // (0x2C)
     // member GenericParamConstraint
 
-    // TODO: How to specify the entrypoint in a multi-file assembly? Create an EntryPoint DU.
     /// <summary>Gets or sets the entrypoint of the assembly.</summary>
     /// <remarks>The entrypoint of the assembly is specified by the <c>EntryPointToken</c> field of the CLI header (II.25.3.3).</remarks>
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException" />
     member _.EntryPoint
-        with get(): EntryPointIndex voption = entrypoint
-        and set main =
-            match main with
-            | ValueSome (main': EntryPointIndex) ->
-                IndexOwner.checkIndex owner main'.Index
-            | ValueNone -> ()
-
+        with get(): EntryPointToken voption = entrypoint
+        and set (main: EntryPointToken voption) =
+            ValueOption.iter (IndexOwner.checkOwner owner) main
             entrypoint <- main
 
-    member _.SetAssembly(assm: Assembly) =
-        assembly <- Some assm
-        AssemblyIndex(owner, ())
+    member _.SetAssembly(assm: Assembly) = assembly <- Some assm; AssemblyIndex(owner, ())
 
     member internal this.FindType t: SimpleIndex<_> option =
         // TODO: Search in the TypeDefTable as well.

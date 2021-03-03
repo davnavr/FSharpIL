@@ -28,9 +28,10 @@
     <Compile Include="Metadata\Param.fs" />
     <Compile Include="Metadata\GenericParam.fs" />
     <Compile Include="Metadata\MethodBody.fs" />
-    <Compile Include="Metadata\Method.fs" />
+    <Compile Include="Metadata\MethodDefRow.fs" />
     <Compile Include="Metadata\IndexedList.fs" />
     <Compile Include="Metadata\TypeDef.fs" />
+    <Compile Include="Metadata\Method.fs" />
     <Compile Include="Metadata\MemberRef.fs" />
     <Compile Include="Metadata\CustomAttribute.fs" />
     <Compile Include="Metadata\ImmutableTable.fs" />
