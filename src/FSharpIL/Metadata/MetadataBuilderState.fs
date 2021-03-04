@@ -103,9 +103,9 @@ type MetadataBuilderState (mdle: ModuleTable) =
     /// (0x02)
     member _.TypeDef: TypeDefTable = typeDef
     // (0x04)
-    // member Field
+    member val Field = OwnedTableBuilder<TypeDefRow, FieldRow> owner
     // (0x06)
-    // member Method
+    member val Method = OwnedTableBuilder<TypeDefRow, MethodDefRow> owner
     // (0x08)
     // member Param
     // (0x09)
@@ -172,7 +172,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
                 | _ -> None)
             typeDef
     // (0x2A)
-    // member GenericParam
+    // member GenericParam // TODO: Create custom table type for generic parameters.
     // (0x2B)
     // member MethodSpec
     // (0x2C)

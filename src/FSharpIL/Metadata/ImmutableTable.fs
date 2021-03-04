@@ -19,7 +19,7 @@ type ImmutableTable<'Index, 'T when 'Index :> IIndex and 'Index : equality> inte
             i <- i + 1
             dict.Item <- own item, uint32 i
 
-    member val Handles = dict.Keys :> IReadOnlyCollection<_>
+    member val Handles = dict.Keys :> IReadOnlyCollection<_> // TODO: Rename to indices
     member val Items = Array.AsReadOnly items
     member val internal SimpleIndexSize = if items.Length < 65536 then 2 else 4
 

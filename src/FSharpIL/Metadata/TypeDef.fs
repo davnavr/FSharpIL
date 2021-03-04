@@ -2,9 +2,11 @@
 
 open System
 open System.Collections.Generic
-open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
+open System.Text
+
+open Microsoft.FSharp.Core.Printf
 
 type LayoutFlag =
     | AutoLayout
@@ -130,15 +132,12 @@ type Extends =
 /// <seealso cref="T:FSharpIL.Metadata.InterfaceDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.StructDef"/>
 [<Sealed>]
-type TypeDefRow internal (flags, name, ns, extends, fields, methods, parent, genericParams) =
+type TypeDefRow internal (flags, name, ns, extends, parent) =
     member _.Flags: TypeAttributes = flags
     member _.TypeName: Identifier = name
     member _.TypeNamespace: string = ns
     member _.Extends: Extends = extends
-    member _.FieldList: IndexedList<FieldRow> = fields
-    member _.MethodList: IndexedList<MethodDefRow> = methods
     member _.EnclosingClass: SimpleIndex<TypeDefRow> option = parent
-    member _.GenericParams: IndexedList<GenericParam> = genericParams
 
     override this.Equals obj =
         match obj with
@@ -146,6 +145,41 @@ type TypeDefRow internal (flags, name, ns, extends, fields, methods, parent, gen
         | _ -> false
 
     override _.GetHashCode() = hash(name, ns)
+
+    override _.ToString() =
+        let text = StringBuilder()
+        let visibility =
+            match flags &&& TypeAttributes.VisibilityMask with
+            | TypeAttributes.Public -> "public"
+            | TypeAttributes.NestedPublic -> "nested public"
+            | TypeAttributes.NestedPrivate -> "nested private"
+            | TypeAttributes.NestedFamily  -> "nested family"
+            | TypeAttributes.NestedAssembly  -> "nested assembly"
+            | TypeAttributes.NestedFamANDAssem  -> "nested famandassem"
+            | TypeAttributes.NestedFamORAssem  -> "nested famorassem"
+            | _ -> "private"
+        let layout = 
+            match flags &&& TypeAttributes.LayoutMask with
+            | TypeAttributes.SequentialLayout -> "sequential"
+            | TypeAttributes.ExplicitLayout -> "explicit"
+            | _ -> "auto"
+
+        bprintf text ".class %s %s" visibility layout
+
+        match flags &&& TypeAttributes.StringFormatMask with
+        | TypeAttributes.UnicodeClass -> " unicode"
+        | TypeAttributes.AutoClass -> " autochar"
+        | TypeAttributes.CustomFormatClass -> ""
+        | _ -> " ansi"
+        |> bprintf text "%s"
+
+        // TODO: Add other flags when printing TypeDefRow.
+
+        bprintf text " '"
+        if ns.Length > 0 then bprintf text "%s." ns
+        bprintf text "%O'"name
+
+        text.ToString()
 
     interface IEquatable<TypeDefRow> with
         member _.Equals other = ns = other.TypeNamespace && name = other.TypeName
@@ -272,32 +306,23 @@ type DuplicateTypeDefError (duplicate: TypeDefRow) =
             this.Type
 
 /// <summary>Represents the <c>&lt;Module&gt;</c> pseudo-class that contains global fields and methods (II.10.8).</summary>
-type ModuleType internal (owner: IndexOwner) =
-    let fields = IndexedListBuilder<FieldRow> owner
-    let methods = IndexedListBuilder<MethodDefRow> owner
-
-    // member _.AddField (field: GlobalField) = failwith "TODO: Implement generation of global fields"
-    // member _.AddMethod = failwith "TODO: Implement generation of global methods"
-
-    member internal _.Row() =
-        TypeDefRow(TypeAttributes.NotPublic, ModuleType.Name, String.Empty, Extends.Null, fields.ToImmutable(), methods.ToImmutable(), None, IndexedList.Empty)
-
-    static member val internal Name = Identifier "<Module>"
+[<AbstractClass; Sealed>]
+type ModuleType private () =
+    static member val internal Name = Identifier.ofStr "<Module>"
+    static member val internal Row = TypeDefRow(TypeAttributes.NotPublic, ModuleType.Name, String.Empty, Extends.Null, None)
 
 type TypeDefTableEnumerator =
     struct
         val mutable private definitions: List<TypeDefRow>.Enumerator
-        val private moduleType: TypeDefRow
         val mutable private state: uint8
 
-        internal new (moduleType: ModuleType, types: List<TypeDefRow>) =
+        internal new (types: List<TypeDefRow>) =
             { definitions = types.GetEnumerator()
-              moduleType = moduleType.Row()
               state = 0uy }
 
         member this.Current =
             match this.state with
-            | 1uy -> this.moduleType
+            | 1uy -> ModuleType.Row
             | _ -> this.definitions.Current
 
         member this.MoveNext() =
@@ -322,19 +347,19 @@ type TypeDefTable internal (owner: IndexOwner) =
     let defs = List<TypeDefRow>()
     let lookup = HashSet<TypeDefRow>()
 
-    member val Module = ModuleType owner
+    member val Module = TypeIndex<ModuleType>(owner, ModuleType.Row)
     member _.Count = defs.Count + 1
 
     // TODO: Enforce common CLS checks and warnings for types.
     member _.GetIndex(tdef: TypeDefRow) =
         IndexOwner.checkOwner owner tdef
-        if (tdef.TypeName = ModuleType.Name && String.IsNullOrEmpty tdef.TypeNamespace) || lookup.Add tdef
+        if (tdef.TypeName = ModuleType.Row.TypeName && String.IsNullOrEmpty tdef.TypeNamespace) || lookup.Add tdef
         then
             defs.Add tdef
             SimpleIndex(owner, tdef) |> Ok
         else DuplicateTypeDefError tdef :> ValidationError |> Error
 
-    member this.GetEnumerator() = new TypeDefTableEnumerator(this.Module, defs)
+    member this.GetEnumerator() = new TypeDefTableEnumerator(defs)
 
     interface IReadOnlyCollection<TypeDefRow> with
         member this.Count = this.Count

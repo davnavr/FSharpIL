@@ -224,17 +224,18 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         let mutable field = 1u
         let mutable method = 1u
 
-        for tdef in tables.TypeDef.Items do
+        for index in tables.TypeDef.Handles do
+            let tdef = index.Value
             writer.WriteU4 tdef.Flags
             info.StringsStream.WriteStringIndex(tdef.TypeName, writer)
             info.StringsStream.WriteIndex(tdef.TypeNamespace, writer)
             extends.WriteIndex(tdef.Extends, writer)
 
             tables.Field.WriteSimpleIndex(field, writer)
-            field <- field + uint32 tdef.FieldList.Count
+            field <- field + (tables.TempFieldCounts.GetValueOrDefault index)
 
             tables.Field.WriteSimpleIndex(method, writer)
-            method <- method + uint32 tdef.MethodList.Count
+            method <- method + (tables.TempMethodCounts.GetValueOrDefault index)
 
     // Field (0x04)
     for row in tables.Field.Items do

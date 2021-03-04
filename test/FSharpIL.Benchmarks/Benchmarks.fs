@@ -106,18 +106,17 @@ type HelloWorld () =
                   ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
                 |> EntryPointMethod
 
-            let! programBuilder =
-                buildStaticClass
+            let! program =
+                addStaticClass
                     { Access = TypeVisibility.Public
                       ClassName = Identifier.ofStr "Program"
                       Extends = Extends.TypeRef object
                       Flags = Flags.staticClass ClassFlags.None
                       TypeNamespace = "HelloWorld" }
 
-            let! main' = programBuilder.AddMethod main
-            let! program = programBuilder.BuildType()
+            let! main' = addMethod program main
 
-            do! program.Value.MethodList.GetIndex main' |> setEntryPoint
+            do! setEntryPoint main'
         }
         |> CliMetadata.createMetadata
             { Name = Identifier.ofStr "HelloWorld.dll"

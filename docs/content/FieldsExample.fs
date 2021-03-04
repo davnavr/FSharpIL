@@ -60,14 +60,14 @@ let example() =
                   ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
 
         let! examples =
-            buildStaticClass
+            addStaticClass
                 { Access = TypeVisibility.Public
                   ClassName = Identifier.ofStr "Fields"
                   Extends = Extends.TypeRef object
                   Flags = Flags.staticClass ClassFlags.None
                   TypeNamespace = "FSharpIL.Examples" }
 
-        let! myStaticField =
+        let myStaticField =
             { FieldName = Identifier.ofStr "myStaticField"
               Flags =
                 { Visibility = Visibility.Private
@@ -76,11 +76,10 @@ let example() =
                 |> Flags.staticField
               Signature = FieldSignature.create EncodedType.I4 }
             |> StaticField
-            |> examples.AddField
 
         // TODO: Do things with fields.
 
-        let! examples' = examples.BuildType()
+        let! myStaticField' = addField examples myStaticField
 
         ()
     }

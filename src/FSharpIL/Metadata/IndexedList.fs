@@ -3,6 +3,7 @@
 open System.Collections.Generic
 open System.Collections.Immutable
 
+[<System.Obsolete>]
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type IndexedList<'T when 'T : equality> internal (owner: IndexOwner, items: ImmutableArray<'T>) =
     internal new (owner, items: ImmutableArray<'T>.Builder) = IndexedList<_>(owner, items.ToImmutable())
@@ -27,6 +28,7 @@ type IndexedList<'T when 'T : equality> internal (owner: IndexOwner, items: Immu
 
     static member Empty = IndexedList(Unchecked.defaultof<IndexOwner>, ImmutableArray<'T>.Empty)
 
+[<System.Obsolete>]
 [<Sealed>]
 type internal IndexedListBuilder<'T when 'T : equality and 'T :> IIndexValue> (owner: IndexOwner) =
     let lookup = HashSet<'T>()

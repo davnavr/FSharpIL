@@ -128,17 +128,17 @@ let example() =
             |> EntryPointMethod
 
         // Create the class that will contain the entrypoint method.
-        let! programBuilder =
-            buildStaticClass
+        let! program =
+            addStaticClass
                 { Access = TypeVisibility.Public
                   ClassName = Identifier.ofStr "Program"
                   Extends = Extends.TypeRef object
                   Flags = Flags.staticClass { ClassFlags.None with BeforeFieldInit = true }
                   TypeNamespace = "HelloWorld" }
 
-        let! main' = programBuilder.AddMethod main
-        let! program = programBuilder.BuildType() // TODO: Fix, order of types does not follow order that BuildType methods were called.
-        do! program.Value.MethodList.GetIndex main' |> setEntryPoint
+        let! main' = addMethod program main
+
+        do! setEntryPoint main'
     }
     |> CliMetadata.createMetadata
         { Name = Identifier.ofStr "HelloWorld.exe"

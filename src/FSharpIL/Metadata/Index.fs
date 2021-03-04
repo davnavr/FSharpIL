@@ -19,6 +19,7 @@ type IIndex = abstract Owner: IndexOwner
 type SimpleIndex<'Value when 'Value : equality> internal (owner: IndexOwner, value: 'Value) =
     member internal _.Owner = owner
     member _.Value = value
+    override _.ToString() = value.ToString()
 
     interface IIndex with member this.Owner = this.Owner
 
@@ -33,6 +34,7 @@ type TaggedIndex<'Tag, 'Value when 'Value : equality> internal (index: SimpleInd
     member _.Index = index
     member internal _.Owner = index.Owner
     member _.Value = index.Value
+    override _.ToString() = index.ToString()
 
     internal new(owner, value) = TaggedIndex(SimpleIndex<_>(owner, value))
 
