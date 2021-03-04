@@ -44,11 +44,12 @@ type ParamRow =
 /// <summary>Represents a <c>Param</c> item used in signatures (II.23.2.10).</summary>
 // TODO: How is BYREF and TYPEDBYREF modeled?
 [<IsReadOnly>]
+[<NoComparison; StructuralEquality>]
 type ParamItem =
     struct
         val CustomMod: ImmutableArray<CustomModifier>
         val internal Type: IEncodedType // ParamType
-        internal new(modifiers, paramType) = { CustomMod = modifiers; Type = paramType }
+        internal new (modifiers, paramType) = { CustomMod = modifiers; Type = paramType }
 
         member internal this.CheckOwner owner =
             for modifier in this.CustomMod do modifier.CheckOwner owner

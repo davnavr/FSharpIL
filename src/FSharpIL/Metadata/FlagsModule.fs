@@ -9,9 +9,9 @@ let sealedClass (Flags flags: ClassFlags) = TypeFlags<SealedClassFlags>(TypeAttr
 let staticClass (Flags flags: ClassFlags) = TypeFlags<StaticClassFlags>(TypeAttributes.Abstract ||| TypeAttributes.Sealed ||| flags)
 let valueType (Flags flags: ClassFlags) = TypeFlags<StructFlags>(TypeAttributes.Sealed ||| flags)
 
-let instanceField (Flags flags: FieldFlags<Visibility>) = ValidFlags<InstanceFieldFlags, _> flags
-let staticField (Flags flags: FieldFlags<Visibility>) = ValidFlags<StaticFieldFlags, _>(flags ||| FieldAttributes.Static)
-let globalField (Flags flags: FieldFlags<GlobalVisibility>) = ValidFlags<GlobalFieldFlags, _>(flags ||| FieldAttributes.Static) // TODO: Set other special flags
+let instanceField (Flags flags: FieldFlags<Visibility>) = ValidFlags<InstanceField, _> flags
+let staticField (Flags flags: FieldFlags<Visibility>) = ValidFlags<StaticField, _>(flags ||| FieldAttributes.Static)
+let globalField (Flags flags: FieldFlags<GlobalVisibility>) = ValidFlags<GlobalField, _>(flags ||| FieldAttributes.Static) // TODO: Set other special flags
 
 let instanceMethod (Flags flags: InstanceMethodFlags) = ValidFlags<InstanceMethod, _> flags
 let abstractMethod (Flags flags: InstanceMethodFlags) = ValidFlags<AbstractMethod, _>(MethodAttributes.Abstract ||| MethodAttributes.Virtual ||| flags)

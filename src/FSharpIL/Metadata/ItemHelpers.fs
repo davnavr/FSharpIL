@@ -1,5 +1,5 @@
 ﻿[<AutoOpen>]
-module FSharpIL.Metadata.ItemsExtensions
+module FSharpIL.Metadata.ItemsExtensions // TODO: Make extensions globally available.
 
 type CustomModifier with
     member this.ModifierType = this.CMod :?> TypeDefOrRefOrSpecEncoded
@@ -15,3 +15,6 @@ type ReturnTypeItem with
 
 type ParamItem with
     member this.ParamType = this.Type :?> EncodedType
+
+type FieldSignature with
+    member this.FieldType = this.Type :?> EncodedType

@@ -116,5 +116,5 @@ type MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile private () =
         member _.Signature() = failwith "uh oh signature"
 
 [<AutoOpen>]
-module MethodHelpers =
-    let internal (|MethodDef|) (mthd: #IMethod<_>) = mthd.Definition()
+module internal MethodHelpers =
+    let inline (|MethodDef|) (mthd: #IMethod<_>) = mthd.Definition()

@@ -1,7 +1,6 @@
 ﻿(*** hide ***)
 #if DOCUMENTATION
-#r "nuget: System.Collections.Immutable"
-#r "../../src/FSharpIL/bin/Release/netstandard2.1/FSharpIL.dll"
+#r "../Dependencies.fsx"
 #else
 module FSharpIL.HelloWorld
 
@@ -9,7 +8,6 @@ open Expecto
 
 open Swensen.Unquote
 
-open System
 open System.Diagnostics
 open System.IO
 
@@ -146,7 +144,7 @@ let example() =
         { Name = Identifier.ofStr "HelloWorld.exe"
           Mvid = Guid.NewGuid() }
     |> ValidationResult.get
-    |> PEFile.ofMetadata ImageFileFlags.dll
+    |> PEFile.ofMetadata ImageFileFlags.dll // TODO: This should use exe flags.
 (*** hide ***)
 #if !DOCUMENTATION
 [<Tests>]
@@ -158,9 +156,12 @@ let tests =
         |> testCase name
 
     testList "hello world" [
-        testCaseCecil "has entrypoint" <| fun metadata -> test <@ metadata.EntryPoint.Name = "Main" @>
+        testCaseCecil "has entrypoint" <| fun metadata ->
+            test <@ metadata.EntryPoint.Name = "Main" @>
+
         testCaseCecil "has method references only" <| fun metadata ->
             test <@ metadata.GetMemberReferences() |> Seq.forall (fun mref -> mref :? MethodReference) @>
+
         testCaseCecil "has target framework attribute" <| fun metadata ->
             <@
                 let attribute = Seq.head metadata.Assembly.CustomAttributes
@@ -168,7 +169,8 @@ let tests =
                 attribute.AttributeType.Name = "TargetFrameworkAttribute" && ".NETCoreApp,Version=v5.0".Equals value.Value
             @>
             |> test
-        testCaseCecil "types have correct names" <| fun metadata ->
+
+        testCaseCecil "has types with correct names" <| fun metadata ->
             let expected =
                 [
                     ("", "<Module>")
@@ -179,6 +181,10 @@ let tests =
                 |> Seq.map (fun tdef -> tdef.Namespace, tdef.Name)
                 |> List.ofSeq
             test <@ expected = actual @>
+
+        testCaseCecil "entrypoint has correct argument type" <| fun metadata ->
+            let args = Seq.head metadata.EntryPoint.Parameters
+            test <@ args.ParameterType.IsArray && args.ParameterType.GetElementType() = metadata.TypeSystem.String @>
 
         testCase "runs correctly" <| fun() ->
             let output = Path.Combine(__SOURCE_DIRECTORY__, "tmp")
