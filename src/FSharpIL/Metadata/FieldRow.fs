@@ -48,6 +48,17 @@ type FieldRow internal (flags, name, signature) =
     interface IIndexValue with
         member _.CheckOwner owner = signature.CheckOwner owner
 
+type FieldIndex<'Tag> = TaggedIndex<'Tag, FieldRow>
+
+/// <summary>
+/// Error used when there is a duplicate row in the <c>Field</c> table (17).
+/// </summary>
+/// <category>Errors</category>
+[<Sealed>]
+type DuplicateFieldError (field: FieldRow) =
+    inherit ValidationError()
+    member _.Field = field
+
 type IField<'Parent> =
     inherit IIndexValue
     abstract Row : unit -> FieldRow
@@ -72,5 +83,3 @@ type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> =
         flags
 
     interface IFlags<FieldAttributes> with member this.Value = this.Value
-
-type FieldIndex<'Tag> = TaggedIndex<'Tag, FieldRow>

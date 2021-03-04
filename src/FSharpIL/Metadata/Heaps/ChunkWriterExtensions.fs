@@ -58,6 +58,11 @@ type ChunkWriter with
             this.WriteType element
             this.WriteArrayShape shape
 
+        | EncodedType.I1 -> this.WriteU1 ElementType.I1
+        | EncodedType.I2 -> this.WriteU1 ElementType.I2
+        | EncodedType.I4 -> this.WriteU1 ElementType.I4
+        | EncodedType.I8 -> this.WriteU1 ElementType.I8
+
         | EncodedType.String -> this.WriteU1 ElementType.String
         | EncodedType.SZArray(modifiers, element) ->
             this.WriteU1 ElementType.SZArray
@@ -66,7 +71,13 @@ type ChunkWriter with
                 failwith "Custom modifiers for SZArray is not yet supported"
 
             this.WriteType element
-        | bad -> failwithf "Unsupported type %A" bad
+
+        | EncodedType.U1 -> this.WriteU1 ElementType.U1
+        | EncodedType.U2 -> this.WriteU1 ElementType.U2
+        | EncodedType.U4 -> this.WriteU1 ElementType.U4
+        | EncodedType.U8 -> this.WriteU1 ElementType.U8
+
+        | bad -> failwithf "Unable to write unsupported type %A" bad
 
     member _.WriteCustomMod(modifiers: #IReadOnlyCollection<CustomModifier>) =
         if modifiers.Count > 0 then

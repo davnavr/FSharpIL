@@ -18,7 +18,7 @@ type internal BlobIndex =
 /// <summary>Represents the <c>#Blob</c> metadata stream (II.24.2.4).</summary>
 [<ReferenceEquality; NoComparison>]
 type internal BlobHeap =
-    { // Field: Dictionary< , BlobIndex>
+    { Field: Dictionary<FieldSignature , BlobIndex>
       MethodDef: Dictionary<MethodDefSignature, BlobIndex>
       // MemberRef contains both MethodRef and FieldRef
       MethodRef: Dictionary<MethodRefSignature, BlobIndex>
@@ -31,7 +31,8 @@ type internal BlobHeap =
       mutable ByteLength: uint32 }
 
     member this.SignatureCount =
-        this.MethodDef.Count
+        this.Field.Count
+        + this.MethodDef.Count
         + this.MethodRef.Count
 
         + this.CustomAttribute.Count
@@ -43,6 +44,7 @@ type internal BlobHeap =
 
     member inline private this.WriteRawIndex({ BlobIndex.Index = i }, writer: ChunkWriter) = this.WriteRawIndex(i, writer)
 
+    member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.Field.Item signature, writer)
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.MethodDef.Item signature, writer)
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.MethodRef.Item signature, writer)
     member this.WriteIndex(signature, writer) =

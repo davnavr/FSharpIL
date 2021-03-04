@@ -37,7 +37,9 @@ type CliMetadata (state: MetadataBuilderState) =
         if state.TypeDef.Count > 0 then
             bits <- bits ||| (1UL <<< 2)
             uint32 state.TypeDef.Count |> counts.Add
-        // if field.Count
+        if field.Count > 0 then
+            bits <- bits ||| (1UL <<< 4)
+            uint32 field.Count |> counts.Add
         if methodDef.Count > 0 then
             bits <- bits ||| (1UL <<< 6)
             uint32 methodDef.Count |> counts.Add
@@ -131,13 +133,13 @@ type CliMetadata (state: MetadataBuilderState) =
     /// </summary>
     member _.RowCounts = rowCounts
 
+// TODO: Consider replacing TypeDefBuilder by making Field and Method tables in MetadataBuilderState be a Dictionary<TypeDef, _>.
 // TODO: Move this to another file.
 [<NoEquality; NoComparison>]
 type TypeDefBuilder<'Type, 'GenericParam> =
     class
         val private builder: unit -> Result<SimpleIndex<TypeDefRow>, ValidationError>
         val private validate: TypeDefRow -> unit
-        // TODO: Fix, forgetting to call the BuildType function will result in missing fields and methods!
         val private fields: IndexedListBuilder<FieldRow>
         val private methods: IndexedListBuilder<MethodDefRow>
         val private owner: IndexOwner
@@ -172,7 +174,11 @@ type TypeDefBuilder<'Type, 'GenericParam> =
         | ValueSome i -> TaggedIndex<'Method, _>(this.owner, i) |> Ok
         | ValueNone -> DuplicateMethodError method :> ValidationError |> Error
 
-    // AddField
+    member this.AddField(FieldRow field: #IField<'Type>) =
+        match this.fields.Add field with
+        | ValueSome i -> Ok i
+        | ValueNone -> DuplicateFieldError field :> ValidationError |> Error
+
     // TODO: Figure out how to add generic parameters.
 
     // TODO: Create functions in a separate module for adding things to a TypeBuilder.
@@ -398,26 +404,26 @@ module CliMetadata =
             string name |> action
 
     let inline internal iterBlobs
+            field
             methodDef
             methodRef
             customAttribute
             publicKeyOrToken
             bytes
             (metadata: CliMetadata) =
-        for method in metadata.MethodDef.Items do
-            methodDef method.Signature
+
+        for row in metadata.Field.Items do field row.Signature
+
+        for method in metadata.MethodDef.Items do methodDef method.Signature
 
         for mref in metadata.MemberRef.Items do
             match mref with
             | MethodRef method -> methodRef method.Signature
 
-        for { Value = signature } in metadata.CustomAttribute do
-            Option.iter customAttribute signature
+        for { Value = signature } in metadata.CustomAttribute do Option.iter customAttribute signature
 
-        for { PublicKeyOrToken = token } in metadata.AssemblyRef.Items do
-            publicKeyOrToken token
+        for { PublicKeyOrToken = token } in metadata.AssemblyRef.Items do publicKeyOrToken token
 
-        for { File.HashValue = hashValue } in metadata.File.Items do
-            bytes hashValue
+        for { File.HashValue = hashValue } in metadata.File.Items do bytes hashValue
 
         ()

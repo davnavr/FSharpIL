@@ -137,4 +137,10 @@ module ReturnType =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module ParamItem =
     let modified modifiers (paramType: EncodedType) = ParamItem(modifiers, paramType)
-    let inline create paramType = modified ImmutableArray.Empty paramType
+    let create paramType = modified ImmutableArray.Empty paramType
+
+[<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module FieldSignature =
+    let modified modifiers (fieldType: EncodedType) = FieldSignature(modifiers, fieldType)
+    let create fieldType = modified ImmutableArray.Empty fieldType

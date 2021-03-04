@@ -240,7 +240,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     for row in tables.Field.Items do
         writer.WriteU2 row.Flags
         info.StringsStream.WriteStringIndex(row.Name, writer)
-        invalidOp "TODO: Write index for field signatures."
+        info.BlobStream.WriteIndex(row.Signature, writer) // Signature
 
     // MethodDef (0x06)
     if tables.MethodDef.Count > 0 then

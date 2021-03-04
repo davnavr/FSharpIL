@@ -1,6 +1,5 @@
 ﻿/// <summary>
-/// Contains functions for calculating the sizes of various "blobs" and signatures (II.23.2)
-/// in the <c>#Blob</c> heap (II.24.2.4).
+/// Contains functions for calculating the sizes of various "blobs" and signatures (II.23.2) in the <c>#Blob</c> heap (II.24.2.4).
 /// </summary>
 [<RequireQualifiedAccess>]
 module internal FSharpIL.Metadata.Heaps.BlobSize
@@ -38,6 +37,7 @@ let (|B4|B2|B1|) (value: uint32) =
 let ofCustomMod (customMod: CustomModifier) =
     failwith "TODO: Calculate size of custom modifiers"
 
+// TODO: Consider using a for loop to avoid object allocations since the ImmutableArray.Enumerator is a struct.
 let private customModifiers modifiers = Seq.sumBy ofCustomMod modifiers
 
 let ofRetType (retType: ReturnTypeItem) =
@@ -78,6 +78,11 @@ let rec ofType =
             failwith "Cannot calculate size of blob, custom modifiers for SZArray not yet supported"
         1u + ofType item
     | t -> failwithf "Cannot calculate size for unsupported type %A" t
+
+let ofFieldSignature (signature: FieldSignature) =
+    1u
+    + customModifiers signature.CustomMod
+    + ofType signature.FieldType
 
 let ofParam (param: ParamItem) =
     ofType param.ParamType + customModifiers param.CustomMod

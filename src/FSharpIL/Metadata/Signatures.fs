@@ -7,7 +7,18 @@ open System.Runtime.CompilerServices
 type internal ElementType =
     | End = 0uy
     | Void = 0x1uy
-
+    | Boolean = 0x2uy
+    | Char = 0x3uy
+    | I1 = 0x4uy
+    | U1 = 0x5uy
+    | I2 = 0x6uy
+    | U2 = 0x7uy
+    | I4 = 0x8uy
+    | U4 = 0x9uy
+    | I8 = 0xAuy
+    | U8 = 0xBuy
+    | R4 = 0xCuy
+    | R8 = 0xDuy
     | String = 0xEuy
 
     | Array = 0x14uy

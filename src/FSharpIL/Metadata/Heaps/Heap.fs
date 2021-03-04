@@ -88,7 +88,7 @@ module internal Heap =
     /// <summary>Creates the <c>#Blob</c> metadata stream, which contains signatures (II.24.2.4).</summary>
     let blob (metadata: CliMetadata) =
         let blob =
-            { 
+            { Field = Dictionary<_, _> metadata.Field.Count
               MethodDef = Dictionary<_, _> metadata.MethodDef.Count
               MethodRef = Dictionary<_, _> metadata.MemberRef.Count
 
@@ -103,7 +103,11 @@ module internal Heap =
                 blob.ByteLength <- blob.ByteLength + index.TotalSize
                 dict.Item <- key, index
 
+        // TODO: Create inlined function to check if a blob is not in one of the dictionaries before adding.
         CliMetadata.iterBlobs
+            (fun signature ->
+                if not (blob.Field.ContainsKey signature) then
+                    BlobSize.ofFieldSignature signature |> index blob.Field signature)
             (fun signature ->
                 if not (blob.MethodDef.ContainsKey signature) then
                     BlobSize.ofMethodDefSignature signature |> index blob.MethodDef signature)
@@ -145,6 +149,7 @@ module internal Heap =
         metadata.Module.Mvid.ToByteArray() |> writer.WriteBytes
 
     let writeBlob (blobs: BlobHeap) (metadata: CliMetadata) (writer: ChunkWriter) =
+        let field = HashSet<_> blobs.Field.Count
         let methodDef = HashSet<_> blobs.MethodDef.Count
         let methodRef = HashSet<_> blobs.MethodRef.Count
         let attributes = HashSet<_> blobs.CustomAttribute.Count
@@ -153,7 +158,14 @@ module internal Heap =
 
         writer.WriteU1 0uy // Empty blob
 
+        // TODO: Create inlined function for adding to HashSet and writing blob size.
         CliMetadata.iterBlobs
+            (fun signature ->
+                if field.Add signature then
+                    writer.WriteBlobSize blobs.Field.[signature].Size
+                    writer.WriteU1 0x6uy // FIELD
+                    writer.WriteCustomMod signature.CustomMod
+                    writer.WriteType signature.FieldType)
             (fun signature ->
                 if methodDef.Add signature then
                     writer.WriteBlobSize blobs.MethodDef.[signature].Size

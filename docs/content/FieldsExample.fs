@@ -37,7 +37,7 @@ let example() =
     metadata {
         let! assm =
             setAssembly
-                { Name = AssemblyName.ofStr "Example.Fields"
+                { Name = AssemblyName.ofStr "FSharpIL.Examples.Fields"
                   HashAlgId = ()
                   Version = Version(1, 0, 0, 0)
                   Flags = ()
@@ -62,10 +62,21 @@ let example() =
         let! examples =
             buildStaticClass
                 { Access = TypeVisibility.Public
-                  ClassName = Identifier.ofStr "Program"
+                  ClassName = Identifier.ofStr "Fields"
                   Extends = Extends.TypeRef object
-                  Flags = Flags.staticClass { ClassFlags.None with BeforeFieldInit = true }
-                  TypeNamespace = "HelloWorld" }
+                  Flags = Flags.staticClass ClassFlags.None
+                  TypeNamespace = "FSharpIL.Examples" }
+
+        let! myStaticField =
+            { FieldName = Identifier.ofStr "myStaticField"
+              Flags =
+                { Visibility = Visibility.Private
+                  NotSerialized = false
+                  SpecialName = false }
+                |> Flags.staticField
+              Signature = FieldSignature.create EncodedType.I4 }
+            |> StaticField
+            |> examples.AddField
 
         // TODO: Do things with fields.
 
@@ -74,7 +85,7 @@ let example() =
         ()
     }
     |> CliMetadata.createMetadata
-        { Name = Identifier.ofStr "HelloWorld.exe"
+        { Name = Identifier.ofStr "FSharpIL.Examples.Fields.exe"
           Mvid = Guid.NewGuid() }
     |> ValidationResult.get
     |> PEFile.ofMetadata ImageFileFlags.exe
@@ -82,8 +93,20 @@ let example() =
 #if !DOCUMENTATION
 [<Tests>]
 let tests =
+    let testCaseCecil name test = // TODO: Create common function for testing an example with Cecil.
+        fun() ->
+            use metadata = example() |> WritePE.stream |> ModuleDefinition.ReadModule
+            test metadata
+        |> testCase name
+
     testList "Fields Example" [
-        testCase "has correct field names" <| fun() ->
-            failwith "TODO: Add more tests"
+        testCaseCecil "has correct field names" <| fun metadata ->
+            let expected = [ "myStaticField" ]
+            let actual =
+                metadata.Types
+                |> Seq.collect (fun tdef -> tdef.Fields)
+                |> Seq.map (fun field -> field.Name)
+                |> List.ofSeq
+            test <@ expected = actual @>
     ]
 #endif
