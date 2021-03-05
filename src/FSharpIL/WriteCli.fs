@@ -16,6 +16,10 @@ module Size =
     [<Literal>]
     let CliHeader = 0x48u
 
+    /// The size of a fat method body header, as a number of 4-byte integers (II.25.4.3).
+    [<Literal>]
+    let FatFormat = 3us
+
 [<Sealed>]
 type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * uint32) =
     let large = count > (65535 <<< n)
@@ -31,6 +35,13 @@ type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * ui
         if large then writer.WriteU4 index else writer.WriteU2 index
 
 let codedIndex count n indexer = CodedIndex<_>(count, n, indexer)
+
+[<RequireQualifiedAccess>]
+module private ILMethodFlags =
+    let [<Literal>] TinyFormat = 0x2uy
+    let [<Literal>] FatFormat = 0x3us
+    let [<Literal>] MoreSects = 0x8us
+    let [<Literal>] InitLocals = 0x10us
 
 [<ReferenceEquality; NoComparison>]
 type CliInfo =
@@ -87,32 +98,70 @@ let header info (writer: ChunkWriter) =
     writer.WriteU8 0UL // ExportAddressTableJumps
     writer.WriteU8 0UL // ManagedNativeHeader
 
-/// Writes the method bodies.
+/// <param name="start">
+/// The first node that the method bodies will temporarily be written to before being written as part of the CLI metadata.
+/// </param>
+let methodBody (start: LinkedListNode<byte[]>) (body: IMethodBody) (info: CliInfo) =
+    if not body.Exists then invalidArg "body" "The method body should exist"
+
+    let writer = ChunkWriter start
+    let content = MethodBodyContentImpl(writer, info.Cli, info.UserStringStream)
+    let info = body.WriteBody content
+    struct(writer.Size, info)
+
 let bodies rva (info: CliInfo) (writer: ChunkWriter) =
+    let chunk = LinkedList<byte[]>().AddFirst(Array.zeroCreate writer.Chunk.Value.Length)
     let mutable offset = rva
 
     for method in info.Cli.MethodDef.Items do
         match info.MethodBodies.TryGetValue method.Body with
-        | (false, _) when method.Body.Exists ->
-            // TODO: Write fat format when necessary.
+        | false, _ when method.Body.Exists ->
+            let struct(size, body) = methodBody chunk method.Body info
+            
             // NOTE: For fat (and tiny) formats, "two least significant bits of first byte" indicate the type.
-            // TODO: Check conditions to see if tiny format can be used.
-            let header = writer.CreateWriter()
-            writer.SkipBytes 1u
-            let body = MethodBodyContentImpl(writer.CreateWriter(), info.Cli, info.UserStringStream)
-            method.Body.WriteBody body
-            let size = body.Writer.Size
-            0x2uy ||| (byte size <<< 2) |> header.WriteU1
+            // TODO: Add checks for no exceptions and extra data sections to generate Tiny format.
+            let tiny = size < 64u && body.MaxStack <= 8us (*no exceptions and no extra data sections*)
 
+            // Header
+            if tiny
+            then ILMethodFlags.TinyFormat ||| (byte size <<< 2) |> writer.WriteU1 // Flags and Size
+            else
+                let mutable flags = ILMethodFlags.FatFormat // TODO: Set other fat method flags as needed.
+                if body.InitLocals then flags <- flags ||| ILMethodFlags.InitLocals
+                flags ||| (Size.FatFormat <<< 12) |> writer.WriteU2 // Flags and Size
+                writer.WriteU2 body.MaxStack
+                writer.WriteU4 size
+                writer.WriteU4 0u // LocalVarSigTok // TODO: Figure out how to set local variable information.
+
+            // Body
+            use mutable content = chunk.List.GetEnumerator()
+            let mutable size' = size
+            while size' > 0u && content.MoveNext() do
+                let current = content.Current
+                let currentLength = uint32 current.Length
+                if size' > currentLength then
+                    size' <- size' - currentLength
+                    writer.WriteBytes current
+                else
+                    let remaining = Seq.take (int size') current
+                    size' <- 0u
+                    writer.WriteBytes remaining
+
+            if size' > 0u then
+                failwithf
+                    "Unable to write method body of size %i, chunk list unexpectedly ended with %i bytes remaining"
+                    size
+                    size'
+
+            if not tiny then writer.AlignTo 4u
+
+            let pos = writer.Position
             info.MethodBodies.Item <- method.Body, offset
-
-            offset <- offset + size
-            writer.SkipBytes size
+            offset <- offset + uint32 (writer.Position - pos)
 
             // TODO: Write extra method data sections.
-        | (false, _) -> info.MethodBodies.Item <- method.Body, 0u
-        | (true, existing) -> info.MethodBodies.Item <- method.Body, existing
-        | _ -> failwith "Unsupported method body"
+        | false, _ -> info.MethodBodies.Item <- method.Body, 0u
+        | true, _ -> ()
 
     writer.AlignTo 4u
 

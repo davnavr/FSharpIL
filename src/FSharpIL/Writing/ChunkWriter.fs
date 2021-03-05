@@ -34,7 +34,7 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, default
         if pos >= current.Value.Length then
             current <-
                 match current.Next with
-                | null -> current.List.AddAfter(current, Array.zeroCreate<byte> defaultCapacity)
+                | null -> current.List.AddAfter(current, Array.zeroCreate defaultCapacity)
                 | existing -> existing
             pos <- 0
 

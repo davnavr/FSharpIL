@@ -98,6 +98,7 @@ type HelloWorld () =
                         writer.Ldstr "Hello World!"
                         writer.Call writeLine
                         writer.Ret()
+                        { MaxStack = 8us; InitLocals = false }
                     |> MethodBody.create
                   ImplFlags = MethodImplFlags.None
                   MethodName = Identifier.ofStr "Main"
