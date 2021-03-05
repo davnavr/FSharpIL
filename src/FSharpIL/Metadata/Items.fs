@@ -132,6 +132,7 @@ module ReturnType =
     let modified modifiers (returnType: ReturnType) = ReturnTypeItem(modifiers, returnType)
     let itemVoid = ReturnTypeItem ReturnType.Void
     let itemI4 = encoded EncodedType.I4
+    let itemU4 = encoded EncodedType.U4
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

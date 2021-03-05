@@ -5,6 +5,7 @@ open Expecto
 
 open System.Diagnostics
 open System.IO
+open System.Runtime.Loader
 
 open Mono.Cecil
 
@@ -20,14 +21,19 @@ let private testCecil testf example (name: string) (test: _ -> unit): Test =
 let testCaseCecil = testCecil testCase
 let ftestCaseCecil = testCecil ftestCase
 
-let private testExec testf example (name: string) (dir: string) (path: string) fileName (test: Process -> _ -> unit): Test =
-    fun() ->
-        let file: FSharpIL.PortableExecutable.PEFile = example()
-        let output = Path.Combine(dir, path)
-        let executable = Path.Combine(output, fileName)
-        let config = Path.Combine(output, "example.runtimeconfig.json")
+let private writeToDisk example dir path fileName =
+    let file: FSharpIL.PortableExecutable.PEFile = example()
+    let output = Path.Combine(dir, path)
+    let executable = Path.Combine(output, fileName)
 
-        WritePE.toPath executable file
+    WritePE.toPath executable file
+
+    output, executable
+
+let private testExec testf example (name: string) dir path fileName (test: Process -> _ -> unit): Test =
+    fun() ->
+        let output, executable = writeToDisk example dir path fileName
+        let config = Path.Combine(output, "example.runtimeconfig.json")
 
         use dotnet =
             ProcessStartInfo (
@@ -45,7 +51,22 @@ let private testExec testf example (name: string) (dir: string) (path: string) f
     |> testf name
 
 /// <summary>
-/// Builds a test case that executes the Portable Executable with the <c>dotnet exec</c> command.
+/// Builds a test case that writes the Portable Executable to disk and executes it with the <c>dotnet exec</c> command.
 /// </summary>
 let testCaseExec = testExec testCase
 let ftestCaseExec = testExec ftestCase
+
+let private testLoad testf example (name: string) (test: _ -> unit): Test =
+    fun() ->
+        let context: AssemblyLoadContext = failwith "TODO: Figure out how to load assemblies"
+        try
+            let file = example() |> WritePE.stream
+            let assm = context.LoadFromStream file
+            test assm
+        finally context.Unload() // TODO: Figure out if unloading is necessary.
+    |> testf name
+
+/// <summary>
+/// Builds a test case that loads the Portable Executable into a <see cref="T:System.Runtime.Loader.AssemblyLoadContext"/>.
+/// </summary>
+let testCaseLoad = testLoad testCase

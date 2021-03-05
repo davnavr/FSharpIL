@@ -126,7 +126,7 @@ let example() =
         { Name = Identifier.ofStr "HelloWorld.exe"
           Mvid = Guid.NewGuid() }
     |> ValidationResult.get
-    |> PEFile.ofMetadata ImageFileFlags.dll // TODO: This should use exe flags.
+    |> PEFile.ofMetadata ImageFileFlags.exe
 (*** hide ***)
 #if COMPILED
 [<Tests>]
