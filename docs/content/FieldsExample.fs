@@ -67,7 +67,7 @@ let example() =
                   Flags = Flags.staticClass ClassFlags.None
                   TypeNamespace = "FSharpIL.Examples" }
 
-        let myStaticField =
+        let! myStaticField =
             { FieldName = Identifier.ofStr "myStaticField"
               Flags =
                 { Visibility = Visibility.Private
@@ -76,10 +76,24 @@ let example() =
                 |> Flags.staticField
               Signature = FieldSignature.create EncodedType.I4 }
             |> StaticField
+            |> addField examples
 
         // TODO: Do things with fields.
 
-        let! myStaticField' = addField examples myStaticField
+        let! main =
+            { Body =
+                fun content ->
+                    let writer = MethodBodyWriter content
+                    writer.Ldfld myStaticField
+                    writer.Ret()
+                |> MethodBody.create
+              ImplFlags = MethodImplFlags.None
+              MethodName = Identifier.ofStr "Main"
+              Flags = Flags.staticMethod { Visibility = Public; HideBySig = true }
+              Signature = EntryPointSignature.exitNoArgs
+              ParamList = fun _ _ -> failwith "bad" } // TODO: Create function that throws exception when called for ParamList.
+            |> EntryPointMethod
+            |> addMethod examples
 
         ()
     }

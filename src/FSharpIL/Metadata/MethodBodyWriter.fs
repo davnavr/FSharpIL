@@ -19,7 +19,10 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     /// (0x00) Writes an instruction that does nothing (III.3.51).
     member _.Nop() = content.Writer.WriteU1 0uy
-    /// (0x01) Writes an instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been tripped" (III.3.16).
+    /// <summary>
+    /// (0x01) Writes an instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been
+    /// tripped" (III.3.16).
+    /// </summary>
     member _.Break() = content.Writer.WriteU1 1uy
     /// (0x2A) Writes an instruction used to return from the current method (III.3.56).
     member _.Ret() = content.Writer.WriteU1 0x2Auy
@@ -37,9 +40,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <summary>
     /// (0x72) Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
     /// </summary>
-    /// <remarks>
-    /// To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.
-    /// </remarks>
+    /// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
     /// <exception cref="T:System.ArgumentNullException">Thrown when the input string is <see langword="null"/>.</exception>
     member _.Ldstr(str: string) =
         match str with
@@ -48,21 +49,23 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
             content.Writer.WriteU1 0x72uy
             MetadataToken.userString str content.UserString content.Writer
 
+    member private this.WriteFieldInstruction(opcode, SimpleIndex field: FieldIndex<_>) =
+        content.Writer.WriteU1 opcode
+        this.WriteMetadataToken(content.Metadata.Field.IndexOf field, 0x4uy)
     // TODO: Allow a FieldRef to be used when loading an instance field.
-    /// <summary>
-    /// (0x7B) Writes an instruction that pushes the value of an object's field onto the stack (III.4.10).
-    /// </summary>
-    member this.Ldfld(field: SimpleIndex<FieldRow>) =
-        content.Writer.WriteU1 0x7Buy
-        this.WriteMetadataToken(content.Metadata.Field.IndexOf field, 0x4uy)
+    /// <summary>(0x7B) Writes an instruction that pushes the value of an object's field onto the stack (III.4.10).</summary>
+    /// <param name="field">The field to load the value of.</param>
+    member this.Ldfld field = this.WriteFieldInstruction(0x7Buy, field)
 
+    /// <summary>(0x7D) Writes an instruction that stores a value into an object's field (III.4.28).</summary>
+    member this.Stfld field = this.WriteFieldInstruction(0x7Duy, field)
     // TODO: Allow a FieldRef to be used when loading a static field.
-    /// <summary>
-    /// (0x7E) Writes an instruction that pushes the value of a static field onto the stack (III.4.14).
-    /// </summary>
-    member this.Ldsfld(field: SimpleIndex<FieldRow>) =
-        content.Writer.WriteU1 0x7Euy
-        this.WriteMetadataToken(content.Metadata.Field.IndexOf field, 0x4uy)
+    /// <summary>(0x7E) Writes an instruction that pushes the value of a static field onto the stack (III.4.14).</summary>
+    /// <param name="field">The static field to load the value of.</param>
+    member this.Ldsfld field = this.WriteFieldInstruction(0x7Euy, field)
+
+    /// <summary>(0x7D) Writes an instruction that stores a value into a static field (III.4.30).</summary>
+    member this.Stsfld field = this.WriteFieldInstruction(0x80uy, field)
 
 [<AutoOpen>]
 module MethodBodyContentExtensions =

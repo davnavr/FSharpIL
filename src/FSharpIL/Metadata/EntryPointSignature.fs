@@ -15,6 +15,6 @@ let exitWithArgs = MethodDefSignature(false, false, MethodCallingConventions.Def
 /// Represents the signature of an entrypoint method that takes an array of string arguments and returns nothing.
 let voidWithArgs = MethodDefSignature(false, false, MethodCallingConventions.Default, ReturnType.itemVoid, args) |> create
 /// Represents the signature of an entrypoint method that takes no arguments and returns an integer exit code.
-let exitNoArgs = MethodDefSignature(false, false, MethodCallingConventions.Default, ReturnType.itemI4, ImmutableArray.Empty)
+let exitNoArgs = MethodDefSignature(false, false, MethodCallingConventions.Default, ReturnType.itemI4, ImmutableArray.Empty) |> create
 /// Represents the signature of an entrypoint method that takes no arguments and returns nothing.
-let voidNoArgs = MethodDefSignature(false, false, MethodCallingConventions.Default, ReturnType.itemVoid, ImmutableArray.Empty)
+let voidNoArgs = MethodDefSignature(false, false, MethodCallingConventions.Default, ReturnType.itemVoid, ImmutableArray.Empty) |> create
