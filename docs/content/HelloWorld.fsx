@@ -1,5 +1,5 @@
 ﻿(*** hide ***)
-#if DOCUMENTATION
+#if !COMPILED
 #r "../Dependencies.fsx"
 #else
 module FSharpIL.HelloWorld
@@ -146,7 +146,7 @@ let example() =
     |> ValidationResult.get
     |> PEFile.ofMetadata ImageFileFlags.dll // TODO: This should use exe flags.
 (*** hide ***)
-#if !DOCUMENTATION
+#if COMPILED
 [<Tests>]
 let tests =
     let testCaseCecil name test =

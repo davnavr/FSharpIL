@@ -48,7 +48,9 @@ module AssemblyName =
         then None
         else AssemblyName str |> Some
 
-    /// <exception cref="T:System.ArgumentException">The <paramref name="name"/> contains a colon <c>:</c>, or slashes ___</exception>
+    /// <exception cref="T:System.ArgumentException">
+    /// The <paramref name="name"/> contains a colon <c>:</c>, a forward slash, or a backslash character.
+    /// </exception>
     let ofStr (str: string) =
         match tryOfStr str with
         | Some name -> name

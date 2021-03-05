@@ -1,5 +1,5 @@
 (*** hide ***)
-#if DOCUMENTATION
+#if !COMPILED
 #r "../Dependencies.fsx"
 #else
 module FSharpIL.FieldsExample
@@ -103,7 +103,7 @@ let example() =
     |> ValidationResult.get
     |> PEFile.ofMetadata ImageFileFlags.exe
 (*** hide ***)
-#if !DOCUMENTATION
+#if COMPILED
 [<Tests>]
 let tests =
     let testCaseCecil name test = // TODO: Create common function for testing an example with Cecil.

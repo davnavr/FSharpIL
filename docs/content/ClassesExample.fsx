@@ -1,5 +1,5 @@
 (*** hide ***)
-#if DOCUMENTATION
+#if !COMPILED
 #r "../Dependencies.fsx"
 #else
 module FSharpIL.ClassesExample
@@ -87,7 +87,7 @@ let example() =
     |> ValidationResult.get
     |> PEFile.ofMetadata ImageFileFlags.exe
 (*** hide ***)
-#if !DOCUMENTATION
+#if !COMPILED
 [<Tests>]
 let tests =
     let testCaseCecil name test =

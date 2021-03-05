@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\content\HelloWorld.fs"/>
-    <Compile Include="..\content\ClassesExample.fs"/>
-    <Compile Include="..\content\FieldsExample.fs"/>
+    <Compile Include="..\content\HelloWorld.fsx"/>
+    <Compile Include="..\content\ClassesExample.fsx"/>
+    <Compile Include="..\content\FieldsExample.fsx"/>
     <Compile Include="$(RootDirectory)\test\FSharpIL.Tests\Test.fs"/>
 
     <PackageReference Include="Expecto" Version="9.0.2" />

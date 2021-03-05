@@ -88,6 +88,7 @@ type ChunkWriter with
         this.WriteCustomMod item.CustomMod
         match item.ReturnType with
         | ReturnType.Void -> this.WriteU1 ElementType.Void
+        | ReturnType.Type item -> this.WriteType item
         | bad -> failwithf "Unable to write unsupported return type %A" bad
 
     member this.WriteParam(item: ParamItem) =

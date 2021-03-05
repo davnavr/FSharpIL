@@ -26,7 +26,7 @@ let private write (content: DirectoryInfo) (style: DirectoryInfo) (output: Direc
     try
         if not output.Exists then output.Create()
 
-        let evaluator = FsiEvaluator(options = [| "--define:DOCUMENTATION" |], strict = true)
+        let evaluator = FsiEvaluator(strict = true)
 
         evaluator.EvaluationFailed.Add (failwithf "Exception thrown while evaluating expression: %A")
 

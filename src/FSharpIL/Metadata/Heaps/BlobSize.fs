@@ -40,13 +40,6 @@ let ofCustomMod (customMod: CustomModifier) =
 // TODO: Consider using a for loop to avoid object allocations since the ImmutableArray.Enumerator is a struct.
 let private customModifiers modifiers = Seq.sumBy ofCustomMod modifiers
 
-let ofRetType (retType: ReturnTypeItem) =
-    let size =
-        match retType.ReturnType with
-        | ReturnType.Void -> 1u
-        | bad -> failwithf "Unable to calculate size for unsupported return type %A" bad
-    size + customModifiers retType.CustomMod
-
 let rec ofType =
     function
     | EncodedType.Boolean
@@ -78,6 +71,14 @@ let rec ofType =
             failwith "Cannot calculate size of blob, custom modifiers for SZArray not yet supported"
         1u + ofType item
     | t -> failwithf "Cannot calculate size for unsupported type %A" t
+
+let ofRetType (retType: ReturnTypeItem) =
+    let size =
+        match retType.ReturnType with
+        | ReturnType.Void -> 1u
+        | ReturnType.Type item -> ofType item
+        | bad -> failwithf "Unable to calculate size for unsupported return type %A" bad
+    size + customModifiers retType.CustomMod
 
 let ofFieldSignature (signature: FieldSignature) =
     1u
