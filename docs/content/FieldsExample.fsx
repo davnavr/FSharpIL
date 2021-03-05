@@ -44,20 +44,8 @@ let example() =
                   PublicKey = None
                   Culture = NullCulture }
 
-        // TODO: Figure out how to avoid copy and pasting references to System assemblies. Consider providing a module that contains commonly used AssemblyReferences and their TypeReferences.
-        let! mscorlib =
-            referenceAssembly
-                { Version = Version(5, 0, 0, 0)
-                  PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
-                  Name = AssemblyName.ofStr "System.Private.CoreLib"
-                  Culture = NullCulture
-                  HashValue = None }
-
-        let! object =
-            referenceType
-                { TypeName = Identifier.ofStr "Object"
-                  TypeNamespace = "System"
-                  ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        let! mscorlib = SystemAssembly.Net5_0.private_corelib
+        let! object = SystemTypes.object mscorlib
 
         let! examples =
             addStaticClass

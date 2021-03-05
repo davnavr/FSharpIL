@@ -55,6 +55,8 @@
     <Compile Include="Metadata\MetadataToken.fs" />
     <Compile Include="Metadata\MethodBodyWriter.fs" />
     <Compile Include="Metadata\Builders.fs" />
+    <Compile Include="Metadata\SystemAssembly.fs" />
+    <Compile Include="Metadata\SystemTypes.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />

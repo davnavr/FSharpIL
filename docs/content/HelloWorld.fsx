@@ -53,24 +53,12 @@ let example() =
                   Culture = NullCulture
                   HashValue = None }
         let! consolelib =
-            referenceAssembly
-                { Version = Version(5, 0, 0, 0)
-                  PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-                  Name = AssemblyName.ofStr "System.Console"
-                  Culture = NullCulture
-                  HashValue = None }
+            // Helper functions to add predefined assembly references are available in the SystemAssembly module
+            SystemAssembly.Net5_0.console
 
         // Add references to types defined in referenced assemblies.
-        let! console =
-            referenceType
-                { TypeName = Identifier.ofStr "Console"
-                  TypeNamespace = "System"
-                  ResolutionScope = ResolutionScope.AssemblyRef consolelib }
-        let! object =
-            referenceType
-                { TypeName = Identifier.ofStr "Object"
-                  TypeNamespace = "System"
-                  ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        let! console = SystemTypes.console consolelib
+        let! object = SystemTypes.object mscorlib
         let! tfmAttr =
             referenceType
                 { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
