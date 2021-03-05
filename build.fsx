@@ -29,11 +29,11 @@ let handleErr msg: ProcessResult -> _ =
 
 Target.create "Clean" <| fun _ ->
     [
-        outDir
-        docsDir </> "content" </> "tmp"
-        // TODO: Have .gitignore files be in the out directories, and figure out how to ignore them when deleting files.
+        !!(docsDir </> "content" </> "exout" </> "*.dll")
+        !!(outDir </> "*.nupkg")
+        !!(outDir </> "docs" </> "**" </> "*.*")
     ]
-    |> List.iter Shell.cleanDir
+    |> List.iter File.deleteAll
 
     // TODO Clean bin and obj folders instead of calling "dotnet clean", since it doesn't clear out outputs for netstandard2.1 folders.
     DotNet.exec id "clean" slnFile |> handleErr "Error occured while cleaning project output"

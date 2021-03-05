@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Result.fs" />
     <Compile Include="Generate.fs" />
     <Compile Include="ValidationExpect.fs" />
     <Compile Include="MetadataTests.fs" />

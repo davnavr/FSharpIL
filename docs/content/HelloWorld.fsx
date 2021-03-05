@@ -8,12 +8,6 @@ open Expecto
 
 open Swensen.Unquote
 
-open System.Diagnostics
-open System.IO
-
-open Newtonsoft.Json
-open Newtonsoft.Json.Linq
-
 open Mono.Cecil
 
 open FSharpIL
@@ -137,20 +131,14 @@ let example() =
 #if COMPILED
 [<Tests>]
 let tests =
-    let testCaseCecil name test =
-        fun() ->
-            use metadata = example() |> WritePE.stream |> ModuleDefinition.ReadModule
-            test metadata
-        |> testCase name
-
     testList "hello world" [
-        testCaseCecil "has entrypoint" <| fun metadata ->
+        testCaseCecil example "has entrypoint" <| fun metadata ->
             test <@ metadata.EntryPoint.Name = "Main" @>
 
-        testCaseCecil "has method references only" <| fun metadata ->
+        testCaseCecil example "has method references only" <| fun metadata ->
             test <@ metadata.GetMemberReferences() |> Seq.forall (fun mref -> mref :? MethodReference) @>
 
-        testCaseCecil "has target framework attribute" <| fun metadata ->
+        testCaseCecil example "has target framework attribute" <| fun metadata ->
             <@
                 let attribute = Seq.head metadata.Assembly.CustomAttributes
                 let value = Seq.head attribute.ConstructorArguments
@@ -158,7 +146,7 @@ let tests =
             @>
             |> test
 
-        testCaseCecil "has types with correct names" <| fun metadata ->
+        testCaseCecil example "has types with correct names" <| fun metadata ->
             let expected =
                 [
                     ("", "<Module>")
@@ -170,45 +158,14 @@ let tests =
                 |> List.ofSeq
             test <@ expected = actual @>
 
-        testCaseCecil "entrypoint has correct argument type" <| fun metadata ->
+        testCaseCecil example "entrypoint has correct argument type" <| fun metadata ->
             let args = Seq.head metadata.EntryPoint.Parameters
             test <@ args.ParameterType.IsArray && args.ParameterType.GetElementType() = metadata.TypeSystem.String @>
 
-        // TODO: Create common function for writing example to disk and then running.
-        testCase "runs correctly" <| fun() ->
-            let output = Path.Combine(__SOURCE_DIRECTORY__, "tmp")
-            let executable = Path.Combine(output, "HelloWorld.dll")
-            let config =
-                JObject ([|
-                    JProperty("runtimeOptions", JObject [|
-                        JProperty("tfm", "net5.0")
-                        JProperty("framework", JObject [|
-                            JProperty("name", "Microsoft.NETCore.App")
-                            JProperty("version", "5.0.0")
-                        |])
-                    |])
-                |])
-
-            example() |> WritePE.toPath executable
-
-            using (new JsonTextWriter(new StreamWriter(Path.Combine(output, "HelloWorld.runtimeconfig.json")))) config.WriteTo
-
-            use dotnet =
-                ProcessStartInfo (
-                    fileName = "dotnet",
-                    arguments = sprintf "exec %s" executable,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false
-                )
-                |> Process.Start
-
+        testCaseExec example "runs correctly" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
             let out = dotnet.StandardOutput.ReadLine()
             dotnet.StandardError.ReadToEnd() |> stderr.Write
-            dotnet.WaitForExit()
 
-            let code = dotnet.ExitCode
-
-            test <@ code = 0 && out = "Hello World!" @>
+            fun() -> let code = dotnet.ExitCode in test <@ code = 0 && out = "Hello World!" @>
     ]
 #endif

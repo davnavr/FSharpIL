@@ -8,12 +8,6 @@ open Expecto
 
 open Swensen.Unquote
 
-open System.Diagnostics
-open System.IO
-
-open Newtonsoft.Json
-open Newtonsoft.Json.Linq
-
 open Mono.Cecil
 
 open FSharpIL
@@ -76,20 +70,9 @@ let example() =
     |> ValidationResult.get
     |> PEFile.ofMetadata ImageFileFlags.exe
 (*** hide ***)
-#if !COMPILED
+#if COMPILED
 [<Tests>]
 let tests =
-    let testCaseCecil name test =
-        fun() ->
-            use metadata = example() |> WritePE.stream |> ModuleDefinition.ReadModule
-            test metadata
-        |> testCase name
-
     testList "Classes Example" [
-        testCase "temporary name ___________" <| fun() ->
-            let output = Path.Combine(__SOURCE_DIRECTORY__, "tmp")
-            let executable = Path.Combine(output, "FSharpIL.Examples.Classes.dll")
-
-            example() |> WritePE.toPath executable
     ]
 #endif

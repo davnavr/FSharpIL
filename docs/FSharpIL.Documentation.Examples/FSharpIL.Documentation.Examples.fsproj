@@ -7,14 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\content\HelloWorld.fsx"/>
-    <Compile Include="..\content\ClassesExample.fsx"/>
-    <Compile Include="..\content\FieldsExample.fsx"/>
-    <Compile Include="$(RootDirectory)\test\FSharpIL.Tests\Test.fs"/>
+    <Compile Include="ExampleHelpers.fs" />
+    <Compile Include="..\content\HelloWorld.fsx" />
+    <Compile Include="..\content\ClassesExample.fsx" />
+    <Compile Include="..\content\FieldsExample.fsx" />
+    <Compile Include="$(RootDirectory)\test\FSharpIL.Tests\Test.fs" />
 
     <PackageReference Include="Expecto" Version="9.0.2" />
     <PackageReference Include="Mono.Cecil" Version="0.11.3" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1-beta1" />
     <PackageReference Include="Unquote" Version="5.0.0" />
 
     <ProjectReference Include="$(RootDirectory)/src/FSharpIL/FSharpIL.fsproj" />

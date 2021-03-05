@@ -8,12 +8,6 @@ open Expecto
 
 open Swensen.Unquote
 
-open System.Diagnostics
-open System.IO
-
-open Newtonsoft.Json
-open Newtonsoft.Json.Linq
-
 open Mono.Cecil
 
 open FSharpIL
@@ -94,14 +88,8 @@ let example() =
 #if COMPILED
 [<Tests>]
 let tests =
-    let testCaseCecil name test = // TODO: Create common function for testing an example with Cecil.
-        fun() ->
-            use metadata = example() |> WritePE.stream |> ModuleDefinition.ReadModule
-            test metadata
-        |> testCase name
-
     testList "Fields Example" [
-        testCaseCecil "has correct field names" <| fun metadata ->
+        testCaseCecil example "has correct field names" <| fun metadata ->
             let expected = [ "myStaticField" ]
             let actual =
                 metadata.Types
