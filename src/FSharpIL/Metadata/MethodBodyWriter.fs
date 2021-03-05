@@ -6,6 +6,7 @@ open FSharpIL.Metadata.Heaps
 [<Sealed>]
 type internal MethodBodyContentImpl (writer, metadata, us: UserStringHeap) =
     inherit MethodBodyContent(writer)
+    do if writer.Size > 0u then invalidArg "writer" "The method body writer must be a new instance"
     member _.Metadata: CliMetadata = metadata
     member _.UserString = us
 
@@ -17,6 +18,8 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     member private _.WriteMetadataToken(index, table) = MetadataToken.write index table content.Writer
 
+    /// Gets the number of bytes that have been written.
+    member _.Size = content.Writer.Size
     /// (0x00) Writes an instruction that does nothing (III.3.51).
     member _.Nop() = content.Writer.WriteU1 0uy
     /// <summary>

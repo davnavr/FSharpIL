@@ -40,7 +40,7 @@ type CliInfo =
       mutable Metadata: ChunkWriter
       /// Specifies the RVA and size of the "hash data for this PE file" (II.25.3.3).
       mutable StrongNameSignature: ChunkWriter
-      MethodBodies: Dictionary<MethodDefRow, uint32>
+      MethodBodies: Dictionary<IMethodBody, uint32>
       StringsStream: Heap<string>
       UserStringStream: UserStringHeap
       GuidStream: Heap<Guid>
@@ -92,8 +92,8 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
     let mutable offset = rva
 
     for method in info.Cli.MethodDef.Items do
-        if method.Body.Exists then
-            // TODO: Ensure that MethodDefs with the same method bodies point to the same RVA.
+        match info.MethodBodies.TryGetValue method.Body with
+        | (false, _) when method.Body.Exists ->
             // TODO: Write fat format when necessary.
             // NOTE: For fat (and tiny) formats, "two least significant bits of first byte" indicate the type.
             // TODO: Check conditions to see if tiny format can be used.
@@ -103,11 +103,16 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
             method.Body.WriteBody body
             let size = body.Writer.Size
             0x2uy ||| (byte size <<< 2) |> header.WriteU1
-            info.MethodBodies.Item <- method, offset
+
+            info.MethodBodies.Item <- method.Body, offset
+
             offset <- offset + size
             writer.SkipBytes size
 
             // TODO: Write extra method data sections.
+        | (false, _) -> info.MethodBodies.Item <- method.Body, 0u
+        | (true, existing) -> info.MethodBodies.Item <- method.Body, existing
+        | _ -> failwith "Unsupported method body"
 
     writer.AlignTo 4u
 
@@ -248,7 +253,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         let mutable param = 1u
 
         for method in tables.MethodDef.Items do
-            writer.WriteU4 info.MethodBodies.[method] // Rva
+            writer.WriteU4 info.MethodBodies.[method.Body] // Rva
             writer.WriteU2 method.ImplFlags
             writer.WriteU2 method.Flags
             info.StringsStream.WriteStringIndex(method.Name, writer)
