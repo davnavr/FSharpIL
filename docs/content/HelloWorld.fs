@@ -186,6 +186,7 @@ let tests =
             let args = Seq.head metadata.EntryPoint.Parameters
             test <@ args.ParameterType.IsArray && args.ParameterType.GetElementType() = metadata.TypeSystem.String @>
 
+        // TODO: Create common function for writing example to disk and then running.
         testCase "runs correctly" <| fun() ->
             let output = Path.Combine(__SOURCE_DIRECTORY__, "tmp")
             let executable = Path.Combine(output, "HelloWorld.dll")
