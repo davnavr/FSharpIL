@@ -141,7 +141,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
     /// (0x1A)
     member val ModuleRef = ModuleRefTable owner
     // (0x1B)
-    // member TypeSpec
+    member val TypeSpec = MutableTable<TypeSpecRow> owner
     // (0x1C)
     // member ImplMap
     // (0x1D)

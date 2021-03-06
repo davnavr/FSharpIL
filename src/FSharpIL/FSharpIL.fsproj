@@ -31,6 +31,7 @@
     <Compile Include="Metadata\MethodDefRow.fs" />
     <Compile Include="Metadata\IndexedList.fs" />
     <Compile Include="Metadata\TypeDef.fs" />
+    <Compile Include="Metadata\TypeSpec.fs" />
     <Compile Include="Metadata\OwnedTableBuilder.fs" />
     <Compile Include="Metadata\Field.fs" />
     <Compile Include="Metadata\Method.fs" />

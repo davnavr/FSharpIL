@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Metadata
+﻿namespace rec FSharpIL.Metadata
 
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
@@ -34,6 +34,19 @@ type ArrayShape =
       /// <remarks>Corresponds to the <c>NumLoBounds</c> item and <c>LoBound</c> items in the signature.</remarks>
       LowerBounds: ImmutableArray<int32> }
 
+[<RequireQualifiedAccess>]
+type GenericInst =
+    // TODO: Add other GenericInst types for TypeDefs.
+    | TypeRef of valueType: bool * SimpleIndex<TypeRef> * head: EncodedType * tail: ImmutableArray<EncodedType>
+
+    interface IIndexValue with
+        member this.CheckOwner owner =
+            match this with
+            | TypeRef(_, item, head, tail) ->
+                IndexOwner.checkIndex owner item
+                IndexOwner.checkOwner owner head
+                for gparam in tail do IndexOwner.checkOwner owner gparam
+
 /// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
 [<RequireQualifiedAccess>]
 type EncodedType =
@@ -68,7 +81,7 @@ type EncodedType =
     | Array of EncodedType * ArrayShape
     | FunctionPointer // of MethodDefSig
     //| FunctionPointer // of MethodRefSig
-    | GenericInstantiation // of ?
+    | GenericInst of GenericInst
     //| MVAR // of ?
     /// <summary>Represents the <see cref="T:System.Object"/> type.</summary>
     | Object
@@ -101,6 +114,7 @@ type EncodedType =
             | Object
             | String -> ()
             | Array(item, _) -> IndexOwner.checkOwner owner item
+            | GenericInst inst -> IndexOwner.checkOwner owner inst
             | SZArray(modifiers, item) ->
                 for modifier in modifiers do modifier.CheckOwner owner
                 IndexOwner.checkOwner owner item
@@ -125,6 +139,17 @@ type ReturnType =
             | Void -> ()
 
 [<RequireQualifiedAccess>]
+type TypeSpec =
+    /// <summary>Represents a <c>GENERICINST</c> followed by a <c>TypeRef</c>.</summary>
+    | GenericInst of GenericInst
+
+    interface ITypeSpec
+    interface IIndexValue with
+        member this.CheckOwner owner =
+            match this with
+            | GenericInst generic -> IndexOwner.checkOwner owner generic
+
+[<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module ReturnType =
     let item (returnType: ReturnType) = ReturnTypeItem returnType
@@ -133,6 +158,22 @@ module ReturnType =
     let itemVoid = ReturnTypeItem ReturnType.Void
     let itemI4 = encoded EncodedType.I4
     let itemU4 = encoded EncodedType.U4
+
+[<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module GenericInst =
+    // TODO: Figure out if using list when making generic TypeSpec is bad for performance.
+    /// <exception cref="T:System.ArgumentException">Thrown when the generic parameter list is empty.</exception>
+    let typeRef valueType typeRef genericParameters =
+        match genericParameters with
+        | head :: tail -> GenericInst.TypeRef(valueType, typeRef, head, tail.ToImmutableArray())
+        | _ -> invalidArg "genericParameters" "The generic parameter list should not be empty."
+
+[<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module TypeSpec =
+    let create (typeSpec: TypeSpec) = TypeSpecRow typeSpec
+    let genericInst (inst: GenericInst) = TypeSpec.GenericInst inst |> create
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

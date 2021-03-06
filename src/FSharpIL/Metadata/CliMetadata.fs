@@ -53,7 +53,9 @@ type CliMetadata (state: MetadataBuilderState) =
         if state.ModuleRef.Count > 0 then
             bits <- bits ||| (1UL <<< 0x1A)
             uint32 state.ModuleRef.Count |> counts.Add
-
+        if state.TypeSpec.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x1B)
+            uint32 state.TypeSpec.Count |> counts.Add
 
 
         if state.Assembly.IsSome then
@@ -105,6 +107,7 @@ type CliMetadata (state: MetadataBuilderState) =
     member val CustomAttribute = state.CustomAttribute.ToImmutableArray()
 
     member val ModuleRef = state.CreateTable state.ModuleRef
+    member val TypeSpec = state.CreateTable state.TypeSpec
 
     member val Assembly = state.Assembly
     member val AssemblyRef = state.CreateTable state.AssemblyRef
@@ -235,7 +238,6 @@ module CliMetadata =
     // TODO: Add functions for adding global fields and global methods.
 
     let referenceType typeRef (state: MetadataBuilderState) = state.TypeRef.GetIndex typeRef
-
     let referenceMethod method (state: MetadataBuilderState): MemberRefIndex<MethodRef> = state.MemberRef.GetIndex method
 
     // TODO: Better way of adding custom attributes, have a function: CustomAttribute -> target: _ -> MetadataBuilderState -> _
@@ -246,6 +248,11 @@ module CliMetadata =
 
     /// Adds a reference to an assembly.
     let referenceAssembly assembly (state: MetadataBuilderState) = state.AssemblyRef.GetIndex assembly
+
+    let addTypeSpec typeSpec (state: MetadataBuilderState) =
+        match state.TypeSpec.GetIndex typeSpec with
+        | ValueSome index -> Ok index
+        | ValueNone -> DuplicateTypeSpecError typeSpec :> ValidationError |> Error
 
     /// <summary>
     /// Applies the given function to each string in the <c>#Strings</c> heap referenced in

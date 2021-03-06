@@ -13,6 +13,9 @@ let inline (|OptionalCustomModifier|RequiredCustomModifier|) (cmod: CustomModifi
 type ReturnTypeItem with
     member this.ReturnType = this.RetType :?> ReturnType
 
+type TypeSpecRow with
+    member this.Signature = this.Type :?> TypeSpec
+
 type ParamItem with
     member this.ParamType = this.Type :?> EncodedType
 
