@@ -50,6 +50,16 @@ type ChunkWriter with
         this.WriteCompressed shape.LowerBounds.Length // NumLoBounds
         for bound in shape.LowerBounds do this.WriteCompressedSigned bound // LoBound
 
+    member private this.WriteGenericInst(inst: GenericInst) =
+        match inst with
+        | GenericInst.TypeRef(valueType, tref, head, tail) ->
+            this.WriteU1 ElementType.GenericInst
+            this.WriteU1(if valueType then ElementType.ValueType else ElementType.Class)
+            failwith "TODO: Figure out how to write TypeDefOrRefOrSpecEncoded"
+            this.WriteCompressed(1u + uint32 tail.Length)
+            this.WriteType head
+            for gparam in tail do this.WriteType gparam
+
     // TODO: Consider automatically converting some Array to SZArray, since a user might use a one dimensional string array instead of an SZArray in the entrypoint, which means the exe cannot run. This won't be a problem if an EntryPointMethod union type is used.
     member this.WriteType(item: EncodedType) =
         match item with
@@ -57,6 +67,8 @@ type ChunkWriter with
             this.WriteU1 ElementType.Array
             this.WriteType element
             this.WriteArrayShape shape
+
+        | EncodedType.GenericInst inst -> this.WriteGenericInst inst
 
         | EncodedType.I1 -> this.WriteU1 ElementType.I1
         | EncodedType.I2 -> this.WriteU1 ElementType.I2

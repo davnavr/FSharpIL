@@ -26,6 +26,8 @@ type internal BlobHeap =
 
       CustomAttribute: Dictionary<CustomAttributeSignature, BlobIndex>
 
+      TypeSpec: Dictionary<TypeSpec, BlobIndex>
+
       PublicKeyTokens: Dictionary<PublicKeyOrToken, BlobIndex>
       ByteBlobs: Dictionary<byte[], BlobIndex>
       mutable ByteLength: uint32 }
@@ -51,6 +53,8 @@ type internal BlobHeap =
         match signature with
         | Some signature' -> this.WriteRawIndex(this.CustomAttribute.Item signature', writer)
         | None -> ()
+
+    member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.TypeSpec.Item signature, writer)
 
     member this.WriteIndex(token, writer) = this.WriteRawIndex(this.PublicKeyTokens.Item token, writer)
     member this.WriteIndex(bytes, writer) = this.WriteRawIndex(this.ByteBlobs.Item bytes, writer)

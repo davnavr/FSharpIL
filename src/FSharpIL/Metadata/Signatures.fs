@@ -21,7 +21,11 @@ type internal ElementType =
     | R8 = 0xDuy
     | String = 0xEuy
 
+    | ValueType = 0x11uy
+    | Class = 0x12uy
+
     | Array = 0x14uy
+    | GenericInst = 0x15uy
 
     | SZArray = 0x1duy
 

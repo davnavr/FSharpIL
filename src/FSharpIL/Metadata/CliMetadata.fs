@@ -302,7 +302,11 @@ module CliMetadata =
             field
             methodDef
             methodRef
+
             customAttribute
+
+            typeSpec
+
             publicKeyOrToken
             bytes
             (metadata: CliMetadata) =
@@ -316,6 +320,8 @@ module CliMetadata =
             | MethodRef method -> methodRef method.Signature
 
         for { Value = signature } in metadata.CustomAttribute do Option.iter customAttribute signature
+
+        for row in metadata.TypeSpec.Items do typeSpec row.Signature
 
         for { PublicKeyOrToken = token } in metadata.AssemblyRef.Items do publicKeyOrToken token
 

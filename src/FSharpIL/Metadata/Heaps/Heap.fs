@@ -93,6 +93,8 @@ module internal Heap =
               MethodRef = Dictionary<_, _> metadata.MemberRef.Count
 
               CustomAttribute = Dictionary<_, _> metadata.CustomAttribute.Length
+              TypeSpec = Dictionary<_, _> metadata.TypeSpec.Count
+
               PublicKeyTokens = Dictionary<_, _> metadata.AssemblyRef.Count
               ByteBlobs = Dictionary<_, _>(metadata.File.Count)
               ByteLength = 1u }
@@ -117,6 +119,9 @@ module internal Heap =
             (fun signature ->
                 if not (blob.CustomAttribute.ContainsKey signature) then
                     BlobSize.ofCustomAttribute signature |> index blob.CustomAttribute signature)
+            (fun signature ->
+                if not (blob.TypeSpec.ContainsKey signature) then
+                    failwith "TODO: Calculate size of TypeSpec.")
             (fun token ->
                 if not (blob.PublicKeyTokens.ContainsKey token) then
                     match token with
@@ -152,7 +157,10 @@ module internal Heap =
         let field = HashSet<_> blobs.Field.Count
         let methodDef = HashSet<_> blobs.MethodDef.Count
         let methodRef = HashSet<_> blobs.MethodRef.Count
+
         let attributes = HashSet<_> blobs.CustomAttribute.Count
+        let typeSpec = HashSet<_> blobs.TypeSpec.Count
+
         let publicKeyTokens = HashSet<_> blobs.PublicKeyTokens.Count
         let bytes = HashSet<byte[]> blobs.ByteBlobs.Count
 
@@ -199,6 +207,10 @@ module internal Heap =
                     writer.WriteU2 signature.NamedArg.Length // NumNamed
                     for arg in signature.NamedArg do
                         failwithf "TODO: Implement writing of named arguments for custom attributes")
+            (fun signature ->
+                if typeSpec.Add signature then
+                    
+                    failwith "TODO: Write the typeSpec")
             (fun token ->
                 if publicKeyTokens.Add token then
                     match token with

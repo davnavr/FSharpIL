@@ -2,7 +2,7 @@
 /// Contains functions for calculating the sizes of various "blobs" and signatures (II.23.2) in the <c>#Blob</c> heap (II.24.2.4).
 /// </summary>
 [<RequireQualifiedAccess>]
-module internal FSharpIL.Metadata.Heaps.BlobSize
+module internal rec FSharpIL.Metadata.Heaps.BlobSize
 
 open System.Text
 
@@ -40,6 +40,14 @@ let ofCustomMod (customMod: CustomModifier) =
 // TODO: Consider using a for loop to avoid object allocations since the ImmutableArray.Enumerator is a struct.
 let private customModifiers modifiers = Seq.sumBy ofCustomMod modifiers
 
+let ofGenericInst =
+    function
+    | GenericInst.TypeRef(_, _, head, tail) ->
+        2u
+        + (failwith "TODO: How to calculate size of TypeDefOrRefOrSpecEncoded?")
+        + ofType head
+        + Seq.sumBy ofType tail
+
 let rec ofType =
     function
     | EncodedType.Boolean
@@ -66,6 +74,7 @@ let rec ofType =
         + Seq.sumBy ofUnsigned shape.Sizes
         + ofUnsigned (uint32 shape.LowerBounds.Length)
         + Seq.sumBy ofSigned shape.LowerBounds
+    | EncodedType.GenericInst inst -> ofGenericInst inst
     | EncodedType.SZArray(modifiers, item) ->
         if not modifiers.IsEmpty then
             failwith "Cannot calculate size of blob, custom modifiers for SZArray not yet supported"
