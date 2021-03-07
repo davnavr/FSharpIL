@@ -208,16 +208,16 @@ module CliMetadata =
             def.Access.EnclosingClass
         )
         |> state.TypeDef.GetIndex
-        |> Result.map TypeIndex<ClassDef<'Flags>>
+        |> Result.map TypeDefIndex
 
-    let addClass (classDef: ConcreteClassDef) state: Result<TypeIndex<ConcreteClassDef>, _> = addClassImpl classDef state
-    let addAbstractClass (classDef: AbstractClassDef) state: Result<TypeIndex<AbstractClassDef>, _> = addClassImpl classDef state
-    let addSealedClass (classDef: SealedClassDef) state: Result<TypeIndex<SealedClassDef>, _> = addClassImpl classDef state
-    let addStaticClass (classDef: StaticClassDef) state: Result<TypeIndex<StaticClassDef>, _> = addClassImpl classDef state
+    let addClass (classDef: ConcreteClassDef) state: Result<TypeDefIndex<ConcreteClassDef>, _> = addClassImpl classDef state
+    let addAbstractClass (classDef: AbstractClassDef) state: Result<TypeDefIndex<AbstractClassDef>, _> = addClassImpl classDef state
+    let addSealedClass (classDef: SealedClassDef) state: Result<TypeDefIndex<SealedClassDef>, _> = addClassImpl classDef state
+    let addStaticClass (classDef: StaticClassDef) state: Result<TypeDefIndex<StaticClassDef>, _> = addClassImpl classDef state
 
     let private addDerivedTypeDef extends def (typeDef: 'Type) (state: MetadataBuilderState) =
         match state.FindType extends with
-        | Some extends' -> def extends' typeDef state |> TypeIndex<'Type> |> Ok
+        | Some extends' -> def extends' typeDef state |> TypeDefIndex |> Ok
         | None -> MissingTypeError extends :> ValidationError |> Error
 
     // let addDelegate
@@ -225,12 +225,12 @@ module CliMetadata =
     // let addInterface
     // let addStruct
 
-    let addField (SimpleIndex owner: TypeIndex<'Type>) (FieldRow field: 'Field when 'Field :> IField<'Type>) (state: MetadataBuilderState) =
+    let addField (SimpleIndex owner: TypeDefIndex<'Type>) (FieldRow field: 'Field when 'Field :> IField<'Type>) (state: MetadataBuilderState) =
         match state.Field.Add(owner, field) with
         | ValueSome index -> FieldIndex<'Field> index |> Result<FieldIndex<_>, _>.Ok
         | ValueNone -> DuplicateFieldError field :> ValidationError |> Error
 
-    let addMethod (SimpleIndex owner: TypeIndex<'Type>) (MethodDef method: 'Method when 'Method :> IMethod<'Type>) (state: MetadataBuilderState) =
+    let addMethod (SimpleIndex owner: TypeDefIndex<'Type>) (MethodDef method: 'Method when 'Method :> IMethod<'Type>) (state: MetadataBuilderState) =
         match state.Method.Add(owner, method) with
         | ValueSome index -> MethodIndex<'Method> index |> Result<MethodIndex<_>, _>.Ok
         | ValueNone -> DuplicateMethodError method :> ValidationError |> Error

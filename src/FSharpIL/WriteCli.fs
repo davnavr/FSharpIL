@@ -444,14 +444,14 @@ let root (info: CliInfo) (writer: ChunkWriter) =
 
     // #US
     if us <> Unchecked.defaultof<ChunkWriter> then
-        stream us (Heap.writeUS info.UserStringStream)
+        stream us (Heap.writeUS info.UserStringStream info.Cli)
 
     // #GUID
     stream guid (Heap.writeGuid info.Cli) // TODO: Fix, GUID heap should be an array of guids, where 1 refers to the first item.
 
     // #Blob
     if blob <> Unchecked.defaultof<ChunkWriter> then
-        stream blob (Heap.writeBlob info.BlobStream)
+        stream blob (Heap.writeBlob info.BlobStream info.Cli)
 
     do // Stream count
         let mutable count = 3u // #~, #Strings, #GUID

@@ -7,12 +7,12 @@ open System.Reflection
 // II.22.21
 [<StructuralComparison; StructuralEquality>]
 type GenericParamConstraint =
-    | ClassConstraint of TypeIndex<ConcreteClassDef>
+    | ClassConstraint of TypeDefIndex<ConcreteClassDef>
     /// <summary>
     /// Indicates that the generic parameter is constrainted to derive from a <c>TypeDef</c> representing an abstract class.
     /// </summary>
-    | AbstractClassConstraint of TypeIndex<AbstractClassDef>
-    | InterfaceConstraint of TypeIndex<InterfaceDef>
+    | AbstractClassConstraint of TypeDefIndex<AbstractClassDef>
+    | InterfaceConstraint of TypeDefIndex<InterfaceDef>
     /// <summary>
     /// Indicates that the generic parameter is constrainted to derive from a <c>TypeRef</c> representing a class or interface.
     /// </summary>

@@ -104,7 +104,7 @@ type InterfaceFlags =
 [<AbstractClass; Sealed>] type StructFlags = class end
 
 type TypeFlags<'Tag> = ValidFlags<'Tag, TypeAttributes>
-type TypeIndex<'Type> = TaggedIndex<'Type, TypeDefRow>
+type TypeDefIndex<'Type> = TaggedIndex<'Type, TypeDefRow>
 
 /// <summary>
 /// Specifies which type a <see cref="T:FSharpIL.Metadata.TypeDef"/> extends.
@@ -112,9 +112,9 @@ type TypeIndex<'Type> = TaggedIndex<'Type, TypeDefRow>
 [<RequireQualifiedAccess>]
 type Extends =
     /// Extend a class that is not sealed or abstract.
-    | ConcreteClass of TypeIndex<ConcreteClassDef>
+    | ConcreteClass of TypeDefIndex<ConcreteClassDef>
     /// Extend an abstract class.
-    | AbstractClass of TypeIndex<AbstractClassDef>
+    | AbstractClass of TypeDefIndex<AbstractClassDef>
     /// Extends a type referenced in another assembly.
     | TypeRef of SimpleIndex<TypeRef>
     // | TypeSpec of SimpleIndex<?>
@@ -347,7 +347,7 @@ type TypeDefTable internal (owner: IndexOwner) =
     let defs = List<TypeDefRow>()
     let lookup = HashSet<TypeDefRow>()
 
-    member val Module = TypeIndex<ModuleType>(owner, ModuleType.Row)
+    member val Module = TypeDefIndex<ModuleType>(owner, ModuleType.Row)
     member _.Count = defs.Count + 1
 
     // TODO: Enforce common CLS checks and warnings for types.

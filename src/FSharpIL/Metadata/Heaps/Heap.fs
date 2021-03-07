@@ -87,8 +87,7 @@ module internal Heap =
 
     /// <summary>Creates the <c>#Blob</c> metadata stream, which contains signatures (II.24.2.4).</summary>
     let blob (metadata: CliMetadata) size =
-        let mutable offset = 0u
-        let writer = ChunkWriter(LinkedList<_>().AddFirst(Array.zeroCreate size))
+        let mutable offset = 1u
         let blob =
             { Field = Dictionary<_, _> metadata.Field.Count
               MethodDef = Dictionary<_, _> metadata.MethodDef.Count
@@ -99,9 +98,10 @@ module internal Heap =
 
               PublicKeyTokens = Dictionary<_, _> metadata.AssemblyRef.Count
               ByteBlobs = Dictionary<_, _>(metadata.File.Count)
-              Content = writer }
+              Content = ChunkWriter(LinkedList<_>().AddFirst(Array.zeroCreate size)) }
+        let writer = BlobWriter(metadata, blob.Content)
         let inline blobIndex pos item (dict: Dictionary<_, BlobIndex>) =
-            let size = uint32(writer.Position - pos)
+            let size = uint32(blob.Content.Position - pos)
             dict.Item <- item, { BlobIndex.Index = offset; BlobIndex.Size = size }
             offset <- offset + size + BlobSize.ofUnsigned size
 
@@ -109,34 +109,34 @@ module internal Heap =
             let signature = field.Signature
             if not (blob.Field.ContainsKey signature) then
                 let pos = writer.Position
-                writer.WriteU1 0x6uy // FIELD
-                writer.WriteCustomMod signature.CustomMod
-                writer.WriteType signature.FieldType
+                writer.Writer.WriteU1 0x6uy // FIELD
+                writer.CustomMod signature.CustomMod
+                writer.EncodedType signature.FieldType
                 blobIndex pos signature blob.Field
 
         for method in metadata.MethodDef.Items do
             let signature = method.Signature
             if not (blob.MethodDef.ContainsKey signature) then
                 let pos = writer.Position
-                writer.WriteU1 signature.Flags
+                writer.Writer.WriteU1 signature.Flags
 
                 //match signature.CallingConventions with
                 //| MethodCallingConventions.Generic count -> invalidOp "TODO: Write number of generic parameters."
                 //| _ -> ()
 
-                writer.WriteCompressed signature.Parameters.Length // ParamCount
-                writer.WriteRetType signature.ReturnType
-                writer.WriteParameters signature.Parameters
+                writer.CompressedUnsigned signature.Parameters.Length // ParamCount
+                writer.RetType signature.ReturnType
+                writer.Parameters signature.Parameters
                 blobIndex pos signature blob.MethodDef
 
         for memberRef in metadata.MemberRef.Items do
             match memberRef with
             | MethodRef { Signature = signature } when not (blob.MethodRef.ContainsKey signature) ->
                 let pos = writer.Position
-                writer.WriteU1 signature.CallingConventions
-                writer.WriteCompressed signature.Parameters.Length // ParamCount
-                writer.WriteRetType signature.ReturnType
-                writer.WriteParameters signature.Parameters
+                writer.Writer.WriteU1 signature.CallingConventions
+                writer.CompressedUnsigned signature.Parameters.Length // ParamCount
+                writer.RetType signature.ReturnType
+                writer.Parameters signature.Parameters
                 // TODO: Write SENTINEL and extra parameters.
                 if not signature.VarArgParameters.IsEmpty then
                     failwith "TODO: Implement writing of VarArg parameters"
@@ -148,10 +148,10 @@ module internal Heap =
             match value with
             | Some signature when not (blob.CustomAttribute.ContainsKey signature) ->
                 let pos = writer.Position
-                writer.WriteU2 1us // Prolog
+                writer.Writer.WriteU2 1us // Prolog
                 for arg in signature.FixedArg do
-                    writer.WriteFixedArg arg
-                writer.WriteU2 signature.NamedArg.Length // NumNamed
+                    writer.FixedArg arg
+                writer.Writer.WriteU2 signature.NamedArg.Length // NumNamed
                 for arg in signature.NamedArg do
                     failwithf "TODO: Implement writing of named arguments for custom attributes"
                 blobIndex pos signature blob.CustomAttribute
@@ -169,21 +169,20 @@ module internal Heap =
                 let pos = writer.Position
                 match token with
                 | PublicKeyToken(b1, b2, b3, b4, b5, b6, b7, b8) ->
-                    writer.WriteBlobSize 8u
-                    writer.WriteU1 b1
-                    writer.WriteU1 b2
-                    writer.WriteU1 b3
-                    writer.WriteU1 b4
-                    writer.WriteU1 b5
-                    writer.WriteU1 b6
-                    writer.WriteU1 b7
-                    writer.WriteU1 b8
+                    writer.Writer.WriteU1 b1
+                    writer.Writer.WriteU1 b2
+                    writer.Writer.WriteU1 b3
+                    writer.Writer.WriteU1 b4
+                    writer.Writer.WriteU1 b5
+                    writer.Writer.WriteU1 b6
+                    writer.Writer.WriteU1 b7
+                    writer.Writer.WriteU1 b8
                 | _ -> failwithf "Unable to write unsupported public key token %A" token
                 blobIndex pos token blob.PublicKeyTokens
 
         for { File.HashValue = hashValue } in metadata.File.Items do 
             if not (blob.ByteBlobs.ContainsKey hashValue) then
-                writer.WriteBytes hashValue
+                writer.Writer.WriteBytes hashValue
 
         blob
 
@@ -203,12 +202,17 @@ module internal Heap =
     let writeGuid (metadata: CliMetadata) (writer: ChunkWriter) =
         metadata.Module.Mvid.ToByteArray() |> writer.WriteBytes
 
-    let writeBlob (blobs: BlobHeap) (writer: ChunkWriter) =
-        let mutable (struct(chunk, i) as state) = struct(blobs.Content.Chunk.List.First, 0)
-        let inline writeAll (dict: Dictionary<_, BlobIndex>) =
+    let writeBlob (blobs: BlobHeap) metadata (writer: ChunkWriter) =
+        writer.WriteU1 0uy
+
+        let mutable chunk, i = blobs.Content.Chunk.List.First, 0
+        let writeAll (dict: Dictionary<_, BlobIndex>) =
+            let writer' = BlobWriter(metadata, writer)
             for KeyValue(_, index) in dict do
-                writer.WriteBlobSize index.Size
-                state <- writer.WriteBytes(chunk, i, index.Size)
+                writer'.CompressedUnsigned index.Size
+                let struct(chunk', i') = writer.WriteBytes(chunk, i, index.Size)
+                chunk <- chunk'
+                i <- i'
 
         writeAll blobs.Field
         writeAll blobs.MethodDef
@@ -218,11 +222,12 @@ module internal Heap =
         writeAll blobs.PublicKeyTokens
         writeAll blobs.ByteBlobs
 
-    let writeUS (us: UserStringHeap) (writer: ChunkWriter) =
+    let writeUS (us: UserStringHeap) metadata (writer: ChunkWriter) =
+        let writer' = BlobWriter(metadata, writer)
         writer.WriteU1 0uy
         for str in us do
             let { BlobIndex.Size = size } = us.IndexOf str
-            writer.WriteBlobSize size
+            writer'.CompressedUnsigned size
             Encoding.Unicode.GetBytes str |> writer.WriteBytes
             writer.WriteU1 0uy // TODO: Determine value of terminal byte.
 

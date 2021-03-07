@@ -83,7 +83,7 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, default
             this.CheckNextChunk()
             let length = min this.FreeBytes (bytes.Length - i)
             let destination = Span<_>(current.Value, pos, length)
-            bytes.Slice(i).CopyTo destination
+            bytes.Slice(i, length).CopyTo destination
             i <- i + length
             pos <- pos + length
             size <- size + uint32 length
@@ -122,11 +122,15 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, default
                     length
                     remaining
             let content = chunk.Value
-            let length' = content.Length - index
+            let length' =
+                let current = content.Length - index
+                if remaining > uint32 current
+                then current
+                else int32 remaining
             let source = Span<_>(content, index, length')
             this.WriteBytes source
             index <- index + length'
-            remaining <- remaining + uint32 length'
+            remaining <- remaining - uint32 length'
             if index = content.Length then
                 chunk <- chunk.Next
                 index <- 0

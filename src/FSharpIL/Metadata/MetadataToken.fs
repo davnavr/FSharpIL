@@ -14,7 +14,7 @@ let write index table (writer: ChunkWriter) =
     if index > 0xFF_FF_FFu then
         invalidArg
             (nameof index)
-            "The row or offset pointed to by a metadata token must be able to fit in 3 bytes."
+            "The row or offset pointed to by a metadata token must be able to fit in 3 bytes"
     index &&& 0xFFu |> writer.WriteU1
     (index >>> 8) &&& 0xFFu |> writer.WriteU1
     (index >>> 16) &&& 0xFFu |> writer.WriteU1
