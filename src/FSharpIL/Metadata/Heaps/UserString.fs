@@ -28,7 +28,7 @@ type internal UserStringHeap internal (capacity: int32) =
         | _ ->
             let length = Encoding.Unicode.GetByteCount str |> uint32
             let index = { BlobIndex.Index = i; BlobIndex.Size = length + 1u }
-            i <- i + index.TotalSize
+            i <- i + (BlobSize.ofUnsigned index.Size) + index.Size
             lookup.Item <- str, index
             strings.Add str
 

@@ -86,7 +86,9 @@ module internal Heap =
         Lookup<_>(guids, uint32 guids.Count * 16u, indexOf)
 
     /// <summary>Creates the <c>#Blob</c> metadata stream, which contains signatures (II.24.2.4).</summary>
-    let blob (metadata: CliMetadata) =
+    let blob (metadata: CliMetadata) size =
+        let mutable offset = 0u
+        let writer = ChunkWriter(LinkedList<_>().AddFirst(Array.zeroCreate size))
         let blob =
             { Field = Dictionary<_, _> metadata.Field.Count
               MethodDef = Dictionary<_, _> metadata.MethodDef.Count
@@ -97,43 +99,91 @@ module internal Heap =
 
               PublicKeyTokens = Dictionary<_, _> metadata.AssemblyRef.Count
               ByteBlobs = Dictionary<_, _>(metadata.File.Count)
-              ByteLength = 1u }
-        let inline index (dict: Dictionary<_, _>) key size =
-            if size > 0u then
-                let i = blob.ByteLength
-                let index = { BlobIndex.Index = i; BlobIndex.Size = size }
-                blob.ByteLength <- blob.ByteLength + index.TotalSize
-                dict.Item <- key, index
+              Content = writer }
+        let inline blobIndex pos item (dict: Dictionary<_, BlobIndex>) =
+            let size = uint32(writer.Position - pos)
+            dict.Item <- item, { BlobIndex.Index = offset; BlobIndex.Size = size }
+            offset <- offset + size + BlobSize.ofUnsigned size
 
-        // TODO: Create inlined function to check if a blob is not in one of the dictionaries before adding.
-        CliMetadata.iterBlobs
-            (fun signature ->
-                if not (blob.Field.ContainsKey signature) then
-                    BlobSize.ofFieldSignature signature |> index blob.Field signature)
-            (fun signature ->
-                if not (blob.MethodDef.ContainsKey signature) then
-                    BlobSize.ofMethodDefSignature signature |> index blob.MethodDef signature)
-            (fun signature ->
-                if not (blob.MethodRef.ContainsKey signature) then
-                    BlobSize.ofMethodRefSignature signature |> index blob.MethodRef signature)
-            (fun signature ->
-                if not (blob.CustomAttribute.ContainsKey signature) then
-                    BlobSize.ofCustomAttribute signature |> index blob.CustomAttribute signature)
-            (fun signature ->
-                if not (blob.TypeSpec.ContainsKey signature) then
-                    failwith "TODO: Calculate size of TypeSpec.")
-            (fun token ->
-                if not (blob.PublicKeyTokens.ContainsKey token) then
-                    match token with
-                    | _ when false -> 0u
-                    | PublicKey key -> uint32 key.Length
-                    | PublicKeyToken _ -> 8u
-                    | NoPublicKey -> 0u
-                    |> index blob.PublicKeyTokens token)
-            (fun bytes ->
-                if not (blob.ByteBlobs.ContainsKey bytes) then
-                    uint32 bytes.Length |> index blob.ByteBlobs bytes)
-            metadata
+        for field in metadata.Field.Items do
+            let signature = field.Signature
+            if not (blob.Field.ContainsKey signature) then
+                let pos = writer.Position
+                writer.WriteU1 0x6uy // FIELD
+                writer.WriteCustomMod signature.CustomMod
+                writer.WriteType signature.FieldType
+                blobIndex pos signature blob.Field
+
+        for method in metadata.MethodDef.Items do
+            let signature = method.Signature
+            if not (blob.MethodDef.ContainsKey signature) then
+                let pos = writer.Position
+                writer.WriteU1 signature.Flags
+
+                //match signature.CallingConventions with
+                //| MethodCallingConventions.Generic count -> invalidOp "TODO: Write number of generic parameters."
+                //| _ -> ()
+
+                writer.WriteCompressed signature.Parameters.Length // ParamCount
+                writer.WriteRetType signature.ReturnType
+                writer.WriteParameters signature.Parameters
+                blobIndex pos signature blob.MethodDef
+
+        for memberRef in metadata.MemberRef.Items do
+            match memberRef with
+            | MethodRef { Signature = signature } when not (blob.MethodRef.ContainsKey signature) ->
+                let pos = writer.Position
+                writer.WriteU1 signature.CallingConventions
+                writer.WriteCompressed signature.Parameters.Length // ParamCount
+                writer.WriteRetType signature.ReturnType
+                writer.WriteParameters signature.Parameters
+                // TODO: Write SENTINEL and extra parameters.
+                if not signature.VarArgParameters.IsEmpty then
+                    failwith "TODO: Implement writing of VarArg parameters"
+                blobIndex pos signature blob.MethodRef
+            // FieldRef
+            | _ -> ()
+
+        for { Value = value } in metadata.CustomAttribute do
+            match value with
+            | Some signature when not (blob.CustomAttribute.ContainsKey signature) ->
+                let pos = writer.Position
+                writer.WriteU2 1us // Prolog
+                for arg in signature.FixedArg do
+                    writer.WriteFixedArg arg
+                writer.WriteU2 signature.NamedArg.Length // NumNamed
+                for arg in signature.NamedArg do
+                    failwithf "TODO: Implement writing of named arguments for custom attributes"
+                blobIndex pos signature blob.CustomAttribute
+            | _ -> ()
+
+        for typeSpec in metadata.TypeSpec.Items do
+            let signature = typeSpec.Signature
+            if not (blob.TypeSpec.ContainsKey signature) then
+                let pos = writer.Position
+                failwith "TODO: Write the typeSpec"
+                blobIndex pos signature blob.TypeSpec
+
+        for { PublicKeyOrToken = token } in metadata.AssemblyRef.Items do
+            if not (blob.PublicKeyTokens.ContainsKey token) then
+                let pos = writer.Position
+                match token with
+                | PublicKeyToken(b1, b2, b3, b4, b5, b6, b7, b8) ->
+                    writer.WriteBlobSize 8u
+                    writer.WriteU1 b1
+                    writer.WriteU1 b2
+                    writer.WriteU1 b3
+                    writer.WriteU1 b4
+                    writer.WriteU1 b5
+                    writer.WriteU1 b6
+                    writer.WriteU1 b7
+                    writer.WriteU1 b8
+                | _ -> failwithf "Unable to write unsupported public key token %A" token
+                blobIndex pos token blob.PublicKeyTokens
+
+        for { File.HashValue = hashValue } in metadata.File.Items do 
+            if not (blob.ByteBlobs.ContainsKey hashValue) then
+                writer.WriteBytes hashValue
 
         blob
 
@@ -153,83 +203,20 @@ module internal Heap =
     let writeGuid (metadata: CliMetadata) (writer: ChunkWriter) =
         metadata.Module.Mvid.ToByteArray() |> writer.WriteBytes
 
-    let writeBlob (blobs: BlobHeap) (metadata: CliMetadata) (writer: ChunkWriter) =
-        let field = HashSet<_> blobs.Field.Count
-        let methodDef = HashSet<_> blobs.MethodDef.Count
-        let methodRef = HashSet<_> blobs.MethodRef.Count
+    let writeBlob (blobs: BlobHeap) (writer: ChunkWriter) =
+        let mutable (struct(chunk, i) as state) = struct(blobs.Content.Chunk.List.First, 0)
+        let inline writeAll (dict: Dictionary<_, BlobIndex>) =
+            for KeyValue(_, index) in dict do
+                writer.WriteBlobSize index.Size
+                state <- writer.WriteBytes(chunk, i, index.Size)
 
-        let attributes = HashSet<_> blobs.CustomAttribute.Count
-        let typeSpec = HashSet<_> blobs.TypeSpec.Count
-
-        let publicKeyTokens = HashSet<_> blobs.PublicKeyTokens.Count
-        let bytes = HashSet<byte[]> blobs.ByteBlobs.Count
-
-        writer.WriteU1 0uy // Empty blob
-
-        // TODO: Create inlined function for adding to HashSet and writing blob size.
-        CliMetadata.iterBlobs
-            (fun signature ->
-                if field.Add signature then
-                    writer.WriteBlobSize blobs.Field.[signature].Size
-                    writer.WriteU1 0x6uy // FIELD
-                    writer.WriteCustomMod signature.CustomMod
-                    writer.WriteType signature.FieldType)
-            (fun signature ->
-                if methodDef.Add signature then
-                    writer.WriteBlobSize blobs.MethodDef.[signature].Size
-                    writer.WriteU1 signature.Flags
-
-                    //match signature.CallingConventions with
-                    //| MethodCallingConventions.Generic count -> invalidOp "TODO: Write number of generic parameters."
-                    //| _ -> ()
-
-                    writer.WriteCompressed signature.Parameters.Length // ParamCount
-                    writer.WriteRetType signature.ReturnType
-                    writer.WriteParameters signature.Parameters)
-            (fun signature ->
-                if methodRef.Add signature then
-                    writer.WriteBlobSize blobs.MethodRef.[signature].Size
-                    writer.WriteU1 signature.CallingConventions
-                    writer.WriteCompressed signature.Parameters.Length // ParamCount
-                    writer.WriteRetType signature.ReturnType
-                    writer.WriteParameters signature.Parameters
-                    // TODO: Write SENTINEL and extra parameters.
-                    if not signature.VarArgParameters.IsEmpty then
-                        failwith "TODO: Implement writing of VarArg parameters")
-            (fun signature ->
-                if attributes.Add signature then
-                    if signature.FixedArg.IsEmpty && signature.NamedArg.IsEmpty then
-                        invalidOp "Attributes without any fixed or named arguments should use the empty blob instead."
-                    writer.WriteBlobSize blobs.CustomAttribute.[signature].Size
-                    writer.WriteU2 1us // Prolog
-                    for arg in signature.FixedArg do
-                        writer.WriteFixedArg arg
-                    writer.WriteU2 signature.NamedArg.Length // NumNamed
-                    for arg in signature.NamedArg do
-                        failwithf "TODO: Implement writing of named arguments for custom attributes")
-            (fun signature ->
-                if typeSpec.Add signature then
-                    
-                    failwith "TODO: Write the typeSpec")
-            (fun token ->
-                if publicKeyTokens.Add token then
-                    match token with
-                    | PublicKeyToken(b1, b2, b3, b4, b5, b6, b7, b8) ->
-                        writer.WriteBlobSize 8u
-                        writer.WriteU1 b1
-                        writer.WriteU1 b2
-                        writer.WriteU1 b3
-                        writer.WriteU1 b4
-                        writer.WriteU1 b5
-                        writer.WriteU1 b6
-                        writer.WriteU1 b7
-                        writer.WriteU1 b8
-                    | _ -> failwithf "Invalid public key or token %A" token)
-            (fun bytes ->
-                // if ?.Add bytes
-                uint32 bytes.Length |> writer.WriteBlobSize
-                writer.WriteBytes bytes)
-            metadata
+        writeAll blobs.Field
+        writeAll blobs.MethodDef
+        writeAll blobs.MethodRef
+        writeAll blobs.CustomAttribute
+        writeAll blobs.TypeSpec
+        writeAll blobs.PublicKeyTokens
+        writeAll blobs.ByteBlobs
 
     let writeUS (us: UserStringHeap) (writer: ChunkWriter) =
         writer.WriteU1 0uy

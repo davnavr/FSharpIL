@@ -60,7 +60,6 @@ type ChunkWriter with
             this.WriteType head
             for gparam in tail do this.WriteType gparam
 
-    // TODO: Consider automatically converting some Array to SZArray, since a user might use a one dimensional string array instead of an SZArray in the entrypoint, which means the exe cannot run. This won't be a problem if an EntryPointMethod union type is used.
     member this.WriteType(item: EncodedType) =
         match item with
         | EncodedType.Array(element, shape) ->

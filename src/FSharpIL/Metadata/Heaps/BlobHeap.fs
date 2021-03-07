@@ -9,11 +9,10 @@ open FSharpIL.Writing
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]
 type internal BlobIndex =
-    { Index: uint32
-      /// The size of the blob pointed to by this index.
+    { /// <summary>An index that points to this blob in the <c>#Blob</c> heap.</summary>
+      Index: uint32
+      /// The size of the contents of the blob pointed to by this index.
       Size: uint32 }
-
-    member this.TotalSize = (BlobSize.ofUnsigned this.Size) + this.Size
 
 /// <summary>Represents the <c>#Blob</c> metadata stream (II.24.2.4).</summary>
 [<ReferenceEquality; NoComparison>]
@@ -30,8 +29,9 @@ type internal BlobHeap =
 
       PublicKeyTokens: Dictionary<PublicKeyOrToken, BlobIndex>
       ByteBlobs: Dictionary<byte[], BlobIndex>
-      mutable ByteLength: uint32 }
+      Content: ChunkWriter }
 
+    // TODO: Turn these Blob methods into functions.
     member this.SignatureCount =
         this.Field.Count
         + this.MethodDef.Count
@@ -61,5 +61,4 @@ type internal BlobHeap =
 
     member this.WriteEmpty writer = this.WriteRawIndex(0u, writer)
 
-    interface IHeap with
-        member this.ByteLength = this.ByteLength
+    interface IHeap with member this.ByteLength = this.Content.Size

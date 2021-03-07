@@ -134,25 +134,7 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
                 writer.WriteU4 0u // LocalVarSigTok // TODO: Figure out how to set local variable information.
 
             // Body
-            use mutable content = chunk.List.GetEnumerator()
-            let mutable size' = size
-            while size' > 0u && content.MoveNext() do
-                let current = content.Current
-                let currentLength = uint32 current.Length
-                if size' > currentLength then
-                    size' <- size' - currentLength
-                    writer.WriteBytes current
-                else
-                    let remaining = Seq.take (int size') current
-                    size' <- 0u
-                    writer.WriteBytes remaining
-
-            if size' > 0u then
-                failwithf
-                    "Unable to write method body of size %i, chunk list unexpectedly ended with %i bytes remaining"
-                    size
-                    size'
-
+            writer.WriteBytes(chunk.List, size)
             if not tiny then writer.AlignTo 4u
 
             let pos = writer.Position
@@ -469,7 +451,7 @@ let root (info: CliInfo) (writer: ChunkWriter) =
 
     // #Blob
     if blob <> Unchecked.defaultof<ChunkWriter> then
-        stream blob (Heap.writeBlob info.BlobStream info.Cli)
+        stream blob (Heap.writeBlob info.BlobStream)
 
     do // Stream count
         let mutable count = 3u // #~, #Strings, #GUID
@@ -490,7 +472,7 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
           StringsStream = Heap.strings cli
           UserStringStream = UserStringHeap 64
           GuidStream = Heap.guid cli
-          BlobStream = Heap.blob cli }
+          BlobStream = Heap.blob cli section.Chunk.Value.Length }
     let mutable rva = headerRva
 
     header info writer

@@ -75,21 +75,62 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, default
 
     member inline this.WriteU8 value = this.WriteU8(uint64 value)
 
-    member private this.HasFreeBytes length = this.FreeBytes >= length
+    member _.CreateWriter() = ChunkWriter(current, pos, defaultCapacity)
 
-    member _.CreateWriter() =
-        ChunkWriter(current, pos, defaultCapacity)
+    member this.WriteBytes(bytes: Span<byte>) =
+        let mutable i = 0
+        while i < bytes.Length do
+            this.CheckNextChunk()
+            let length = min this.FreeBytes (bytes.Length - i)
+            let destination = Span<_>(current.Value, pos, length)
+            bytes.Slice(i).CopyTo destination
+            i <- i + length
+            pos <- pos + length
+            size <- size + uint32 length
 
-    member this.WriteBytes(bytes: byte[]) =
-        if this.HasFreeBytes bytes.Length then
-            let destination = Span(current.Value, pos, bytes.Length)
-            Span(bytes).CopyTo destination
-            pos <- pos + bytes.Length
-            size <- size + uint32 bytes.Length
-        else
-            Array.toSeq bytes |> this.WriteBytes
-
+    member this.WriteBytes(bytes: byte[]) = this.WriteBytes(Span<_> bytes)
     member this.WriteBytes(bytes: seq<byte>) = Seq.iter this.WriteU1 bytes
+
+    [<Obsolete>]
+    /// <param name="length">The number of bytes to write from the chunk list.</param>
+    member this.WriteBytes(chunks: LinkedList<byte[]>, length: uint32) =
+        use mutable content = chunks.GetEnumerator()
+        let mutable size' = length
+        while size' > 0u && content.MoveNext() do
+            let current = content.Current
+            let currentLength = uint32 current.Length
+            if size' > currentLength then
+                size' <- size' - currentLength
+                this.WriteBytes current
+            else
+                let remaining = Seq.take (int size') current
+                size' <- 0u
+                this.WriteBytes remaining
+        if size' > 0u then
+            sprintf
+                "Unable to write byte chunks of length %i, chunk list unexpectedly ended with %i bytes remaining"
+                length
+                size'
+            |> invalidOp
+
+    member this.WriteBytes(startChunk: LinkedListNode<byte[]>, chunkIndex: int32, length: uint32) =
+        let mutable chunk, remaining, index = startChunk, length, chunkIndex
+        while remaining > 0u do
+            if chunk = null then
+                failwithf
+                    "Unable to write byte chunks of length %i, chunk list unexpectedly ended with %i bytes remaining"
+                    length
+                    remaining
+            let content = chunk.Value
+            let length' = content.Length - index
+            let source = Span<_>(content, index, length')
+            this.WriteBytes source
+            index <- index + length'
+            remaining <- remaining + uint32 length'
+            if index = content.Length then
+                chunk <- chunk.Next
+                index <- 0
+        struct(chunk, index)
 
     member this.SkipBytes count =
         size <- size + count

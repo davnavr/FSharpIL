@@ -297,34 +297,3 @@ module CliMetadata =
 
         for { FileName = name } in metadata.File.Items do
             string name |> action
-
-    let inline internal iterBlobs
-            field
-            methodDef
-            methodRef
-
-            customAttribute
-
-            typeSpec
-
-            publicKeyOrToken
-            bytes
-            (metadata: CliMetadata) =
-
-        for row in metadata.Field.Items do field row.Signature
-
-        for method in metadata.MethodDef.Items do methodDef method.Signature
-
-        for mref in metadata.MemberRef.Items do
-            match mref with
-            | MethodRef method -> methodRef method.Signature
-
-        for { Value = signature } in metadata.CustomAttribute do Option.iter customAttribute signature
-
-        for row in metadata.TypeSpec.Items do typeSpec row.Signature
-
-        for { PublicKeyOrToken = token } in metadata.AssemblyRef.Items do publicKeyOrToken token
-
-        for { File.HashValue = hashValue } in metadata.File.Items do bytes hashValue
-
-        ()
