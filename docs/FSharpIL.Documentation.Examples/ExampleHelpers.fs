@@ -70,3 +70,4 @@ let private testLoad testf example (name: string) (test: _ -> unit): Test =
 /// Builds a test case that loads the Portable Executable into a <see cref="T:System.Runtime.Loader.AssemblyLoadContext"/>.
 /// </summary>
 let testCaseLoad = testLoad testCase
+let ftestCaseLoad = testLoad ftestCase

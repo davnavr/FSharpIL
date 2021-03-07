@@ -29,18 +29,16 @@ type NullMethodBody internal () =
 
 /// <summary>Represents a non-null method body.</summary>
 [<AbstractClass>]
-type ConcreteMethodBody internal () =
+type ConcreteMethodBody () =
     abstract WriteBody: MethodBodyContent -> MethodBody
     interface IMethodBody with
         member _.Exists = true
         member this.WriteBody content = this.WriteBody content
 
-// TODO: Move this module to another file.
-[<RequireQualifiedAccess>]
-module MethodBody =
-    let create (writer: MethodBodyContent -> MethodBody) =
-        { new ConcreteMethodBody() with member _.WriteBody content = writer content }
-    /// Represents a method body that does not exist, used for abstract methods.
-    let none = NullMethodBody()
-    ///// A method body containing a single <c>ret</c> instruction.
-    //let empty = { new IMethodBody with
+[<Sealed>]
+type internal MutableMethodBody (writer) =
+    inherit ConcreteMethodBody()
+    let mutable writer' = writer
+    new() = MutableMethodBody(fun _ -> invalidOp "The method body was not initialized")
+    member _.SetBody writer = writer' <- writer
+    override _.WriteBody content = writer' content

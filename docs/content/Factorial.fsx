@@ -66,7 +66,9 @@ let example() =
             |> StaticField
             |> addField factorial
 
-        let! _ =
+        let calculateBody, setCalculateBody = MethodBody.mutableBody()
+
+        let! calculate =
             { MethodName = Identifier.ofStr "Calculate"
               ImplFlags = MethodImplFlags.None
               Flags = { Visibility = Public; HideBySig = true } |> Flags.staticMethod
@@ -77,15 +79,14 @@ let example() =
                     ReturnType.itemU4,
                     ParamItem.create EncodedType.U4 |> ImmutableArray.Create
                 )
-              Body =
-                fun content ->
-                    let writer = MethodBodyWriter content
-                    writer.Ret()
-                    //failwith "TODO: Figure out how to make this method call itself."
-                    { MaxStack = 8us; InitLocals = false }
-                |> MethodBody.create }
+              Body = calculateBody }
             |> StaticMethod
             |> addMethod factorial
+
+        setCalculateBody <| fun content ->
+            let writer = MethodBodyWriter content
+            writer.Ret()
+            { MaxStack = 8us; InitLocals = false }
 
         // TODO: Do more factorial things
         ()
@@ -110,7 +111,8 @@ let tests =
                 |> List.ofSeq
             test <@ expected = actual @>
 
-        //testCaseLoad example "method can be called" <| fun assm ->
-        //    failwith "TODO: Figure out what method to call and how to pass arguments."
+        // TODO: Figure out if a property test can be used here.
+        ftestCaseLoad example "method can be called" <| fun assm ->
+            failwith "TODO: Figure out what method to call and how to pass arguments."
     ]
 #endif
