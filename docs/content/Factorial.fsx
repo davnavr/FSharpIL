@@ -85,6 +85,7 @@ let example() =
 
         setCalculateBody <| fun content ->
             let writer = MethodBodyWriter content
+            writer.Ldc_i4 0 // Temporary
             writer.Ret()
             { MaxStack = 8us; InitLocals = false }
 
@@ -111,10 +112,11 @@ let tests =
                 |> List.ofSeq
             test <@ expected = actual @>
 
-        // TODO: Figure out if a property test can be used here.
+        // TODO: Figure out if a property test can be used to test factorial calculation.
         ftestCaseLoad example "method can be called" <| fun assm ->
             let calculate = assm.GetType("Factorial.CachedFactorial").GetMethod("Calculate")
-            let result = calculate.Invoke(null, [| 3u |])
-            failwith "TODO: Figure out what method to call and how to pass arguments."
+            let expected = 6u
+            let actual = calculate.Invoke(null, [| 3u |]) |> unbox
+            test <@ expected = actual @>
     ]
 #endif

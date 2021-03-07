@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Metadata
+﻿namespace rec FSharpIL.Metadata
 
 open FSharpIL.Metadata.Heaps
 
@@ -9,6 +9,7 @@ type internal MethodBodyContentImpl (writer, metadata, us: UserStringHeap) =
     do if writer.Size > 0u then invalidArg "writer" "The method body writer must be a new instance"
     member _.Metadata: CliMetadata = metadata
     member _.UserString = us
+    member this.CreateWriter() = MethodBodyWriter this
 
 // TODO: Figure out how exception handling information will be included.
 // TODO: Figure out how to prevent (some) invalid method bodies.
@@ -20,24 +21,65 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     /// Gets the number of bytes that have been written.
     member _.Size = content.Writer.Size
+    member _.WriteU1 value = content.Writer.WriteU1 value
+
     /// (0x00) Writes an instruction that does nothing (III.3.51).
-    member _.Nop() = content.Writer.WriteU1 0uy
+    member this.Nop() = this.WriteU1 0uy
     /// <summary>
     /// (0x01) Writes an instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been
     /// tripped" (III.3.16).
     /// </summary>
-    member _.Break() = content.Writer.WriteU1 1uy
+    member this.Break() = this.WriteU1 1uy
     /// (0x2A) Writes an instruction used to return from the current method (III.3.56).
-    member _.Ret() = content.Writer.WriteU1 0x2Auy
+    member this.Ret() = this.WriteU1 0x2Auy
     /// (0x14) Writes an instruction used to load a null pointer (III.3.45).
-    member _.Ldnull() = content.Writer.WriteU1 0x14uy
+    member this.Ldnull() = this.WriteU1 0x14uy
+
+    // TODO: Figure out how numbers are written in the IL. Are they compressed?
+
+    /// <summary>
+    /// (0x15 to 0x1E, 0x20) Writes an instruction that pushes a signed four-byte integer onto the stack (III.3.40).
+    /// </summary>
+    /// <remarks>
+    /// This method automatically writes the short forms of these opcodes depending on the number that is to be pushed onto the
+    /// stack.
+    /// </remarks>
+    member this.Ldc_i4(num: int32) =
+        match num with
+        | -1 -> this.WriteU1 0x15uy
+        | _ when num <= 8 -> this.WriteU1(0x16uy + uint8 num)
+        | _ ->
+            this.WriteU1 0x20uy
+            failwith "TODO: How is an int32 written?"
+
+    /// <summary>
+    /// (0x1F) Writes an instruction that pushes a signed one-byte integer onto the stack as an <c>int32</c> (III.3.40).
+    /// </summary>
+    member this.Ldc_i4(num: int8) =
+        this.WriteU1 0x1Fuy
+        failwith "TODO: How is an int8 written?"
+
+    /// (0x21) Writes an instruction that pushes a signed eight-byte integer onto the stack (III.3.40).
+    member this.Ldc_i8(num: int64) =
+        this.WriteU1 0x21uy
+        failwith "TODO: How is an int64 written?"
+
+    /// (0x22)
+    member this.Ldc_r4(num: float32) =
+        this.WriteU1 0x22uy
+        failwith "TODO: How is a r4 written?"
+
+    /// (0x23)
+    member this.Ldc_r8(num: double) =
+        this.WriteU1 0x23uy
+        failwith "TODO: How is a r8 written?"
 
     // TODO: Allow call to accept a MethodDef, MethodRef, or MethodSpec.
     /// <summary>(0x28) Writes an instruction that calls a method (III.3.19).</summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
     member this.Call(SimpleIndex method: MemberRefIndex<MethodRef>) =
         IndexOwner.checkIndex content.Metadata.Owner method
-        content.Writer.WriteU1 0x28uy
+        this.WriteU1 0x28uy
         this.WriteMetadataToken(content.Metadata.MemberRef.IndexOf method, 0xAuy)
 
     /// <summary>
@@ -45,15 +87,15 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// </summary>
     /// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
     /// <exception cref="T:System.ArgumentNullException">Thrown when the input string is <see langword="null"/>.</exception>
-    member _.Ldstr(str: string) =
+    member this.Ldstr(str: string) =
         match str with
         | null -> nullArg "str"
         | _ ->
-            content.Writer.WriteU1 0x72uy
+            this.WriteU1 0x72uy
             MetadataToken.userString str content.UserString content.Writer
 
     member private this.WriteFieldInstruction(opcode, SimpleIndex field: FieldIndex<_>) =
-        content.Writer.WriteU1 opcode
+        this.WriteU1 opcode
         this.WriteMetadataToken(content.Metadata.Field.IndexOf field, 0x4uy)
     // TODO: Allow a FieldRef to be used when loading an instance field.
     /// <summary>(0x7B) Writes an instruction that pushes the value of an object's field onto the stack (III.4.10).</summary>
@@ -69,8 +111,3 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     /// <summary>(0x7D) Writes an instruction that stores a value into a static field (III.4.30).</summary>
     member this.Stsfld field = this.WriteFieldInstruction(0x80uy, field)
-
-[<AutoOpen>]
-module MethodBodyContentExtensions =
-    type MethodBodyContent with
-        member this.CreateWriter() = MethodBodyWriter(this :?> MethodBodyContentImpl)
