@@ -232,7 +232,7 @@ module CliMetadata =
 
     let addMethod (SimpleIndex owner: TypeDefIndex<'Type>) (MethodDef method: 'Method when 'Method :> IMethod<'Type>) (state: MetadataBuilderState) =
         match state.Method.Add(owner, method) with
-        | ValueSome index -> MethodIndex<'Method> index |> Result<MethodIndex<_>, _>.Ok
+        | ValueSome index -> MethodDefIndex<'Method> index |> Result<MethodDefIndex<_>, _>.Ok
         | ValueNone -> DuplicateMethodError method :> ValidationError |> Error
 
     // TODO: Add functions for adding global fields and global methods.

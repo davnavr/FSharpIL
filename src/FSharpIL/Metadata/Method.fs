@@ -149,12 +149,12 @@ type EntryPointMethod (method: Method<ConcreteMethodBody, StaticMethod, EntryPoi
 /// <summary>Represents an <c>EntryPointToken</c> (II.25.3.3).</summary>
 type EntryPointToken =
     /// Indicates that the entrypoint is a static method in the current assembly.
-    | ValidEntryPoint of MethodIndex<EntryPointMethod>
+    | ValidEntryPoint of MethodDefIndex<EntryPointMethod>
     /// <summary>
     /// Indicates that the entrypoint is a static method in the current assembly. Its signature may not be valid in some implementations
     /// of the CLR.
     /// </summary>
-    | CustomEntryPoint of MethodIndex<StaticMethod> // TODO: See if this option is needed to allow usage of Task or Task<int> in signature.
+    | CustomEntryPoint of MethodDefIndex<StaticMethod> // TODO: See if this option is needed to allow usage of Task or Task<int> in signature.
     /// Indicates that the entrypoint is defined in another module.
     | EntryPointFile of SimpleIndex<ModuleRef>
 

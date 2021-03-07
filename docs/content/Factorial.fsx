@@ -86,6 +86,7 @@ let example() =
         setCalculateBody <| fun content ->
             let writer = MethodBodyWriter content
             writer.Ldc_i4 0 // Temporary
+            writer.Tail_Call calculate
             writer.Ret()
             { MaxStack = 8us; InitLocals = false }
 

@@ -94,7 +94,7 @@ type MethodDefRow internal (body, iflags, attr, name, signature: MethodDefSignat
 
     interface IIndexValue with member this.CheckOwner owner = this.Signature.CheckOwner owner
 
-type MethodIndex<'Tag> = TaggedIndex<'Tag, MethodDefRow>
+type MethodDefIndex<'Tag> = TaggedIndex<'Tag, MethodDefRow>
 
 /// <summary>
 /// Error used when there is a duplicate row in the <c>MethodDef</c> table (21).

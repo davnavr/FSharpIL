@@ -1,5 +1,7 @@
 ﻿namespace rec FSharpIL.Metadata
 
+open FSharpIL.Bytes
+
 open FSharpIL.Metadata.Heaps
 
 // TODO: Come up with better name for this class.
@@ -21,7 +23,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     /// Gets the number of bytes that have been written.
     member _.Size = content.Writer.Size
-    member _.WriteU1 value = content.Writer.WriteU1 value
+    member private _.WriteU1 value = content.Writer.WriteU1 value
 
     /// (0x00) Writes an instruction that does nothing (III.3.51).
     member this.Nop() = this.WriteU1 0uy
@@ -35,7 +37,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0x14) Writes an instruction used to load a null pointer (III.3.45).
     member this.Ldnull() = this.WriteU1 0x14uy
 
-    // TODO: Figure out how numbers are written in the IL. Are they compressed?
+    // TODO: Figure out how numbers are written in the IL (III.1.2)
 
     /// <summary>
     /// (0x15 to 0x1E, 0x20) Writes an instruction that pushes a signed four-byte integer onto the stack (III.3.40).
@@ -74,13 +76,21 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         this.WriteU1 0x23uy
         failwith "TODO: How is a r8 written?"
 
-    // TODO: Allow call to accept a MethodDef, MethodRef, or MethodSpec.
-    /// <summary>(0x28) Writes an instruction that calls a method (III.3.19).</summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Call(SimpleIndex method: MemberRefIndex<MethodRef>) =
+    member private this.Call(method, index, table) =
         IndexOwner.checkIndex content.Metadata.Owner method
         this.WriteU1 0x28uy
-        this.WriteMetadataToken(content.Metadata.MemberRef.IndexOf method, 0xAuy)
+        this.WriteMetadataToken(index, table)
+
+    // TODO: Allow call to accept a MethodSpec.
+    /// <summary>(0x28) Writes an instruction that calls a <c>MethodRef</c> (III.3.19).</summary>
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+    member this.Call(SimpleIndex method: MemberRefIndex<MethodRef>) =
+        this.Call(method, content.Metadata.MemberRef.IndexOf method, 0xAuy)
+
+    /// <summary>(0x28) Writes an instruction that calls a <c>MethodDef</c> (III.3.19).</summary>
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+    member this.Call(SimpleIndex method: MethodDefIndex<_>) =
+        this.Call(method, content.Metadata.MethodDef.IndexOf method, 0x6uy)
 
     /// <summary>
     /// (0x72) Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
@@ -111,3 +121,21 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     /// <summary>(0x7D) Writes an instruction that stores a value into a static field (III.4.30).</summary>
     member this.Stsfld field = this.WriteFieldInstruction(0x80uy, field)
+
+    // TODO: Add checks to ensure that the next written instruction after tail. is ret
+    member private this.Tail() = this.WriteU1 0xFEuy; this.WriteU1 0x14uy
+
+    /// <summary>
+    /// (0xFE 0x14) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> (III.2.4)
+    /// </summary>
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+    member this.Tail_Call(method: MemberRefIndex<_>) = this.Tail(); this.Call method
+
+    /// <summary>
+    /// (0xFE 0x14) Writes an instruction that discards the current stack frame before calling a <c>MethodDef</c> (III.2.4)
+    /// </summary>
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+    member this.Tail_Call(method: MethodDefIndex<_>) = this.Tail(); this.Call method
+
+    // member this.Tail_Call
+    // member this.Tail_Callvirt
