@@ -113,6 +113,8 @@ let tests =
 
         // TODO: Figure out if a property test can be used here.
         ftestCaseLoad example "method can be called" <| fun assm ->
+            let calculate = assm.GetType("Factorial.CachedFactorial").GetMethod("Calculate")
+            let result = calculate.Invoke(null, [| 3u |])
             failwith "TODO: Figure out what method to call and how to pass arguments."
     ]
 #endif

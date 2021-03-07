@@ -5,7 +5,6 @@ open Expecto
 
 open System.Diagnostics
 open System.IO
-open System.Runtime.Loader
 
 open Mono.Cecil
 
@@ -58,7 +57,7 @@ let ftestCaseExec = testExec ftestCase
 
 let private testLoad testf example (name: string) (test: _ -> unit): Test =
     fun() ->
-        let context: AssemblyLoadContext = failwith "TODO: Figure out how to load assemblies"
+        let context = new ExampleAssemblyLoadContext(name)
         try
             let file = example() |> WritePE.stream
             let assm = context.LoadFromStream file
