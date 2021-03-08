@@ -1,10 +1,17 @@
 ﻿namespace rec FSharpIL.Metadata
 
+open System
+open System.Runtime.CompilerServices
+
 open FSharpIL.Bytes
+open FSharpIL.Writing
 
 open FSharpIL.Metadata.Heaps
 
 // TODO: Come up with better name for this class.
+/// <exception cref="T:System.ArgumentException">
+/// The number of bytes written by the <paramref name="writer"/> is greater than zero.
+/// </exception>
 [<Sealed>]
 type internal MethodBodyContentImpl (writer, metadata, us: UserStringHeap) =
     inherit MethodBodyContent(writer)
@@ -13,16 +20,58 @@ type internal MethodBodyContentImpl (writer, metadata, us: UserStringHeap) =
     member _.UserString = us
     member this.CreateWriter() = MethodBodyWriter this
 
+/// Represents the target of a branch instruction (III.1.7.2).
+[<IsByRefLike>]
+type BranchTarget = struct
+    val mutable private existing: bool
+    val private writer: ChunkWriter
+    /// Gets a value indicating whether this branch target is a 1-byte offset.
+    val IsByte: bool
+    /// Gets the position of the next byte immediately after this offset.
+    val Position: uint32
+
+    internal new (position, isByte, writer) =
+        { existing = false
+          writer = writer
+          IsByte = isByte
+          Position = position }
+
+    member internal this.ReserveBytes(writer: ChunkWriter) =
+        if this.IsByte
+        then writer.SkipBytes 1u
+        else writer.SkipBytes 4u
+
+    /// <summary>Sets the target of a branch instruction.</summary>
+    /// <param name="offset">
+    /// A byte offset from the branch instruction, where a value of <c>0</c> targets the next instruction.
+    /// </param>
+    /// <exception cref="T:System.ArgumentOutOfRangeException">
+    /// Thrown when this target is a 1-byte offset, and the <paramref name="offset"/> cannot be represented in 1 byte.
+    /// </exception>
+    /// <exception cref="T:System.InvalidOperationException">
+    /// Thrown when this method is called more than once, since the target index cannot be rewritten.
+    /// </exception>
+    member this.SetTarget(offset: int32) =
+        if this.existing then invalidOp "The target index has already been written"
+        this.existing <- true
+        if this.IsByte then
+            if offset < -128 || offset > 127 then
+                ArgumentOutOfRangeException("offset", offset, "Expected one-byte integer offset") |> raise
+            this.writer.WriteU1(uint8 offset)
+        else
+            failwith "TODO: Write the offset as a signed 4-byte integer"
+end
+
 // TODO: Figure out how exception handling information will be included.
 // TODO: Figure out how to prevent (some) invalid method bodies.
-[<System.Runtime.CompilerServices.IsByRefLike; Struct>]
+[<IsByRefLike; Struct>]
 type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     new (content: MethodBodyContent) = MethodBodyWriter(content :?> MethodBodyContentImpl)
 
     member private _.WriteMetadataToken(index, table) = MetadataToken.write index table content.Writer
 
     /// Gets the number of bytes that have been written.
-    member _.Size = content.Writer.Size
+    member _.ByteCount = content.Writer.Size
     member private _.WriteU1 value = content.Writer.WriteU1 value
 
     /// (0x00) Writes an instruction that does nothing (III.3.51).
@@ -36,8 +85,6 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Ret() = this.WriteU1 0x2Auy
     /// (0x14) Writes an instruction used to load a null pointer (III.3.45).
     member this.Ldnull() = this.WriteU1 0x14uy
-
-    // TODO: Figure out how numbers are written in the IL (III.1.2)
 
     /// <summary>
     /// (0x15 to 0x1E, 0x20) Writes an instruction that pushes a signed four-byte integer onto the stack (III.3.40).
@@ -59,7 +106,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// </summary>
     member this.Ldc_i4(num: int8) =
         this.WriteU1 0x1Fuy
-        failwith "TODO: How is an int8 written?"
+        failwith "TODO: How is an int32 written?"
 
     /// (0x21) Writes an instruction that pushes a signed eight-byte integer onto the stack (III.3.40).
     member this.Ldc_i8(num: int64) =
@@ -91,6 +138,31 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
     member this.Call(SimpleIndex method: MethodDefIndex<_>) =
         this.Call(method, content.Metadata.MethodDef.IndexOf method, 0x6uy)
+
+    member private this.Branch(opcode, isByte) =
+        this.WriteU1 opcode
+        let offset = if isByte then 1u else 4u
+        let target = BranchTarget(this.ByteCount + offset, isByte, content.Writer.CreateWriter())
+        target.ReserveBytes content.Writer
+        target
+
+    // TODO: Create methods that make writing branching instructions easier.
+    // TODO: Make the short form of these instructions be separate methods, since the size of the offset may not be known beforehand.
+    /// (0x2E)
+    member this.Beq_s() = this.Branch(0x2Euy, true)
+
+    /// <summary>
+    /// (0x35) Writes the short form of an instruction that branches to the specified target if <c>value1 > value2</c> (III.3.9).
+    /// </summary>
+    member this.Bgt_un_s() = this.Branch(0x35uy, true)
+
+    /// (0x3B)
+    member this.Beq() = this.Branch(0x3Buy, false)
+
+    /// <summary>
+    /// (0x42) Writes an instruction that branches to the specified target if <c>value1 > value2</c> (III.3.9).
+    /// </summary>
+    member this.Bgt_un() = this.Branch(0x42uy, false)
 
     /// <summary>
     /// (0x72) Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
@@ -129,13 +201,13 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0xFE 0x14) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> (III.2.4)
     /// </summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Tail_Call(method: MemberRefIndex<_>) = this.Tail(); this.Call method
+    member this.Tail_call(method: MemberRefIndex<_>) = this.Tail(); this.Call method
 
     /// <summary>
     /// (0xFE 0x14) Writes an instruction that discards the current stack frame before calling a <c>MethodDef</c> (III.2.4)
     /// </summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Tail_Call(method: MethodDefIndex<_>) = this.Tail(); this.Call method
+    member this.Tail_call(method: MethodDefIndex<_>) = this.Tail(); this.Call method
 
-    // member this.Tail_Call
-    // member this.Tail_Callvirt
+    // member this.Tail_call
+    // member this.Tail_callvirt

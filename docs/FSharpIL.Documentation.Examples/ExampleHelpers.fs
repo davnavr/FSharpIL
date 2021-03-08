@@ -55,6 +55,15 @@ let private testExec testf example (name: string) dir path fileName (test: Proce
 let testCaseExec = testExec testCase
 let ftestCaseExec = testExec ftestCase
 
+let private testFile testf example (name: string) dir path fileName (test: _ -> unit): Test =
+    testf name (fun() -> writeToDisk example dir path fileName |> test)
+
+/// <summary>
+/// Builds a test case that writes the Portable Executable file to disk.
+/// </summary>
+let testCaseFile = testFile testCase
+let ftestCaseFile = testFile ftestCase
+
 let private testLoad testf example (name: string) (test: _ -> unit): Test =
     fun() ->
         let context = new ExampleAssemblyLoadContext(name)

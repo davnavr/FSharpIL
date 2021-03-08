@@ -85,8 +85,17 @@ let example() =
 
         setCalculateBody <| fun content ->
             let writer = MethodBodyWriter content
-            writer.Ldc_i4 0 // Temporary
-            writer.Tail_Call calculate
+            writer.Ldc_i4 3 // writer.Ldarg 1us
+            writer.Ldc_i4 2
+            let target = writer.Bgt_un_s()
+            let pos = writer.ByteCount
+
+            writer.Ldc_i4 2
+            writer.Ret()
+
+            target.SetTarget(int32 (writer.ByteCount - pos)) // TODO: Make helper functions for making calculation of offsets easier.
+            // writer.Tail_call calculate
+            writer.Ldc_i4 1
             writer.Ret()
             { MaxStack = 8us; InitLocals = false }
 
@@ -113,8 +122,10 @@ let tests =
                 |> List.ofSeq
             test <@ expected = actual @>
 
+        testCaseFile example "can save to disk" __SOURCE_DIRECTORY__ "exout" "Factorial.dll" ignore
+
         // TODO: Figure out if a property test can be used to test factorial calculation.
-        ftestCaseLoad example "method can be called" <| fun assm ->
+        testCaseLoad example "method can be called" <| fun assm ->
             let calculate = assm.GetType("Factorial.CachedFactorial").GetMethod("Calculate")
             let expected = 6u
             let actual = calculate.Invoke(null, [| 3u |]) |> unbox
