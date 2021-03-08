@@ -85,17 +85,28 @@ let example() =
 
         setCalculateBody <| fun content ->
             let writer = MethodBodyWriter content
-            writer.Ldc_i4 3 // writer.Ldarg 1us
+
+            // TODO: Check if the value is in the cache.
+
+            writer.Ldarg 0us
             writer.Ldc_i4 2
-            let target = writer.Bgt_un_s()
+            let target = writer.Bgt_un_s() // Check if the argument "num" is less than two.
             let pos = writer.ByteCount
 
             writer.Ldc_i4 2
             writer.Ret()
 
             target.SetTarget(int32 (writer.ByteCount - pos)) // TODO: Make helper functions for making calculation of offsets easier.
-            // writer.Tail_call calculate
+
+            // writer.Tail_call calculate // TODO: Add an accumulator parameter.
+            writer.Ldarg 0us
             writer.Ldc_i4 1
+            writer.conv_u4()
+            writer.Sub()
+            writer.Call calculate
+            writer.Ldarg 0us
+            writer.Mul()
+
             writer.Ret()
             { MaxStack = 8us; InitLocals = false }
 

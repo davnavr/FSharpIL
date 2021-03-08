@@ -72,17 +72,38 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     /// Gets the number of bytes that have been written.
     member _.ByteCount = content.Writer.Size
+
     member private _.WriteU1 value = content.Writer.WriteU1 value
 
     /// (0x00) Writes an instruction that does nothing (III.3.51).
     member this.Nop() = this.WriteU1 0uy
+
     /// <summary>
     /// (0x01) Writes an instruction used for debugging that "signals the CLI to inform the debugger that a breakpoint has been
     /// tripped" (III.3.16).
     /// </summary>
     member this.Break() = this.WriteU1 1uy
+
+    /// <summary>
+    /// (0x2 to 0x5, 0xE, 0xFE 0x09) Writes an instruction that loads an argument onto the stack (III.3.38).
+    /// </summary>
+    /// <remarks>
+    /// For argument numbers 0 through 3, and for argument numbers less than 255, the short forms of the opcodes are used.
+    /// </remarks>
+    member this.Ldarg(num: uint16) =
+        if num <= 255us then
+            let num' = uint8 num
+            if num' <= 3uy
+            then this.WriteU1(0x2uy + num')
+            else this.WriteU1 0xEuy; this.WriteU1 num'
+        else
+            this.WriteU1 0xFEuy
+            this.WriteU1 0x09uy
+            content.Writer.WriteU2 num
+
     /// (0x2A) Writes an instruction used to return from the current method (III.3.56).
     member this.Ret() = this.WriteU1 0x2Auy
+
     /// (0x14) Writes an instruction used to load a null pointer (III.3.45).
     member this.Ldnull() = this.WriteU1 0x14uy
 
@@ -165,6 +186,26 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Bgt_un() = this.Branch(0x42uy, false)
 
     /// <summary>
+    /// (0x59) Writes an instruction that subtracts <c>value2</c> from <c>value1</c> and pushes the result onto the stack without
+    /// an overflow check (III.3.64).
+    /// </summary>
+    member this.Sub() = this.WriteU1 0x59uy
+
+    /// <summary>
+    /// (0x5A) Writes an instruction that multiplies <c>value1</c> by <c>value2</c> and pushes the result onto the stack without
+    /// an overflow check (III.3.48).
+    /// </summary>
+    member this.Mul() = this.WriteU1 0x5Auy
+
+    // member this.Mul_ovf
+
+    /// <summary>
+    /// (0x6D) Writes an instruction that converts the value on top of the stack to a unsigned four-byte integer without an
+    /// overflow check (III.3.27).
+    /// </summary>
+    member this.conv_u4() = this.WriteU1 0x6Duy
+
+    /// <summary>
     /// (0x72) Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
     /// </summary>
     /// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
@@ -198,13 +239,13 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member private this.Tail() = this.WriteU1 0xFEuy; this.WriteU1 0x14uy
 
     /// <summary>
-    /// (0xFE 0x14) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> (III.2.4)
+    /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> (III.2.4)
     /// </summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
     member this.Tail_call(method: MemberRefIndex<_>) = this.Tail(); this.Call method
 
     /// <summary>
-    /// (0xFE 0x14) Writes an instruction that discards the current stack frame before calling a <c>MethodDef</c> (III.2.4)
+    /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodDef</c> (III.2.4)
     /// </summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
     member this.Tail_call(method: MethodDefIndex<_>) = this.Tail(); this.Call method
