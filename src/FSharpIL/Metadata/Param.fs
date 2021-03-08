@@ -41,6 +41,8 @@ type ParamRow =
         match this with
         | Param { ParamName = name } -> name
 
+    override this.ToString() = this.ParamName
+
 /// <summary>Represents a <c>Param</c> item used in signatures (II.23.2.10).</summary>
 // TODO: How is BYREF and TYPEDBYREF modeled?
 [<IsReadOnly>]

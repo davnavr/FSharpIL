@@ -151,9 +151,6 @@ let example() =
             writer.Tail_call helper
             writer.Ret()
             { MaxStack = 8us; InitLocals = false }
-
-        // TODO: Do more factorial things
-        ()
     }
     |> CliMetadata.createMetadata
         { Name = Identifier.ofStr "Factorial.dll"

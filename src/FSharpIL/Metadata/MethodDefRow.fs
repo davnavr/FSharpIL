@@ -4,6 +4,9 @@ open System
 open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
+open System.Text
+
+open Microsoft.FSharp.Core.Printf
 
 // NOTE: For methods, SpecialName has to be set if RTSpecialName is set.
 // NOTE: For methods, RTSpecialName and SpecialName is set when it is a ctor or cctor
@@ -67,7 +70,6 @@ type IMethodDefSignature =
     inherit IIndexValue
     abstract Signature: unit -> MethodDefSignature
 
-// TODO: Rename to MethodDefRow
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
 type MethodDefRow internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
@@ -85,6 +87,30 @@ type MethodDefRow internal (body, iflags, attr, name, signature: MethodDefSignat
         parameters.ToImmutable()
 
     member internal _.SkipDuplicateChecking = attr &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
+
+    override this.ToString() =
+        let visibility =
+            match attr ||| MethodAttributes.MemberAccessMask with
+            | MethodAttributes.Private -> "private"
+            | MethodAttributes.FamANDAssem -> "famandassem"
+            | MethodAttributes.Assembly -> "assembly"
+            | MethodAttributes.Family -> "family"
+            | MethodAttributes.FamORAssem -> "famorassem"
+            | MethodAttributes.Public -> "public"
+            | _ -> "compilercontrolled"
+        let hidebysig = if attr.HasFlag MethodAttributes.HideBySig then " hidebysig" else String.Empty
+        let mstatic = if attr.HasFlag MethodAttributes.Static then " static" else String.Empty
+        let parameters =
+            let builder = StringBuilder()
+            let parameters' = signature.Parameters
+            for i = 0 to parameters'.Length - 1 do
+                let sep = if i < parameters'.Length - 1 then ", " else String.Empty
+                bprintf builder "%O %O%s" parameters'.[i] this.ParamList.[i] sep
+            builder.ToString()
+
+        // TODO: Add extra flags when printing MethodDef.
+
+        sprintf ".method %s%s%s %O (%s)" visibility hidebysig mstatic signature.ReturnType parameters
 
     interface IEquatable<MethodDefRow> with
         member this.Equals other =

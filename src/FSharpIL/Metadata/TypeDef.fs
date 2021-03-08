@@ -4,9 +4,6 @@ open System
 open System.Collections.Generic
 open System.Reflection
 open System.Runtime.CompilerServices
-open System.Text
-
-open Microsoft.FSharp.Core.Printf
 
 type LayoutFlag =
     | AutoLayout
@@ -146,8 +143,12 @@ type TypeDefRow internal (flags, name, ns, extends, parent) =
 
     override _.GetHashCode() = hash(name, ns)
 
-    override _.ToString() =
-        let text = StringBuilder()
+    member private _.GetFullName() =
+        if ns.Length > 0
+        then sprintf "%s.%O" ns name
+        else string name
+
+    override this.ToString() =
         let visibility =
             match flags &&& TypeAttributes.VisibilityMask with
             | TypeAttributes.Public -> "public"
@@ -163,23 +164,23 @@ type TypeDefRow internal (flags, name, ns, extends, parent) =
             | TypeAttributes.SequentialLayout -> "sequential"
             | TypeAttributes.ExplicitLayout -> "explicit"
             | _ -> "auto"
-
-        bprintf text ".class %s %s" visibility layout
-
-        match flags &&& TypeAttributes.StringFormatMask with
-        | TypeAttributes.UnicodeClass -> " unicode"
-        | TypeAttributes.AutoClass -> " autochar"
-        | TypeAttributes.CustomFormatClass -> ""
-        | _ -> " ansi"
-        |> bprintf text "%s"
+        let str =
+            match flags &&& TypeAttributes.StringFormatMask with
+            | TypeAttributes.UnicodeClass -> " unicode"
+            | TypeAttributes.AutoClass -> " autochar"
+            | TypeAttributes.CustomFormatClass -> String.Empty
+            | _ -> " ansi"
+        let name = this.GetFullName()
 
         // TODO: Add other flags when printing TypeDefRow.
+        let extends =
+            match extends with
+            | Extends.ConcreteClass(SimpleIndex tdef)
+            | Extends.AbstractClass(SimpleIndex tdef) -> tdef.Value.GetFullName() |> sprintf " extends %s"
+            | Extends.TypeRef tref -> sprintf " extends %O" tref
+            | Extends.Null -> String.Empty
 
-        bprintf text " '"
-        if ns.Length > 0 then bprintf text "%s." ns
-        bprintf text "%O'"name
-
-        text.ToString()
+        sprintf ".class %s %s%s '%s'%s" visibility layout str name extends
 
     interface IEquatable<TypeDefRow> with
         member _.Equals other = ns = other.TypeNamespace && name = other.TypeName

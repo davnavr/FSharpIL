@@ -17,6 +17,11 @@ type ResolutionScope =
     | TypeRef of SimpleIndex<TypeRef>
     | Null // of SimpleIndex<ExportedTypeRow> // TODO: How to enforce that a row exists in the ExportedType table?
 
+    override this.ToString() =
+        match this with
+        | AssemblyRef assembly -> string assembly.Value.Name
+        | _ -> "unknown resolution scope"
+
 /// <summary>
 /// (0x01) Represents a row in the <c>TypeRef</c> table (II.22.38).
 /// </summary>
@@ -24,6 +29,13 @@ and [<StructuralComparison; StructuralEquality>] TypeRef =
     { ResolutionScope: ResolutionScope
       TypeName: Identifier
       TypeNamespace: string }
+
+    override this.ToString() =
+        let name =
+            if this.TypeNamespace.Length > 0
+            then sprintf "%s.%A" this.TypeNamespace this.TypeName
+            else string this.TypeName
+        sprintf "[%O]%s" this.ResolutionScope name
 
     interface IIndexValue with
         member this.CheckOwner actual =

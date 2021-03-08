@@ -2,6 +2,9 @@
 
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
+open System.Text
+
+open Microsoft.FSharp.Core.Printf
 
 /// II.23.2.8
 type TypeDefOrRefOrSpecEncoded =
@@ -38,6 +41,16 @@ type ArrayShape =
 type GenericInst =
     // TODO: Add other GenericInst types for TypeDefs.
     | TypeRef of valueType: bool * SimpleIndex<TypeRef> * head: EncodedType * tail: ImmutableArray<EncodedType>
+
+    override this.ToString() =
+        match this with
+        | TypeRef(_, tref, head, tail) ->
+            let tail' =
+                let text = StringBuilder()
+                for gparam in tail do
+                    bprintf text ", %O" gparam
+                text.ToString()
+            sprintf "%O<%O%O>" tref.Value head tail'
 
     interface IIndexValue with
         member this.CheckOwner owner =
@@ -93,6 +106,14 @@ type EncodedType =
     | ValueType // of TypeDefOrRefOrSpecEncoded
     //| Var // of ?
 
+    override this.ToString() =
+        match this with
+        | U4 -> "uint32"
+        | GenericInst inst -> string inst
+        | String -> "string"
+        | SZArray(_, item) -> sprintf "%O[]" item
+        | _ -> "unknown encoded type"
+
     interface IEncodedType
     interface IIndexValue with
         member this.CheckOwner owner =
@@ -128,6 +149,12 @@ type ReturnType =
     | ByRefType of EncodedType
     | TypedByRef
     | Void
+
+    override this.ToString() =
+        match this with
+        | Type t -> string t
+        | Void -> "void"
+        | _ -> "unknown return type"
 
     interface IReturnType
     interface IIndexValue with
