@@ -121,6 +121,7 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
             // NOTE: For fat (and tiny) formats, "two least significant bits of first byte" indicate the type.
             // TODO: Add checks for no exceptions and extra data sections to generate Tiny format.
             let tiny = size < 64u && body.MaxStack <= 8us (*no exceptions and no extra data sections*)
+            let pos = uint32 writer.Position
 
             // Header
             if tiny
@@ -134,12 +135,11 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
                 writer.WriteU4 0u // LocalVarSigTok // TODO: Figure out how to set local variable information.
 
             // Body
-            writer.WriteBytes(chunk.List, size)
+            writer.WriteBytes(chunk, 0, size) |> ignore
             if not tiny then writer.AlignTo 4u
 
-            let pos = writer.Position
             info.MethodBodies.Item <- method.Body, offset
-            offset <- offset + uint32 (writer.Position - pos)
+            offset <- offset + (uint32 writer.Position) - pos
 
             // TODO: Write extra method data sections.
         | false, _ -> info.MethodBodies.Item <- method.Body, 0u

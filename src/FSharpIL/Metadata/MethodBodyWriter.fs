@@ -167,8 +167,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         target.ReserveBytes content.Writer
         target
 
-    // TODO: Create methods that make writing branching instructions easier.
-    // TODO: Make the short form of these instructions be separate methods, since the size of the offset may not be known beforehand.
+    // TODO: Create methods or helper functions that make writing branching instructions easier.
     /// (0x2E)
     member this.Beq_s() = this.Branch(0x2Euy, true)
 

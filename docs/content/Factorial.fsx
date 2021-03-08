@@ -68,7 +68,27 @@ let example() =
 
         let calculateBody, setCalculateBody = MethodBody.mutableBody()
 
-        let! calculate =
+        let! helper =
+            { MethodName = Identifier.ofStr "CalculateHelper"
+              ImplFlags = MethodImplFlags.None
+              Flags = { Visibility = Public; HideBySig = true } |> Flags.staticMethod
+              ParamList =
+                fun _ i ->
+                    match i with
+                    | 0 -> { Flags = ParamFlags.None; ParamName = "num" }
+                    | _ -> { Flags = ParamFlags.None; ParamName = "accumulator" }
+                    |> Param
+              Signature =
+                StaticMethodSignature(
+                    Default,
+                    ReturnType.itemU4,
+                    ImmutableArray.Create(ParamItem.create EncodedType.U4, ParamItem.create EncodedType.U4)
+                )
+              Body = calculateBody }
+            |> StaticMethod
+            |> addMethod factorial
+
+        let! _ =
             { MethodName = Identifier.ofStr "Calculate"
               ImplFlags = MethodImplFlags.None
               Flags = { Visibility = Public; HideBySig = true } |> Flags.staticMethod
@@ -79,34 +99,56 @@ let example() =
                     ReturnType.itemU4,
                     ParamItem.create EncodedType.U4 |> ImmutableArray.Create
                 )
-              Body = calculateBody }
+              Body =
+                fun content ->
+                    let writer = MethodBodyWriter content
+                    // TODO: Check if the value is in the cache.
+
+                    writer.Ldarg 0us
+                    writer.Ldc_i4 2
+                    let target = writer.Bgt_un_s() // Check if the argument "num" is less than two.
+                    let pos = writer.ByteCount
+
+                    writer.Ldc_i4 2
+                    writer.Ret()
+
+                    target.SetTarget(int32 (writer.ByteCount - pos)) // TODO: Make helper functions for making calculation of offsets easier.
+
+                    writer.Ldarg 0us
+                    writer.Ldarg 0us
+                    writer.Call helper
+                    writer.Ret()
+                    { MaxStack = 8us; InitLocals = false }
+                |> MethodBody.create }
             |> StaticMethod
             |> addMethod factorial
 
         setCalculateBody <| fun content ->
             let writer = MethodBodyWriter content
-
-            // TODO: Check if the value is in the cache.
-
             writer.Ldarg 0us
-            writer.Ldc_i4 2
-            let target = writer.Bgt_un_s() // Check if the argument "num" is less than two.
+            writer.Ldc_i4 1
+            let target = writer.Bgt_un_s() // If "num" <= 1, return the accumulator value.
             let pos = writer.ByteCount
 
-            writer.Ldc_i4 2
+            writer.Ldarg 1us
             writer.Ret()
 
-            target.SetTarget(int32 (writer.ByteCount - pos)) // TODO: Make helper functions for making calculation of offsets easier.
+            target.SetTarget(int32 (writer.ByteCount - pos))
 
-            // writer.Tail_call calculate // TODO: Add an accumulator parameter.
             writer.Ldarg 0us
             writer.Ldc_i4 1
             writer.conv_u4()
             writer.Sub()
-            writer.Call calculate
-            writer.Ldarg 0us
-            writer.Mul()
 
+            // TODO: Maybe store this in a local variable instead of duplicating it.
+            writer.Ldarg 0us
+            writer.Ldc_i4 1
+            writer.conv_u4()
+            writer.Sub()
+
+            writer.Ldarg 1us
+            writer.Mul()
+            writer.Tail_call helper
             writer.Ret()
             { MaxStack = 8us; InitLocals = false }
 
