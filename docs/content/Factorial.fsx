@@ -162,6 +162,7 @@ let example() =
 #if COMPILED
 [<Tests>]
 let tests =
+    // TODO: Use Expecto test fixtures for assembly load context and PEFile instance.
     testList "factorial" [
         testCaseCecil example "has correct field names" <| fun metadata ->
             let expected = [ "cache" ]
@@ -181,4 +182,5 @@ let tests =
             let actual = calculate.Invoke(null, [| 3u |]) |> unbox
             test <@ expected = actual @>
     ]
+    // TODO: Use afterRunTests to unload AssemblyLoadContent if necessary.
 #endif

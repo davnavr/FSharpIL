@@ -16,6 +16,9 @@ type ReturnTypeItem with
 type TypeSpecRow with
     member this.Signature = this.Type :?> TypeSpec
 
+type MethodSpecRow with
+    member this.Instantiation = this.Instantiation :?> MethodSpec
+
 type ParamItem with
     member this.ParamType = this.Type :?> EncodedType
 

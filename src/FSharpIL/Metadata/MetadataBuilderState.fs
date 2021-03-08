@@ -174,7 +174,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
     // (0x2A)
     // member GenericParam // TODO: Create custom table type for generic parameters.
     // (0x2B)
-    // member MethodSpec
+    member val MethodSpec = MutableTable<MethodSpecRow> owner
     // (0x2C)
     // member GenericParamConstraint
 

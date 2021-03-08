@@ -96,6 +96,8 @@ module internal Heap =
               CustomAttribute = Dictionary<_, _> metadata.CustomAttribute.Length
               TypeSpec = Dictionary<_, _> metadata.TypeSpec.Count
 
+              MethodSpec = Dictionary<_, _> metadata.MethodSpec.Count
+
               PublicKeyTokens = Dictionary<_, _> metadata.AssemblyRef.Count
               ByteBlobs = Dictionary<_, _>(metadata.File.Count)
               Content = ChunkWriter(LinkedList<_>().AddFirst(Array.zeroCreate size)) }
@@ -164,6 +166,15 @@ module internal Heap =
                 failwith "TODO: Write the typeSpec"
                 blobIndex pos signature blob.TypeSpec
 
+        for methodSpec in metadata.MethodSpec.Items do
+            let inst = methodSpec.Instantiation
+            if not (blob.MethodSpec.ContainsKey inst) then
+                let pos = writer.Position
+                writer.Writer.WriteU1 0xAuy
+                writer.CompressedUnsigned inst.Count
+                for gparam in inst.ToImmutableArray() do writer.EncodedType gparam
+                blobIndex pos inst blob.MethodSpec
+
         for { PublicKeyOrToken = token } in metadata.AssemblyRef.Items do
             if not (blob.PublicKeyTokens.ContainsKey token) then
                 let pos = writer.Position
@@ -219,6 +230,7 @@ module internal Heap =
         writeAll blobs.MethodRef
         writeAll blobs.CustomAttribute
         writeAll blobs.TypeSpec
+        writeAll blobs.MethodSpec
         writeAll blobs.PublicKeyTokens
         writeAll blobs.ByteBlobs
 

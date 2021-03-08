@@ -27,6 +27,8 @@ type internal BlobHeap =
 
       TypeSpec: Dictionary<TypeSpec, BlobIndex>
 
+      MethodSpec: Dictionary<MethodSpec, BlobIndex>
+
       PublicKeyTokens: Dictionary<PublicKeyOrToken, BlobIndex>
       ByteBlobs: Dictionary<byte[], BlobIndex>
       Content: ChunkWriter }
@@ -55,6 +57,8 @@ type internal BlobHeap =
         | None -> ()
 
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.TypeSpec.Item signature, writer)
+
+    member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.MethodSpec.Item signature, writer)
 
     member this.WriteIndex(token, writer) = this.WriteRawIndex(this.PublicKeyTokens.Item token, writer)
     member this.WriteIndex(bytes, writer) = this.WriteRawIndex(this.ByteBlobs.Item bytes, writer)

@@ -1,5 +1,6 @@
 ﻿namespace rec FSharpIL.Metadata
 
+open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 open System.Text
@@ -165,6 +166,7 @@ type ReturnType =
             | TypedByRef
             | Void -> ()
 
+/// <summary>Represents a <c>TypeSpec</c> item in the <c>#Blob</c> heap (II.23.2.14).</summary>
 [<RequireQualifiedAccess>]
 type TypeSpec =
     /// <summary>Represents a <c>GENERICINST</c> followed by a <c>TypeRef</c>.</summary>
@@ -175,6 +177,27 @@ type TypeSpec =
         member this.CheckOwner owner =
             match this with
             | GenericInst generic -> IndexOwner.checkOwner owner generic
+
+/// <summary>Represents a <c>MethodSpec</c> item in the <c>#Blob</c> heap (II.23.2.15).</summary>
+/// <exception cref="T:System.ArgumentException">Thrown when the generic parameter list is empty.</exception>
+type MethodSpec (gparams: ImmutableArray<EncodedType>) =
+    do if gparams.Length <= 0 then invalidArg "gparams" "The generic parameter list cannot be empty."
+
+    new (gparams: seq<_>) = MethodSpec(gparams.ToImmutableArray())
+
+    member _.Count = gparams.Length
+
+    override this.Equals obj = (this :> IEquatable<MethodSpec>).Equals(obj :?> MethodSpec)
+    override _.GetHashCode() = gparams.GetHashCode()
+
+    member _.ToImmutableArray() = gparams
+
+    interface IEquatable<MethodSpec> with
+        member this.Equals other = this.ToImmutableArray() = other.ToImmutableArray()
+
+    interface IMethodSpec
+    interface IIndexValue with
+        member _.CheckOwner owner = for gparam in gparams do IndexOwner.checkOwner owner gparam
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

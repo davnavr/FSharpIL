@@ -236,6 +236,13 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         | bad -> failwithf "Unsupported custom attribute parent %A" bad
         |> codedIndex total 5
 
+    let methodDefOrRef =
+        let total = tables.MethodDef.Count // + MethodRef
+        function
+        | MethodDefOrRef.Def method -> tables.MethodDef.IndexOf method, 0u
+        // MethodDefOrRef.Ref method
+        |> codedIndex total 1
+
     let customAttributeType =
         let total = tables.MethodDef.Count + tables.MemberRef.Count
         function
@@ -372,6 +379,14 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         writer.WriteU4 flags
         info.StringsStream.WriteStringIndex(file.FileName, writer)
         info.BlobStream.WriteIndex(file.HashValue, writer)
+
+
+
+
+    // MethodSpec (0x2B)
+    for methodSpec in tables.MethodSpec.Items do
+        methodDefOrRef.WriteIndex(methodSpec.Method, writer)
+        info.BlobStream.WriteIndex(methodSpec.Instantiation, writer)
 
 
 

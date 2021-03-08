@@ -73,6 +73,12 @@ type CliMetadata (state: MetadataBuilderState) =
 
 
 
+        if state.MethodSpec.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x2B)
+            uint32 state.MethodSpec.Count |> counts.Add
+
+
+
         if nestedClass.Length > 0 then
             bits <- bits ||| (1UL <<< 0x29)
             uint32 nestedClass.Length |> counts.Add
@@ -113,6 +119,8 @@ type CliMetadata (state: MetadataBuilderState) =
     member val AssemblyRef = state.CreateTable state.AssemblyRef
 
     member val File = state.CreateTable state.File
+
+    member val MethodSpec = state.CreateTable state.MethodSpec
 
     member _.NestedClass = nestedClass
 
@@ -253,6 +261,12 @@ module CliMetadata =
         match state.TypeSpec.GetIndex typeSpec with
         | ValueSome index -> Ok index
         | ValueNone -> DuplicateTypeSpecError typeSpec :> ValidationError |> Error
+
+    let addMethodSpec method (spec: seq<_>) (state: MetadataBuilderState) =
+        let spec' = MethodSpecRow(method, MethodSpec spec)
+        match state.MethodSpec.GetIndex spec' with
+        | ValueSome index -> Ok index
+        | ValueNone -> DuplicateMethodSpecError spec' :> ValidationError |> Error
 
     /// <summary>
     /// Applies the given function to each string in the <c>#Strings</c> heap referenced in
