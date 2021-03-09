@@ -10,12 +10,13 @@ type MemberRefParent =
     // | ModuleRef // of ?
     // | TypeDef // of ?
     | TypeRef of SimpleIndex<TypeRef>
-    // | TypeSpec // of ?
+    | TypeSpec of SimpleIndex<TypeSpecRow>
 
     interface IIndexValue with
         member this.CheckOwner owner =
             match this with
             | TypeRef tref -> IndexOwner.checkIndex owner tref
+            | TypeSpec tref -> IndexOwner.checkIndex owner tref
 
 [<NoComparison; StructuralEquality>]
 type MemberRef<'Signature when 'Signature : equality and 'Signature : struct and 'Signature :> IIndexValue> =

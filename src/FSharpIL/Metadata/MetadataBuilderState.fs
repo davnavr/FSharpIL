@@ -102,9 +102,9 @@ type MetadataBuilderState (mdle: ModuleTable) =
     member val TypeRef: TypeRefTable = TypeRefTable(owner, warnings)
     /// (0x02)
     member _.TypeDef: TypeDefTable = typeDef
-    // (0x04)
+    /// (0x04)
     member val Field = OwnedTableBuilder<TypeDefRow, FieldRow> owner
-    // (0x06)
+    /// (0x06)
     member val Method = OwnedTableBuilder<TypeDefRow, MethodDefRow> owner
     // (0x08)
     // member Param
@@ -140,7 +140,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
     // member MethodImpl
     /// (0x1A)
     member val ModuleRef = ModuleRefTable owner
-    // (0x1B)
+    /// (0x1B)
     member val TypeSpec = MutableTable<TypeSpecRow> owner
     // (0x1C)
     // member ImplMap

@@ -203,8 +203,10 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             + tables.TypeRef.Count
             + tables.ModuleRef.Count
             + tables.MethodDef.Count
+            + tables.TypeSpec.Count
         function
         | MemberRefParent.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
+        | MemberRefParent.TypeSpec tspec -> tables.TypeSpec.IndexOf tspec, 4u
         |> codedIndex total 3
 
     let customAttriuteParent =
@@ -345,6 +347,9 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // ModuleRef (0x1A)
     for moduleRef in tables.ModuleRef.Items do
         info.StringsStream.WriteStringIndex(moduleRef.Name, writer) // Name
+
+    // TypeSpec (0x1B)
+    for typeSpec in tables.TypeSpec.Items do info.BlobStream.WriteIndex(typeSpec.Signature, writer)
 
 
 

@@ -84,6 +84,7 @@ type internal BlobWriter = struct
             this.Writer.WriteU1 ElementType.Array
             this.EncodedType element
             this.ArrayShape shape
+        | EncodedType.Boolean -> this.Writer.WriteU1 ElementType.Boolean
 
         | EncodedType.GenericInst inst -> this.GenericInst inst
 
@@ -91,6 +92,10 @@ type internal BlobWriter = struct
         | EncodedType.I2 -> this.Writer.WriteU1 ElementType.I2
         | EncodedType.I4 -> this.Writer.WriteU1 ElementType.I4
         | EncodedType.I8 -> this.Writer.WriteU1 ElementType.I8
+
+        | EncodedType.MVar num ->
+            this.Writer.WriteU1 ElementType.MVar
+            this.CompressedUnsigned num
 
         | EncodedType.String -> this.Writer.WriteU1 ElementType.String
         | EncodedType.SZArray(modifiers, element) ->
@@ -105,6 +110,10 @@ type internal BlobWriter = struct
         | EncodedType.U2 -> this.Writer.WriteU1 ElementType.U2
         | EncodedType.U4 -> this.Writer.WriteU1 ElementType.U4
         | EncodedType.U8 -> this.Writer.WriteU1 ElementType.U8
+
+        | EncodedType.Var num ->
+            this.Writer.WriteU1 ElementType.Var
+            this.CompressedUnsigned num
 
         | bad -> failwithf "Unable to write unsupported type %A" bad
 

@@ -176,14 +176,17 @@ module internal Heap =
             let signature = typeSpec.Signature
             if not (blob.TypeSpec.ContainsKey signature) then
                 let pos = writer.Position
-                failwith "TODO: Write the typeSpec"
+
+                match signature with
+                | TypeSpec.GenericInst inst -> writer.GenericInst inst
+
                 blobIndex pos signature blob.TypeSpec
 
         for methodSpec in metadata.MethodSpec.Items do
             let inst = methodSpec.Instantiation
             if not (blob.MethodSpec.ContainsKey inst) then
                 let pos = writer.Position
-                writer.Writer.WriteU1 0xAuy
+                writer.Writer.WriteU1 0xAuy // GENERICINST
                 writer.CompressedUnsigned inst.Count
                 for gparam in inst.ToImmutableArray() do writer.EncodedType gparam
                 blobIndex pos inst blob.MethodSpec

@@ -96,7 +96,8 @@ type EncodedType =
     | FunctionPointer // of MethodDefSig
     //| FunctionPointer // of MethodRefSig
     | GenericInst of GenericInst
-    //| MVAR // of ?
+    /// Represents a generic parameter in a generic method.
+    | MVar of number: uint32
     /// <summary>Represents the <see cref="T:System.Object"/> type.</summary>
     | Object
     //| PTR // of ?
@@ -105,14 +106,17 @@ type EncodedType =
     | String
     | SZArray of ImmutableArray<CustomModifier> * EncodedType
     | ValueType // of TypeDefOrRefOrSpecEncoded
-    //| Var // of ?
+    /// Represents a generic parameter in a generic type definition.
+    | Var of number: uint32
 
     override this.ToString() =
         match this with
         | U4 -> "uint32"
         | GenericInst inst -> string inst
+        | MVar num -> sprintf "!!%i" num
         | String -> "string"
         | SZArray(_, item) -> sprintf "%O[]" item
+        | Var num -> sprintf "!%i" num
         | _ -> "unknown encoded type"
 
     interface IEncodedType
@@ -134,7 +138,9 @@ type EncodedType =
             | I
             | U
             | Object
-            | String -> ()
+            | MVar _
+            | String
+            | Var _ -> ()
             | Array(item, _) -> IndexOwner.checkOwner owner item
             | GenericInst inst -> IndexOwner.checkOwner owner inst
             | SZArray(modifiers, item) ->
@@ -206,6 +212,7 @@ module ReturnType =
     let encoded encodedType = ReturnTypeItem(ReturnType.Type encodedType)
     let modified modifiers (returnType: ReturnType) = ReturnTypeItem(modifiers, returnType)
     let itemVoid = ReturnTypeItem ReturnType.Void
+    let itemBool = encoded EncodedType.Boolean
     let itemI4 = encoded EncodedType.I4
     let itemU4 = encoded EncodedType.U4
 
@@ -230,6 +237,8 @@ module TypeSpec =
 module ParamItem =
     let modified modifiers (paramType: EncodedType) = ParamItem(modifiers, paramType)
     let create paramType = modified ImmutableArray.Empty paramType
+    let mvar num = EncodedType.MVar num |> create
+    let var num = EncodedType.Var num |> create
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

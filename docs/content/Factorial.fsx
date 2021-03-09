@@ -46,6 +46,17 @@ let example() =
             |> referenceType
 
         let dictionary_u4_u4 = GenericInst.typeRef false dictionary [ EncodedType.U4; EncodedType.U4 ]
+        let! dictionary_u4_u4_spec = TypeSpec.genericInst dictionary_u4_u4 |> addTypeSpec
+
+        let! containsKey =
+            referenceGenericMethod
+                { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
+                  MemberName = Identifier.ofStr "ContainsKey"
+                  Signature =
+                    let parameters =
+                        // Note the parameters much exactly match the method, so a generic parameter is used.
+                        ImmutableArray.CreateRange [ ParamItem.var 0u ]
+                    MethodRefGenericSignature(true, false, 2u, ReturnType.itemBool, parameters) }
 
         let! factorial =
             { ClassName = Identifier.ofStr "CachedFactorial"
@@ -102,17 +113,8 @@ let example() =
               Body =
                 fun content ->
                     let writer = MethodBodyWriter content
-                    // TODO: Check if the value is in the cache.
-
-                    writer.Ldarg 0us
-                    writer.Ldc_i4 2
-                    let target = writer.Bgt_un_s() // Check if the argument "num" is less than two.
-                    let pos = writer.ByteCount
-
-                    writer.Ldc_i4 2
-                    writer.Ret()
-
-                    target.SetTarget(int32 (writer.ByteCount - pos)) // TODO: Make helper functions for making calculation of offsets easier.
+                    writer.Call containsKey
+                    // TODO: Branch depending on whether or not the value is already in the cache.
 
                     writer.Ldarg 0us
                     writer.Ldarg 0us
