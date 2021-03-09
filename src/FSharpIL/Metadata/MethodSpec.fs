@@ -5,12 +5,17 @@
 [<NoComparison; StructuralEquality>]
 type MethodDefOrRef =
     | Def of SimpleIndex<MethodDefRow>
-    // | Ref of SimpleIndex<>
+    | RefDefault of MemberRefIndex<MethodRefDefault>
+    | RefGeneric of MemberRefIndex<MethodRefGeneric>
+    | RefVarArg of MemberRefIndex<MethodRefVarArg>
 
     interface IIndexValue with
         member this.CheckOwner owner =
             match this with
             | Def method -> IndexOwner.checkIndex owner method
+            | RefDefault (SimpleIndex method)
+            | RefGeneric (SimpleIndex method)
+            | RefVarArg (SimpleIndex method) -> IndexOwner.checkIndex owner method
 
 /// <summary>Represents a row in the <c>MethodSpec</c> table (II.22.29).</summary>
 [<System.Runtime.CompilerServices.IsReadOnly>]

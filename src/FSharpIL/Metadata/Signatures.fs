@@ -29,6 +29,8 @@ type internal ElementType =
 
     | SZArray = 0x1duy
 
+    | Sentinel = 0x41uy
+
 [<Interface>] type internal ITypeDefOrRefOrSpec = inherit IIndexValue
 
 /// (II.23.2.7)

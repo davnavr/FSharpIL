@@ -82,7 +82,9 @@ type CustomAttributeParent =
 [<RequireQualifiedAccess>]
 type CustomAttributeType =
     // | MethodDef // of ?
-    | MemberRef of MemberRefIndex<MethodRef>
+    | MethodRefDefault of MemberRefIndex<MethodRefDefault>
+    | MethodRefGeneric of MemberRefIndex<MethodRefGeneric>
+    | MethodRefVarArg of MemberRefIndex<MethodRefVarArg>
 
 /// <summary>Represents a row in the <c>CustomAttribute</c> table (II.22.10).</summary>
 type CustomAttribute =
@@ -99,7 +101,9 @@ type CustomAttribute =
             | CustomAttributeParent.Assembly(IndexOwner other) -> IndexOwner.ensureEqual owner other
 
             match this.Type with
-            | CustomAttributeType.MemberRef mref -> IndexOwner.checkIndex owner mref.Index
+            | CustomAttributeType.MethodRefDefault(SimpleIndex method)
+            | CustomAttributeType.MethodRefGeneric(SimpleIndex method)
+            | CustomAttributeType.MethodRefVarArg(SimpleIndex method) -> IndexOwner.checkIndex owner method
 
             Option.iter (IndexOwner.checkOwner owner) this.Value
 

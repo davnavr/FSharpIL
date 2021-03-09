@@ -29,7 +29,6 @@
     <Compile Include="Metadata\GenericParam.fs" />
     <Compile Include="Metadata\MethodBody.fs" />
     <Compile Include="Metadata\MethodDefRow.fs" />
-    <Compile Include="Metadata\MethodSpec.fs" />
     <Compile Include="Metadata\IndexedList.fs" />
     <Compile Include="Metadata\TypeDef.fs" />
     <Compile Include="Metadata\TypeSpec.fs" />
@@ -37,6 +36,7 @@
     <Compile Include="Metadata\Field.fs" />
     <Compile Include="Metadata\Method.fs" />
     <Compile Include="Metadata\MemberRef.fs" />
+    <Compile Include="Metadata\MethodSpec.fs" />
     <Compile Include="Metadata\CustomAttribute.fs" />
     <Compile Include="Metadata\ImmutableTable.fs" />
     <Compile Include="Metadata\FlagsModule.fs" />

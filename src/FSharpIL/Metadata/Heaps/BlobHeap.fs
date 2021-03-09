@@ -19,9 +19,7 @@ type internal BlobIndex =
 type internal BlobHeap =
     { Field: Dictionary<FieldSignature , BlobIndex>
       MethodDef: Dictionary<MethodDefSignature, BlobIndex>
-      // MemberRef contains both MethodRef and FieldRef
-      MethodRef: Dictionary<MethodRefSignature, BlobIndex>
-      // FieldRef: Dictionary< , BlobIndex>
+      MemberRef: Dictionary<MemberRefRow, BlobIndex>
 
       CustomAttribute: Dictionary<CustomAttributeSignature, BlobIndex>
 
@@ -37,9 +35,16 @@ type internal BlobHeap =
     member this.SignatureCount =
         this.Field.Count
         + this.MethodDef.Count
-        + this.MethodRef.Count
+        + this.MemberRef.Count
 
         + this.CustomAttribute.Count
+
+        + this.TypeSpec.Count
+
+        + this.MethodSpec.Count
+
+         + this.PublicKeyTokens.Count
+         + this.ByteBlobs.Count
 
     member private this.WriteRawIndex(i, writer: ChunkWriter) =
         match this with
@@ -50,7 +55,7 @@ type internal BlobHeap =
 
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.Field.Item signature, writer)
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.MethodDef.Item signature, writer)
-    member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.MethodRef.Item signature, writer)
+    member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.MemberRef.Item signature, writer)
     member this.WriteIndex(signature, writer) =
         match signature with
         | Some signature' -> this.WriteRawIndex(this.CustomAttribute.Item signature', writer)

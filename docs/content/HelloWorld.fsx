@@ -63,30 +63,20 @@ let example() =
         let string = ParamItem.create EncodedType.String
 
         let! writeLine =
-            referenceMethod
+            referenceDefaultMethod
                 { Class = MemberRefParent.TypeRef console
                   MemberName = Identifier.ofStr "WriteLine"
-                  Signature =
-                    { HasThis = false
-                      ExplicitThis = false
-                      ReturnType = ReturnType.itemVoid
-                      Parameters = ImmutableArray.Create string
-                      VarArgParameters = ImmutableArray.Empty } }
+                  Signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string) }
         let! tfmAttrCtor =
-            referenceMethod
+            referenceDefaultMethod
                 { Class = MemberRefParent.TypeRef tfmAttr
                   MemberName = Identifier.ofStr ".ctor"
-                  Signature =
-                    { HasThis = true // TODO: Figure out flags.
-                      ExplicitThis = false
-                      ReturnType = ReturnType.itemVoid
-                      Parameters = ImmutableArray.Create string
-                      VarArgParameters = ImmutableArray.Empty } }
+                  Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string) }
 
         // Defines a custom attribute on the current assembly specifying the target framework.
         do!
             { Parent = CustomAttributeParent.Assembly assm
-              Type = CustomAttributeType.MemberRef tfmAttrCtor
+              Type = CustomAttributeType.MethodRefDefault tfmAttrCtor
               Value =
                 { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
                   NamedArg = ImmutableArray.Empty }

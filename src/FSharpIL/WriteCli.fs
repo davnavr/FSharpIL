@@ -237,16 +237,21 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         |> codedIndex total 5
 
     let methodDefOrRef =
-        let total = tables.MethodDef.Count // + MethodRef
+        // TODO: Figure out if table count for MethodDefOrRef coded index includes all of MemberRef or just MethodRefs.
+        let total = tables.MethodDef.Count + tables.MemberRef.Count
         function
         | MethodDefOrRef.Def method -> tables.MethodDef.IndexOf method, 0u
-        // MethodDefOrRef.Ref method
+        | MethodDefOrRef.RefDefault(SimpleIndex method)
+        | MethodDefOrRef.RefGeneric(SimpleIndex method)
+        | MethodDefOrRef.RefVarArg(SimpleIndex method) -> tables.MemberRef.IndexOf method, 1u
         |> codedIndex total 1
 
     let customAttributeType =
         let total = tables.MethodDef.Count + tables.MemberRef.Count
         function
-        | CustomAttributeType.MemberRef (SimpleIndex mref) -> tables.MemberRef.IndexOf mref, 3u
+        | CustomAttributeType.MethodRefDefault (SimpleIndex mref)
+        | CustomAttributeType.MethodRefGeneric (SimpleIndex mref)
+        | CustomAttributeType.MethodRefVarArg (SimpleIndex mref) -> tables.MemberRef.IndexOf mref, 3u
         |> codedIndex total 3
 
     // Module (0x00)
@@ -316,12 +321,14 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
     // MemberRef (0x0A)
     for row in tables.MemberRef.Items do
-        memberRefParent.WriteIndex(row.Class, writer)
-        info.StringsStream.WriteStringIndex(row.MemberName, writer)
-
-        // Signature
         match row with
-        | MethodRef method -> info.BlobStream.WriteIndex(method.Signature, writer)
+        | MethodRefDefault { Class = mclass; MemberName = name }
+        | MethodRefGeneric { Class = mclass; MemberName = name }
+        | MethodRefVarArg { Class = mclass; MemberName = name }->
+            memberRefParent.WriteIndex(mclass, writer)
+            info.StringsStream.WriteStringIndex(name, writer)
+
+        info.BlobStream.WriteIndex(row, writer) // Signature
 
 
 

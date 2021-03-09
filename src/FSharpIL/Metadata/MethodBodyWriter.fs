@@ -150,9 +150,25 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         this.WriteMetadataToken(index, table)
 
     // TODO: Allow call to accept a MethodSpec.
-    /// <summary>(0x28) Writes an instruction that calls a <c>MethodRef</c> (III.3.19).</summary>
+    /// <summary>
+    /// (0x28) Writes an instruction that calls a <c>MethodRef</c> with the <c>DEFAULT</c> calling convention (III.3.19).
+    /// </summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Call(SimpleIndex method: MemberRefIndex<MethodRef>) =
+    member this.Call(SimpleIndex method: MemberRefIndex<MethodRefDefault>) =
+        this.Call(method, content.Metadata.MemberRef.IndexOf method, 0xAuy)
+
+    /// <summary>
+    /// (0x28) Writes an instruction that calls a <c>MethodRef</c> with the <c>GENERIC</c> calling convention (III.3.19).
+    /// </summary>
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+    member this.Call(SimpleIndex method: MemberRefIndex<MethodRefGeneric>) =
+        this.Call(method, content.Metadata.MemberRef.IndexOf method, 0xAuy)
+
+    /// <summary>
+    /// (0x28) Writes an instruction that calls a <c>MethodRef</c> with the <c>VARARG</c> calling convention (III.3.19).
+    /// </summary>
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+    member this.Call(SimpleIndex method: MemberRefIndex<MethodRefVarArg>) =
         this.Call(method, content.Metadata.MemberRef.IndexOf method, 0xAuy)
 
     /// <summary>(0x28) Writes an instruction that calls a <c>MethodDef</c> (III.3.19).</summary>
@@ -238,10 +254,25 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member private this.Tail() = this.WriteU1 0xFEuy; this.WriteU1 0x14uy
 
     /// <summary>
-    /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> (III.2.4)
+    /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> with the
+    /// <c>DEFAULT</c> calling convention (III.2.4)
     /// </summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Tail_call(method: MemberRefIndex<_>) = this.Tail(); this.Call method
+    member this.Tail_call(method: MemberRefIndex<MethodRefDefault>) = this.Tail(); this.Call method
+
+    /// <summary>
+    /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> with the
+    /// <c>GENERIC</c> calling convention (III.2.4)
+    /// </summary>
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+    member this.Tail_call(method: MemberRefIndex<MethodRefGeneric>) = this.Tail(); this.Call method
+
+    /// <summary>
+    /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> with the
+    /// <c>VARARG</c> calling convention (III.2.4)
+    /// </summary>
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+    member this.Tail_call(method: MemberRefIndex<MethodRefVarArg>) = this.Tail(); this.Call method
 
     /// <summary>
     /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodDef</c> (III.2.4)

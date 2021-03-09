@@ -246,7 +246,18 @@ module CliMetadata =
     // TODO: Add functions for adding global fields and global methods.
 
     let referenceType typeRef (state: MetadataBuilderState) = state.TypeRef.GetIndex typeRef
-    let referenceMethod method (state: MetadataBuilderState): MemberRefIndex<MethodRef> = state.MemberRef.GetIndex method
+
+    /// <summary>Adds a reference to a method with the <c>DEFAULT</c> calling convention.</summary>
+    let referenceDefaultMethod (method: MethodRefDefault) (state: MetadataBuilderState): MemberRefIndex<MethodRefDefault> =
+        state.MemberRef.GetIndex method
+
+    /// <summary>Adds a reference to a method with the <c>GENERIC</c> calling convention.</summary>
+    let referenceGenericMethod (method: MethodRefGeneric) (state: MetadataBuilderState): MemberRefIndex<MethodRefGeneric> =
+        state.MemberRef.GetIndex method
+
+    /// <summary>Adds a reference to a method with the <c>VARARG</c> calling convention.</summary>
+    let referenceVarArgMethod (method: MethodRefVarArg) (state: MetadataBuilderState): MemberRefIndex<MethodRefVarArg> =
+        state.MemberRef.GetIndex method
 
     // TODO: Better way of adding custom attributes, have a function: CustomAttribute -> target: _ -> MetadataBuilderState -> _
     let attribute attr (state: MetadataBuilderState) = state.CustomAttribute.Add attr
@@ -295,7 +306,11 @@ module CliMetadata =
 
 
         for mref in metadata.MemberRef.Items do
-            string mref.MemberName |> action
+            match mref with
+            | MethodRefDefault { MemberName = name }
+            | MethodRefGeneric { MemberName = name }
+            | MethodRefVarArg { MemberName = name } ->
+                string name |> action
 
         // ModuleRef table not necessary, since its names will correspond to names used in the File table
 

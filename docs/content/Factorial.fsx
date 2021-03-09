@@ -13,9 +13,9 @@ open Mono.Cecil
 open FSharpIL
 #endif
 (**
-# Hello World
+# Factorial
 
-The following example creates a simple .NET 5 console application.
+The following example showcases the use of tail calls and the usage of a method on a generic class.
 
 ## Example
 *)
@@ -28,7 +28,7 @@ open FSharpIL.PortableExecutable
 
 let example() =
     metadata {
-        let! assm =
+        let! _ =
             setAssembly
                 { Name = AssemblyName.ofStr "Factorial"
                   HashAlgId = ()

@@ -2,6 +2,7 @@
 
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
 [<RequireQualifiedAccess>]
 type MemberRefParent =
@@ -16,47 +17,116 @@ type MemberRefParent =
             match this with
             | TypeRef tref -> IndexOwner.checkIndex owner tref
 
-type MemberRef<'Signature when 'Signature : equality and 'Signature :> IIndexValue> =
+[<NoComparison; StructuralEquality>]
+type MemberRef<'Signature when 'Signature : equality and 'Signature : struct and 'Signature :> IIndexValue> =
     { Class: MemberRefParent
       MemberName: Identifier
       Signature: 'Signature }
 
+    member internal this.CheckOwner owner =
+        IndexOwner.checkOwner owner this.Class
+        this.Signature.CheckOwner owner
+
+[<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module internal CallingConvention =
+    let flags hasThis explicitThis genParamCount varArgsEmpty =
+        let mutable value = CallingConvention.Default
+        if hasThis then value <- value ||| CallingConvention.HasThis
+        if explicitThis then value <- value ||| CallingConvention.ExplicitThis
+        if genParamCount > 0u then value <- value ||| CallingConvention.Generic
+        if not varArgsEmpty then value <- value ||| CallingConvention.VarArg
+        value
+
+/// <summary>
+/// Represents a default <c>MethodRefSig</c> item (II.23.2.1), which "provides the call site Signature for a method" (II.23.2.2).
+/// </summary>
+[<IsReadOnly>]
+type MethodRefDefaultSignature = struct
+    val HasThis: bool
+    val ExplicitThis: bool
+    val ReturnType: ReturnTypeItem
+    val Parameters: ImmutableArray<ParamItem>
+
+    new (hasThis, explicitThis, retType, parameters) =
+        { HasThis = hasThis
+          ExplicitThis = explicitThis
+          ReturnType = retType
+          Parameters = parameters }
+
+    new (retType, parameters) = MethodRefDefaultSignature(false, false, retType, parameters)
+
+    member internal this.CallingConventions = CallingConvention.flags this.HasThis this.ExplicitThis 0u true
+
     interface IIndexValue with
         member this.CheckOwner owner =
-            IndexOwner.checkOwner owner this.Class
-            this.Signature.CheckOwner owner
+            this.ReturnType.CheckOwner owner
+            for param in this.Parameters do param.CheckOwner owner
+end
 
-/// <summary>Represents a <c>MethodRefSig</c>, which "provides the call site Signature for a method" (II.23.2.2).</summary>
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-type MethodRefSignature =
-    { HasThis: bool
-      ExplicitThis: bool
-      /// <summary>Corresponds to the <c>RetType</c> item, which specifies the return type of the method.</summary>
-      ReturnType: ReturnTypeItem
-      Parameters: ImmutableArray<ParamItem>
-      VarArgParameters: ImmutableArray<ParamItem> }
+/// <summary>Represents a generic <c>MethodRefSig</c> item (II.23.2.1).</summary>
+[<IsReadOnly>]
+type MethodRefGenericSignature = struct
+    val HasThis: bool
+    val ExplicitThis: bool
+    /// Gets the number of generic parameters.
+    val GenParamCount: uint32
+    val ReturnType: ReturnTypeItem
+    val Parameters: ImmutableArray<ParamItem>
 
-    /// <remarks>
-    /// If this method is marked <c>VARARG</c>, then this holds the total number of <c>Param</c> items before and after the sentinel byte.
-    /// </remarks>
+    new (hasThis, explicitThis, genParamCount, retType, parameters) =
+        { HasThis = hasThis
+          ExplicitThis = explicitThis
+          GenParamCount = genParamCount
+          ReturnType = retType
+          Parameters = parameters }
+
+    new (genParamCount, retType, parameters) = MethodRefGenericSignature(false, false, genParamCount, retType, parameters)
+
+    member internal this.CallingConventions = CallingConvention.flags this.HasThis this.ExplicitThis this.GenParamCount true
+
+    interface IIndexValue with
+        member this.CheckOwner owner =
+            this.ReturnType.CheckOwner owner
+            for param in this.Parameters do param.CheckOwner owner
+end
+
+/// <summary>Represents a <c>MethodRefSig</c> with a <c>VARARG</c> calling convention (II.23.2.2).</summary>
+type MethodRefVarArgSignature = struct
+    val HasThis: bool
+    val ExplicitThis: bool
+    val ReturnType: ReturnTypeItem
+    val Parameters: ImmutableArray<ParamItem>
+    val VarArgParameters: ImmutableArray<ParamItem>
+
+    new (hasThis, explicitThis, retType, parameters, varArgParameters) =
+        { HasThis = hasThis
+          ExplicitThis = explicitThis
+          ReturnType = retType
+          Parameters = parameters
+          VarArgParameters = varArgParameters }
+
+    new (hasThis, explicitThis, retType, parameters) = MethodRefVarArgSignature(hasThis, explicitThis, retType, parameters, ImmutableArray.Empty)
+    new (retType, parameters, varArgParameters) = MethodRefVarArgSignature(false, false, retType, parameters, varArgParameters)
+    new (retType, parameters) = MethodRefVarArgSignature(retType, parameters, ImmutableArray.Empty)
+
+    /// <summary>Gets the total number of parameters and <c>VARARG</c> arguments.</summary>
+    /// <remarks>This holds the total number of <c>Param</c> items before and after the sentinel byte.</remarks>
     member this.ParamCount = uint32 (this.Parameters.Length + this.VarArgParameters.Length)
 
-    member internal this.CallingConventions =
-        let mutable flags = CallingConvention.Default
-        if this.HasThis then flags <- flags ||| CallingConvention.HasThis
-        if this.ExplicitThis then flags <- flags ||| CallingConvention.ExplicitThis
-        if not this.VarArgParameters.IsEmpty then flags <- flags ||| CallingConvention.VarArg
-        flags
+    member internal this.CallingConventions = CallingConvention.flags this.HasThis this.ExplicitThis 0u this.VarArgParameters.IsEmpty
 
     interface IIndexValue with
         member this.CheckOwner owner =
             this.ReturnType.CheckOwner owner
             for parameter in this.Parameters do parameter.CheckOwner owner
             for parameter in this.VarArgParameters do parameter.CheckOwner owner
+end
 
-type MethodRef = MemberRef<MethodRefSignature>
-
-// type FieldRef = 
+type MethodRefDefault = MemberRef<MethodRefDefaultSignature>
+type MethodRefGeneric = MemberRef<MethodRefGenericSignature>
+type MethodRefVarArg = MemberRef<MethodRefVarArgSignature>
+// type FieldRef = MemberRef<>
 
 /// <summary>
 /// Represents a row in the <c>MemberRef</c> table, which contains references to the methods and fields of a class (II.22.25).
@@ -65,21 +135,17 @@ type MethodRef = MemberRef<MethodRefSignature>
 /// <seealso cref="T:FSharpIL.Metadata.FieldRef"/>
 [<NoComparison; StructuralEquality>]
 type MemberRefRow =
-    | MethodRef of MethodRef
+    | MethodRefDefault of MethodRefDefault
+    | MethodRefGeneric of MethodRefGeneric
+    | MethodRefVarArg of MethodRefVarArg
     // | FieldRef // of ?
-
-    member this.Class =
-        match this with
-        | MethodRef { Class = parent } -> parent
-
-    member this.MemberName =
-        match this with
-        | MethodRef { MemberName = name } -> name
 
     interface IIndexValue with
         member this.CheckOwner owner =
             match this with
-            | MethodRef method -> IndexOwner.checkOwner owner method
+            | MethodRefDefault method -> method.CheckOwner owner
+            | MethodRefGeneric method -> method.CheckOwner owner
+            | MethodRefVarArg method -> method.CheckOwner owner
 
 type MemberRefIndex<'Member> = TaggedIndex<'Member, MemberRefRow>
 
@@ -116,7 +182,9 @@ type MemberRefTable internal (owner: IndexOwner, warnings: ImmutableArray<Valida
         members.Add row
         MemberRefIndex<'MemberRef>(owner, row)
 
-    member this.GetIndex(method: MethodRef) = this.GetIndex<MethodRef>(MethodRef method)
+    member this.GetIndex(method: MethodRefDefault) = this.GetIndex<MethodRefDefault>(MethodRefDefault method)
+    member this.GetIndex(method: MethodRefGeneric) = this.GetIndex<MethodRefGeneric>(MethodRefGeneric method)
+    member this.GetIndex(method: MethodRefVarArg) = this.GetIndex<MethodRefVarArg>(MethodRefVarArg method)
     // member this.GetIndex(field: FieldRef) = this.GetIndex<FieldRef>(FieldRef field)
 
     interface IReadOnlyCollection<MemberRefRow> with

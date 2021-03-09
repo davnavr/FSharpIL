@@ -91,7 +91,7 @@ module internal Heap =
         let blob =
             { Field = Dictionary<_, _> metadata.Field.Count
               MethodDef = Dictionary<_, _> metadata.MethodDef.Count
-              MethodRef = Dictionary<_, _> metadata.MemberRef.Count
+              MemberRef = Dictionary<_, _> metadata.MemberRef.Count
 
               CustomAttribute = Dictionary<_, _> metadata.CustomAttribute.Length
               TypeSpec = Dictionary<_, _> metadata.TypeSpec.Count
@@ -132,19 +132,32 @@ module internal Heap =
                 blobIndex pos signature blob.MethodDef
 
         for memberRef in metadata.MemberRef.Items do
-            match memberRef with
-            | MethodRef { Signature = signature } when not (blob.MethodRef.ContainsKey signature) ->
+            if not (blob.MemberRef.ContainsKey memberRef) then
                 let pos = writer.Position
-                writer.Writer.WriteU1 signature.CallingConventions
-                writer.CompressedUnsigned signature.Parameters.Length // ParamCount
-                writer.RetType signature.ReturnType
-                writer.Parameters signature.Parameters
-                // TODO: Write SENTINEL and extra parameters.
-                if not signature.VarArgParameters.IsEmpty then
-                    failwith "TODO: Implement writing of VarArg parameters"
-                blobIndex pos signature blob.MethodRef
-            // FieldRef
-            | _ -> ()
+
+                match memberRef with
+                | MethodRefDefault { Signature = signature } ->
+                    writer.Writer.WriteU1 signature.CallingConventions
+                    writer.CompressedUnsigned signature.Parameters.Length // ParamCount
+                    writer.RetType signature.ReturnType
+                    writer.Parameters signature.Parameters
+                | MethodRefGeneric { Signature = signature } ->
+                    writer.Writer.WriteU1 signature.CallingConventions
+                    writer.CompressedUnsigned signature.GenParamCount
+                    writer.CompressedUnsigned signature.Parameters.Length // ParamCount
+                    writer.RetType signature.ReturnType
+                    writer.Parameters signature.Parameters
+                | MethodRefVarArg { Signature = signature } ->
+                    writer.Writer.WriteU1 signature.CallingConventions
+                    writer.CompressedUnsigned signature.ParamCount
+                    writer.RetType signature.ReturnType
+                    writer.Parameters signature.Parameters
+                    if not signature.VarArgParameters.IsEmpty then
+                        writer.Writer.WriteU1 ElementType.Sentinel
+                        writer.Parameters signature.VarArgParameters
+                //| FieldRef { Signature = signature } ->
+
+                blobIndex pos memberRef blob.MemberRef
 
         for { Value = value } in metadata.CustomAttribute do
             match value with
@@ -227,7 +240,7 @@ module internal Heap =
 
         writeAll blobs.Field
         writeAll blobs.MethodDef
-        writeAll blobs.MethodRef
+        writeAll blobs.MemberRef
         writeAll blobs.CustomAttribute
         writeAll blobs.TypeSpec
         writeAll blobs.MethodSpec
