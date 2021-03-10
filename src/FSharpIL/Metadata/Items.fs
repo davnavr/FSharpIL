@@ -178,6 +178,10 @@ type TypeSpec =
     /// <summary>Represents a <c>GENERICINST</c> followed by a <c>TypeRef</c>.</summary>
     | GenericInst of GenericInst
 
+    override this.ToString() =
+        match this with
+        | GenericInst inst -> inst.ToString()
+
     interface ITypeSpec
     interface IIndexValue with
         member this.CheckOwner owner =

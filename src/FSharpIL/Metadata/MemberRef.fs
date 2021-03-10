@@ -3,6 +3,9 @@
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
+open System.Text
+
+open Microsoft.FSharp.Core.Printf
 
 [<RequireQualifiedAccess>]
 type MemberRefParent =

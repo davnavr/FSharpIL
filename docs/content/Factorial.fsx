@@ -8,8 +8,6 @@ open Expecto
 
 open Swensen.Unquote
 
-open Mono.Cecil
-
 open FSharpIL
 #endif
 (**
@@ -49,14 +47,15 @@ let example() =
         let! dictionary_u4_u4_spec = TypeSpec.genericInst dictionary_u4_u4 |> addTypeSpec
 
         let! containsKey =
-            referenceGenericMethod
+            // A default method referenec is used here, since the generic parameters are declared in the dictionary type.
+            referenceDefaultMethod
                 { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
                   MemberName = Identifier.ofStr "ContainsKey"
                   Signature =
                     let parameters =
-                        // Note the parameters much exactly match the method, so a generic parameter is used.
-                        ImmutableArray.CreateRange [ ParamItem.var 0u ]
-                    MethodRefGenericSignature(true, false, 2u, ReturnType.itemBool, parameters) }
+                        // Note how a generic parameter is used here instead of using U4.
+                        ImmutableArray.CreateRange [ ParamItem.var 0u; ]
+                    MethodRefDefaultSignature(true, false, ReturnType.itemBool, parameters) }
 
         let! factorial =
             { ClassName = Identifier.ofStr "CachedFactorial"
@@ -66,7 +65,7 @@ let example() =
               Extends = Extends.TypeRef object }
             |> addStaticClass
 
-        let! _ =
+        let! cache =
             { FieldName = Identifier.ofStr "cache"
               Flags =
                 { Visibility = Public
@@ -113,8 +112,11 @@ let example() =
               Body =
                 fun content ->
                     let writer = MethodBodyWriter content
-                    writer.Call containsKey
+                    writer.Ldsfld cache
+                    writer.Ldarg 0us
+                    writer.Callvirt containsKey // TODO: Figure out if callvirt is needed for ContainsKey
                     // TODO: Branch depending on whether or not the value is already in the cache.
+                    writer.Pop() // Temporary
 
                     writer.Ldarg 0us
                     writer.Ldarg 0us
