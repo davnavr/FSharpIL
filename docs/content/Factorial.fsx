@@ -13,7 +13,7 @@ open FSharpIL
 (**
 # Factorial
 
-The following example showcases the use of tail calls and the usage of a method on a generic class.
+The following example showcases the use of tail calls and the usage of methods on a generic class.
 
 ## Example
 *)
@@ -47,7 +47,7 @@ let example() =
         let! dictionary_u4_u4_spec = TypeSpec.genericInst dictionary_u4_u4 |> addTypeSpec
 
         let! containsKey =
-            // A default method referenec is used here, since the generic parameters are declared in the dictionary type.
+            // A default method reference is used here, since the generic parameters are declared in the dictionary type.
             referenceDefaultMethod
                 { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
                   MemberName = Identifier.ofStr "ContainsKey"
@@ -56,6 +56,13 @@ let example() =
                         // Note how a generic parameter is used here instead of using U4.
                         ImmutableArray.CreateRange [ ParamItem.var 0u; ]
                     MethodRefDefaultSignature(true, false, ReturnType.itemBool, parameters) }
+        let! get_Item =
+            referenceDefaultMethod
+                { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
+                  MemberName = Identifier.ofStr "get_Item"
+                  Signature =
+                    let parameters = ImmutableArray.CreateRange [ ParamItem.var 0u ]
+                    MethodRefDefaultSignature(true, false, ReturnType.itemVar 1u, parameters) }
 
         let! factorial =
             { ClassName = Identifier.ofStr "CachedFactorial"
@@ -114,9 +121,17 @@ let example() =
                     let writer = MethodBodyWriter content
                     writer.Ldsfld cache
                     writer.Ldarg 0us
-                    writer.Callvirt containsKey // TODO: Figure out if callvirt is needed for ContainsKey
-                    // TODO: Branch depending on whether or not the value is already in the cache.
-                    writer.Pop() // Temporary
+                    writer.Callvirt containsKey // TODO: Figure out if callvirt is needed for ContainsKey and Add methods
+                    let target = writer.Brtrue_s() // Temporary
+                    let pos = writer.ByteCount
+
+                    // Get the existing value from the cache.
+                    writer.Ldsfld cache
+                    writer.Ldarg 0us
+                    writer.Callvirt get_Item
+                    writer.Ret()
+
+                    target.SetTarget(int32 (writer.ByteCount - pos))
 
                     writer.Ldarg 0us
                     writer.Ldarg 0us

@@ -219,6 +219,7 @@ module ReturnType =
     let itemBool = encoded EncodedType.Boolean
     let itemI4 = encoded EncodedType.I4
     let itemU4 = encoded EncodedType.U4
+    let itemVar number = EncodedType.Var number |> encoded
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

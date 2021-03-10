@@ -187,6 +187,17 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         target
 
     // TODO: Create methods or helper functions that make writing branching instructions easier.
+    /// <summary>
+    /// (0x2D) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is non-zero
+    /// (III.3.18).
+    /// </summary>
+    member this.Brtrue_s() = this.Branch(0x2Duy, true)
+    /// <summary>
+    /// (0x2D) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is a non-null
+    /// object reference (III.3.18).
+    /// </summary>
+    /// <remarks>This opcode is an alias for the <c>brtrue.s</c> instruction.</remarks>
+    member this.Brinst_s() = this.Brtrue_s()
     /// (0x2E)
     member this.Beq_s() = this.Branch(0x2Euy, true)
 
@@ -195,6 +206,16 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// </summary>
     member this.Bgt_un_s() = this.Branch(0x35uy, true)
 
+    /// <summary>
+    /// (0x3A) Writes an instruction that branches to the specified target if the <c>value</c> is non-zero (III.3.18).
+    /// </summary>
+    member this.Brtrue() = this.Branch(0x3Auy, false)
+    /// <summary>
+    /// (0x3A) Writes an instruction that branches to the specified target if the <c>value</c> is a non-null object reference
+    /// (III.3.18).
+    /// </summary>
+    /// <remarks>This opcode is an alias for the <c>brtrue</c> instruction.</remarks>
+    member this.Brinst() = this.Brtrue()
     /// (0x3B)
     member this.Beq() = this.Branch(0x3Buy, false)
 
