@@ -3,11 +3,13 @@
 open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
+open System.Runtime.InteropServices
 
 type VTableLayout =
     | ReuseSlot
     | NewSlot
 
+// TODO: Consider making flags classes with optional arguments in constructors instead of records.
 [<IsReadOnly; Struct>]
 type InstanceMethodFlags =
     { Visibility: Visibility
@@ -81,45 +83,119 @@ type FinalMethod (method: Method<ConcreteMethodBody, FinalMethod, MethodSignatur
     interface IMethod<AbstractClassDef> with member _.Definition() = method.Definition()
     interface IMethod<SealedClassDef> with member _.Definition() = method.Definition()
 
+[<IsReadOnly>]
+type ConstructorFlags = struct
+    val Visibility: Visibility
+    val HideBySig: bool
+
+    new (visibility, [<Optional; DefaultParameterValue(false)>] hideBySig) =
+        { Visibility = visibility; HideBySig = hideBySig }
+
+    interface IFlags<MethodAttributes> with
+        member this.Value =
+            let mutable flags = (this.Visibility :> IFlags<MethodAttributes>).Value
+            if this.HideBySig then flags <- flags ||| MethodAttributes.HideBySig
+            flags
+end
+
+[<IsReadOnly>]
+[<NoComparison; StructuralEquality>]
+type ObjectConstructorSignature = struct
+    val Parameters: ImmutableArray<ParamItem>
+    new (parameters) = { Parameters = parameters }
+
+    member internal this.CheckOwner owner =
+        for param in this.Parameters do param.CheckOwner owner
+
+    member internal this.Signature() =
+        MethodDefSignature(true, false, MethodCallingConventions.Default, ReturnTypeItem ReturnTypeVoid.Item, this.Parameters)
+
+    interface IMethodDefSignature with
+        member this.CheckOwner owner = this.CheckOwner owner
+        member this.Signature() = this.Signature()
+end
+
+[<IsReadOnly>]
+type Constructor<'Flags, 'Signature> = struct
+    val Body: ConcreteMethodBody
+    val ImplFlags: MethodImplFlags
+    val Flags: ValidFlags<'Flags, MethodAttributes>
+    val Signature: 'Signature
+    val ParamList: ParamItem -> int -> ParamRow // TODO: Remove Paramlist and move it to ObjectConstructor.
+
+    new (body, implFlags, flags, signature, paramList) =
+        { Body = body
+          ImplFlags = implFlags
+          Flags = flags
+          Signature = signature
+          ParamList = paramList }
+end
+
 // TODO: Prevent constructors from having generic parameters (an entry in the GenericParam table).
 // NOTE: Constructors and Class Constructors cannot be marked CompilerControlled.
 /// <summary>Represents a method named <c>.ctor</c>, which is an object constructor method.</summary>
 [<Sealed>]
-type Constructor (method: Method<ConcreteMethodBody, Constructor, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>) =
-    interface IIndexValue with member _.CheckOwner owner = method.CheckOwner owner
-    interface IMethod<ConcreteClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<AbstractClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<SealedClassDef> with member _.Definition() = method.Definition()
+type ObjectConstructor (method: Constructor<ObjectConstructor, ObjectConstructorSignature>) =
+    member private _.Definition() =
+        MethodDefRow (
+            method.Body,
+            method.ImplFlags.Value,
+            method.Flags.Value,
+            Identifier.ofStr ".ctor",
+            method.Signature.Signature(),
+            method.ParamList
+        )
 
-[<Sealed>]
+    interface IIndexValue with member _.CheckOwner owner = method.Signature.CheckOwner owner
+    interface IMethod<ConcreteClassDef> with member this.Definition() = this.Definition()
+    interface IMethod<AbstractClassDef> with member this.Definition() = this.Definition()
+    interface IMethod<SealedClassDef> with member this.Definition() = this.Definition()
+
+// TODO: Prevent a ClassConstructor from appearing more than once.
 /// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
-type ClassConstructor (method: Method<ConcreteMethodBody, ClassConstructor, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>) =
-    interface IIndexValue with member _.CheckOwner owner = method.CheckOwner owner
-    interface IMethod<ConcreteClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<AbstractClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<SealedClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<StaticClassDef> with member _.Definition() = method.Definition()
+[<Sealed>]
+type ClassConstructor (method: Constructor<ClassConstructor, unit>) =
+    member private _.Definition() =
+        MethodDefRow (
+            method.Body,
+            method.ImplFlags.Value,
+            method.Flags.Value,
+            Identifier.ofStr ".cctor",
+            MethodDefSignature(
+                false,
+                false,
+                MethodCallingConventions.Default,
+                ReturnTypeItem ReturnTypeVoid.Item,
+                ImmutableArray.Empty
+            ),
+            method.ParamList
+        )
+
+    interface IIndexValue with member _.CheckOwner _ = ()
+    interface IMethod<ConcreteClassDef> with member this.Definition() = this.Definition()
+    interface IMethod<AbstractClassDef> with member this.Definition() = this.Definition()
+    interface IMethod<SealedClassDef> with member this.Definition() = this.Definition()
+    interface IMethod<StaticClassDef> with member this.Definition() = this.Definition()
 
 [<IsReadOnly>]
 [<NoComparison; StructuralEquality>]
-type StaticMethodSignature =
-    struct
-        val CallingConventions: MethodCallingConventions
-        val ReturnType: ReturnTypeItem
-        val Parameters: ImmutableArray<ParamItem>
+type StaticMethodSignature = struct
+    val CallingConventions: MethodCallingConventions
+    val ReturnType: ReturnTypeItem
+    val Parameters: ImmutableArray<ParamItem>
 
-        new (cconv, rtype, parameters) = { CallingConventions = cconv; ReturnType = rtype; Parameters = parameters }
+    new (cconv, rtype, parameters) = { CallingConventions = cconv; ReturnType = rtype; Parameters = parameters }
 
-        member this.Signature() = MethodDefSignature(false, false, this.CallingConventions, this.ReturnType, this.Parameters)
+    member internal this.Signature() =
+        MethodDefSignature(false, false, this.CallingConventions, this.ReturnType, this.Parameters)
 
-        interface IMethodDefSignature with
-            member this.CheckOwner owner =
-                this.ReturnType.CheckOwner owner
-                for param in this.Parameters do
-                    param.CheckOwner owner
-
-            member this.Signature() = this.Signature()
-    end
+    interface IMethodDefSignature with
+        member this.Signature() = this.Signature()
+        member this.CheckOwner owner =
+            this.ReturnType.CheckOwner owner
+            for param in this.Parameters do
+                param.CheckOwner owner
+end
 
 [<Sealed>]
 type StaticMethod (method: Method<ConcreteMethodBody, StaticMethod, StaticMethodSignature>) =

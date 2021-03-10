@@ -48,6 +48,7 @@ type internal CallingConvention =
     | Generic = 0x10uy
 
 /// <summary>Represents a <c>MethodDefSig</c>, which captures the signature of a method or global function (II.23.2.1).</summary>
+// TODO: Ensure that HasThis is set when ExplicitThis is set (31).
 [<IsReadOnly; Struct>]
 type MethodDefSignature internal (hasThis: bool, explicitThis: bool, cconv: MethodCallingConventions, retType: ReturnTypeItem, parameters: ImmutableArray<ParamItem>) =
     member _.CallingConventions = cconv

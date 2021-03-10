@@ -50,6 +50,12 @@ type CustomModifier =
 
 [<Interface>] type internal IReturnType = inherit IIndexValue
 
+[<Sealed>]
+type internal ReturnTypeVoid private () =
+    static member Item = ReturnTypeVoid()
+    interface IReturnType
+    interface IIndexValue with member _.CheckOwner _ = ()
+
 /// <summary>Represents a <c>RetType</c> used in a signature (II.23.2.11).</summary>
 [<IsReadOnly>]
 type ReturnTypeItem =

@@ -11,7 +11,11 @@ let inline (|OptionalCustomModifier|RequiredCustomModifier|) (cmod: CustomModifi
     else OptionalCustomModifier modifierType
 
 type ReturnTypeItem with
-    member this.ReturnType = this.RetType :?> ReturnType
+    member this.ReturnType =
+        match this.RetType with
+        | :? ReturnType as rtype -> rtype
+        | :? ReturnTypeVoid -> ReturnType.Void
+        | unknown -> failwithf "Unknown return type %A" unknown
 
 type TypeSpecRow with
     member this.Signature = this.Type :?> TypeSpec

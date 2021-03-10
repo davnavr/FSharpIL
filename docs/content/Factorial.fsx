@@ -63,6 +63,11 @@ let example() =
                   Signature =
                     let parameters = ImmutableArray.CreateRange [ ParamItem.var 0u ]
                     MethodRefDefaultSignature(true, false, ReturnType.itemVar 1u, parameters) }
+        let! dictionary_u4_u4_ctor =
+            referenceDefaultMethod
+                { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
+                  MemberName = Identifier.ofStr ".ctor"
+                  Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Empty) }
 
         let! factorial =
             { ClassName = Identifier.ofStr "CachedFactorial"
@@ -109,6 +114,7 @@ let example() =
             { MethodName = Identifier.ofStr "Calculate"
               ImplFlags = MethodImplFlags.None
               Flags = { Visibility = Public; HideBySig = true } |> Flags.staticMethod
+              // TODO: Figure out why the parameter name is not correct in the decompiler
               ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "num" }
               Signature =
                 StaticMethodSignature(
@@ -122,7 +128,7 @@ let example() =
                     writer.Ldsfld cache
                     writer.Ldarg 0us
                     writer.Callvirt containsKey // TODO: Figure out if callvirt is needed for ContainsKey and Add methods
-                    let target = writer.Brtrue_s() // Temporary
+                    let target = writer.Brfalse_s()
                     let pos = writer.ByteCount
 
                     // Get the existing value from the cache.
@@ -140,6 +146,24 @@ let example() =
                     { MaxStack = 8us; InitLocals = false }
                 |> MethodBody.create }
             |> StaticMethod
+            |> addMethod factorial
+
+        // Class constructor to initialize cache
+        let! _ =
+            let body content =
+                let writer = MethodBodyWriter content
+                writer.Newobj dictionary_u4_u4_ctor
+                writer.Stsfld cache
+                writer.Ret()
+                { MaxStack = 8us; InitLocals = false }
+            Constructor(
+                MethodBody.create body,
+                MethodImplFlags.None,
+                ConstructorFlags(Public, true) |> Flags.classConstructor,
+                (),
+                fun _ _ -> failwith "class constructor has no arguments"
+            )
+            |> ClassConstructor
             |> addMethod factorial
 
         setCalculateBody <| fun content ->

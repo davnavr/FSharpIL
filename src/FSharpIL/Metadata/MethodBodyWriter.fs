@@ -188,8 +188,26 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     // TODO: Create methods or helper functions that make writing branching instructions easier.
     /// <summary>
-    /// (0x2D) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is non-zero
-    /// (III.3.18).
+    /// (0x2C) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is false or zero
+    /// (III.3.17).
+    /// </summary>
+    member this.Brfalse_s() = this.Branch(0x2Cuy, true)
+    /// <summary>
+    /// (0x2C) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is
+    /// <see langword="null"/> (III.3.17).
+    /// </summary>
+    /// <remarks>This opcode is an alias for the <c>brfalse.s</c> instruction.</remarks>
+    member this.Brnull_s() = this.Brfalse_s()
+    /// <summary>
+    /// (0x2C) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is zero
+    /// (III.3.17).
+    /// </summary>
+    /// <remarks>This opcode is an alias for the <c>brfalse.s</c> instruction.</remarks>
+    member this.Brzero_s() = this.Brfalse_s()
+
+    /// <summary>
+    /// (0x2D) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is true or
+    /// non-zero (III.3.18).
     /// </summary>
     member this.Brtrue_s() = this.Branch(0x2Duy, true)
     /// <summary>
@@ -198,6 +216,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// </summary>
     /// <remarks>This opcode is an alias for the <c>brtrue.s</c> instruction.</remarks>
     member this.Brinst_s() = this.Brtrue_s()
+
     /// (0x2E)
     member this.Beq_s() = this.Branch(0x2Euy, true)
 
@@ -205,9 +224,25 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0x35) Writes the short form of an instruction that branches to the specified target if <c>value1 > value2</c> (III.3.9).
     /// </summary>
     member this.Bgt_un_s() = this.Branch(0x35uy, true)
+    
+    /// <summary>
+    /// (0x39) Writes an instruction that branches to the specified target if the <c>value</c> is false or zero (III.3.17).
+    /// </summary>
+    member this.Brfalse() = this.Branch(0x39uy, false)
+    /// <summary>
+    /// (0x39) Writes an instruction that branches to the specified target if the <c>value</c> is <see langword="null"/>
+    /// (III.3.17).
+    /// </summary>
+    /// <remarks>This opcode is an alias for the <c>brfalse</c> instruction.</remarks>
+    member this.Brnull() = this.Brfalse()
+    /// <summary>
+    /// (0x39) Writes an instruction that branches to the specified target if the <c>value</c> is zero (III.3.17).
+    /// </summary>
+    /// <remarks>This opcode is an alias for the <c>brfalse</c> instruction.</remarks>
+    member this.Brzero() = this.Brfalse()
 
     /// <summary>
-    /// (0x3A) Writes an instruction that branches to the specified target if the <c>value</c> is non-zero (III.3.18).
+    /// (0x3A) Writes an instruction that branches to the specified target if the <c>value</c> is true or non-zero (III.3.18).
     /// </summary>
     member this.Brtrue() = this.Branch(0x3Auy, false)
     /// <summary>
@@ -216,6 +251,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// </summary>
     /// <remarks>This opcode is an alias for the <c>brtrue</c> instruction.</remarks>
     member this.Brinst() = this.Brtrue()
+
     /// (0x3B)
     member this.Beq() = this.Branch(0x3Buy, false)
 
@@ -279,6 +315,15 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         | _ ->
             this.WriteU1 0x72uy
             MetadataToken.userString str content.UserString content.Writer
+
+    // TODO: Allow Newobj to accept ObjectConstructor and ClassConstructor method indices.
+    // TODO: Figure out of Newobj can accept a .ctor with a VARARG signature.
+    /// <summary>
+    /// (0x73) Writes an isntrcution that allocates "an uninitialized object or value type" and calls the specified constructor
+    /// method (III.4.21).
+    /// </summary>
+    member this.Newobj(SimpleIndex ctor: MemberRefIndex<MethodRefDefault>) =
+        this.Call(0x73uy, ctor, content.Metadata.MemberRef.IndexOf ctor, 0xAuy)
 
     member private this.WriteFieldInstruction(opcode, SimpleIndex field: FieldIndex<_>) =
         this.WriteU1 opcode

@@ -19,8 +19,8 @@ let finalMethod (Flags flags: InstanceMethodFlags) = ValidFlags<FinalMethod, _>(
 let staticMethod (Flags flags: StaticMethodFlags<Visibility>) = ValidFlags<StaticMethod, _>(MethodAttributes.Static ||| flags)
 // let globalMethod (Flags flags: StaticMethodDefFlags<GlobalVisibility>) = failwith ""
 
-// let constructor (Flags flags: _) = ValidFlags<ConstructorFlags, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| flags)
-// let classConstructor (Flags flags: _) = ValidFlags<ClassConstructorFlags, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| MethodAttributes.Static ||| flags)
+let constructor (Flags flags: ConstructorFlags) = ValidFlags<ObjectConstructor, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| flags)
+let classConstructor (Flags flags: ConstructorFlags) = ValidFlags<ClassConstructor, _>(MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName ||| MethodAttributes.Static ||| flags)
 
 /// Flags for non-variant generic parameters.
 let invariant (Flags flags: GenericParamFlags) = ValidFlags<InvariantGenericParamFlags, _> flags
