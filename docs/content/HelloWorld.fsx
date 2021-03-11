@@ -8,6 +8,8 @@ open Expecto
 
 open Swensen.Unquote
 
+open System.IO
+
 open Mono.Cecil
 
 open FSharpIL
@@ -122,38 +124,49 @@ let example() =
 #if COMPILED
 [<Tests>]
 let tests =
+    let example' = lazy example()
+    let metadata = lazy PEFile.toCecilModule example'.Value
+
+    afterRunTests <| fun() -> metadata.Value.Dispose()
+
     testList "hello world" [
-        testCaseCecil example "has entrypoint" <| fun metadata ->
-            test <@ metadata.EntryPoint.Name = "Main" @>
+        testCase "has entrypoint" <| fun() ->
+            test <@ metadata.Value.EntryPoint.Name = "Main" @>
 
-        testCaseCecil example "has method references only" <| fun metadata ->
-            test <@ metadata.GetMemberReferences() |> Seq.forall (fun mref -> mref :? MethodReference) @>
+        testCase "has method references only" <| fun() ->
+            test <@ metadata.Value.GetMemberReferences() |> Seq.forall (fun mref -> mref :? MethodReference) @>
 
-        testCaseCecil example "has target framework attribute" <| fun metadata ->
+        testCase "has target framework attribute" <| fun() ->
             <@
-                let attribute = Seq.head metadata.Assembly.CustomAttributes
+                let attribute = Seq.head metadata.Value.Assembly.CustomAttributes
                 let value = Seq.head attribute.ConstructorArguments
                 attribute.AttributeType.Name = "TargetFrameworkAttribute" && ".NETCoreApp,Version=v5.0".Equals value.Value
             @>
             |> test
 
-        testCaseCecil example "has types with correct names" <| fun metadata ->
+        testCase "has types with correct names" <| fun() ->
             let expected =
                 [
                     ("", "<Module>")
                     ("HelloWorld", "Program")
                 ]
-            let actual =
-                metadata.Types
-                |> Seq.map (fun tdef -> tdef.Namespace, tdef.Name)
-                |> List.ofSeq
-            test <@ expected = actual @>
+            <@
+                let actual =
+                    metadata.Value.Types
+                    |> Seq.map (fun tdef -> tdef.Namespace, tdef.Name)
+                    |> List.ofSeq
+                expected = actual
+            @>
+            |> test
 
-        testCaseCecil example "entrypoint has correct argument type" <| fun metadata ->
-            let args = Seq.head metadata.EntryPoint.Parameters
-            test <@ args.ParameterType.IsArray && args.ParameterType.GetElementType() = metadata.TypeSystem.String @>
+        testCase "entrypoint has correct argument type" <| fun() ->
+            <@
+                let args = Seq.head metadata.Value.EntryPoint.Parameters
+                args.ParameterType.IsArray && args.ParameterType.GetElementType() = metadata.Value.TypeSystem.String
+            @>
+            |> test
 
-        testCaseExec example "runs correctly" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
+        testCaseExec example' "runs correctly" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
             let out = dotnet.StandardOutput.ReadLine()
             dotnet.StandardError.ReadToEnd() |> stderr.Write
 

@@ -1,8 +1,7 @@
 ﻿module FSharpIL.WritePETests
 
-open FsCheck
-
 open Expecto
+open FsCheck
 
 open System.Collections.Immutable
 open System.Reflection.PortableExecutable

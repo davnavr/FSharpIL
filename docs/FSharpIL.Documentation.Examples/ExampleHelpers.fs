@@ -5,33 +5,26 @@ open Expecto
 
 open System.Diagnostics
 open System.IO
+open System.Runtime.Loader
 
 open Mono.Cecil
 
-let private testCecil testf example (name: string) (test: _ -> unit): Test =
+[<RequireQualifiedAccess>]
+module PEFile =
+    let toCecilModule pe =
+        WritePE.stream pe |> ModuleDefinition.ReadModule
+    let toLoadContext name pe: AssemblyLoadContext * _ =
+        let context = ExampleAssemblyLoadContext name
+        let assembly = context.LoadFromStream(WritePE.stream pe)
+        context :> AssemblyLoadContext, assembly
+
+let private testExec testf (Lazy file) (name: string) dir path fileName (test: Process -> _ -> unit): Test =
     fun() ->
-        use metadata = example() |> WritePE.stream |> ModuleDefinition.ReadModule
-        test metadata
-    |> testf name
+        let output = Path.Combine(dir, path)
+        let executable = Path.Combine(output, fileName)
 
-/// <summary>
-/// Builds a test case that examines the Portable Executable with a <see cref="T:Mono.Cecil.ModuleDefinition"/>.
-/// </summary>
-let testCaseCecil = testCecil testCase
-let ftestCaseCecil = testCecil ftestCase
+        WritePE.toPath executable file
 
-let private writeToDisk example dir path fileName =
-    let file: FSharpIL.PortableExecutable.PEFile = example()
-    let output = Path.Combine(dir, path)
-    let executable = Path.Combine(output, fileName)
-
-    WritePE.toPath executable file
-
-    output, executable
-
-let private testExec testf example (name: string) dir path fileName (test: Process -> _ -> unit): Test =
-    fun() ->
-        let output, executable = writeToDisk example dir path fileName
         let config = Path.Combine(output, "example.runtimeconfig.json")
 
         use dotnet =
@@ -52,30 +45,5 @@ let private testExec testf example (name: string) dir path fileName (test: Proce
 /// <summary>
 /// Builds a test case that writes the Portable Executable to disk and executes it with the <c>dotnet exec</c> command.
 /// </summary>
-let testCaseExec = testExec testCase
-let ftestCaseExec = testExec ftestCase
-
-let private testFile testf example (name: string) dir path fileName (test: _ -> unit): Test =
-    testf name (fun() -> writeToDisk example dir path fileName |> test)
-
-/// <summary>
-/// Builds a test case that writes the Portable Executable file to disk.
-/// </summary>
-let testCaseFile = testFile testCase
-let ftestCaseFile = testFile ftestCase
-
-let private testLoad testf example (name: string) (test: _ -> unit): Test =
-    fun() ->
-        let context = new ExampleAssemblyLoadContext(name)
-        try
-            let file = example() |> WritePE.stream
-            let assm = context.LoadFromStream file
-            test assm
-        finally context.Unload() // TODO: Figure out if unloading is necessary.
-    |> testf name
-
-/// <summary>
-/// Builds a test case that loads the Portable Executable into a <see cref="T:System.Runtime.Loader.AssemblyLoadContext"/>.
-/// </summary>
-let testCaseLoad = testLoad testCase
-let ftestCaseLoad = testLoad ftestCase
+let testCaseExec file = testExec testCase file
+let ftestCaseExec file = testExec ftestCase file

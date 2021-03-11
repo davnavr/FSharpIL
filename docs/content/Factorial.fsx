@@ -8,6 +8,8 @@ open Expecto
 
 open Swensen.Unquote
 
+open System.IO
+
 open FSharpIL
 #endif
 (**
@@ -205,25 +207,46 @@ let example() =
 #if COMPILED
 [<Tests>]
 let tests =
-    // TODO: Use Expecto test fixtures for assembly load context and PEFile instance.
+    let example' = lazy example()
+    let metadata = lazy PEFile.toCecilModule example'.Value
+    let context =
+        lazy
+            let (ctx, assembly) = PEFile.toLoadContext "factorial" example'.Value
+            let calculate = assembly.GetType("Factorial.CachedFactorial").GetMethod("Calculate")
+            {| Context = ctx
+               Assembly = assembly
+               Calculate = calculate |}
+
+    afterRunTests <| fun() ->
+        context.Value.Context.Unload()
+        metadata.Value.Dispose()
+
+    // TODO: Shuffle tests?
     testList "factorial" [
-        testCaseCecil example "has correct field names" <| fun metadata ->
+        testCase "has correct field names" <| fun() ->
             let expected = [ "cache" ]
-            let actual =
-                metadata.Types
-                |> Seq.collect (fun tdef -> tdef.Fields)
-                |> Seq.map (fun field -> field.Name)
-                |> List.ofSeq
-            test <@ expected = actual @>
+            let types = metadata.Value.Types
+            <@
+                let actual =
+                    types
+                    |> Seq.collect (fun tdef -> tdef.Fields)
+                    |> Seq.map (fun field -> field.Name)
+                    |> List.ofSeq
+                expected = actual
+            @>
+            |> test
 
-        testCaseFile example "can save to disk" __SOURCE_DIRECTORY__ "exout" "Factorial.dll" ignore
+        testCase "can save to disk" <| fun() ->
+            let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "Factorial.dll")
+            WritePE.toPath path example'.Value
 
-        // TODO: Figure out if a property test can be used to test factorial calculation.
-        testCaseLoad example "method can be called" <| fun assm ->
-            let calculate = assm.GetType("Factorial.CachedFactorial").GetMethod("Calculate")
+        // TODO: Use a property test can be used to test factorial calculation.
+        testCase "method can be called" <| fun () ->
             let expected = 6u
-            let actual = calculate.Invoke(null, [| 3u |]) |> unbox
-            test <@ expected = actual @>
+            <@
+                let actual = context.Value.Calculate.Invoke(null, [| 3u |]) |> unbox
+                expected = actual
+            @>
+            |> test
     ]
-    // TODO: Use afterRunTests to unload AssemblyLoadContent if necessary.
 #endif
