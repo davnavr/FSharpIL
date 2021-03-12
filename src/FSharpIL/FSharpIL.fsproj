@@ -47,7 +47,6 @@
     <Compile Include="Metadata\ItemHelpers.fs" />
     <Compile Include="Metadata\EntryPointSignature.fs" />
     <Compile Include="Metadata\CliMetadata.fs" />
-    <Compile Include="Metadata\CliMetadataBuilder.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\BlobWriter.fs" />
     <Compile Include="Metadata\Heaps\HeapExtensions.fs" />
@@ -57,7 +56,6 @@
     <Compile Include="Metadata\MetadataToken.fs" />
     <Compile Include="Metadata\MethodBodyWriter.fs" />
     <Compile Include="Metadata\MethodBodyModule.fs" />
-    <Compile Include="Metadata\Builders.fs" />
     <Compile Include="Metadata\SystemAssembly.fs" />
     <Compile Include="Metadata\SystemTypes.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />

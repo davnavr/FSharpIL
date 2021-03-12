@@ -61,10 +61,12 @@ type ModuleTable =
       // EncBaseId
       }
 
+// TODO: Rename to CliMetadataBuilder
+// TODO: For table types, make GetEnumerator and Add methods internal.
 [<Sealed>]
 type MetadataBuilderState (mdle: ModuleTable) =
     let owner = IndexOwner()
-    let warnings = ImmutableArray.CreateBuilder<ValidationWarning>()
+    let warnings = ImmutableArray.CreateBuilder<ValidationWarning>() // TODO: Consider having these warning builders stored in some record type.
     let clsViolations = ImmutableArray.CreateBuilder<ClsViolation>()
     let mutable entrypoint = ValueNone
 

@@ -2,6 +2,8 @@
 
 open System.Collections.Immutable
 
+// TODO: Make a computation expression for Result<_, _> or ValidationResult<_>
+// TODO: If making a module for unsafe functions, consider using a CompilerMessageAttribute as a warning.
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
 [<Sealed>]
 type CliMetadata (state: MetadataBuilderState) =

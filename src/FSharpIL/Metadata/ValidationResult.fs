@@ -1,11 +1,12 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
 /// <summary>
 /// Represents a violation of a Common Language Specification rule (I.7).
 /// </summary>
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<IsReadOnly; Struct>]
 type ClsViolationMessage =
     { Number: uint8
       Message: string }
@@ -104,3 +105,56 @@ module ValidationResult =
         | ValidationSuccess (result, _)
         | ValidationWarning (result, _, _) -> Ok result
         | ValidationError err -> Error err
+
+type ClsViolationsBuilder = ImmutableArray<ClsViolation>.Builder
+type WarningsBuilder = ImmutableArray<ValidationWarning>.Builder
+
+[<Sealed>]
+type ValidationResultBuilder internal () =
+    member inline _.Bind(comp, func) =
+        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
+            match comp with
+            | Ok result -> func result cls warnings
+            | Error (err: ValidationError) -> Error err
+
+    member inline _.Bind(comp: ValidationResult<_>, func) =
+        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
+            cls.AddRange comp.ClsViolations
+            warnings.AddRange comp.Warnings
+            match comp.Result with
+            | Ok result -> func result cls warnings
+            | Error err -> Error err
+
+    member inline _.Return value (_: ClsViolationsBuilder) (_: WarningsBuilder) = Result<_, ValidationError>.Ok value
+
+    member inline _.ReturnFrom(value: Result<_, ValidationError>) =
+        fun (_: ClsViolationsBuilder) (_: WarningsBuilder) -> value
+
+    member inline _.ReturnFrom(value: ValidationResult<_>) =
+        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
+            cls.AddRange value.ClsViolations
+            warnings.AddRange value.Warnings
+            value.Result
+
+    member inline _.Run expr =
+        let cls = ImmutableArray.CreateBuilder<_>()
+        let warnings = ImmutableArray.CreateBuilder<_>()
+        let result = expr cls warnings
+        { ClsViolations = cls.ToImmutable()
+          Warnings = warnings.ToImmutable()
+          Result = result }
+
+    member inline _.TryFinally(expr, compensation) (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) =
+        try expr cls warnings: Result<_, ValidationError>
+        finally compensation()
+
+    member inline this.Zero() = this.Return()
+
+[<AutoOpen>]
+module ValidationResultBuilder = let validated = ValidationResultBuilder()
+
+module TEST =
+    let a =
+        validated {
+            return! Ok()
+        }
