@@ -183,6 +183,8 @@ type MemberRefTableBuilder internal (owner: IndexOwner) =
     member this.Add(method: MethodRefVarArg) = this.Add<MethodRefVarArg>(MethodRefVarArg method)
     //member this.GetIndex(field: FieldRef) = this.GetIndex<FieldRef>(FieldRef field)
 
+    member internal _.ToImmutable() = members.ToImmutable()
+
     interface IReadOnlyCollection<MemberRefRow> with
         member _.Count = members.Count
         member _.GetEnumerator() = members.GetEnumerator() :> IEnumerator<_>

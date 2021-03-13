@@ -6,15 +6,15 @@ open System.Collections.Immutable
 // TODO: If making a module for unsafe functions, consider using a CompilerMessageAttribute as a warning.
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
 [<Sealed>]
-type CliMetadata (state: MetadataBuilderState) =
+type CliMetadata (builder: CliMetadataBuilder) =
     // TODO: Determine if readOnlyDict or ImmutableDictionary has faster lookup times.
-    let methodDef = state.CreateTable state.Method
+    let methodDef = builder.Method.ToImmutable()
     let parameters =
-        methodDef.Items
+        methodDef.Rows
         |> Seq.collect(fun method -> Seq.indexed method.ParamList)
         |> ImmutableArray.CreateRange
 
-    let nestedClass = state.NestedClass |> ImmutableArray.CreateRange
+    let nestedClass = builder.NestedClass |> ImmutableArray.CreateRange
 
     let valid, rowCounts =
         // Module table is always present
@@ -22,15 +22,15 @@ type CliMetadata (state: MetadataBuilderState) =
         let counts = ImmutableArray.CreateBuilder 48
         counts.Add 1u
 
-        if state.TypeRef.Count > 0 then
+        if builder.TypeRef.Count > 0 then
             bits <- bits ||| (1UL <<< 1)
-            uint32 state.TypeRef.Count |> counts.Add
-        if state.TypeDef.Count > 0 then
+            uint32 builder.TypeRef.Count |> counts.Add
+        if builder.TypeDef.Count > 0 then
             bits <- bits ||| (1UL <<< 2)
-            uint32 state.TypeDef.Count |> counts.Add
-        if state.Field.Count > 0 then
+            uint32 builder.TypeDef.Count |> counts.Add
+        if builder.Field.Count > 0 then
             bits <- bits ||| (1UL <<< 4)
-            uint32 state.Field.Count |> counts.Add
+            uint32 builder.Field.Count |> counts.Add
         if methodDef.Count > 0 then
             bits <- bits ||| (1UL <<< 6)
             uint32 methodDef.Count |> counts.Add
@@ -40,44 +40,44 @@ type CliMetadata (state: MetadataBuilderState) =
 
 
 
-        if state.MemberRef.Count > 0 then
+        if builder.MemberRef.Count > 0 then
             bits <- bits ||| (1UL <<< 0xA)
-            uint32 state.MemberRef.Count |> counts.Add
+            uint32 builder.MemberRef.Count |> counts.Add
 
 
 
-        if state.CustomAttribute.Count > 0 then
+        if builder.CustomAttribute.Count > 0 then
             bits <- bits ||| (1UL <<< 0xC)
-            uint32 state.CustomAttribute.Count |> counts.Add
+            uint32 builder.CustomAttribute.Count |> counts.Add
 
 
 
-        if state.ModuleRef.Count > 0 then
+        if builder.ModuleRef.Count > 0 then
             bits <- bits ||| (1UL <<< 0x1A)
-            uint32 state.ModuleRef.Count |> counts.Add
-        if state.TypeSpec.Count > 0 then
+            uint32 builder.ModuleRef.Count |> counts.Add
+        if builder.TypeSpec.Count > 0 then
             bits <- bits ||| (1UL <<< 0x1B)
-            uint32 state.TypeSpec.Count |> counts.Add
+            uint32 builder.TypeSpec.Count |> counts.Add
 
 
-        if state.Assembly.IsSome then
+        if builder.Assembly.IsSome then
             bits <- bits ||| (1UL <<< 0x20)
             counts.Add 1u
-        if state.AssemblyRef.Count > 0 then
+        if builder.AssemblyRef.Count > 0 then
             bits <- bits ||| (1UL <<< 0x23)
-            uint32 state.AssemblyRef.Count |> counts.Add
+            uint32 builder.AssemblyRef.Count |> counts.Add
 
 
 
-        if state.File.Count > 0 then
+        if builder.File.Count > 0 then
             bits <- bits ||| (1UL <<< 0x26)
-            uint32 state.File.Count |> counts.Add
+            uint32 builder.File.Count |> counts.Add
 
 
 
-        if state.MethodSpec.Count > 0 then
+        if builder.MethodSpec.Count > 0 then
             bits <- bits ||| (1UL <<< 0x2B)
-            uint32 state.MethodSpec.Count |> counts.Add
+            uint32 builder.MethodSpec.Count |> counts.Add
 
 
 
@@ -87,42 +87,40 @@ type CliMetadata (state: MetadataBuilderState) =
 
         bits, counts
 
-    member val internal Owner = state.Owner
-
-    member val Header = state.Header
+    member val Header = builder.Header
     /// <summary>Corresponds to the <c>Flags</c> field of the CLI header (II.25.3.3).</summary>
-    member val HeaderFlags = state.HeaderFlags
+    member val HeaderFlags = builder.HeaderFlags
     /// <summary>Corresponds to the <c>EntryPointToken</c> field of the CLI header (II.25.3.3).</summary>
-    member val EntryPointToken = state.EntryPoint
+    member val EntryPointToken = builder.EntryPointToken
 
     /// <summary>Corresponds to the <c>Version</c> field of the metadata root (II.24.2.1)</summary>
-    member val MetadataVersion = state.MetadataVersion
+    member val MetadataVersion = builder.MetadataVersion
 
     /// <summary>Corresponds to the <c>MajorVersion</c> field of the <c>#~</c> stream header.</summary>
-    member val MajorVersion = state.MajorVersion
+    member val MajorVersion = builder.MajorVersion
     /// <summary>Corresponds to the <c>MinorVersion</c> field of the <c>#~</c> stream header.</summary>
-    member val MinorVersion = state.MinorVersion
+    member val MinorVersion = builder.MinorVersion
 
-    member val Module = state.Module
-    member val TypeRef = state.CreateTable state.TypeRef
-    member val TypeDef = state.CreateTable state.TypeDef
-    member val Field = state.CreateTable state.Field
+    member val Module = builder.Module
+    member val TypeRef = builder.TypeRef.ToImmutable()
+    member val TypeDef = builder.TypeDef.ToImmutable()
+    member val Field = builder.Field.ToImmutable()
     member _.MethodDef = methodDef
     member _.Param = parameters
 
-    member val MemberRef = state.CreateTable state.MemberRef
+    member val MemberRef = builder.MemberRef.ToImmutable()
 
-    member val CustomAttribute = state.CustomAttribute.ToImmutableArray()
+    member val CustomAttribute = builder.CustomAttribute.ToImmutableArray()
 
-    member val ModuleRef = state.CreateTable state.ModuleRef
-    member val TypeSpec = state.CreateTable state.TypeSpec
+    member val ModuleRef = builder.ModuleRef
+    member val TypeSpec = builder.TypeSpec.ToImmutable()
 
-    member val Assembly = state.Assembly
-    member val AssemblyRef = state.CreateTable state.AssemblyRef
+    member val Assembly = builder.Assembly
+    member val AssemblyRef = builder.AssemblyRef.ToImmutable()
 
-    member val File = state.CreateTable state.File
+    member val File = builder.File.ToImmutable()
 
-    member val MethodSpec = state.CreateTable state.MethodSpec
+    member val MethodSpec = builder.MethodSpec.ToImmutable()
 
     member _.NestedClass = nestedClass
 
@@ -134,17 +132,6 @@ type CliMetadata (state: MetadataBuilderState) =
     /// which specifies "the number of rows for each present table" (II.24.2.6).
     /// </summary>
     member _.RowCounts = rowCounts
-
-    // TODO: Create separate immutable table type called OwnedTable that stores the counts for each owner.
-    member val internal TempFieldCounts =
-        state.Field.ToReadOnlyDictionary()
-        |> Seq.map (fun (KeyValue (tdef, field)) -> tdef, uint32 field.Count)
-        |> readOnlyDict
-
-    member val internal TempMethodCounts =
-        state.Method.ToReadOnlyDictionary()
-        |> Seq.map (fun (KeyValue (tdef, method)) -> tdef, uint32 method.Count)
-        |> readOnlyDict
 
 // TODO: Consider making modules for related functions. Ex: MethodRef module to contain functions to referenceDefault, refereceGeneric, etc.
 /// Contains functions for modifying the CLI metadata with CLS checks and warnings.
@@ -163,7 +150,7 @@ module CliMetadata =
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
     let setEntryPointToken (builder: CliMetadataBuilder) entryPoint =
         IndexOwner.checkOwner builder.Owner entryPoint
-        builder.SetEntryPoint entryPoint
+        builder.SetEntryPointToken entryPoint
 
     /// <summary>Sets the entrypoint of the assembly to a static method defined in the assembly.</summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
@@ -244,6 +231,11 @@ module CliMetadata =
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
     let setAssembly (builder: CliMetadataBuilder) assembly = builder.SetAssembly assembly
 
+    let referenceModule (warnings: WarningsBuilder) (builder: CliMetadataBuilder) moduleRef =
+        let i, dup = builder.ModuleRef.Add moduleRef
+        if dup then warnings.Add(DuplicateModuleRefWarning moduleRef)
+        i
+
     /// Adds a reference to an assembly.
     let referenceAssembly (warnings: WarningsBuilder) (builder: CliMetadataBuilder) assembly =
         let i, duplicate = builder.AssemblyRef.Add assembly
@@ -268,18 +260,18 @@ module CliMetadata =
     let inline internal iterStrings action (metadata: CliMetadata) =
         string metadata.Module.Name |> action
 
-        for tref in metadata.TypeRef.Items do
+        for tref in metadata.TypeRef.Rows do
             string tref.TypeName |> action
             action tref.TypeNamespace
 
-        for tdef in metadata.TypeDef.Items do
+        for tdef in metadata.TypeDef.Rows do
             string tdef.TypeName |> action
             action tdef.TypeNamespace
 
-        for field in metadata.Field.Items do
+        for field in metadata.Field.Rows do
             string field.Name |> action
 
-        for method in metadata.MethodDef.Items do
+        for method in metadata.MethodDef.Rows do
             string method.Name |> action
 
         for _, param in metadata.Param do
@@ -287,7 +279,7 @@ module CliMetadata =
 
 
 
-        for mref in metadata.MemberRef.Items do
+        for mref in metadata.MemberRef.Rows do
             match mref with
             | MethodRefDefault { MemberName = name }
             | MethodRefGeneric { MemberName = name }
@@ -297,14 +289,14 @@ module CliMetadata =
         // ModuleRef table not necessary, since its names will correspond to names used in the File table
 
         match metadata.Assembly with
-        | Some assembly ->
+        | ValueSome assembly ->
             string assembly.Name |> action
             string assembly.Culture |> action
-        | None -> ()
+        | ValueNone -> ()
 
-        for assembly in metadata.AssemblyRef.Items do
+        for assembly in metadata.AssemblyRef.Rows do
             string assembly.Name |> action
             string assembly.Culture |> action
 
-        for { FileName = name } in metadata.File.Items do
+        for { FileName = name } in metadata.File.Rows do
             string name |> action

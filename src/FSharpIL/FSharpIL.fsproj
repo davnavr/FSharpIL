@@ -15,6 +15,7 @@
     <Compile Include="Writing\ChunkWriter.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\Index.fs" />
+    <Compile Include="Metadata\MetadataTable.fs" />
     <Compile Include="Metadata\RowArrayList.fs" />
     <Compile Include="Metadata\RowHashSet.fs" />
     <Compile Include="Metadata\MetadataTableBuilder.fs" />
@@ -34,16 +35,15 @@
     <Compile Include="Metadata\IndexedList.fs" />
     <Compile Include="Metadata\TypeDef.fs" />
     <Compile Include="Metadata\TypeSpec.fs" />
-    <Compile Include="Metadata\OwnedTableBuilder.fs" />
+    <Compile Include="Metadata\OwnedMetadataTableBuilder.fs" />
     <Compile Include="Metadata\Field.fs" />
     <Compile Include="Metadata\Method.fs" />
     <Compile Include="Metadata\MemberRef.fs" />
     <Compile Include="Metadata\MethodSpec.fs" />
     <Compile Include="Metadata\CustomAttribute.fs" />
-    <Compile Include="Metadata\ImmutableTable.fs" />
     <Compile Include="Metadata\FlagsModule.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
-    <Compile Include="Metadata\MetadataBuilderState.fs" />
+    <Compile Include="Metadata\CliMetadataBuilder.fs" />
     <Compile Include="Metadata\GenericParamModule.fs" />
     <Compile Include="Metadata\Items.fs" />
     <Compile Include="Metadata\ItemHelpers.fs" />

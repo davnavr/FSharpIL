@@ -16,6 +16,9 @@ type RowArrayList<'T when 'T : equality> = struct
           owner = owner }
 
     member this.Count = this.items.Count
+
+    member this.Item with get i = this.items.[i]
+
     /// <param name="item">The element to add to this list.</param>
     /// <param name="duplicate">
     /// When this method returns, contains <see langword="true"/> if the item added was a duplicate; otherwise, contains
@@ -24,9 +27,18 @@ type RowArrayList<'T when 'T : equality> = struct
     member this.Add(item, duplicate: outref<bool>) =
         this.items.Add item
         duplicate <- this.lookup.Add item |> not
-        SimpleIndex<'T>(this.owner, item)
+        this.CreateIndex item
+
     member this.GetEnumerator() = this.items.GetEnumerator()
-    member this.ToImmutableArray() = this.items.ToImmutable()
+
+    member internal this.ToImmutable() =
+        let lookup' = Dictionary<SimpleIndex<'T>, int32> this.Count
+        for i = 0 to this.Count - 1 do
+            lookup'.[this.CreateIndex this.[i]] <- i
+        { TableItems = this.items.ToImmutableArray()
+          TableLookup = lookup' }
+
+    member private this.CreateIndex item = SimpleIndex<'T>(this.owner, item)
 
     interface IReadOnlyCollection<'T> with
         member this.Count = this.Count

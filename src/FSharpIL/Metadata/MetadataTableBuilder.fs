@@ -13,6 +13,8 @@ type MetadataTableBuilder<'T when 'T :> IIndexValue and 'T : equality> internal 
         items.TryAdd item
     member _.GetEnumerator() = items.GetEnumerator()
 
+    member internal _.ToImmutable() = items.ToImmutable()
+
     interface IReadOnlyCollection<'T> with
         member this.Count = this.Count
         member this.GetEnumerator() = this.GetEnumerator()

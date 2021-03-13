@@ -343,13 +343,6 @@ type TypeDefTableBuilder internal (owner: IndexOwner) =
 
     member _.Count = definitions.Count + 1
 
-    // TODO: Add methods for adding classes, structs, etc. that are called by the functions in the CliMetadata module.
-    member internal _.TryAdd(typeDef: TypeDefRow) =
-        match typeDef.TypeNamespace with
-        | null
-        | "" when typeDef.TypeName = ModuleType.Name -> ValueNone
-        | _ -> definitions.TryAdd typeDef
-
     member this.GetEnumerator() =
         let items =
             seq {
@@ -357,6 +350,15 @@ type TypeDefTableBuilder internal (owner: IndexOwner) =
                 yield! definitions
             }
         items.GetEnumerator()
+
+    // TODO: Add methods for adding classes, structs, etc. that are called by the functions in the CliMetadata module.
+    member internal _.TryAdd(typeDef: TypeDefRow) =
+        match typeDef.TypeNamespace with
+        | null
+        | "" when typeDef.TypeName = ModuleType.Name -> ValueNone
+        | _ -> definitions.TryAdd typeDef
+
+    member internal _.ToImmutable() = definitions.ToImmutable()
 
     interface IReadOnlyCollection<TypeDefRow> with
         member this.Count = this.Count

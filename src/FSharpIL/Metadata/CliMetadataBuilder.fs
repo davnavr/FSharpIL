@@ -65,7 +65,7 @@ type ModuleTable =
 [<Sealed>]
 type CliMetadataBuilder (mdle: ModuleTable) =
     let mutable entrypoint = ValueNone
-    let mutable assembly = None
+    let mutable assembly = ValueNone
 
     let owner = IndexOwner()
     let typeDef = TypeDefTableBuilder owner
@@ -79,6 +79,7 @@ type CliMetadataBuilder (mdle: ModuleTable) =
             then CorFlags.None
             else CorFlags.StrongNameSigned
         CorFlags.ILOnly ||| signed
+    member val EntryPointToken: EntryPointToken voption = entrypoint
 
     /// The metadata version, contained in the metadata root (II.24.2.1).
     member val MetadataVersion = MetadataVersion.ofStr "v4.0.30319" with get, set
@@ -98,9 +99,9 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     /// (0x02)
     member _.TypeDef: TypeDefTableBuilder = typeDef
     /// (0x04)
-    member val Field = OwnedTableBuilder<TypeDefRow, FieldRow> owner
+    member val Field = OwnedMetadataTableBuilder<TypeDefRow, FieldRow> owner
     /// (0x06)
-    member val Method = OwnedTableBuilder<TypeDefRow, MethodDefRow> owner
+    member val Method = OwnedMetadataTableBuilder<TypeDefRow, MethodDefRow> owner
     // (0x08)
     // member Param
     // (0x09)
@@ -134,7 +135,7 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     // (0x19)
     // member MethodImpl
     /// (0x1A)
-    member val ModuleRef = ModuleRefTable owner
+    member val ModuleRef = RowArrayList<ModuleRef> owner
     /// (0x1B)
     member val TypeSpec = MetadataTableBuilder<TypeSpecRow> owner
     // (0x1C)
@@ -142,7 +143,7 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     // (0x1D)
     // member FieldRva
     /// (0x20)
-    member _.Assembly: Assembly option = assembly
+    member _.Assembly: Assembly voption = assembly
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// <summary>Represents the <c>AssemblyRef</c> table, which contains references to other assemblies (0x23).</summary>
@@ -173,18 +174,9 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     // (0x2C)
     // member GenericParamConstraint
 
-    /// <remarks>The entrypoint of the assembly is specified by the <c>EntryPointToken</c> field of the CLI header (II.25.3.3).</remarks>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException" />
-    member _.SetEntryPoint (main: EntryPointToken) =
+    member _.SetEntryPointToken (main: EntryPointToken) =
         IndexOwner.checkOwner owner main
         entrypoint <- ValueSome main
 
-    member _.SetAssembly(assm: Assembly) = assembly <- Some assm; AssemblyIndex(owner, ())
-
-    [<Obsolete>]
-    member internal this.FindType t: SimpleIndex<_> option =
-        // TODO: Search in the TypeDefTable as well.
-        this.TypeRef.FindType t
-
-    [<Obsolete>]
-    member internal _.CreateTable table = ImmutableTable(table, fun item -> SimpleIndex(owner, item))
+    member _.SetAssembly(assem: Assembly) = assembly <- ValueSome assem; AssemblyIndex(owner, ())
