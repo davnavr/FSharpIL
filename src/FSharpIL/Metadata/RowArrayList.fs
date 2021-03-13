@@ -34,7 +34,7 @@ type RowArrayList<'T when 'T : equality> = struct
     member internal this.ToImmutable() =
         let lookup' = Dictionary<SimpleIndex<'T>, int32> this.Count
         for i = 0 to this.Count - 1 do
-            lookup'.[this.CreateIndex this.[i]] <- i
+            lookup'.[this.CreateIndex this.[i]] <- i + 1
         { TableItems = this.items.ToImmutableArray()
           TableLookup = lookup' }
 

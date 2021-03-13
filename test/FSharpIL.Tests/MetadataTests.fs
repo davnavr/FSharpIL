@@ -27,24 +27,8 @@ let tests =
 
         testAssembly "names of defined types match parsed names" <| fun pe mdle ->
             let expected =
-                pe.CliHeader.Value.TypeDef.Items |> Seq.map (fun t -> string t.TypeName, t.TypeNamespace)
+                pe.CliHeader.Value.TypeDef.Rows |> Seq.map (fun t -> string t.TypeName, t.TypeNamespace)
             let actual =
                 mdle.Types |> Seq.map (fun t -> t.Name, t.Namespace)
             Expect.sequenceEqual actual expected "type name and namespace should match"
-
-        testCase "error skips rest of metadata expression" <| fun() ->
-            let error = MissingTypeError("test", Identifier.ofStr "test") :> ValidationError
-            let mutable skipped = true
-
-            let result =
-                metadata {
-                    do! fun _ -> Error error
-                    skipped <- false
-                }
-                |> CliMetadata.createMetadata
-                    { Mvid = Guid.NewGuid()
-                      Name = Identifier.ofStr "Empty" }
-
-            ValidationExpect.isSpecificError result error "expression should evaluate to an error"
-            Expect.isTrue skipped "rest of expression should not be evaluated if an error occurs"
     ]

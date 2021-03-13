@@ -57,8 +57,7 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
                 let empty = HashSet<'T>()
                 this.items.[key] <- empty
                 empty
-        if lookup.Add value
-        then
+        if lookup.Add value then
             this.count <- this.count + 1
             this.CreateIndex value |> ValueSome
         else ValueNone
@@ -72,8 +71,8 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
             for row in items do
                 let i = tableItems.Count
                 let index = this.CreateIndex row
-                tableItems.[i] <- row
-                tableLookup.[index] <- i
+                tableItems.Add row
+                tableLookup.[index] <- i + 1
                 if items'.Add index |> not then failwith "Unable to add row"
             ownedLookup.[owner] <- items'
         { OwnedLookup = ownedLookup

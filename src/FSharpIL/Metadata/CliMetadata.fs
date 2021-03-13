@@ -209,22 +209,22 @@ module CliMetadata =
     // TODO: Enforce CLS checks for MemberRef.
     // NOTE: Duplicates (based on owning class, name, and signature) are allowed, but produce a warning.
 
-    let referenceMethod (warnings: WarningsBuilder) (builder: CliMetadataBuilder) (row: MemberRefRow) =
+    let referenceMethod (builder: CliMetadataBuilder) (row: MemberRefRow) (warnings: WarningsBuilder) =
         let struct(i, duplicate) = builder.MemberRef.Add row
         if duplicate then warnings.Add(DuplicateMemberRefWarning row)
         i
 
     /// <summary>Adds a reference to a method with the <c>DEFAULT</c> calling convention.</summary>
-    let referenceDefaultMethod warnings builder method : MemberRefIndex<MethodRefDefault> =
-        referenceMethod warnings builder (MethodRefDefault method)
+    let referenceDefaultMethod builder method warnings: MemberRefIndex<MethodRefDefault> =
+        referenceMethod builder (MethodRefDefault method) warnings
 
     /// <summary>Adds a reference to a method with the <c>GENERIC</c> calling convention.</summary>
-    let referenceGenericMethod warnings builder method: MemberRefIndex<MethodRefGeneric> =
-        referenceMethod warnings builder (MethodRefGeneric method)
+    let referenceGenericMethod builder method warnings: MemberRefIndex<MethodRefGeneric> =
+        referenceMethod builder (MethodRefGeneric method) warnings
 
     /// <summary>Adds a reference to a method with the <c>VARARG</c> calling convention.</summary>
-    let referenceVarArgMethod warnings builder method: MemberRefIndex<MethodRefVarArg> =
-        referenceMethod warnings builder (MethodRefVarArg method)
+    let referenceVarArgMethod builder method warnings: MemberRefIndex<MethodRefVarArg> =
+        referenceMethod builder (MethodRefVarArg method) warnings
 
     // TODO: Better way of adding custom attributes, have a function: CustomAttribute -> target: _ -> MetadataBuilderState -> _
     let attribute (builder: CliMetadataBuilder) attr = builder.CustomAttribute.Add attr
@@ -232,13 +232,13 @@ module CliMetadata =
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
     let setAssembly (builder: CliMetadataBuilder) assembly = builder.SetAssembly assembly
 
-    let referenceModule (warnings: WarningsBuilder) (builder: CliMetadataBuilder) moduleRef =
+    let referenceModule (builder: CliMetadataBuilder) moduleRef (warnings: WarningsBuilder) =
         let i, dup = builder.ModuleRef.Add moduleRef
         if dup then warnings.Add(DuplicateModuleRefWarning moduleRef)
         i
 
     /// Adds a reference to an assembly.
-    let referenceAssembly (warnings: WarningsBuilder) (builder: CliMetadataBuilder) assembly =
+    let referenceAssembly (builder: CliMetadataBuilder) assembly (warnings: WarningsBuilder) =
         let i, duplicate = builder.AssemblyRef.Add assembly
         if duplicate then warnings.Add(DuplicateAssemblyRefWarning assembly)
         i

@@ -118,6 +118,11 @@ type ValidationResultBuilder internal () =
             | Ok result -> func result cls warnings
             | Error err -> Error err
 
+    member inline _.Bind(comp: WarningsBuilder -> _, func) =
+        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
+            let result = comp warnings
+            func result cls warnings
+
     member inline _.Return value (_: ClsViolationsBuilder) (_: WarningsBuilder) = Result<_, ValidationError>.Ok value
 
     member inline _.ReturnFrom(value: Result<_, ValidationError>) =

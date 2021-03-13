@@ -29,61 +29,67 @@ open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
 let example() =
-    metadata {
-        // Define information for the current assembly.
-        let! assm =
-            setAssembly
-                { Name = AssemblyName.ofStr "HelloWorld"
-                  HashAlgId = ()
-                  Version = Version()
-                  Flags = ()
-                  PublicKey = None
-                  Culture = NullCulture }
+    let builder =
+        { Name = Identifier.ofStr "HelloWorld.exe"
+          Mvid = Guid.NewGuid() }
+        |> CliMetadataBuilder
 
+    // Define information for the current assembly.
+    let assem =
+        { Name = AssemblyName.ofStr "HelloWorld"
+          HashAlgId = ()
+          Version = Version()
+          Flags = ()
+          PublicKey = None
+          Culture = NullCulture }
+        |> setAssembly builder
+
+    // This computation keeps track of warnings, CLS violations, and errors
+    validated {
         // Add references to other assemblies.
         let! mscorlib =
-            referenceAssembly
-                { Version = Version(5, 0, 0, 0)
-                  PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
-                  Name = AssemblyName.ofStr "System.Private.CoreLib"
-                  Culture = NullCulture
-                  HashValue = None }
+            { Version = Version(5, 0, 0, 0)
+              PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
+              Name = AssemblyName.ofStr "System.Private.CoreLib"
+              Culture = NullCulture
+              HashValue = None }
+            |> referenceAssembly builder
+
         let! consolelib =
             // Helper functions to add predefined assembly references are available in the SystemAssembly module
-            SystemAssembly.Net5_0.console
+            SystemAssembly.Net5_0.console builder
 
         // Add references to types defined in referenced assemblies.
-        let! console = SystemTypes.console consolelib
-        let! object = SystemTypes.object mscorlib
+        let! console = SystemTypes.console builder consolelib
+        let! object = SystemTypes.object builder mscorlib
         let! tfmAttr =
-            referenceType
-                { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
-                  TypeNamespace = "System.Runtime.Versioning"
-                  ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+            { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
+              TypeNamespace = "System.Runtime.Versioning"
+              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+            |> referenceType builder
 
         // Add references to methods defined in the types of referenced assemblies.
         let string = ParamItem.create EncodedType.String
 
         let! writeLine =
-            referenceDefaultMethod
-                { Class = MemberRefParent.TypeRef console
-                  MemberName = Identifier.ofStr "WriteLine"
-                  Signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string) }
+            { Class = MemberRefParent.TypeRef console
+              MemberName = Identifier.ofStr "WriteLine"
+              Signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string) }
+            |> referenceDefaultMethod builder
         let! tfmAttrCtor =
-            referenceDefaultMethod
-                { Class = MemberRefParent.TypeRef tfmAttr
-                  MemberName = Identifier.ofStr ".ctor"
-                  Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string) }
+            { Class = MemberRefParent.TypeRef tfmAttr
+              MemberName = Identifier.ofStr ".ctor"
+              Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string) }
+            |> referenceDefaultMethod builder
 
         // Defines a custom attribute on the current assembly specifying the target framework.
-        do!
-            { Parent = CustomAttributeParent.Assembly assm
-              Type = CustomAttributeType.MethodRefDefault tfmAttrCtor
-              Value =
-                { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
-                  NamedArg = ImmutableArray.Empty }
-                |> Some }
-            |> attribute
+        { Parent = CustomAttributeParent.Assembly assem
+          Type = CustomAttributeType.MethodRefDefault tfmAttrCtor
+          Value =
+          { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
+            NamedArg = ImmutableArray.Empty }
+          |> Some }
+        |> attribute builder
 
         // Create the entrypoint method of the current assembly.
         let main =
@@ -104,20 +110,19 @@ let example() =
 
         // Create the class that will contain the entrypoint method.
         let! program =
-            addStaticClass
-                { Access = TypeVisibility.Public
-                  ClassName = Identifier.ofStr "Program"
-                  Extends = Extends.TypeRef object
-                  Flags = Flags.staticClass { ClassFlags.None with BeforeFieldInit = true }
-                  TypeNamespace = "HelloWorld" }
+            { Access = TypeVisibility.Public
+              ClassName = Identifier.ofStr "Program"
+              Extends = Extends.TypeRef object
+              Flags = Flags.staticClass { ClassFlags.None with BeforeFieldInit = true }
+              TypeNamespace = "HelloWorld" }
+            |> addStaticClass builder
 
-        let! main' = addMethod program main
+        let! main' = addMethod builder program main
 
-        do! setEntryPoint main'
+        setEntryPoint builder main'
+
+        return CliMetadata builder
     }
-    |> CliMetadata.createMetadata
-        { Name = Identifier.ofStr "HelloWorld.exe"
-          Mvid = Guid.NewGuid() }
     |> ValidationResult.get
     |> PEFile.ofMetadata ImageFileFlags.exe
 (*** hide ***)

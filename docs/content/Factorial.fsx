@@ -27,49 +27,54 @@ open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
 let example() =
-    metadata {
-        let! _ =
-            setAssembly
-                { Name = AssemblyName.ofStr "Factorial"
-                  HashAlgId = ()
-                  Version = Version(1, 2, 6, 24)
-                  Flags = ()
-                  PublicKey = None
-                  Culture = NullCulture }
+    let builder =
+        { Name = Identifier.ofStr "Factorial.dll"
+          Mvid = Guid.NewGuid() }
+        |> CliMetadataBuilder
 
-        let! mscorlib = SystemAssembly.Net5_0.private_corelib
-        let! object = SystemTypes.object mscorlib
+    { Name = AssemblyName.ofStr "Factorial"
+      HashAlgId = ()
+      Version = Version(1, 2, 6, 24)
+      Flags = ()
+      PublicKey = None
+      Culture = NullCulture }
+    |> setAssembly builder
+    |> ignore
+
+    validated {
+        let! mscorlib = SystemAssembly.Net5_0.private_corelib builder
+        let! object = SystemTypes.object builder mscorlib
         let! dictionary =
             { ResolutionScope = ResolutionScope.AssemblyRef mscorlib
               TypeName = Identifier.ofStr "Dictionary`2"
               TypeNamespace = "System.Collections.Generic" }
-            |> referenceType
+            |> referenceType builder
 
         let dictionary_u4_u4 = GenericInst.typeRef false dictionary [ EncodedType.U4; EncodedType.U4 ]
-        let! dictionary_u4_u4_spec = TypeSpec.genericInst dictionary_u4_u4 |> addTypeSpec
+        let! dictionary_u4_u4_spec = TypeSpec.genericInst dictionary_u4_u4 |> addTypeSpec builder
 
         let! containsKey =
             // A default method reference is used here, since the generic parameters are declared in the dictionary type.
-            referenceDefaultMethod
-                { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
-                  MemberName = Identifier.ofStr "ContainsKey"
-                  Signature =
-                    let parameters =
-                        // Note how a generic parameter is used here instead of using U4.
-                        ImmutableArray.CreateRange [ ParamItem.var 0u; ]
-                    MethodRefDefaultSignature(true, false, ReturnType.itemBool, parameters) }
+            { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
+              MemberName = Identifier.ofStr "ContainsKey"
+              Signature =
+                let parameters =
+                    // Note how a generic parameter is used here instead of using U4.
+                    ImmutableArray.CreateRange [ ParamItem.var 0u; ]
+                MethodRefDefaultSignature(true, false, ReturnType.itemBool, parameters) }
+            |> referenceDefaultMethod builder
         let! get_Item =
-            referenceDefaultMethod
-                { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
-                  MemberName = Identifier.ofStr "get_Item"
-                  Signature =
-                    let parameters = ImmutableArray.CreateRange [ ParamItem.var 0u ]
-                    MethodRefDefaultSignature(true, false, ReturnType.itemVar 1u, parameters) }
+            { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
+              MemberName = Identifier.ofStr "get_Item"
+              Signature =
+                let parameters = ImmutableArray.CreateRange [ ParamItem.var 0u ]
+                MethodRefDefaultSignature(true, false, ReturnType.itemVar 1u, parameters) }
+            |> referenceDefaultMethod builder
         let! dictionary_u4_u4_ctor =
-            referenceDefaultMethod
-                { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
-                  MemberName = Identifier.ofStr ".ctor"
-                  Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Empty) }
+            { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
+              MemberName = Identifier.ofStr ".ctor"
+              Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Empty) }
+            |> referenceDefaultMethod builder
 
         let! factorial =
             { ClassName = Identifier.ofStr "CachedFactorial"
@@ -77,7 +82,7 @@ let example() =
               Access = TypeVisibility.Public
               Flags = Flags.staticClass ClassFlags.None
               Extends = Extends.TypeRef object }
-            |> addStaticClass
+            |> addStaticClass builder
 
         let! cache =
             { FieldName = Identifier.ofStr "cache"
@@ -88,7 +93,7 @@ let example() =
                 |> Flags.staticField
               Signature = EncodedType.GenericInst dictionary_u4_u4 |> FieldSignature.create }
             |> StaticField
-            |> addField factorial
+            |> addField builder factorial
 
         let calculateBody, setCalculateBody = MethodBody.mutableBody()
 
@@ -110,7 +115,7 @@ let example() =
                 )
               Body = calculateBody }
             |> StaticMethod
-            |> addMethod factorial
+            |> addMethod builder factorial
 
         let! _ =
             { MethodName = Identifier.ofStr "Calculate"
@@ -148,7 +153,7 @@ let example() =
                     { MaxStack = 8us; InitLocals = false }
                 |> MethodBody.create }
             |> StaticMethod
-            |> addMethod factorial
+            |> addMethod builder factorial
 
         // Class constructor to initialize cache
         let! _ =
@@ -166,7 +171,7 @@ let example() =
                 fun _ _ -> failwith "class constructor has no arguments"
             )
             |> ClassConstructor
-            |> addMethod factorial
+            |> addMethod builder factorial
 
         setCalculateBody <| fun content ->
             let writer = MethodBodyWriter content
@@ -196,10 +201,9 @@ let example() =
             writer.Tail_call helper
             writer.Ret()
             { MaxStack = 8us; InitLocals = false }
+
+        return CliMetadata builder
     }
-    |> CliMetadata.createMetadata
-        { Name = Identifier.ofStr "Factorial.dll"
-          Mvid = Guid.NewGuid() }
     |> ValidationResult.get
     |> PEFile.ofMetadata ImageFileFlags.dll
 

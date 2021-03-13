@@ -33,68 +33,7 @@ module private Helpers =
 type Generate() =
     static member ValidAssembly() =
         gen {
-            let! kind = Arb.generate<ImageFileFlags>
-
-            let! cli =
-                gen {
-                    let! mdle = moduleTable
-                    let! state = Gen.fresh (fun() -> MetadataBuilderState mdle)
-
-                    let! assembly =
-                        gen {
-                            let! (NonEmptyString name) =
-                                Gen.filter
-                                    (fun (NonEmptyString str) -> str.IndexOfAny [| ':'; '\\'; '/' |] = -1)
-                                    Arb.generate
-                            let! version =
-                                Gen.choose (0, 9)
-                                |> Gen.four
-                                |> Gen.map Version
-                            let! publicKey = Arb.generate
-                            let! culture = Arb.generate
-                            let assembly =
-                                { Name = AssemblyName.ofStr name
-                                  HashAlgId = ()
-                                  Version = version
-                                  Flags = ()
-                                  PublicKey = publicKey
-                                  Culture = culture }
-                            return CliMetadata.setAssembly assembly state
-                        }
-                        |> Gen.optionOf
-
-                    let! typeRef = Gen.choose (-1, 0xFF)
-                    for _ = 0 to typeRef do
-                        ()
-
-                    let! typeDef = Gen.choose (-1, 0xFF)
-                    for _ = 0 to typeDef do
-                        let! visibility =
-                            [|
-                                Gen.constant TypeVisibility.NotPublic
-                                Gen.constant TypeVisibility.Public
-
-                                // TODO: Add support for nested visibility.
-                            |]
-                            |> Gen.oneof
-                        let! flags = Arb.generate<ClassFlags> |> Gen.map Flags.staticClass
-                        let! name = identifier
-                        let! (NonEmptyString ns) = Arb.generate
-                        let! extends =
-                            [|
-                                Gen.constant Extends.Null
-
-                                // TODO: Add support for other extends.
-                            |]
-                            |> Gen.oneof
-
-                        // TODO: Add support for classes.
-                        ()
-
-                    return CliMetadata state
-                }
-
-            return PEFile.ofMetadata kind cli |> ValidAssembly
+            return invalidOp "TODO: Figure out how to generate things" |> ValidAssembly
         }
         |> Arb.fromGen
 

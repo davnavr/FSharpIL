@@ -21,10 +21,10 @@ type RowHashSet<'T when 'T : equality> = struct
     member this.GetEnumerator() = this.items.Keys.GetEnumerator()
 
     member internal this.ToImmutable() =
-        let items' = ImmutableArray.CreateBuilder this.Count
+        let items' = Array.zeroCreate this.Count
         let lookup = Dictionary<SimpleIndex<'T>, int32> this.Count
         for KeyValue(key, i) in this.items do
-            lookup.[this.CreateIndex key] <- i
+            lookup.[this.CreateIndex key] <- i + 1
             items'.[i] <- key
         { TableItems = items'.ToImmutableArray()
           TableLookup = lookup }

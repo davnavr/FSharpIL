@@ -197,7 +197,6 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         |> codedIndex total 2
 
     let memberRefParent =
-        // TODO: Include TypeSpec table.
         let total =
             tables.TypeDef.Count
             + tables.TypeRef.Count

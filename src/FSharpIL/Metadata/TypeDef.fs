@@ -339,24 +339,17 @@ type ModuleType private () =
 type TypeDefTableBuilder internal (owner: IndexOwner) =
     let definitions = MetadataTableBuilder<TypeDefRow> owner
 
-    member val Module = TypeDefIndex<ModuleType>(owner, ModuleType.Row)
+    member val Module =
+        match definitions.TryAdd ModuleType.Row with
+        | ValueSome i -> TypeDefIndex<ModuleType> i
+        | ValueNone -> failwith "Unable to add <Module> type to TypeDef table"
 
-    member _.Count = definitions.Count + 1
+    member _.Count = definitions.Count
 
-    member this.GetEnumerator() =
-        let items =
-            seq {
-                yield this.Module.Value
-                yield! definitions
-            }
-        items.GetEnumerator()
+    member _.GetEnumerator() = definitions.GetEnumerator()
 
     // TODO: Add methods for adding classes, structs, etc. that are called by the functions in the CliMetadata module.
-    member internal _.TryAdd(typeDef: TypeDefRow) =
-        match typeDef.TypeNamespace with
-        | null
-        | "" when typeDef.TypeName = ModuleType.Name -> ValueNone
-        | _ -> definitions.TryAdd typeDef
+    member internal _.TryAdd(typeDef: TypeDefRow) = definitions.TryAdd typeDef
 
     member internal _.ToImmutable() = definitions.ToImmutable()
 
