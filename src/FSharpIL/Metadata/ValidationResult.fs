@@ -32,15 +32,8 @@ type ValidationError internal () = class end
 
 exception ValidationErrorException of ValidationError
 
-/// <summary>Error used when an item is added to a table that does not allow duplicates.</summary>
-/// <category>Errors</category>
-[<Sealed>]
-type DuplicateRowError<'Item> (item: 'Item) =
-    inherit ValidationError()
-    member _.Item = item
-    override this.ToString() = sprintf "Cannot add duplicate item %O" this.Item
-
 /// II.22.1
+[<IsReadOnly; Struct>]
 type ValidationResult<'Result> =
     { ClsViolations: ImmutableArray<ClsViolation>
       Warnings: ImmutableArray<ValidationWarning>
@@ -152,9 +145,3 @@ type ValidationResultBuilder internal () =
 
 [<AutoOpen>]
 module ValidationResultBuilder = let validated = ValidationResultBuilder()
-
-module TEST =
-    let a =
-        validated {
-            return! Ok()
-        }

@@ -2,39 +2,39 @@
 
 open System.Collections.Generic
 
-type OwnedTableBuilderEnumerator<'Owner, 'T when 'Owner : equality and 'T : equality and 'Owner :> IIndexValue and 'T :> IIndexValue> =
-    struct
-        val mutable private keyEnumerator: Dictionary<SimpleIndex<'Owner>, HashSet<'T>>.Enumerator
-        val mutable private valueEnumerator: HashSet<'T>.Enumerator
-        val mutable private moved: bool
-        new (items: Dictionary<SimpleIndex<'Owner>, HashSet<'T>>) =
-            { keyEnumerator = items.GetEnumerator()
-              valueEnumerator = Unchecked.defaultof<_>
-              moved = false }
+type OwnedTableBuilderEnumerator<'Owner, 'T when 'Owner : equality> = struct
+    val mutable private keyEnumerator: Dictionary<SimpleIndex<'Owner>, HashSet<'T>>.Enumerator
+    val mutable private valueEnumerator: HashSet<'T>.Enumerator
+    val mutable private moved: bool
 
-        member this.Current = this.valueEnumerator.Current
+    new (items: Dictionary<SimpleIndex<'Owner>, HashSet<'T>>) =
+        { keyEnumerator = items.GetEnumerator()
+          valueEnumerator = Unchecked.defaultof<_>
+          moved = false }
 
-        member this.MoveNext() =
-            if not this.moved then
-                if this.keyEnumerator.MoveNext() then
-                    this.valueEnumerator <- this.keyEnumerator.Current.Value.GetEnumerator()
-                    this.moved <- this.valueEnumerator.MoveNext()
-                    this.moved
-                else false
-            else
+    member this.Current = this.valueEnumerator.Current
+
+    member this.MoveNext() =
+        if not this.moved then
+            if this.keyEnumerator.MoveNext() then
+                this.valueEnumerator <- this.keyEnumerator.Current.Value.GetEnumerator()
                 this.moved <- this.valueEnumerator.MoveNext()
                 this.moved
+            else false
+        else
+            this.moved <- this.valueEnumerator.MoveNext()
+            this.moved
 
-        interface System.IDisposable with member _.Dispose() = ()
-        interface IEnumerator<'T> with
-            member this.Current = this.Current
-            member this.Current = this.Current :> obj
-            member this.MoveNext() = this.MoveNext()
-            member this.Reset() =
-                (this.keyEnumerator :> IEnumerator<_>).Reset()
-                this.valueEnumerator <- Unchecked.defaultof<_>
-                this.moved <- false
-    end
+    interface System.IDisposable with member _.Dispose() = ()
+    interface IEnumerator<'T> with
+        member this.Current = this.Current
+        member this.Current = this.Current :> obj
+        member this.MoveNext() = this.MoveNext()
+        member this.Reset() =
+            (this.keyEnumerator :> IEnumerator<_>).Reset()
+            this.valueEnumerator <- Unchecked.defaultof<_>
+            this.moved <- false
+end
 
 /// <summary>Represents a table whose rows are conceptually owned by one row in another table.</summary>
 [<Sealed>]

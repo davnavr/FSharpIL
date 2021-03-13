@@ -3,14 +3,10 @@
 /// <summary>
 /// Represents a <see cref="T:System.String"/> that cannot be <see langword="null"/>, be empty, or contain any null characters.
 /// </summary>
-[<System.Runtime.CompilerServices.IsReadOnly>]
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
-type Identifier =
-    struct
-        val private identifier: string
-        internal new (str) = { identifier = str }
-        override this.ToString() = this.identifier
-    end
+type Identifier internal (identifier: string) =
+    override _.ToString() = identifier
 
 [<RequireQualifiedAccess>]
 module Identifier =
@@ -38,5 +34,4 @@ module Identifier =
             str
 
 [<AutoOpen>]
-module IdentifierPatterns =
-    let (|Identifier|) (name: Identifier) = name.ToString()
+module IdentifierPatterns = let (|Identifier|) (name: Identifier) = name.ToString()

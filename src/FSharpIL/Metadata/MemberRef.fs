@@ -167,29 +167,21 @@ type DuplicateMemberRefWarning (row: MemberRefRow) =
             this.Member
 
 [<Sealed>]
-type MemberRefTable internal (owner: IndexOwner, warnings: ImmutableArray<ValidationWarning>.Builder) =
-    let members = List<MemberRefRow>()
-    let lookup = HashSet<MemberRefRow>()
+type MemberRefTableBuilder internal (owner: IndexOwner) =
+    let members = RowArrayList<MemberRefRow> owner
 
     member _.Count = members.Count
 
-    // TODO: Instead of a union type, have two overloaded GetIndex methods for adding MethodRefs and FieldRefs.
-
-    // TODO: Enforce CLS checks.
-    // NOTE: Duplicates (based on owning class, name, and signature) are allowed, but produce a warning.
-    member private _.GetIndex<'MemberRef>(row: MemberRefRow) =
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+    member internal _.Add<'MemberRef>(row: MemberRefRow): struct(MemberRefIndex<_> * _) =
         IndexOwner.checkOwner owner row
+        let i, duplicate = members.Add row
+        struct(MemberRefIndex<'MemberRef> i, duplicate)
 
-        if lookup.Add row |> not then
-            DuplicateMemberRefWarning row |> warnings.Add
-
-        members.Add row
-        MemberRefIndex<'MemberRef>(owner, row)
-
-    member this.GetIndex(method: MethodRefDefault) = this.GetIndex<MethodRefDefault>(MethodRefDefault method)
-    member this.GetIndex(method: MethodRefGeneric) = this.GetIndex<MethodRefGeneric>(MethodRefGeneric method)
-    member this.GetIndex(method: MethodRefVarArg) = this.GetIndex<MethodRefVarArg>(MethodRefVarArg method)
-    // member this.GetIndex(field: FieldRef) = this.GetIndex<FieldRef>(FieldRef field)
+    member this.Add(method: MethodRefDefault) = this.Add<MethodRefDefault>(MethodRefDefault method)
+    member this.Add(method: MethodRefGeneric) = this.Add<MethodRefGeneric>(MethodRefGeneric method)
+    member this.Add(method: MethodRefVarArg) = this.Add<MethodRefVarArg>(MethodRefVarArg method)
+    //member this.GetIndex(field: FieldRef) = this.GetIndex<FieldRef>(FieldRef field)
 
     interface IReadOnlyCollection<MemberRefRow> with
         member _.Count = members.Count

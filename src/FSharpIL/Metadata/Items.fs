@@ -189,25 +189,25 @@ type TypeSpec =
             | GenericInst generic -> IndexOwner.checkOwner owner generic
 
 /// <summary>Represents a <c>MethodSpec</c> item in the <c>#Blob</c> heap (II.23.2.15).</summary>
-/// <exception cref="T:System.ArgumentException">Thrown when the generic parameter list is empty.</exception>
-type MethodSpec (gparams: ImmutableArray<EncodedType>) =
-    do if gparams.Length <= 0 then invalidArg "gparams" "The generic parameter list cannot be empty."
+/// <exception cref="T:System.ArgumentException">Thrown when the generic argument list is empty.</exception>
+type MethodSpec (garguments: ImmutableArray<EncodedType>) =
+    do if garguments.Length <= 0 then invalidArg "garguments" "The generic argument list cannot be empty."
 
-    new (gparams: seq<_>) = MethodSpec(gparams.ToImmutableArray())
+    new (garguments: seq<_>) = MethodSpec(garguments.ToImmutableArray())
 
-    member _.Count = gparams.Length
+    member _.Count = garguments.Length
 
     override this.Equals obj = (this :> IEquatable<MethodSpec>).Equals(obj :?> MethodSpec)
-    override _.GetHashCode() = gparams.GetHashCode()
+    override _.GetHashCode() = garguments.GetHashCode()
 
-    member _.ToImmutableArray() = gparams
+    member _.ToImmutableArray() = garguments
 
     interface IEquatable<MethodSpec> with
         member this.Equals other = this.ToImmutableArray() = other.ToImmutableArray()
 
     interface IMethodSpec
     interface IIndexValue with
-        member _.CheckOwner owner = for gparam in gparams do IndexOwner.checkOwner owner gparam
+        member _.CheckOwner owner = for gparam in garguments do IndexOwner.checkOwner owner gparam
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

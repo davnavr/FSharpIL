@@ -104,7 +104,7 @@ type TypeFlags<'Tag> = ValidFlags<'Tag, TypeAttributes>
 type TypeDefIndex<'Type> = TaggedIndex<'Type, TypeDefRow>
 
 /// <summary>
-/// Specifies which type a <see cref="T:FSharpIL.Metadata.TypeDef"/> extends.
+/// Specifies which type is extended by a <c>TypeDef</c>.
 /// </summary>
 [<RequireQualifiedAccess>]
 type Extends =
@@ -121,7 +121,7 @@ type Extends =
     | Null
 
 /// <summary>
-/// Represents a row in the <see cref="T:FSharpIL.Metadata.TypeDefTable"/> (II.22.37).
+/// Represents a row in the <c>TypeDef</c> table (II.22.37).
 /// </summary>
 /// <seealso cref="T:FSharpIL.Metadata.ClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.DelegateDef"/>
@@ -235,7 +235,7 @@ type TypeVisibility =
         | NestedFamilyOrAssembly _ -> TypeAttributes.NestedFamORAssem
 
 /// <summary>
-/// Represents a <see cref="T:FSharpIL.Metadata.TypeDef"/> that is neither a delegate, enumeration, interface, or user-defined value type.
+/// Represents a <c>TypeDef</c> that is neither a delegate, enumeration, interface, or user-defined value type.
 /// </summary>
 /// <seealso cref="T:FSharpIL.Metadata.ConcreteClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.AbstractClassDef"/>
@@ -261,7 +261,7 @@ type SealedClassDef = ClassDef<SealedClassFlags>
 type StaticClassDef = ClassDef<StaticClassFlags>
 
 /// <summary>
-/// Represents a delegate type, which is a <see cref="T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:System.Delegate"/>.
+/// Represents a delegate type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Delegate"/>.
 /// </summary>
 type DelegateDef =
     { Access: TypeVisibility
@@ -270,7 +270,7 @@ type DelegateDef =
       TypeNamespace: string }
 
 /// <summary>
-/// Represents an enumeration type, which is a <see cref="T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:System.Enum"/>.
+/// Represents an enumeration type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Enum"/>.
 /// </summary>
 type EnumDef =
   { Access: TypeVisibility
@@ -285,7 +285,7 @@ type InterfaceDef =
       TypeNamespace: string }
 
 /// <summary>
-/// Represents a user-defined value type, which is a <see cref="T:FSharpIL.Metadata.TypeDef"/> that derives from <see cref="T:System.ValueType"/>.
+/// Represents a user-defined value type, which is a <c>TypeDef</c> that derives from <see cref="T:System.ValueType"/>.
 /// </summary>
 /// <seealso cref="T:FSharpIL.Metadata.EnumDef"/>
 type StructDef =
@@ -293,6 +293,14 @@ type StructDef =
      Flags: TypeFlags<StructFlags>
      StructName: Identifier
      TypeNamespace: string }
+
+/// <summary>Represents a violation of CLS rule 19, which states that "CLS-compliant interfaces shall not define...fields".</summary>
+/// <category>CLS Rules</category>
+[<Sealed>]
+type InterfaceContainsFields (intf: InterfaceDef) =
+    // TODO: Mention name of offending interface when it contains fields.
+    inherit ClsViolation({ Number = 19uy; Message = sprintf "Interfaces should not define fields" })
+    member _.Interface = intf
 
 /// <summary>
 /// Error used when there is a duplicate row in the <c>TypeDef</c> table (29, 30).
@@ -306,61 +314,49 @@ type DuplicateTypeDefError (duplicate: TypeDefRow) =
             "Unable to add type definition \"%O\", a type with the same namespace, name, and parent already exists"
             this.Type
 
+/// <summary>
+/// Error used when a system type such as <see cref="T:System.ValueType"/> or <see cref="T:System.Delegate"/> could not be found.
+/// </summary>
+/// <category>Errors</category>
+[<Sealed>]
+type MissingTypeError (ns: string, name: Identifier) =
+    inherit ValidationError()
+    member _.Namespace = ns
+    member _.Name = name
+    override _.ToString() =
+        match ns with
+        | "" -> string name
+        | _ -> sprintf "%s.%A" ns name
+        |> sprintf "Unable to find type \"%s\", perhaps a TypeDef or TypeRef is missing"
+
 /// <summary>Represents the <c>&lt;Module&gt;</c> pseudo-class that contains global fields and methods (II.10.8).</summary>
 [<AbstractClass; Sealed>]
 type ModuleType private () =
-    static member val internal Name = Identifier.ofStr "<Module>"
+    static member val Name = Identifier.ofStr "<Module>"
     static member val internal Row = TypeDefRow(TypeAttributes.NotPublic, ModuleType.Name, String.Empty, Extends.Null, None)
 
-type TypeDefTableEnumerator =
-    struct
-        val mutable private definitions: List<TypeDefRow>.Enumerator
-        val mutable private state: uint8
-
-        internal new (types: List<TypeDefRow>) =
-            { definitions = types.GetEnumerator()
-              state = 0uy }
-
-        member this.Current =
-            match this.state with
-            | 1uy -> ModuleType.Row
-            | _ -> this.definitions.Current
-
-        member this.MoveNext() =
-            match this.state with
-            | 0uy ->
-                this.state <- 1uy
-                true
-            | _ ->
-                if this.state = 1uy then this.state <- 2uy
-                this.definitions.MoveNext()
-
-        interface IEnumerator<TypeDefRow> with
-            member this.Current = this.Current
-            member this.Current = this.Current :> obj
-            member this.Dispose() = this.definitions.Dispose()
-            member this.MoveNext() = this.MoveNext()
-            member _.Reset() = NotSupportedException() |> raise
-    end
-
 [<Sealed>]
-type TypeDefTable internal (owner: IndexOwner) =
-    let defs = List<TypeDefRow>()
-    let lookup = HashSet<TypeDefRow>()
+type TypeDefTableBuilder internal (owner: IndexOwner) =
+    let definitions = MetadataTableBuilder<TypeDefRow> owner
 
     member val Module = TypeDefIndex<ModuleType>(owner, ModuleType.Row)
-    member _.Count = defs.Count + 1
 
-    // TODO: Enforce common CLS checks and warnings for types.
-    member _.GetIndex(tdef: TypeDefRow) =
-        IndexOwner.checkOwner owner tdef
-        if (tdef.TypeName = ModuleType.Row.TypeName && String.IsNullOrEmpty tdef.TypeNamespace) || lookup.Add tdef
-        then
-            defs.Add tdef
-            SimpleIndex(owner, tdef) |> Ok
-        else DuplicateTypeDefError tdef :> ValidationError |> Error
+    member _.Count = definitions.Count + 1
 
-    member this.GetEnumerator() = new TypeDefTableEnumerator(defs)
+    // TODO: Add methods for adding classes, structs, etc. that are called by the functions in the CliMetadata module.
+    member internal _.TryAdd(typeDef: TypeDefRow) =
+        match typeDef.TypeNamespace with
+        | null
+        | "" when typeDef.TypeName = ModuleType.Name -> ValueNone
+        | _ -> definitions.TryAdd typeDef
+
+    member this.GetEnumerator() =
+        let items =
+            seq {
+                yield this.Module.Value
+                yield! definitions
+            }
+        items.GetEnumerator()
 
     interface IReadOnlyCollection<TypeDefRow> with
         member this.Count = this.Count

@@ -15,12 +15,14 @@
     <Compile Include="Writing\ChunkWriter.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\Index.fs" />
+    <Compile Include="Metadata\RowArrayList.fs" />
+    <Compile Include="Metadata\RowHashSet.fs" />
+    <Compile Include="Metadata\MetadataTableBuilder.fs" />
     <Compile Include="Metadata\Assembly.fs" />
     <Compile Include="Metadata\AssemblyRef.fs" />
     <Compile Include="Metadata\Identifier.fs" />
     <Compile Include="Metadata\File.fs" />
     <Compile Include="Metadata\ModuleRef.fs" />
-    <Compile Include="Metadata\MutableTable.fs" />
     <Compile Include="Metadata\TypeRef.fs" />
     <Compile Include="Metadata\Flags.fs" />
     <Compile Include="Metadata\Signatures.fs" />

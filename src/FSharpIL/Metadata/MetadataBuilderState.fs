@@ -53,6 +53,7 @@ type NestedClass =
             IndexOwner.checkIndex owner this.EnclosingClass
 
 /// <summary>(0x00) Represents the single row of the <c>Module</c> table (II.22.30).</summary>
+[<Struct; IsReadOnly>]
 type ModuleTable =
     { // Generation
       Name: Identifier
@@ -61,22 +62,17 @@ type ModuleTable =
       // EncBaseId
       }
 
-// TODO: Rename to CliMetadataBuilder
-// TODO: For table types, make GetEnumerator and Add methods internal.
 [<Sealed>]
-type MetadataBuilderState (mdle: ModuleTable) =
-    let owner = IndexOwner()
-    let warnings = ImmutableArray.CreateBuilder<ValidationWarning>() // TODO: Consider having these warning builders stored in some record type.
-    let clsViolations = ImmutableArray.CreateBuilder<ClsViolation>()
+type CliMetadataBuilder (mdle: ModuleTable) =
     let mutable entrypoint = ValueNone
-
-    let typeDef = TypeDefTable owner
     let mutable assembly = None
+
+    let owner = IndexOwner()
+    let typeDef = TypeDefTableBuilder owner
 
     member internal _.Owner = owner
 
     member val Header = CliHeaderFields.Default with get, set
-
     member this.HeaderFlags =
         let signed =
             if this.Header.StrongNameSignature.IsEmpty
@@ -86,9 +82,6 @@ type MetadataBuilderState (mdle: ModuleTable) =
 
     /// The metadata version, contained in the metadata root (II.24.2.1).
     member val MetadataVersion = MetadataVersion.ofStr "v4.0.30319" with get, set
-
-    member val Warnings = warnings
-    member val ClsViolations = clsViolations
 
     // Reserved: uint32
     member val MajorVersion: byte = 2uy
@@ -101,9 +94,9 @@ type MetadataBuilderState (mdle: ModuleTable) =
     /// (0x00)
     member val Module = mdle
     /// (0x01)
-    member val TypeRef: TypeRefTable = TypeRefTable(owner, warnings)
+    member val TypeRef = MetadataTableBuilder<TypeRef> owner
     /// (0x02)
-    member _.TypeDef: TypeDefTable = typeDef
+    member _.TypeDef: TypeDefTableBuilder = typeDef
     /// (0x04)
     member val Field = OwnedTableBuilder<TypeDefRow, FieldRow> owner
     /// (0x06)
@@ -113,7 +106,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
     // (0x09)
     // member InterfaceImpl
     /// (0x0A)
-    member val MemberRef: MemberRefTable = MemberRefTable(owner, warnings)
+    member val MemberRef: MemberRefTableBuilder = MemberRefTableBuilder owner
     // (0x0B)
     // member Constant
     /// (0x0C)
@@ -143,7 +136,7 @@ type MetadataBuilderState (mdle: ModuleTable) =
     /// (0x1A)
     member val ModuleRef = ModuleRefTable owner
     /// (0x1B)
-    member val TypeSpec = MutableTable<TypeSpecRow> owner
+    member val TypeSpec = MetadataTableBuilder<TypeSpecRow> owner
     // (0x1C)
     // member ImplMap
     // (0x1D)
@@ -152,12 +145,12 @@ type MetadataBuilderState (mdle: ModuleTable) =
     member _.Assembly: Assembly option = assembly
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
-    /// (0x23)
-    member val AssemblyRef: AssemblyRefTable = AssemblyRefTable(owner, warnings)
+    /// <summary>Represents the <c>AssemblyRef</c> table, which contains references to other assemblies (0x23).</summary>
+    member val AssemblyRef = RowArrayList<AssemblyRef> owner
     // AssemblyRefProcessor // 0x24 // Not used when writing a PE file
     // AssemblyRefOS // 0x25 // Not used when writing a PE file
     /// (0x26)
-    member val File = FileTable owner
+    member val File = RowArrayList<File> owner
     // (0x27)
     // member ExportedType
     // (0x28)
@@ -176,23 +169,22 @@ type MetadataBuilderState (mdle: ModuleTable) =
     // (0x2A)
     // member GenericParam // TODO: Create custom table type for generic parameters.
     // (0x2B)
-    member val MethodSpec = MutableTable<MethodSpecRow> owner
+    member val MethodSpec = MetadataTableBuilder<MethodSpecRow> owner
     // (0x2C)
     // member GenericParamConstraint
 
-    /// <summary>Gets or sets the entrypoint of the assembly.</summary>
     /// <remarks>The entrypoint of the assembly is specified by the <c>EntryPointToken</c> field of the CLI header (II.25.3.3).</remarks>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException" />
-    member _.EntryPoint
-        with get(): EntryPointToken voption = entrypoint
-        and set (main: EntryPointToken voption) =
-            ValueOption.iter (IndexOwner.checkOwner owner) main
-            entrypoint <- main
+    member _.SetEntryPoint (main: EntryPointToken) =
+        IndexOwner.checkOwner owner main
+        entrypoint <- ValueSome main
 
     member _.SetAssembly(assm: Assembly) = assembly <- Some assm; AssemblyIndex(owner, ())
 
+    [<Obsolete>]
     member internal this.FindType t: SimpleIndex<_> option =
         // TODO: Search in the TypeDefTable as well.
         this.TypeRef.FindType t
 
+    [<Obsolete>]
     member internal _.CreateTable table = ImmutableTable(table, fun item -> SimpleIndex(owner, item))

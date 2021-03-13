@@ -146,7 +146,8 @@ type CliMetadata (state: MetadataBuilderState) =
         |> Seq.map (fun (KeyValue (tdef, method)) -> tdef, uint32 method.Count)
         |> readOnlyDict
 
-/// Contains functions for modifying the CLI metadata.
+// TODO: Consider making modules for related functions. Ex: MethodRef module to contain functions to referenceDefault, refereceGeneric, etc.
+/// Contains functions for modifying the CLI metadata with CLS checks and warnings.
 module CliMetadata =
     [<RequireQualifiedAccess>]
     module private SystemType =
@@ -154,78 +155,42 @@ module CliMetadata =
         let Enum = "System", Identifier "Enum"
         let ValueType = "System", Identifier "ValueType"
 
-    /// <summary>Represents a violation of CLS rule 19, which states that "CLS-compliant interfaces shall not define...fields".</summary>
-    /// <category>CLS Rules</category>
-    [<Sealed>]
-    type InterfaceContainsFields (intf: InterfaceDef) =
-        // TODO: Mention name of offending interface when it contains fields.
-        inherit ClsViolation({ Number = 19uy; Message = sprintf "Interfaces should not define fields" })
-        member _.Interface = intf
-
-    /// <summary>
-    /// Error used when a system type such as <see cref="T:System.ValueType"/> or <see cref="T:System.Delegate"/> could not be found.
-    /// </summary>
-    /// <category>Errors</category>
-    [<Sealed>]
-    type MissingTypeError (ns: string, name: Identifier) =
-        inherit ValidationError()
-        member _.Namespace = ns
-        member _.Name = name
-        override _.ToString() =
-            match ns with
-            | "" -> string name
-            | _ -> sprintf "%s.%A" ns name
-            |> sprintf "Unable to find type \"%s\", perhaps a TypeDef or TypeRef is missing"
-
-    let createState (moduleTable: ModuleTable) (expr: MetadataBuilderState -> _) =
-        let state = MetadataBuilderState moduleTable
-        state, expr state
-
-    /// <summary>
-    /// Creates CLI metadata from the results of the <see cref="T:FSharpIL.Metadata.CliMetadataBuilder"/> computation expression.
-    /// </summary>
-    let createMetadata (moduleTable: ModuleTable) (expr: MetadataBuilderState -> Result<unit, ValidationError>) =
-        let state, result = createState moduleTable expr
-        let cls = state.ClsViolations.ToImmutable()
-        let warnings = state.Warnings.ToImmutable()
-
-        match result with
-        | Ok() ->
-            let metadata = CliMetadata state
-            if warnings.IsEmpty
-            then ValidationResult.success metadata cls
-            else ValidationResult.warning metadata cls warnings
-        | Error err -> ValidationResult.error err cls warnings
+    //[<AbstractClass; Sealed>]
+    //type Unsafe = class
+    //end
 
     /// <summary>Sets the entrypoint of the assembly.</summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    let setEntryPointToken entryPoint (state: MetadataBuilderState) =
-        IndexOwner.checkOwner state.Owner entryPoint
-        state.EntryPoint <- ValueSome entryPoint
+    let setEntryPointToken (builder: CliMetadataBuilder) entryPoint =
+        IndexOwner.checkOwner builder.Owner entryPoint
+        builder.SetEntryPoint entryPoint
 
     /// <summary>Sets the entrypoint of the assembly to a static method defined in the assembly.</summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    let setEntryPoint main state = setEntryPointToken (EntryPointToken.ValidEntryPoint main) state
+    let setEntryPoint builder main = setEntryPointToken builder (EntryPointToken.ValidEntryPoint main)
 
+    // TODO: Enforce common CLS checks and warnings for types.
     // TODO: Consider having functions for adding typeDef, fields, and methods in separate modules.
     // TODO: Enforce CLS checks and warnings when adding a class.
-    let private addClassImpl (def: ClassDef<'Flags>) (state: MetadataBuilderState) =
-        TypeDefRow (
-            (def.Flags.Value ||| def.Access.Flags),
-            def.ClassName,
-            def.TypeNamespace,
-            def.Extends,
-            def.Access.EnclosingClass
-        )
-        |> state.TypeDef.GetIndex
-        |> Result.map TypeDefIndex
+    let private addClassImpl (builder: CliMetadataBuilder) (def: ClassDef<'Flags>) =
+        let row =
+            TypeDefRow (
+                (def.Flags.Value ||| def.Access.Flags),
+                def.ClassName,
+                def.TypeNamespace,
+                def.Extends,
+                def.Access.EnclosingClass
+            )
+        match builder.TypeDef.TryAdd row with
+        | ValueSome index -> TypeDefIndex index |> Ok
+        | ValueNone -> DuplicateTypeDefError row :> ValidationError |> Error
 
-    let addClass (classDef: ConcreteClassDef) state: Result<TypeDefIndex<ConcreteClassDef>, _> = addClassImpl classDef state
-    let addAbstractClass (classDef: AbstractClassDef) state: Result<TypeDefIndex<AbstractClassDef>, _> = addClassImpl classDef state
-    let addSealedClass (classDef: SealedClassDef) state: Result<TypeDefIndex<SealedClassDef>, _> = addClassImpl classDef state
-    let addStaticClass (classDef: StaticClassDef) state: Result<TypeDefIndex<StaticClassDef>, _> = addClassImpl classDef state
+    let addClass builder (classDef: ConcreteClassDef): Result<TypeDefIndex<ConcreteClassDef>, _> = addClassImpl builder classDef
+    let addAbstractClass builder (classDef: AbstractClassDef): Result<TypeDefIndex<AbstractClassDef>, _> = addClassImpl builder classDef
+    let addSealedClass builder (classDef: SealedClassDef): Result<TypeDefIndex<SealedClassDef>, _> = addClassImpl builder classDef
+    let addStaticClass builder (classDef: StaticClassDef): Result<TypeDefIndex<StaticClassDef>, _> = addClassImpl builder classDef
 
-    let private addDerivedTypeDef extends def (typeDef: 'Type) (state: MetadataBuilderState) =
+    let private addDerivedTypeDef (builder: CliMetadataBuilder) extends def (typeDef: 'Type) =
         match state.FindType extends with
         | Some extends' -> def extends' typeDef state |> TypeDefIndex |> Ok
         | None -> MissingTypeError extends :> ValidationError |> Error
@@ -235,49 +200,64 @@ module CliMetadata =
     // let addInterface
     // let addStruct
 
-    let addField (SimpleIndex owner: TypeDefIndex<'Type>) (FieldRow field: 'Field when 'Field :> IField<'Type>) (state: MetadataBuilderState) =
-        match state.Field.Add(owner, field) with
+    let addField (builder: CliMetadataBuilder) (SimpleIndex owner: TypeDefIndex<'Type>) (FieldRow field: 'Field when 'Field :> IField<'Type>) =
+        match builder.Field.Add(owner, field) with
         | ValueSome index -> FieldIndex<'Field> index |> Result<FieldIndex<_>, _>.Ok
         | ValueNone -> DuplicateFieldError field :> ValidationError |> Error
 
-    let addMethod (SimpleIndex owner: TypeDefIndex<'Type>) (MethodDef method: 'Method when 'Method :> IMethod<'Type>) (state: MetadataBuilderState) =
-        match state.Method.Add(owner, method) with
+    let addMethod (builder: CliMetadataBuilder) (SimpleIndex owner: TypeDefIndex<'Type>) (MethodDef method: 'Method when 'Method :> IMethod<'Type>) =
+        match builder.Method.Add(owner, method) with
         | ValueSome index -> MethodDefIndex<'Method> index |> Result<MethodDefIndex<_>, _>.Ok
         | ValueNone -> DuplicateMethodError method :> ValidationError |> Error
 
     // TODO: Add functions for adding global fields and global methods.
 
-    let referenceType typeRef (state: MetadataBuilderState) = state.TypeRef.GetIndex typeRef
+    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+    let referenceType (builder: CliMetadataBuilder) typeRef =
+        match builder.TypeRef.TryAdd typeRef with
+        | ValueSome i -> Ok i
+        | ValueNone -> DuplicateTypeRefError typeRef :> ValidationError |> Error
+
+    // TODO: Enforce CLS checks for MemberRef.
+    // NOTE: Duplicates (based on owning class, name, and signature) are allowed, but produce a warning.
+
+    let inline referenceMethod (warnings: WarningsBuilder) (builder: CliMetadataBuilder) (row: MemberRefRow) =
+        let struct(i, duplicate) = builder.MemberRef.Add row
+        if duplicate then warnings.Add(DuplicateMemberRefWarning row)
+        i
 
     /// <summary>Adds a reference to a method with the <c>DEFAULT</c> calling convention.</summary>
-    let referenceDefaultMethod (method: MethodRefDefault) (state: MetadataBuilderState): MemberRefIndex<MethodRefDefault> =
-        state.MemberRef.GetIndex method
+    let referenceDefaultMethod warnings builder method : MemberRefIndex<MethodRefDefault> =
+        referenceMethod warnings builder (MethodRefDefault method)
 
     /// <summary>Adds a reference to a method with the <c>GENERIC</c> calling convention.</summary>
-    let referenceGenericMethod (method: MethodRefGeneric) (state: MetadataBuilderState): MemberRefIndex<MethodRefGeneric> =
-        state.MemberRef.GetIndex method
+    let referenceGenericMethod warnings builder method: MemberRefIndex<MethodRefGeneric> =
+        referenceMethod warnings builder (MethodRefGeneric method)
 
     /// <summary>Adds a reference to a method with the <c>VARARG</c> calling convention.</summary>
-    let referenceVarArgMethod (method: MethodRefVarArg) (state: MetadataBuilderState): MemberRefIndex<MethodRefVarArg> =
-        state.MemberRef.GetIndex method
+    let referenceVarArgMethod warnings builder method: MemberRefIndex<MethodRefVarArg> =
+        referenceMethod warnings builder (MethodRefVarArg method)
 
     // TODO: Better way of adding custom attributes, have a function: CustomAttribute -> target: _ -> MetadataBuilderState -> _
-    let attribute attr (state: MetadataBuilderState) = state.CustomAttribute.Add attr
+    let attribute (builder: CliMetadataBuilder) attr = builder.CustomAttribute.Add attr
 
     /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET assembly.
-    let setAssembly assembly (state: MetadataBuilderState) = state.SetAssembly assembly
+    let setAssembly (builder: CliMetadataBuilder) assembly = builder.SetAssembly assembly
 
     /// Adds a reference to an assembly.
-    let referenceAssembly assembly (state: MetadataBuilderState) = state.AssemblyRef.GetIndex assembly
+    let referenceAssembly (warnings: WarningsBuilder) (builder: CliMetadataBuilder) assembly =
+        let i, duplicate = builder.AssemblyRef.Add assembly
+        if duplicate then warnings.Add(DuplicateAssemblyRefWarning assembly)
+        i
 
-    let addTypeSpec typeSpec (state: MetadataBuilderState) =
-        match state.TypeSpec.GetIndex typeSpec with
+    let addTypeSpec (builder: CliMetadataBuilder) typeSpec =
+        match builder.TypeSpec.TryAdd typeSpec with
         | ValueSome index -> Ok index
         | ValueNone -> DuplicateTypeSpecError typeSpec :> ValidationError |> Error
 
-    let addMethodSpec method (spec: seq<_>) (state: MetadataBuilderState) =
-        let spec' = MethodSpecRow(method, MethodSpec spec)
-        match state.MethodSpec.GetIndex spec' with
+    let addMethodSpec (builder: CliMetadataBuilder) method (garguments: seq<_>) =
+        let spec' = MethodSpecRow(method, MethodSpec garguments)
+        match builder.MethodSpec.TryAdd spec' with
         | ValueSome index -> Ok index
         | ValueNone -> DuplicateMethodSpecError spec' :> ValidationError |> Error
 

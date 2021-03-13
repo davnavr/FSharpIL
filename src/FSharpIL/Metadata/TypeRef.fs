@@ -1,8 +1,5 @@
 ﻿namespace FSharpIL.Metadata
 
-open System.Collections.Generic
-open System.Collections.Immutable
-
 /// <summary>
 /// Indicates where the target <see cref="T:FSharpIL.Metadata.TypeRef"/> is defined (II.22.38).
 /// </summary>
@@ -50,49 +47,17 @@ and [<StructuralComparison; StructuralEquality>] TypeRef =
 [<Sealed>]
 type TypeRefUsesModuleResolutionScope (typeRef) =
     inherit ValidationWarning()
-
     member _.Type = typeRef
 
+/// <summary>Error used when there is a duplicate row in the <c>TypeRef</c> table (6).</summary>
+/// <category>Errors</category>
 [<Sealed>]
-type TypeRefTable internal (owner: IndexOwner, warnings: ImmutableArray<ValidationWarning>.Builder) =
-    let table = MutableTable<_> owner
-    let search = Dictionary<string * Identifier, TypeRef> 8
+type DuplicateTypeRefError (duplicate: TypeRef) =
+    inherit ValidationError()
+    member _.Duplicate = duplicate
+    override this.ToString() =
+        sprintf
+            "Cannot add duplicate reference to \"%O\", a type with the same resolution scope, name, and namespace already exists"
+            this.Duplicate
 
-    member _.Count = table.Count
-
-    /// <summary>
-    /// Searches for a type with the specified name and namespace, with a resolution scope of <see cref="T:FSharpIL.Metadata.ResolutionScope.AssemblyRef"/>.
-    /// </summary>
-    member internal _.FindType((ns, name) as t) =
-        match search.TryGetValue(t) with
-        | (true, existing) -> SimpleIndex(owner, existing) |> Some
-        | (false, _) ->
-            Seq.tryPick
-                (function
-                | { ResolutionScope = ResolutionScope.AssemblyRef _ } as t' when t'.TypeName = name && t'.TypeNamespace = ns ->
-                    search.Item <- (ns, name), t'
-                    SimpleIndex(owner, t') |> Some
-                | _ -> None)
-                table
-
-    member _.GetIndex typeRef =
-        match table.GetIndex typeRef with
-        | ValueSome index ->
-            search.Item <- (typeRef.TypeNamespace, typeRef.TypeName), typeRef
-
-            // TODO: Check that the name is a "valid CLS identifier".
-
-            match typeRef.ResolutionScope with
-            | ResolutionScope.Module ->
-                TypeRefUsesModuleResolutionScope typeRef |> warnings.Add
-            | _ -> ()
-
-            Ok index
-        | ValueNone -> DuplicateRowError typeRef :> ValidationError |> Error
-
-    member _.GetEnumerator() = table.GetEnumerator()
-
-    interface IReadOnlyCollection<TypeRef> with
-        member this.Count = this.Count
-        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
-        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
+// TODO: Create dictionary type to handle lookup of TypeRef and TypeDef rows by name.

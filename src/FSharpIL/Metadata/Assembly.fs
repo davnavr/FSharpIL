@@ -4,11 +4,9 @@ open System
 
 /// Represents the name of an assembly (II.22.2).
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-type AssemblyName =
-    private
-    | AssemblyName of string
-
-    override this.ToString() = let (AssemblyName name) = this in name
+[<StructuralComparison; StructuralEquality>]
+type AssemblyName internal (name: string) =
+    override _.ToString() = name
 
 /// (II.23.1.3)
 type AssemblyCulture = // TODO: Add more cultures
@@ -49,9 +47,12 @@ module AssemblyName =
         else AssemblyName str |> Some
 
     /// <exception cref="T:System.ArgumentException">
-    /// The <paramref name="name"/> contains a colon <c>:</c>, a forward slash, or a backslash character.
+    /// The name is empty or contains a colon, a forward slash, or a backslash character.
     /// </exception>
     let ofStr (str: string) =
         match tryOfStr str with
         | Some name -> name
         | None -> invalidArg "str" "The assembly name was empty or contains invalid characters."
+
+[<AutoOpen>]
+module AssemblyNamePatterns = let (|AssemblyName|) (name: AssemblyName) = name.ToString()

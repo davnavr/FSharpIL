@@ -1,9 +1,8 @@
 ﻿namespace FSharpIL.Metadata
 
 open System
-open System.Collections.Generic
-open System.Collections.Immutable
 
+[<NoComparison; StructuralEquality>]
 type PublicKeyOrToken =
     /// Stores the full public key.
     | PublicKey of byte[]
@@ -12,7 +11,7 @@ type PublicKeyOrToken =
     | NoPublicKey
 
 /// <summary>(0x23) Represents a row in the <c>AssemblyRef</c> table (II.22.5)</summary>
-[<CustomEquality; NoComparison>]
+[<NoComparison; CustomEquality>]
 type AssemblyRef =
     { Version: Version
       PublicKeyOrToken: PublicKeyOrToken
@@ -46,7 +45,7 @@ type AssemblyRef =
         member this.Equals other =
             this.Version = other.Version
             && this.PublicKeyOrToken = other.PublicKeyOrToken
-            && this.Name = other.Name
+            && this.Name = other.Name // TODO: Make AssemblyRef name comparison case-blind.
             && this.Culture = other.Culture
 
 /// <summary>Warning used when there is a duplicate row in the <c>AssemblyRef</c> table (10).</summary>
@@ -59,24 +58,3 @@ type DuplicateAssemblyRefWarning (duplicate: AssemblyRef) =
         sprintf
             "A duplicate reference to \"%O\" was added when a reference to an assembly with the same version, public key, name, and culture already exists"
             this.Duplicate
-
-// TODO: Create new class as this shares code with ModuleRefTable
-[<Sealed>]
-type AssemblyRefTable internal (owner: IndexOwner, warnings: ImmutableArray<ValidationWarning>.Builder) =
-    let references = List<AssemblyRef>()
-    let lookup = HashSet<AssemblyRef>()
-
-    member _.Count = references.Count
-
-    member _.GetIndex assemblyRef =
-        if lookup.Add assemblyRef |> not then
-            DuplicateAssemblyRefWarning assemblyRef |> warnings.Add
-        references.Add assemblyRef
-        SimpleIndex(owner, assemblyRef)
-
-    member _.GetEnumerator() = references.GetEnumerator()
-
-    interface IReadOnlyCollection<AssemblyRef> with
-        member _.Count = references.Count
-        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
-        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator

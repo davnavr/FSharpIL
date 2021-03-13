@@ -16,7 +16,7 @@ type ModuleRef =
     /// <summary>
     /// Corresponds to the <c>Name</c> column, which matches an entry in the <c>File</c> table.
     /// </summary>
-    member this.Name = this.File.Value.FileName
+    member this.Name = this.File.Value.FileName // TODO: Make AssemblyRef name comparison case-blind.
 
     interface IIndexValue with
         member this.CheckOwner actual = IndexOwner.ensureEqual actual this.File.Owner
