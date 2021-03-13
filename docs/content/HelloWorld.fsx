@@ -136,18 +136,15 @@ let tests =
 
     testList "hello world" [
         testCase "has entrypoint" <| fun() ->
-            test <@ metadata.Value.EntryPoint.Name = "Main" @>
+            metadata.Value.EntryPoint.Name =! "Main"
 
         testCase "has method references only" <| fun() ->
             test <@ metadata.Value.GetMemberReferences() |> Seq.forall (fun mref -> mref :? MethodReference) @>
 
         testCase "has target framework attribute" <| fun() ->
-            <@
-                let attribute = Seq.head metadata.Value.Assembly.CustomAttributes
-                let value = Seq.head attribute.ConstructorArguments
-                attribute.AttributeType.Name = "TargetFrameworkAttribute" && ".NETCoreApp,Version=v5.0".Equals value.Value
-            @>
-            |> test
+            let attribute = Seq.head metadata.Value.Assembly.CustomAttributes
+            let value = (Seq.head attribute.ConstructorArguments).Value
+            test <@ attribute.AttributeType.Name = "TargetFrameworkAttribute" && ".NETCoreApp,Version=v5.0".Equals value @>
 
         testCase "has types with correct names" <| fun() ->
             let expected =
@@ -155,26 +152,25 @@ let tests =
                     ("", "<Module>")
                     ("HelloWorld", "Program")
                 ]
+            let actual =
+                metadata.Value.Types
+                |> Seq.map (fun tdef -> tdef.Namespace, tdef.Name)
+                |> List.ofSeq
             <@
-                let actual =
-                    metadata.Value.Types
-                    |> Seq.map (fun tdef -> tdef.Namespace, tdef.Name)
-                    |> List.ofSeq
                 expected = actual
             @>
             |> test
 
         testCase "entrypoint has correct argument type" <| fun() ->
-            <@
-                let args = Seq.head metadata.Value.EntryPoint.Parameters
-                args.ParameterType.IsArray && args.ParameterType.GetElementType() = metadata.Value.TypeSystem.String
-            @>
-            |> test
+            let paramType = (Seq.head metadata.Value.EntryPoint.Parameters).ParameterType
+            test <@ paramType.IsArray && paramType.GetElementType() = metadata.Value.TypeSystem.String @>
 
         testCaseExec example' "runs correctly" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
             let out = dotnet.StandardOutput.ReadLine()
             dotnet.StandardError.ReadToEnd() |> stderr.Write
 
-            fun() -> let code = dotnet.ExitCode in test <@ code = 0 && out = "Hello World!" @>
+            fun() ->
+                let code = dotnet.ExitCode
+                test <@ code = 0 && out = "Hello World!" @>
     ]
 #endif

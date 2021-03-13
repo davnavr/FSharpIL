@@ -149,9 +149,7 @@ module CliMetadata =
 
     /// <summary>Sets the entrypoint of the assembly.</summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    let setEntryPointToken (builder: CliMetadataBuilder) entryPoint =
-        IndexOwner.checkOwner builder.Owner entryPoint
-        builder.SetEntryPointToken entryPoint
+    let setEntryPointToken (builder: CliMetadataBuilder) entryPoint = builder.SetEntryPointToken entryPoint
 
     /// <summary>Sets the entrypoint of the assembly to a static method defined in the assembly.</summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>

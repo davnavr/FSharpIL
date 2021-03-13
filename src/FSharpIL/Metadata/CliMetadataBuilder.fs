@@ -79,7 +79,7 @@ type CliMetadataBuilder (mdle: ModuleTable) =
             then CorFlags.None
             else CorFlags.StrongNameSigned
         CorFlags.ILOnly ||| signed
-    member val EntryPointToken: EntryPointToken voption = entrypoint
+    member _.EntryPointToken: EntryPointToken voption = entrypoint
 
     /// The metadata version, contained in the metadata root (II.24.2.1).
     member val MetadataVersion = MetadataVersion.ofStr "v4.0.30319" with get, set

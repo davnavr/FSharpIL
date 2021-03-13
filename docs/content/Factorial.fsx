@@ -230,15 +230,12 @@ let tests =
         testCase "has correct field names" <| fun() ->
             let expected = [ "cache" ]
             let types = metadata.Value.Types
-            <@
-                let actual =
-                    types
-                    |> Seq.collect (fun tdef -> tdef.Fields)
-                    |> Seq.map (fun field -> field.Name)
-                    |> List.ofSeq
-                expected = actual
-            @>
-            |> test
+            let actual =
+                types
+                |> Seq.collect (fun tdef -> tdef.Fields)
+                |> Seq.map (fun field -> field.Name)
+                |> List.ofSeq
+            expected =! actual
 
         testCase "can save to disk" <| fun() ->
             let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "Factorial.dll")
@@ -247,10 +244,7 @@ let tests =
         // TODO: Use a property test can be used to test factorial calculation.
         testCase "method can be called" <| fun () ->
             let expected = 6u
-            <@
-                let actual = context.Value.Calculate.Invoke(null, [| 3u |]) |> unbox
-                expected = actual
-            @>
-            |> test
+            let actual = context.Value.Calculate.Invoke(null, [| 3u |]) |> unbox
+            expected =! actual
     ]
 #endif
