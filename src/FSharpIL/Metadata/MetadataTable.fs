@@ -20,6 +20,8 @@ type MetadataTable<'T when 'T : equality> =
     member this.HasLargeIndices = this.Count >= 65536
     member this.Item with get index = this.TableLookup.Item index
 
+    member this.IndexOf index = uint32 this.[index]
+
     member internal this.WriteSimpleIndex(i: uint32, writer: ChunkWriter) =
         if this.HasLargeIndices
         then writer.WriteU4 i

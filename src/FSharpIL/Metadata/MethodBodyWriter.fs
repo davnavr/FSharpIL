@@ -177,7 +177,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <summary>(0x28) Writes an instruction that calls a <c>MethodDef</c> (III.3.19).</summary>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
     member this.Call(SimpleIndex method: MethodDefIndex<_>) =
-        this.Call(0x28uy, method, content.Metadata.MethodDef.IndexOf method, 0x6uy)
+        this.Call(0x28uy, method, content.Metadata.MethodDef.Table.IndexOf method, 0x6uy)
 
     member private this.Branch(opcode, isByte) =
         this.WriteU1 opcode
@@ -327,7 +327,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     member private this.WriteFieldInstruction(opcode, SimpleIndex field: FieldIndex<_>) =
         this.WriteU1 opcode
-        this.WriteMetadataToken(content.Metadata.Field.IndexOf field, 0x4uy)
+        this.WriteMetadataToken(content.Metadata.Field.Table.IndexOf field, 0x4uy)
     // TODO: Allow a FieldRef to be used when loading an instance field.
     /// <summary>(0x7B) Writes an instruction that pushes the value of an object's field onto the stack (III.4.10).</summary>
     /// <param name="field">The field to load the value of.</param>

@@ -107,7 +107,7 @@ module internal Heap =
             dict.Item <- item, { BlobIndex.Index = offset; BlobIndex.Size = size }
             offset <- offset + size + BlobSize.ofUnsigned size
 
-        for field in metadata.Field.Items do
+        for field in metadata.Field.Rows do
             let signature = field.Signature
             if not (blob.Field.ContainsKey signature) then
                 let pos = writer.Position
@@ -116,7 +116,7 @@ module internal Heap =
                 writer.EncodedType signature.FieldType
                 blobIndex pos signature blob.Field
 
-        for method in metadata.MethodDef.Items do
+        for method in metadata.MethodDef.Rows do
             let signature = method.Signature
             if not (blob.MethodDef.ContainsKey signature) then
                 let pos = writer.Position
@@ -131,7 +131,7 @@ module internal Heap =
                 writer.Parameters signature.Parameters
                 blobIndex pos signature blob.MethodDef
 
-        for memberRef in metadata.MemberRef.Items do
+        for memberRef in metadata.MemberRef.Rows do
             if not (blob.MemberRef.ContainsKey memberRef) then
                 let pos = writer.Position
 
@@ -172,7 +172,7 @@ module internal Heap =
                 blobIndex pos signature blob.CustomAttribute
             | _ -> ()
 
-        for typeSpec in metadata.TypeSpec.Items do
+        for typeSpec in metadata.TypeSpec.Rows do
             let signature = typeSpec.Signature
             if not (blob.TypeSpec.ContainsKey signature) then
                 let pos = writer.Position
@@ -182,7 +182,7 @@ module internal Heap =
 
                 blobIndex pos signature blob.TypeSpec
 
-        for methodSpec in metadata.MethodSpec.Items do
+        for methodSpec in metadata.MethodSpec.Rows do
             let inst = methodSpec.Instantiation
             if not (blob.MethodSpec.ContainsKey inst) then
                 let pos = writer.Position
@@ -191,7 +191,7 @@ module internal Heap =
                 for gparam in inst.ToImmutableArray() do writer.EncodedType gparam
                 blobIndex pos inst blob.MethodSpec
 
-        for { PublicKeyOrToken = token } in metadata.AssemblyRef.Items do
+        for { PublicKeyOrToken = token } in metadata.AssemblyRef.Rows do
             if not (blob.PublicKeyTokens.ContainsKey token) then
                 let pos = writer.Position
                 match token with
@@ -207,7 +207,7 @@ module internal Heap =
                 | _ -> failwithf "Unable to write unsupported public key token %A" token
                 blobIndex pos token blob.PublicKeyTokens
 
-        for { File.HashValue = hashValue } in metadata.File.Items do 
+        for { File.HashValue = hashValue } in metadata.File.Rows do 
             if not (blob.ByteBlobs.ContainsKey hashValue) then
                 writer.Writer.WriteBytes hashValue
 

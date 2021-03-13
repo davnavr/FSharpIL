@@ -12,9 +12,17 @@ type OwnedMetadataTable<'Owner, 'T when 'Owner : equality and 'T : equality> =
     member this.Count = this.OwnedTable.Count
     member this.Indices = this.OwnedTable.Indices
     member this.Rows = this.OwnedTable.TableItems
-    member this.Item with get index = this.OwnedTable.TableLookup.Item index
+    member this.Table = this.OwnedTable
 
-    member this.GetRows owner = this.OwnedLookup.Item owner
+    member this.TryGetRows owner =
+        match this.OwnedLookup.TryGetValue owner with
+        | (true, rows) -> ValueSome rows
+        | (false, _) -> ValueNone
+
+    member this.GetCount owner =
+        match this.TryGetRows owner with
+        | ValueSome rows -> uint32 rows.Count
+        | ValueNone -> 0u
 
     interface IReadOnlyDictionary<SimpleIndex<'T>, int32> with
         member this.Count = this.Count

@@ -35,7 +35,7 @@
     <Compile Include="Metadata\IndexedList.fs" />
     <Compile Include="Metadata\TypeDef.fs" />
     <Compile Include="Metadata\TypeSpec.fs" />
-    <Compile Include="Metadata\OwnedMetadataTableBuilder.fs" />
+    <Compile Include="Metadata\OwnedMetadataTable.fs" />
     <Compile Include="Metadata\Field.fs" />
     <Compile Include="Metadata\Method.fs" />
     <Compile Include="Metadata\MemberRef.fs" />

@@ -75,7 +75,7 @@ let header info (writer: ChunkWriter) =
         | ValueNone -> 0uy, 0u
         | ValueSome (ValidEntryPoint (SimpleIndex main))
         | ValueSome (CustomEntryPoint (SimpleIndex main)) ->
-            0x6uy, info.Cli.MethodDef.IndexOf main
+            0x6uy, info.Cli.MethodDef.Table.IndexOf main
         | ValueSome (EntryPointFile file) ->
             0x26uy, info.Cli.File.IndexOf file.Value.File
 
@@ -113,7 +113,7 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
     let chunk = LinkedList<byte[]>().AddFirst(Array.zeroCreate writer.Chunk.Value.Length)
     let mutable offset = rva
 
-    for method in info.Cli.MethodDef.Items do
+    for method in info.Cli.MethodDef.Rows do
         match info.MethodBodies.TryGetValue method.Body with
         | false, _ when method.Body.Exists ->
             let struct(size, body) = methodBody chunk method.Body info
@@ -242,7 +242,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         // TODO: Figure out if table count for MethodDefOrRef coded index includes all of MemberRef or just MethodRefs.
         let total = tables.MethodDef.Count + tables.MemberRef.Count
         function
-        | MethodDefOrRef.Def method -> tables.MethodDef.IndexOf method, 0u
+        | MethodDefOrRef.Def method -> tables.MethodDef.Table.IndexOf method, 0u
         | MethodDefOrRef.RefDefault(SimpleIndex method)
         | MethodDefOrRef.RefGeneric(SimpleIndex method)
         | MethodDefOrRef.RefVarArg(SimpleIndex method) -> tables.MemberRef.IndexOf method, 1u
@@ -264,7 +264,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     info.GuidStream.WriteZero writer // Encbaseid
 
     // TypeRef (0x01)
-    for tref in tables.TypeRef.Items do
+    for tref in tables.TypeRef.Rows do
         resolutionScope.WriteIndex(tref.ResolutionScope, writer)
         info.StringsStream.WriteStringIndex(tref.TypeName, writer)
         info.StringsStream.WriteIndex(tref.TypeNamespace, writer)
@@ -274,21 +274,21 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         let mutable field = 1u
         let mutable method = 1u
 
-        for index in tables.TypeDef.Handles do
+        for index in tables.TypeDef.Indices do
             let tdef = index.Value
             writer.WriteU4 tdef.Flags
             info.StringsStream.WriteStringIndex(tdef.TypeName, writer)
             info.StringsStream.WriteIndex(tdef.TypeNamespace, writer)
             extends.WriteIndex(tdef.Extends, writer)
 
-            tables.Field.WriteSimpleIndex(field, writer)
-            field <- field + (tables.TempFieldCounts.GetValueOrDefault index)
+            tables.Field.Table.WriteSimpleIndex(field, writer)
+            field <- field + (tables.Field.GetCount index)
 
-            tables.Field.WriteSimpleIndex(method, writer)
-            method <- method + (tables.TempMethodCounts.GetValueOrDefault index)
+            tables.Field.Table.WriteSimpleIndex(method, writer)
+            method <- method + (tables.MethodDef.GetCount index)
 
     // Field (0x04)
-    for row in tables.Field.Items do
+    for row in tables.Field.Rows do
         writer.WriteU2 row.Flags
         info.StringsStream.WriteStringIndex(row.Name, writer)
         info.BlobStream.WriteIndex(row.Signature, writer) // Signature
@@ -297,7 +297,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     if tables.MethodDef.Count > 0 then
         let mutable param = 1u
 
-        for method in tables.MethodDef.Items do
+        for method in tables.MethodDef.Rows do
             writer.WriteU4 info.MethodBodies.[method.Body] // Rva
             writer.WriteU2 method.ImplFlags
             writer.WriteU2 method.Flags
@@ -322,7 +322,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
 
     // MemberRef (0x0A)
-    for row in tables.MemberRef.Items do
+    for row in tables.MemberRef.Rows do
         match row with
         | MethodRefDefault { Class = mclass; MemberName = name }
         | MethodRefGeneric { Class = mclass; MemberName = name }
@@ -345,11 +345,11 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
 
     // ModuleRef (0x1A)
-    for moduleRef in tables.ModuleRef.Items do
+    for moduleRef in tables.ModuleRef.Rows do
         info.StringsStream.WriteStringIndex(moduleRef.Name, writer) // Name
 
     // TypeSpec (0x1B)
-    for typeSpec in tables.TypeSpec.Items do info.BlobStream.WriteIndex(typeSpec.Signature, writer)
+    for typeSpec in tables.TypeSpec.Rows do info.BlobStream.WriteIndex(typeSpec.Signature, writer)
 
 
 
@@ -368,7 +368,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         info.StringsStream.WriteStringIndex(assembly.Culture, writer)
 
     // AssemblyRef (0x23)
-    for row in tables.AssemblyRef.Items do
+    for row in tables.AssemblyRef.Rows do
         writer.WriteU2 row.Version.Major
         writer.WriteU2 row.Version.Minor
         writer.WriteU2 row.Version.Build
@@ -383,7 +383,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
 
     // File (0x26)
-    for file in tables.File.Items do
+    for file in tables.File.Rows do
         let flags =
             if file.ContainsMetadata
             then 0u
@@ -396,7 +396,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
 
     // MethodSpec (0x2B)
-    for methodSpec in tables.MethodSpec.Items do
+    for methodSpec in tables.MethodSpec.Rows do
         methodDefOrRef.WriteIndex(methodSpec.Method, writer)
         info.BlobStream.WriteIndex(methodSpec.Instantiation, writer)
 
