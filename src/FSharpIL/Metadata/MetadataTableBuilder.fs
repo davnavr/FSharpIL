@@ -17,5 +17,5 @@ type MetadataTableBuilder<'T when 'T :> IIndexValue and 'T : equality> internal 
 
     interface IReadOnlyCollection<'T> with
         member this.Count = this.Count
-        member this.GetEnumerator() = this.GetEnumerator()
-        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
+        member _.GetEnumerator() = items.GetEnumerator() :> IEnumerator<_>
+        member _.GetEnumerator() = items.GetEnumerator() :> System.Collections.IEnumerator

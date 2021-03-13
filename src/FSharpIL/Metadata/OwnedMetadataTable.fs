@@ -76,7 +76,10 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
                 if items'.Add index |> not then failwith "Unable to add row"
             ownedLookup.[owner] <- items'
         { OwnedLookup = ownedLookup
-          OwnedTable = { TableItems = tableItems.ToImmutable(); TableLookup = tableLookup } }
+          OwnedTable =
+            { TableOwner = this.owner
+              TableItems = tableItems.ToImmutable()
+              TableLookup = tableLookup } }
 
     // NOTE: This is used in the Temp functions for owned count.
     member internal this.ToReadOnlyDictionary() = System.Collections.ObjectModel.ReadOnlyDictionary this.items

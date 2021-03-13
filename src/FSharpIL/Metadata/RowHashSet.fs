@@ -1,5 +1,6 @@
 ﻿namespace FSharpIL.Metadata
 
+open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
@@ -18,7 +19,12 @@ type RowHashSet<'T when 'T : equality> = struct
         then this.CreateIndex item |> ValueSome
         else ValueNone
 
-    member this.GetEnumerator() = this.items.Keys.GetEnumerator()
+    member this.GetEnumerator() = ArraySegment<_>(this.ToArray()).GetEnumerator()
+
+    member internal this.ToArray(): 'T[] =
+        let items' = Array.zeroCreate this.Count
+        for KeyValue(key, i) in this.items do items'.[i] <- key
+        items'
 
     member internal this.ToImmutable() =
         let items' = Array.zeroCreate this.Count
@@ -26,13 +32,14 @@ type RowHashSet<'T when 'T : equality> = struct
         for KeyValue(key, i) in this.items do
             lookup.[this.CreateIndex key] <- i + 1
             items'.[i] <- key
-        { TableItems = items'.ToImmutableArray()
+        { TableOwner = this.owner
+          TableItems = items'.ToImmutableArray()
           TableLookup = lookup }
 
     member private this.CreateIndex item = SimpleIndex<'T>(this.owner, item)
 
     interface IReadOnlyCollection<'T> with
         member this.Count = this.Count
-        member this.GetEnumerator() = this.GetEnumerator()
+        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
         member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
 end

@@ -10,11 +10,13 @@ open FSharpIL.Writing
 [<NoComparison; ReferenceEquality>]
 type MetadataTable<'T when 'T : equality> =
     private
-        { TableItems: ImmutableArray<'T>
+        { TableOwner: IndexOwner
+          TableItems: ImmutableArray<'T>
           TableLookup: IReadOnlyDictionary<SimpleIndex<'T>, int32> }
 
     member this.Count = this.TableItems.Length
-    member this.Indices = this.TableLookup.Keys
+    // TODO: Create easier way to iterate indices in order.
+    member this.Indices = Seq.map (fun item -> SimpleIndex<_>(this.TableOwner, item)) this.TableItems
     member this.Rows = this.TableItems
     /// Gets a value indicating whether or not a simple index into this table takes up four or two bytes.
     member this.HasLargeIndices = this.Count >= 65536

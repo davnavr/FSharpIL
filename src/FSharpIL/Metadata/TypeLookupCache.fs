@@ -28,14 +28,14 @@ type TypeLookupCache (builder: CliMetadataBuilder) =
         | (false, _) ->
             let mutable result = ValueNone
 
-            use typeRefEnumerator = builder.TypeRef.GetEnumerator()
+            let mutable typeRefEnumerator = builder.TypeRef.GetEnumerator()
             while result.IsNone && typeRefEnumerator.MoveNext() do
                 let tref = typeRefEnumerator.Current
                 if tref.TypeName = typeName && tref.TypeNamespace = typeNamespace then
                     let index = this.CreateIndex tref
                     result <- ValueSome (TypeLookupResult.TypeRef index)
 
-            use typeDefEnumerator = builder.TypeDef.GetEnumerator()
+            let mutable typeDefEnumerator = builder.TypeDef.GetEnumerator()
             while result.IsNone && typeDefEnumerator.MoveNext() do
                 let tdef = typeDefEnumerator.Current
                 if tdef.TypeName = typeName && tdef.TypeNamespace = typeNamespace then

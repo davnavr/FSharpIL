@@ -355,5 +355,5 @@ type TypeDefTableBuilder internal (owner: IndexOwner) =
 
     interface IReadOnlyCollection<TypeDefRow> with
         member this.Count = this.Count
-        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
-        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
+        member _.GetEnumerator() = (definitions :> IEnumerable<_>).GetEnumerator()
+        member _.GetEnumerator() = (definitions :> System.Collections.IEnumerable).GetEnumerator()
