@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Metadata
+﻿namespace rec FSharpIL.Metadata
 
 /// <summary>
 /// Indicates where the target <see cref="T:FSharpIL.Metadata.TypeRef"/> is defined (II.22.38).
@@ -22,7 +22,9 @@ type ResolutionScope =
 /// <summary>
 /// (0x01) Represents a row in the <c>TypeRef</c> table (II.22.38).
 /// </summary>
-and [<StructuralComparison; StructuralEquality>] TypeRef =
+[<StructuralComparison; StructuralEquality>]
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type TypeRef =
     { ResolutionScope: ResolutionScope
       TypeName: Identifier
       TypeNamespace: string }

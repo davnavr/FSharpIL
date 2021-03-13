@@ -178,10 +178,10 @@ module CliMetadata =
     let addSealedClass builder (classDef: SealedClassDef): Result<TypeDefIndex<SealedClassDef>, _> = addClassImpl builder classDef
     let addStaticClass builder (classDef: StaticClassDef): Result<TypeDefIndex<StaticClassDef>, _> = addClassImpl builder classDef
 
-    let private addDerivedTypeDef (builder: CliMetadataBuilder) extends def (typeDef: 'Type) =
-        match state.FindType extends with
-        | Some extends' -> def extends' typeDef state |> TypeDefIndex |> Ok
-        | None -> MissingTypeError extends :> ValidationError |> Error
+    let private addDerivedTypeDef (lookup: TypeLookupCache) (builder: CliMetadataBuilder) extends def (typeDef: 'Type) =
+        match lookup.FindType extends with
+        | ValueSome extends' -> def builder extends' typeDef |> TypeDefIndex |> Ok
+        | ValueNone -> MissingTypeError extends :> ValidationError |> Error
 
     // let addDelegate
     // let addEnum
@@ -209,7 +209,7 @@ module CliMetadata =
     // TODO: Enforce CLS checks for MemberRef.
     // NOTE: Duplicates (based on owning class, name, and signature) are allowed, but produce a warning.
 
-    let inline referenceMethod (warnings: WarningsBuilder) (builder: CliMetadataBuilder) (row: MemberRefRow) =
+    let referenceMethod (warnings: WarningsBuilder) (builder: CliMetadataBuilder) (row: MemberRefRow) =
         let struct(i, duplicate) = builder.MemberRef.Add row
         if duplicate then warnings.Add(DuplicateMemberRefWarning row)
         i
