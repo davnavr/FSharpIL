@@ -143,10 +143,10 @@ type TypeDefRow internal (flags, name, ns, extends, parent) =
 
     override _.GetHashCode() = hash(name, ns)
 
-    member private _.GetFullName() =
+    member internal _.GetFullName() =
         if ns.Length > 0
-        then sprintf "%s.%O" ns name
-        else string name
+        then sprintf "'%s.%O'" ns name
+        else sprintf "'%O'" name
 
     override this.ToString() =
         let visibility =
@@ -180,7 +180,7 @@ type TypeDefRow internal (flags, name, ns, extends, parent) =
             | Extends.TypeRef tref -> sprintf " extends %O" tref
             | Extends.Null -> String.Empty
 
-        sprintf ".class %s %s%s '%s'%s" visibility layout str name extends
+        sprintf ".class %s %s%s %s%s" visibility layout str name extends
 
     interface IEquatable<TypeDefRow> with
         member _.Equals other = ns = other.TypeNamespace && name = other.TypeName

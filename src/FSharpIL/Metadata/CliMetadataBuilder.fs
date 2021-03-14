@@ -40,7 +40,17 @@ type CorFlags =
     | NativeEntryPoint = 0x10u
     | TrackDebugData = 0x10000u
 
-// II.22.32
+/// <summary>(0x00) Represents the single row of the <c>Module</c> table (II.22.30).</summary>
+[<Struct; IsReadOnly>]
+type ModuleTable =
+    { // Generation
+      Name: Identifier
+      Mvid: Guid
+      // EncId
+      // EncBaseId
+      }
+
+/// <summary>(0x29) Represents a row in the <c>NestedClass</c> table (II.22.32).</summary>
 [<Struct; IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
 type NestedClass =
@@ -51,16 +61,6 @@ type NestedClass =
         member this.CheckOwner owner =
             IndexOwner.checkIndex owner this.NestedClass
             IndexOwner.checkIndex owner this.EnclosingClass
-
-/// <summary>(0x00) Represents the single row of the <c>Module</c> table (II.22.30).</summary>
-[<Struct; IsReadOnly>]
-type ModuleTable =
-    { // Generation
-      Name: Identifier
-      Mvid: Guid
-      // EncId
-      // EncBaseId
-      }
 
 [<Sealed>]
 type CliMetadataBuilder (mdle: ModuleTable) =
@@ -104,8 +104,8 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     member val Method = OwnedMetadataTableBuilder<TypeDefRow, MethodDefRow> owner
     // (0x08)
     // member Param
-    // (0x09)
-    // member InterfaceImpl
+    /// (0x09)
+    member val InterfaceImpl = InterfaceImplTableBuilder owner
     /// (0x0A)
     member val MemberRef: MemberRefTableBuilder = MemberRefTableBuilder owner
     // (0x0B)

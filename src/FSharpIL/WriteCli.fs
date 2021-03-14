@@ -75,7 +75,7 @@ let header info (writer: ChunkWriter) =
         | ValueNone -> 0uy, 0u
         | ValueSome (ValidEntryPoint (SimpleIndex main))
         | ValueSome (CustomEntryPoint (SimpleIndex main)) ->
-            0x6uy, info.Cli.MethodDef.Table.IndexOf main
+            0x6uy, info.Cli.MethodDef.IndexOf main
         | ValueSome (EntryPointFile file) ->
             0x26uy, info.Cli.File.IndexOf file.Value.File
 
@@ -173,6 +173,14 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // Tables
 
     // Calculate how big indices and coded indices should be.
+    let interfaceImpl = // TypeDefOrRef
+        let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.TypeSpec.Count
+        function
+        | InterfaceIndex.TypeDef(SimpleIndex tdef) -> tables.TypeDef.IndexOf tdef, 0u
+        | InterfaceIndex.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
+        | InterfaceIndex.TypeSpec tspec -> tables.TypeSpec.IndexOf tspec, 2u
+        |> codedIndex total 2
+
     let resolutionScope =
         let total =
             1 // Module
@@ -241,7 +249,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         // TODO: Figure out if table count for MethodDefOrRef coded index includes all of MemberRef or just MethodRefs.
         let total = tables.MethodDef.Count + tables.MemberRef.Count
         function
-        | MethodDefOrRef.Def method -> tables.MethodDef.Table.IndexOf method, 0u
+        | MethodDefOrRef.Def method -> tables.MethodDef.IndexOf method, 0u
         | MethodDefOrRef.RefDefault(SimpleIndex method)
         | MethodDefOrRef.RefGeneric(SimpleIndex method)
         | MethodDefOrRef.RefVarArg(SimpleIndex method) -> tables.MemberRef.IndexOf method, 1u
@@ -280,10 +288,10 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             info.StringsStream.WriteIndex(tdef.TypeNamespace, writer)
             extends.WriteIndex(tdef.Extends, writer)
 
-            tables.Field.Table.WriteSimpleIndex(field, writer)
+            tables.Field.WriteSimpleIndex(field, writer)
             field <- field + (tables.Field.GetCount index)
 
-            tables.Field.Table.WriteSimpleIndex(method, writer)
+            tables.Field.WriteSimpleIndex(method, writer)
             method <- method + (tables.MethodDef.GetCount index)
 
     // Field (0x04)
@@ -319,6 +327,12 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
 
 
+
+
+    // InterfaceImpl (0x09)
+    for row in tables.InterfaceImpl.Rows do
+        tables.TypeDef.WriteSimpleIndex(row.Class, writer)
+        interfaceImpl.WriteIndex(row.Interface, writer)
 
     // MemberRef (0x0A)
     for row in tables.MemberRef.Rows do

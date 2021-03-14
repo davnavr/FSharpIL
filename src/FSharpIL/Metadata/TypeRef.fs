@@ -16,6 +16,7 @@ type ResolutionScope =
 
     override this.ToString() =
         match this with
+        | ModuleRef moduleRef -> sprintf ".module %O" moduleRef.Value.Name
         | AssemblyRef assembly -> string assembly.Value.Name
         | _ -> "unknown resolution scope"
 

@@ -40,6 +40,9 @@ type CliMetadata (builder: CliMetadataBuilder) =
 
 
 
+        if builder.InterfaceImpl.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x9)
+            uint32 builder.InterfaceImpl.Count |> counts.Add
         if builder.MemberRef.Count > 0 then
             bits <- bits ||| (1UL <<< 0xA)
             uint32 builder.MemberRef.Count |> counts.Add
@@ -109,6 +112,7 @@ type CliMetadata (builder: CliMetadataBuilder) =
     member _.MethodDef = methodDef
     member _.Param = parameters
 
+    member val InterfaceImpl = builder.InterfaceImpl.ToImmutable()
     member val MemberRef = builder.MemberRef.ToImmutable()
 
     member val CustomAttribute = builder.CustomAttribute.ToImmutableArray()

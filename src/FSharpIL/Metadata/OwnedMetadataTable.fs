@@ -12,7 +12,6 @@ type OwnedMetadataTable<'Owner, 'T when 'Owner : equality and 'T : equality> =
     member this.Count = this.OwnedTable.Count
     member this.Indices = this.OwnedTable.Indices
     member this.Rows = this.OwnedTable.TableItems
-    member this.Table = this.OwnedTable
 
     member this.TryGetRows owner =
         match this.OwnedLookup.TryGetValue owner with
@@ -24,15 +23,9 @@ type OwnedMetadataTable<'Owner, 'T when 'Owner : equality and 'T : equality> =
         | ValueSome rows -> uint32 rows.Count
         | ValueNone -> 0u
 
-    interface IReadOnlyDictionary<SimpleIndex<'T>, int32> with
+    interface IMetadataTable<SimpleIndex<'T>> with
         member this.Count = this.Count
-        member this.Item with get index = this.OwnedTable.Item index
-        member this.Keys = this.Indices
-        member this.Values = this.OwnedTable.TableLookup.Values
-        member this.ContainsKey index = this.OwnedTable.TableLookup.ContainsKey index
-        member this.TryGetValue(handle, index) = this.OwnedTable.TableLookup.TryGetValue(handle, &index)
-        member this.GetEnumerator() = this.OwnedTable.TableLookup.GetEnumerator()
-        member this.GetEnumerator() = this.OwnedTable.TableLookup.GetEnumerator() :> System.Collections.IEnumerator
+        member this.Item with get index = this.OwnedTable.[index]
 
 /// <summary>Represents a table whose rows are conceptually owned by one row in another table.</summary>
 [<Sealed>]
@@ -47,7 +40,7 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
 
     /// <returns>An index to the value added to the table, or <c>ValueNone</c> if the value is a duplicate.</returns>
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Add(key, value) =
+    member this.Add(key, value) = // TODO: Rename to TryAdd
         IndexOwner.checkIndex this.owner key
         IndexOwner.checkOwner this.owner value
         let lookup =
