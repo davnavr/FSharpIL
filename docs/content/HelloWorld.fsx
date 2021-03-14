@@ -89,7 +89,7 @@ let example() =
           { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
             NamedArg = ImmutableArray.Empty }
           |> Some }
-        |> attribute builder
+        |> addCustomAttribute builder
 
         // Create the entrypoint method of the current assembly.
         let main =

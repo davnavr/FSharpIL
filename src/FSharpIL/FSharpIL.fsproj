@@ -50,6 +50,7 @@
     <Compile Include="Metadata\EntryPointSignature.fs" />
     <Compile Include="Metadata\TypeLookupCache.fs" />
     <Compile Include="Metadata\CliMetadata.fs" />
+    <Compile Include="Metadata\CliMetadataModule.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\BlobWriter.fs" />
     <Compile Include="Metadata\Heaps\HeapExtensions.fs" />

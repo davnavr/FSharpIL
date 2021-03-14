@@ -41,6 +41,7 @@ let example() =
     |> setAssembly builder
     |> ignore
 
+    // TODO: Add target framework attribute to Factorial example.
     validated {
         let! mscorlib = SystemAssembly.Net5_0.private_corelib builder
         let! object = SystemTypes.object builder mscorlib
