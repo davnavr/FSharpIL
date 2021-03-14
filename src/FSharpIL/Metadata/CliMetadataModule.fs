@@ -53,14 +53,10 @@ let setEntryPointToken (builder: CliMetadataBuilder) entryPoint = builder.SetEnt
 /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
 let setEntryPoint builder main = setEntryPointToken builder (EntryPointToken.ValidEntryPoint main)
 
-// module SomethingForWarningsOnly
-
-/// Contains functions for modifying the CLI metadata with CLS checks and warnings.
-[<AutoOpen>]
-module Checked =
-    // TODO: Enforce common CLS checks and warnings for types.
-    // TODO: Consider having functions for adding typeDef, fields, and methods in separate modules.
-    // TODO: Enforce CLS checks and warnings when adding a class.
+/// Contains functions for modifying the CLI metadata with warnings only and no CLS checks.
+module WarningChecked =
+    // TODO: Enforce common warning checks for types.
+    // TODO: Enforce warnings when adding a class.
     let private addClassDef (builder: CliMetadataBuilder) (def: ClassDef<'Flags>) =
         Unsafe.AddTypeDef<ClassDef<'Flags>>(
             builder,
@@ -113,9 +109,6 @@ module Checked =
         | ValueSome i -> Ok i
         | ValueNone -> DuplicateTypeRefError typeRef :> ValidationError |> Error
 
-    // TODO: Enforce CLS checks for MemberRef.
-    // NOTE: Duplicates (based on owning class, name, and signature) are allowed, but produce a warning.
-
     let private referenceMethod (builder: CliMetadataBuilder) (row: MemberRefRow) (warnings: WarningsBuilder) =
         let struct(i, duplicate) = builder.MemberRef.Add row
         if duplicate then warnings.Add(DuplicateMemberRefWarning row)
@@ -155,6 +148,24 @@ module Checked =
         | ValueSome index -> Ok index
         | ValueNone -> DuplicateMethodSpecError spec' :> ValidationError |> Error
 
+/// Contains functions for modifying the CLI metadata with CLS checks and warnings.
+[<AutoOpen>]
+module Checked =
+    let addClass builder classDef = WarningChecked.addClass builder classDef
+    let addAbstractClass builder classDef = WarningChecked.addAbstractClass builder classDef
+    let addSealedClass builder classDef = WarningChecked.addSealedClass builder classDef
+    let addStaticClass builder classDef = WarningChecked.addStaticClass builder classDef
+    let addField builder owner field = WarningChecked.addField builder owner field
+    let addMethod builder owner method = WarningChecked.addMethod builder owner method
+    let referenceType builder typeRef = WarningChecked.referenceType builder typeRef
+    let referenceDefaultMethod builder method warnings = WarningChecked.referenceDefaultMethod builder method warnings
+    let referenceGenericMethod builder method warnings = WarningChecked.referenceGenericMethod builder method warnings
+    let referenceVarArgMethod builder method warnings = WarningChecked.referenceVarArgMethod builder method warnings
+    let referenceModule builder moduleRef warnings = WarningChecked.referenceModule builder moduleRef warnings
+    let referenceAssembly builder assembly warnings = WarningChecked.referenceAssembly builder assembly warnings
+    let addTypeSpec builder typeSpec = WarningChecked.addTypeSpec builder typeSpec
+    let addMethodSpec builder method garguments = WarningChecked.addMethodSpec builder method garguments
+
 /// <summary>
 /// Contains functions for modifying the CLI metadata without CLS checks and warnings, throwing an exception on any errors.
 /// </summary>
@@ -169,20 +180,20 @@ module Unchecked =
     // TODO: Figure out how to skip warnings without allocating additional dummy array builders. Maybe call versions of functions that don't create warnings instead?
     let private skipWarnings(): WarningsBuilder = ImmutableArray.CreateBuilder<_> 0
 
-    let addClass builder (classDef: ConcreteClassDef) = Checked.addClass builder classDef |> throwOnError
-    let addAbstractClass builder (classDef: AbstractClassDef) = Checked.addAbstractClass builder classDef |> throwOnError
-    let addSealedClass builder (classDef: SealedClassDef) = Checked.addSealedClass builder classDef |> throwOnError
-    let addStaticClass builder (classDef: StaticClassDef) = Checked.addStaticClass builder classDef |> throwOnError
-    let addField builder owner field = Checked.addField builder owner field |> throwOnError
-    let addMethod builder owner method = Checked.addMethod builder owner method |> throwOnError
-    let referenceType builder typeRef = Checked.referenceType builder typeRef |> throwOnError
+    let addClass builder (classDef: ConcreteClassDef) = WarningChecked.addClass builder classDef |> throwOnError
+    let addAbstractClass builder (classDef: AbstractClassDef) = WarningChecked.addAbstractClass builder classDef |> throwOnError
+    let addSealedClass builder (classDef: SealedClassDef) = WarningChecked.addSealedClass builder classDef |> throwOnError
+    let addStaticClass builder (classDef: StaticClassDef) = WarningChecked.addStaticClass builder classDef |> throwOnError
+    let addField builder owner field = WarningChecked.addField builder owner field |> throwOnError
+    let addMethod builder owner method = WarningChecked.addMethod builder owner method |> throwOnError
+    let referenceType builder typeRef = WarningChecked.referenceType builder typeRef |> throwOnError
     // let referenceDefaultMethod // Throws no errors
     // let referenceGenericMethod
     // let referenceVarArgMethod
     // let referenceModule
     // let referenceAssembly
-    let addTypeSpec builder typeSpec = Checked.addTypeSpec builder typeSpec |> throwOnError
-    let addMethodSpec builder method garguments = Checked.addMethodSpec builder method garguments |> throwOnError
+    let addTypeSpec builder typeSpec = WarningChecked.addTypeSpec builder typeSpec |> throwOnError
+    let addMethodSpec builder method garguments = WarningChecked.addMethodSpec builder method garguments |> throwOnError
 
 /// <summary>
 /// Applies the given function to each string in the <c>#Strings</c> heap referenced in
