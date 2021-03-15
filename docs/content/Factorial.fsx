@@ -97,9 +97,7 @@ let example() =
             { FieldName = Identifier.ofStr "cache"
               Flags = Flags.staticField(FieldFlags Private)
               Signature = EncodedType.GenericInst dictionary_u4_u4 |> FieldSignature.create }
-            |> StaticField
-            :> IField<StaticClassDef>
-            |> addField builder factorial
+            |> StaticClass.addStaticField builder factorial
 
         let calculateBody, setCalculateBody = MethodBody.mutableBody()
 

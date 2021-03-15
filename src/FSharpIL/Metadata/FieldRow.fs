@@ -76,14 +76,6 @@ type DuplicateFieldError (field: FieldRow) =
     inherit ValidationError()
     member _.Field = field
 
-type IField<'Parent> =
-    inherit IIndexValue
-    abstract Row : unit -> FieldRow
-
-[<AutoOpen>]
-module internal FieldHelpers =
-    let inline (|FieldRow|) (f: #IField<_>) = f.Row()
-
 [<IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
 type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> = struct

@@ -64,9 +64,7 @@ let example() =
         { Flags = Flags.staticField(FieldFlags Private)
           FieldName = Identifier.ofStr "value"
           Signature = FieldSignature.create EncodedType.U4 }
-        |> StaticField
-        :> IField<StructDef> // TODO: Figure out how to avoid casting when adding members to structs.
-        |> addField builder posInt
+        |> Struct.addInstanceField builder posInt
 
     let op_Addition =
         { Body =

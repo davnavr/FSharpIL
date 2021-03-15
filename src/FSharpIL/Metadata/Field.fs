@@ -3,6 +3,9 @@
 open System.Runtime.CompilerServices
 open System.Reflection
 
+type [<AbstractClass; Sealed>] InstanceFieldTag = class end
+type [<AbstractClass; Sealed>] StaticFieldTag = class end
+
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
 type Field<'Flags> =
@@ -18,25 +21,10 @@ type Field<'Flags> =
 /// </summary>
 type GlobalField = unit
 
-/// <summary>Represents a non-static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
-[<Sealed>]
-type InstanceField (field: Field<InstanceField>) =
-    interface IIndexValue with member _.CheckOwner owner = field.CheckOwner owner
-    interface IField<ConcreteClassDef> with member _.Row() = field.Row()
-    interface IField<AbstractClassDef> with member _.Row() = field.Row()
-    interface IField<SealedClassDef> with member _.Row() = field.Row()
+/// <summary>Represents a non-static field in the <c>Field</c> table.</summary>
+type InstanceField = Field<InstanceFieldTag>
 
-/// <summary>Represents a static <see cref="T:FSharpIL.Metadata.FieldRow"/>.</summary>
-[<Sealed>]
-type StaticField (field: Field<StaticField>) =
-    interface IIndexValue with member _.CheckOwner owner = field.CheckOwner owner
-    interface IField<ConcreteClassDef> with member _.Row() = field.Row()
-    interface IField<AbstractClassDef> with member _.Row() = field.Row()
-    interface IField<SealedClassDef> with member _.Row() = field.Row()
-    interface IField<StaticClassDef> with member _.Row() = field.Row()
+/// <summary>Represents a static field in the <c>Field</c> table.</summary>
+type StaticField = Field<StaticFieldTag>
 
-    interface IField<StructDef> with member _.Row() = field.Row()
-
-    // NOTE: Static fields should also be allowed in interfaces.
-
-// TODO: Make field union type to avoid explicit casting with :>
+// NOTE: Static fields should also be allowed in interfaces.

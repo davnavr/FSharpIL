@@ -9,7 +9,7 @@ open System.Collections.Immutable
 /// Contains static methods for modifying the CLI metadata without regard for generation of correct metadata.
 [<AbstractClass; Sealed>]
 type Unsafe private () = class
-    static member val ClassConstructorSignature =
+    static member val internal ClassConstructorSignature =
         MethodDefSignature(
             false,
             false,
@@ -18,13 +18,16 @@ type Unsafe private () = class
             ImmutableArray.Empty
         )
 
-    static member AddField<'Tag>(builder: CliMetadataBuilder, owner, field) =
+    static member internal AddField<'Tag>(builder: CliMetadataBuilder, owner, field) =
         IndexOwner.checkOwner builder.Owner field
         match builder.Field.Add(owner, field) with
         | ValueSome index -> FieldIndex<'Tag> index |> Result<FieldIndex<_>, _>.Ok
         | ValueNone -> DuplicateFieldError field :> ValidationError |> Error
 
-    static member AddMethod<'Tag>(builder: CliMetadataBuilder, owner, method) =
+    static member internal AddField<'Flags>(builder, owner, field: Field<'Flags>) =
+        Unsafe.AddField<Field<'Flags>>(builder, owner, field.Row())
+
+    static member internal AddMethod<'Tag>(builder: CliMetadataBuilder, owner, method) =
         IndexOwner.checkOwner builder.Owner method
         match builder.Method.Add(owner, method) with
         | ValueSome index -> MethodDefIndex<'Tag> index |> Result<MethodDefIndex<_>, _>.Ok
@@ -139,6 +142,12 @@ module ConcreteClass =
     let addEntryPoint builder (owner: TypeDefIndex<ConcreteClassDef>) (method: EntryPointMethod) =
         Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<EntryPointMethod>, _>
 
+    let addInstanceField builder (owner: TypeDefIndex<ConcreteClassDef>) (field: InstanceField) =
+        Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<InstanceField>, _>
+
+    let addStaticField builder (owner: TypeDefIndex<ConcreteClassDef>) (field: StaticField) =
+        Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<StaticField>, _>
+
 [<RequireQualifiedAccess>]
 module AbstractClass =
     let addTypeDef builder (classDef: AbstractClassDef): Result<TypeDefIndex<AbstractClassDef>, _> = addClassDef builder classDef
@@ -164,6 +173,12 @@ module AbstractClass =
     let addEntryPoint builder (owner: TypeDefIndex<AbstractClassDef>) (method: EntryPointMethod) =
         Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<EntryPointMethod>, _>
 
+    let addInstanceField builder (owner: TypeDefIndex<AbstractClassDef>) (field: InstanceField) =
+        Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<InstanceField>, _>
+
+    let addStaticField builder (owner: TypeDefIndex<AbstractClassDef>) (field: StaticField) =
+        Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<StaticField>, _>
+
 [<RequireQualifiedAccess>]
 module SealedClass =
     let addTypeDef builder (classDef: SealedClassDef): Result<TypeDefIndex<SealedClassDef>, _> = addClassDef builder classDef
@@ -186,6 +201,12 @@ module SealedClass =
     let addEntryPoint builder (owner: TypeDefIndex<SealedClassDef>) (method: EntryPointMethod) =
         Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<EntryPointMethod>, _>
 
+    let addInstanceField builder (owner: TypeDefIndex<SealedClassDef>) (field: InstanceField) =
+        Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<InstanceField>, _>
+
+    let addStaticField builder (owner: TypeDefIndex<SealedClassDef>) (field: StaticField) =
+        Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<StaticField>, _>
+
 [<RequireQualifiedAccess>]
 module StaticClass =
     let addTypeDef builder (classDef: StaticClassDef): Result<TypeDefIndex<StaticClassDef>, _> = addClassDef builder classDef
@@ -199,6 +220,12 @@ module StaticClass =
     let addEntryPoint builder (owner: TypeDefIndex<StaticClassDef>) (method: EntryPointMethod) =
         Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<EntryPointMethod>, _>
 
+    let addInstanceField builder (owner: TypeDefIndex<StaticClassDef>) (field: InstanceField) =
+        Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<InstanceField>, _>
+
+    let addStaticField builder (owner: TypeDefIndex<StaticClassDef>) (field: StaticField) =
+        Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<StaticField>, _>
+
 let private addDerivedTypeDef (lookup: TypeLookupCache) (builder: CliMetadataBuilder) extends def (typeDef: 'Type) =
     match lookup.FindType extends with
     | ValueSome extends' -> def builder extends' typeDef |> TypeDefIndex |> Ok
@@ -208,13 +235,6 @@ let private addDerivedTypeDef (lookup: TypeLookupCache) (builder: CliMetadataBui
 // let addEnum
 // let addInterface
 let addStruct builder (lookup: TypeLookupCache) = failwith "TODO: Add struct after finding ValueType"
-
-let addField
-    (builder: CliMetadataBuilder)
-    (owner: TypeDefIndex<'Type>)
-    (FieldRow field: 'Field when 'Field :> IField<'Type>)
-    =
-    Unsafe.AddField<'Field>(builder, owner.Index, field)
 
 // TODO: Add functions for adding global fields and global methods.
 
