@@ -53,6 +53,7 @@ let setEntryPointToken (builder: CliMetadataBuilder) entryPoint = builder.SetEnt
 /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
 let setEntryPoint builder main = setEntryPointToken builder (EntryPointToken.ValidEntryPoint main)
 
+// TODO: Check to ensure that tfm referes to System.Runtime.Versioning.TargetFrameworkAttribute
 /// <summary>Adds a <c>TargetFrameworkAttribute</c> to the current assembly specifying the target framework.</summary>
 /// <param name="builder" />
 /// <param name="assembly">Dummy object used to guarantee that the CLI metadata is an assembly.</param>

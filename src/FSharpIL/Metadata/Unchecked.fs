@@ -33,6 +33,16 @@ type Unsafe = class
     static member AddTypeDef<'Tag>(builder, flags, typeName, extends) =
         Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, None)
 
+    static member AddStruct(builder, valueType, structDef: StructDef) =
+        Unsafe.AddTypeDef<StructDef>(
+            builder,
+            structDef.Flags.Value ||| structDef.Access.Flags,
+            structDef.StructName,
+            structDef.TypeNamespace,
+            Extends.TypeRef valueType,
+            structDef.Access.EnclosingClass
+        )
+
     static member ChangeFlagTag<'Flags, 'From, 'To when 'Flags :> Enum>(flags: ValidFlags<'From, 'Flags>) =
         ValidFlags<'To, 'Flags> flags.Value
 
@@ -66,7 +76,7 @@ let private addDerivedTypeDef (lookup: TypeLookupCache) (builder: CliMetadataBui
 // let addDelegate
 // let addEnum
 // let addInterface
-// let addStruct
+let addStruct builder (lookup: TypeLookupCache) = failwith "TODO: Add struct after finding ValueType"
 
 let addField
     (builder: CliMetadataBuilder)

@@ -40,7 +40,11 @@ let example() =
     let throwaway = ImmutableArray.CreateBuilder<_>()
 
     let mscorlib = SystemAssembly.Net5_0.private_corelib builder throwaway
-    let valueType = SystemType.valueType builder mscorlib
+    let valueType =
+        { TypeName = Identifier.ofStr "ValueType"
+          TypeNamespace = "System"
+          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        |> referenceType builder
     let icomparable_1 =
         { TypeName = Identifier.ofStr "IComparable`1"
           TypeNamespace = "System"
@@ -49,11 +53,12 @@ let example() =
 
     // TODO: In the future, this would be a good example to showcase functions to generate XML documentation.
     let nonNegInt = // TODO: Use helper function to define a struct instead.
-        { StructDef.Access = TypeVisibility.Public
-          Flags = failwith "TODO: Get struct flags"
-          StructName = Identifier.ofStr "NonNegInt"
-          TypeNamespace = "CustomNumbers" }
-        |> addStruct builder
+        let info =
+            { StructDef.Access = TypeVisibility.Public
+              Flags = failwith "TODO: Get struct flags"
+              StructName = Identifier.ofStr "NonNegInt"
+              TypeNamespace = "CustomNumbers" }
+        Unsafe.AddStruct(builder, valueType, info)
 
 
 

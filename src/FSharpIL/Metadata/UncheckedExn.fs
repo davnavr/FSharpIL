@@ -12,6 +12,9 @@ let private throwOnError =
 
 [<AbstractClass; Sealed>]
 type Unsafe = class
+    static member AddStruct(builder, valueType, structDef) =
+        Unchecked.Unsafe.AddStruct(builder, valueType, structDef) |> throwOnError
+
     static member AddTypeDef<'Tag>(builder, flags, typeName, typeNamespace, extends, parent): TypeDefIndex<'Tag> =
         Unchecked.Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, typeNamespace, extends, parent) |> throwOnError
 
@@ -20,3 +23,5 @@ type Unsafe = class
 end
 
 let addStruct builder: TypeDefIndex<StructDef> = failwith "TODO: How to add struct?"
+
+let referenceType builder typeRef = Unchecked.referenceType builder typeRef |> throwOnError
