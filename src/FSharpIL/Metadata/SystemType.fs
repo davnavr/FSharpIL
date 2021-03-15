@@ -1,7 +1,7 @@
 ﻿/// <summary>Contains functions to reference commonly used types in the <c>System</c> namespace.</summary>
 module FSharpIL.Metadata.SystemType
 
-open FSharpIL.Metadata.CliMetadata
+open FSharpIL.Metadata.Unchecked
 
 let inline private create builder assembly name =
     { TypeName = Identifier.ofStr name

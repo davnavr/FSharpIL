@@ -26,7 +26,8 @@ open System.Collections.Immutable
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.CliMetadata
-open FSharpIL.Metadata.CliMetadata.Unchecked
+open FSharpIL.Metadata.Unchecked
+open FSharpIL.Metadata.UncheckedExn
 open FSharpIL.PortableExecutable
 
 let example() =

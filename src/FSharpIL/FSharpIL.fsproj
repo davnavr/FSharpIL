@@ -51,6 +51,9 @@
     <Compile Include="Metadata\EntryPointSignature.fs" />
     <Compile Include="Metadata\TypeLookupCache.fs" />
     <Compile Include="Metadata\CliMetadata.fs" />
+    <Compile Include="Metadata\Unchecked.fs" />
+    <Compile Include="Metadata\Checked.fs" />
+    <Compile Include="Metadata\UncheckedExn.fs" />
     <Compile Include="Metadata\CliMetadataModule.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\BlobWriter.fs" />

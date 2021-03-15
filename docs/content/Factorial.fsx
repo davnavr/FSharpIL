@@ -23,6 +23,8 @@ open System
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Unchecked
+open FSharpIL.Metadata.Checked
 open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 

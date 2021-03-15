@@ -3,7 +3,7 @@
 open System
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.CliMetadata
+open FSharpIL.Metadata.Checked
 
 /// Contains functions to reference commonly used .NET 5 assemblies.
 module Net5_0 =
