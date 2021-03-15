@@ -261,6 +261,14 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Bgt_un() = this.Branch(0x42uy, false)
 
     /// <summary>
+    /// (0x58) Writes an instruction that adds <c>value2</c> to <c>value1</c> and pushes the result onto the stack without an
+    /// overflow check (III.3.1).
+    /// </summary>
+    member this.Add() = this.WriteU1 0x58uy
+
+    // member this.Add_ovf
+
+    /// <summary>
     /// (0x59) Writes an instruction that subtracts <c>value2</c> from <c>value1</c> and pushes the result onto the stack without
     /// an overflow check (III.3.64).
     /// </summary>

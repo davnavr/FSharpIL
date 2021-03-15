@@ -26,11 +26,11 @@ end
 module Struct =
     let addTypeDef builder lookup structDef = Unchecked.Struct.addTypeDef builder lookup structDef |> throwOnError
     let addInstanceMethod builder owner method = Unchecked.Struct.addInstanceMethod builder owner method |> throwOnError
-    let addStaticMethod builder owner method = Unchecked.Struct.addStaticMethod builder owner method
-    let addConstructor builder owner method = Unchecked.Struct.addConstructor builder owner method
-    let addClassConstructor builder owner method = Unchecked.Struct.addClassConstructor builder owner method
-    let addEntryPoint builder owner method = Unchecked.Struct.addEntryPoint builder owner method
-    let addInstanceField builder owner field = Unchecked.Struct.addInstanceField builder owner field
-    let addStaticField builder owner field = Unchecked.Struct.addStaticField builder owner field
+    let addStaticMethod builder owner method = Unchecked.Struct.addStaticMethod builder owner method |> throwOnError
+    let addConstructor builder owner method = Unchecked.Struct.addConstructor builder owner method |> throwOnError
+    let addClassConstructor builder owner method = Unchecked.Struct.addClassConstructor builder owner method |> throwOnError
+    let addEntryPoint builder owner method = Unchecked.Struct.addEntryPoint builder owner method |> throwOnError
+    let addInstanceField builder owner field = Unchecked.Struct.addInstanceField builder owner field |> throwOnError
+    let addStaticField builder owner field = Unchecked.Struct.addStaticField builder owner field |> throwOnError
 
 let referenceType builder typeRef = Unchecked.referenceType builder typeRef |> throwOnError

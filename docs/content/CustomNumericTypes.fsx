@@ -26,7 +26,6 @@ open System.Collections.Immutable
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.CliMetadata
-open FSharpIL.Metadata.Unchecked
 open FSharpIL.Metadata.UncheckedExn
 open FSharpIL.PortableExecutable
 
@@ -35,6 +34,15 @@ let example() =
         { Name = Identifier.ofStr "CustomNumbers.dll"
           Mvid = Guid.NewGuid() }
         |> CliMetadataBuilder
+
+    let assembly =
+        { Name = AssemblyName.ofStr "CustomNumbers"
+          HashAlgId = ()
+          Version = Version(3, 14, 15, 9265)
+          Flags = ()
+          PublicKey = None
+          Culture = NullCulture }
+        |> setAssembly builder
 
     // TODO: Make versions of SystemAssembly and SystemType modules that don't use warning builders.
     let throwaway = ImmutableArray.CreateBuilder<_>()
@@ -59,6 +67,7 @@ let example() =
               StructName = Identifier.ofStr "PosInt"
               TypeNamespace = "CustomNumbers" }
         Unsafe.AddStruct(builder, valueType, info)
+    let posIntEncoded = EncodedType.typeDefStruct posInt
 
     let value =
         { Flags = Flags.instanceField(FieldFlags Private)
@@ -68,11 +77,27 @@ let example() =
 
     let op_Addition =
         { Body =
-            failwith "TODO: Add numbers"
+            fun content ->
+                let wr = MethodBodyWriter content
+                wr.Ldarg 0us
+                wr.Ldfld value
+                wr.Ldarg 1us
+                wr.Ldfld value
+                wr.Add()
+                // TODO: Call constructor
+                wr.Ret()
+                { MaxStack = 2us; InitLocals = false }
+            |> MethodBody.create
           ImplFlags = MethodImplFlags()
           Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
           MethodName = Identifier.ofStr "op_Addition"
-          Signature = StaticMethodSignature(MethodCallingConventions.Default, failwith "return", failwith "parameters")
+          Signature =
+            let parameters =
+                ImmutableArray.Create (
+                    ParamItem.create posIntEncoded,
+                    ParamItem.create posIntEncoded
+                )
+            StaticMethodSignature(MethodCallingConventions.Default, ReturnType.encoded posIntEncoded, parameters)
           ParamList =
             fun _ i ->
                 { Flags = ParamFlags()
@@ -103,7 +128,7 @@ let tests =
             {| Context = ctx; Assembly = assembly |}
 
     afterRunTests <| fun() ->
-        context.Value.Context.Unload()
+        if context.IsValueCreated then context.Value.Context.Unload()
         metadata.Value.Dispose()
 
     testList "custom numeric types" [

@@ -89,7 +89,7 @@ type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> = struc
     /// <param name="notSerialized">
     /// If set to <see langword="true"/>, sets the <c>NotSerialized</c> flag. Defaults to <see langword="false"/>.
     /// </param>
-    new (visibility, specialName, [<Optional; DefaultParameterValue(true)>] notSerialized) =
+    new (visibility, specialName, [<Optional; DefaultParameterValue(false)>] notSerialized) =
         { Visibility = visibility
           NotSerialized = notSerialized
           SpecialName = specialName }

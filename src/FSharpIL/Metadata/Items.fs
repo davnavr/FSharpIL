@@ -13,6 +13,11 @@ type TypeDefOrRefOrSpecEncoded =
     | TypeRef of SimpleIndex<TypeRef>
     // TypeSpec // of ?
 
+    override this.ToString() =
+        match this with
+        | TypeDef tdef -> tdef.Value.ToString()
+        | TypeRef tref -> tref.Value.ToString()
+
     interface ITypeDefOrRefOrSpec
     interface IIndexValue with
         member this.CheckOwner owner =
@@ -105,7 +110,7 @@ type EncodedType =
     /// <summary>Represents the <see cref="T:System.String"/> type.</summary>
     | String
     | SZArray of ImmutableArray<CustomModifier> * EncodedType
-    | ValueType // of TypeDefOrRefOrSpecEncoded
+    | ValueType of TypeDefOrRefOrSpecEncoded
     /// Represents a generic parameter in a generic type definition.
     | Var of number: uint32
 
@@ -116,6 +121,7 @@ type EncodedType =
         | MVar num -> sprintf "!!%i" num
         | String -> "string"
         | SZArray(_, item) -> sprintf "%O[]" item
+        | ValueType item -> sprintf "valuetype %O" item
         | Var num -> sprintf "!%i" num
         | _ -> "unknown encoded type"
 
@@ -146,6 +152,7 @@ type EncodedType =
             | SZArray(modifiers, item) ->
                 for modifier in modifiers do modifier.CheckOwner owner
                 IndexOwner.checkOwner owner item
+            | ValueType item -> IndexOwner.checkOwner owner item
             | bad -> failwithf "Cannot validate owner of unsupported encoded type %A" bad
 
 /// <summary>Represents all different possible return types encoded in a <c>RetType</c> (II.23.2.11).</summary>
@@ -208,6 +215,12 @@ type MethodSpec (garguments: ImmutableArray<EncodedType>) =
     interface IMethodSpec
     interface IIndexValue with
         member _.CheckOwner owner = for gparam in garguments do IndexOwner.checkOwner owner gparam
+
+[<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module EncodedType =
+    let typeDefStruct (typeDef: TypeDefIndex<_>) = TypeDefOrRefOrSpecEncoded.TypeDef typeDef.Index |> EncodedType.ValueType
+    let typeRefStruct (typeRef: SimpleIndex<TypeRef>) = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.ValueType
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

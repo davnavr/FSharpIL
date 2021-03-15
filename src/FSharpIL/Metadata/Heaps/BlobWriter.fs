@@ -67,6 +67,10 @@ type internal BlobWriter = struct
         this.TypeDefOrRefOrSpecEncoded(1u, this.Metadata.TypeRef.IndexOf index)
     member this.TypeDefOrRefOrSpecEncoded(index: SimpleIndex<TypeSpecRow>) =
         this.TypeDefOrRefOrSpecEncoded(2u, this.Metadata.TypeSpec.IndexOf index)
+    member this.TypeDefOrRefOrSpecEncoded(index: TypeDefOrRefOrSpecEncoded) =
+        match index with
+        | TypeDefOrRefOrSpecEncoded.TypeDef tdef -> this.TypeDefOrRefOrSpecEncoded tdef
+        | TypeDefOrRefOrSpecEncoded.TypeRef tref -> this.TypeDefOrRefOrSpecEncoded tref
 
     member this.GenericInst(inst: GenericInst) =
         match inst with
@@ -105,6 +109,10 @@ type internal BlobWriter = struct
                 failwith "Custom modifiers for SZArray is not yet supported"
 
             this.EncodedType element
+
+        | EncodedType.ValueType item ->
+            this.Writer.WriteU1 ElementType.ValueType
+            this.TypeDefOrRefOrSpecEncoded item
 
         | EncodedType.U1 -> this.Writer.WriteU1 ElementType.U1
         | EncodedType.U2 -> this.Writer.WriteU1 ElementType.U2
