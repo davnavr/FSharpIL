@@ -55,7 +55,7 @@ let example() =
     let posInt = // TODO: Use helper function to define a struct instead.
         let info =
             { StructDef.Access = TypeVisibility.Public
-              Flags = failwith "TODO: Get struct flags"
+              Flags = ClassFlags() |> Flags.valueType
               StructName = Identifier.ofStr "PosInt"
               TypeNamespace = "CustomNumbers" }
         Unsafe.AddStruct(builder, valueType, info)
