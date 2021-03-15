@@ -60,8 +60,8 @@ let example() =
             SystemAssembly.Net5_0.console builder
 
         // Add references to types defined in referenced assemblies.
-        let! console = SystemTypes.console builder consolelib
-        let! object = SystemTypes.object builder mscorlib
+        let! console = SystemType.console builder consolelib
+        let! object = SystemType.object builder mscorlib
         let! tfmAttr =
             { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
               TypeNamespace = "System.Runtime.Versioning"

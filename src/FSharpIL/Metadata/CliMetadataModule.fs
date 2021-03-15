@@ -4,12 +4,6 @@ module FSharpIL.Metadata.CliMetadata
 open System
 open System.Collections.Immutable
 
-[<RequireQualifiedAccess>]
-module private SystemType =
-    let Delegate = "System", Identifier "Delegate"
-    let Enum = "System", Identifier "Enum"
-    let ValueType = "System", Identifier "ValueType"
-
 /// Contains static methods for modifying the CLI metadata without regard for generation of correct metadata.
 [<AbstractClass; Sealed>]
 type Unsafe = class
@@ -64,6 +58,7 @@ let setEntryPoint builder main = setEntryPointToken builder (EntryPointToken.Val
 /// <param name="tfm">The target framework moniker. For .NET 5, the value is <c>.NETCoreApp,Version=v5.0</c>.</param>
 let setTargetFramework builder (assembly: AssemblyIndex) (ctor: MemberRefIndex<_>) tfm =
     let tfm' = FixedArg.Elem (SerString tfm)
+    // TODO: Check that the constructor is correct.
     { Parent = CustomAttributeParent.Assembly assembly
       Type = CustomAttributeType.MethodRefDefault ctor
       Value = Some { FixedArg = ImmutableArray.Create tfm'; NamedArg = ImmutableArray.Empty } }

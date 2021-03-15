@@ -39,7 +39,7 @@ let example() =
     let throwaway = ImmutableArray.CreateBuilder<_>()
 
     let mscorlib = SystemAssembly.Net5_0.private_corelib builder throwaway
-    let valueType = SystemTypes.valueType builder mscorlib
+    let valueType = SystemType.valueType builder mscorlib
     let icomparable_1 =
         { TypeName = Identifier.ofStr "IComparable`1"
           TypeNamespace = "System"

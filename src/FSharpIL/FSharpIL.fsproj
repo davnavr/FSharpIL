@@ -62,7 +62,7 @@
     <Compile Include="Metadata\MethodBodyWriter.fs" />
     <Compile Include="Metadata\MethodBodyModule.fs" />
     <Compile Include="Metadata\SystemAssembly.fs" />
-    <Compile Include="Metadata\SystemTypes.fs" />
+    <Compile Include="Metadata\SystemType.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />
