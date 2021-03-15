@@ -61,7 +61,7 @@ let example() =
         Unsafe.AddStruct(builder, valueType, info)
 
     let value =
-        { Flags = Flags.staticField(FieldFlags Private)
+        { Flags = Flags.instanceField(FieldFlags Private)
           FieldName = Identifier.ofStr "value"
           Signature = FieldSignature.create EncodedType.U4 }
         |> Struct.addInstanceField builder posInt
@@ -107,5 +107,8 @@ let tests =
         metadata.Value.Dispose()
 
     testList "custom numeric types" [
+        testCase "can save to disk" <| fun() ->
+            let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "CustomNumbers.dll")
+            WritePE.toPath path example'.Value
     ]
 #endif

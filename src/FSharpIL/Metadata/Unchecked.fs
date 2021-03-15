@@ -91,15 +91,21 @@ type Unsafe private () = class
     static member AddTypeDef<'Tag>(builder, flags, typeName, extends) =
         Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, None)
 
-    static member AddStruct(builder, valueType, structDef: StructDef) =
+    static member private AddStruct(builder, valueType, structDef: StructDef) =
         Unsafe.AddTypeDef<StructDef>(
             builder,
-            structDef.Flags.Value ||| structDef.Access.Flags, // TODO: Call Flags.structFlags here.
+            structDef.Flags.Value ||| structDef.Access.Flags,
             structDef.StructName,
             structDef.TypeNamespace,
-            Extends.TypeRef valueType,
+            valueType,
             structDef.Access.EnclosingClass
         )
+
+    static member AddStruct(builder, valueType, structDef: StructDef) =
+        Unsafe.AddStruct(builder, Extends.TypeRef valueType, structDef)
+
+    static member AddStruct(builder, valueType: SimpleIndex<TypeDefRow>, structDef: StructDef) =
+        Unsafe.AddStruct(builder, (invalidOp "TODO: Add Extends.TypeDef to allow addition of structs that derive from System.ValueType in the same assembly": Extends), structDef)
 
     static member ChangeFlagTag<'Flags, 'From, 'To when 'Flags :> Enum>(flags: ValidFlags<'From, 'Flags>) =
         ValidFlags<'To, 'Flags> flags.Value
@@ -231,10 +237,39 @@ let private addDerivedTypeDef (lookup: TypeLookupCache) (builder: CliMetadataBui
     | ValueSome extends' -> def builder extends' typeDef |> TypeDefIndex |> Ok
     | ValueNone -> MissingTypeError extends :> ValidationError |> Error
 
-// let addDelegate
-// let addEnum
-// let addInterface
-let addStruct builder (lookup: TypeLookupCache) = failwith "TODO: Add struct after finding ValueType"
+//module Delegate =
+//module Enum =
+//module Interface =
+
+[<RequireQualifiedAccess>]
+module Struct =
+    let addTypeDef builder (lookup: TypeLookupCache) (structDef: StructDef) =
+        let valueType = "System", Identifier.ofStr "ValueType"
+        match lookup.FindType valueType with
+        | ValueSome (TypeLookupResult.TypeRef tref) -> Unsafe.AddStruct(builder, tref, structDef)
+        | ValueSome (TypeLookupResult.TypeDef tdef) -> Unsafe.AddStruct(builder, tdef, structDef)
+        | ValueNone -> MissingTypeError valueType :> ValidationError |> Error
+
+    let addInstanceMethod builder (owner: TypeDefIndex<StructDef>) (method: InstanceMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<InstanceMethod>, _>
+
+    let addStaticMethod builder (owner: TypeDefIndex<StructDef>) (method: StaticMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<StaticMethod>, _>
+
+    let addConstructor builder (owner: TypeDefIndex<StructDef>) (method: ObjectConstructor) =
+        Unsafe.AddConstructor(builder, owner.Index, method)
+
+    let addClassConstructor builder (owner: TypeDefIndex<StructDef>) (method: ClassConstructor) =
+        Unsafe.AddConstructor(builder, owner.Index, method)
+
+    let addEntryPoint builder (owner: TypeDefIndex<StructDef>) (method: EntryPointMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<EntryPointMethod>, _>
+
+    let addInstanceField builder (owner: TypeDefIndex<StructDef>) (field: InstanceField) =
+        Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<InstanceField>, _>
+
+    let addStaticField builder (owner: TypeDefIndex<StructDef>) (field: StaticField) =
+        Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<StaticField>, _>
 
 // TODO: Add functions for adding global fields and global methods.
 
