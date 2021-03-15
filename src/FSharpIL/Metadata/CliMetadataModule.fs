@@ -1,6 +1,7 @@
 ﻿[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module FSharpIL.Metadata.CliMetadata
 
+open System
 open System.Collections.Immutable
 
 [<RequireQualifiedAccess>]
@@ -33,6 +34,9 @@ type Unsafe = class
         | ValueSome index -> TypeDefIndex<'Tag> index |> Ok
         | ValueNone -> DuplicateTypeDefError row :> ValidationError |> Error
 
+    static member AddTypeDef<'Tag>(builder, flags, typeName, extends) =
+        Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, None)
+
     // ChangeTag
 end
 
@@ -64,6 +68,8 @@ let setTargetFramework builder (assembly: AssemblyIndex) (ctor: MemberRefIndex<_
       Type = CustomAttributeType.MethodRefDefault ctor
       Value = Some { FixedArg = ImmutableArray.Create tfm'; NamedArg = ImmutableArray.Empty } }
     |> addCustomAttribute builder
+
+// TODO: Come up with better name for modules. Maybe WarningsOnly, AllChecks, NoChecks, and RaiseOnError
 
 /// Contains functions for modifying the CLI metadata with warnings only and no CLS checks.
 module WarningChecked =
@@ -192,10 +198,13 @@ module Unchecked =
     // TODO: Figure out how to skip warnings without allocating additional dummy array builders. Maybe call versions of functions that don't create warnings instead?
     let private skipWarnings(): WarningsBuilder = ImmutableArray.CreateBuilder<_> 0
 
+    // TODO: Create version of Unsafe static class that throws exceptions on errors.
+
     let addClass builder (classDef: ConcreteClassDef) = WarningChecked.addClass builder classDef |> throwOnError
     let addAbstractClass builder (classDef: AbstractClassDef) = WarningChecked.addAbstractClass builder classDef |> throwOnError
     let addSealedClass builder (classDef: SealedClassDef) = WarningChecked.addSealedClass builder classDef |> throwOnError
     let addStaticClass builder (classDef: StaticClassDef) = WarningChecked.addStaticClass builder classDef |> throwOnError
+    let addStruct builder (structDef: StructDef): TypeDefIndex<StructDef> = failwith "TODO: Figure out how to generate value types."
     let addField builder owner field = WarningChecked.addField builder owner field |> throwOnError
     let addMethod builder owner method = WarningChecked.addMethod builder owner method |> throwOnError
     let referenceType builder typeRef = WarningChecked.referenceType builder typeRef |> throwOnError

@@ -234,9 +234,7 @@ let tests =
         lazy
             let (ctx, assembly) = PEFile.toLoadContext "factorial" example'.Value
             let calculate = assembly.GetType("Factorial.CachedFactorial").GetMethod("Calculate")
-            {| Context = ctx
-               Assembly = assembly
-               Calculate = calculate |}
+            {| Context = ctx; Assembly = assembly; Calculate = calculate |}
 
     afterRunTests <| fun() ->
         context.Value.Context.Unload()

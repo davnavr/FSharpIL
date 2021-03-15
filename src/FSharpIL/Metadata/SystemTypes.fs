@@ -3,13 +3,19 @@ module FSharpIL.Metadata.SystemTypes
 
 open FSharpIL.Metadata.CliMetadata
 
-// TODO: Make these functions be: SimpleIndex<AssemblyRef> -> MetadataBuilderState -> unit
 /// <summary>Adds a reference to the <see cref="T:System.Object"/> type.</summary>
 /// <param name="mscorlib">
 /// The assembly containing the <see cref="T:System.Object"/> type, which is <c>System.Private.CoreLib</c> for .NET Core.
 /// </param>
 let object builder mscorlib =
     { TypeName = Identifier.ofStr "Object"
+      TypeNamespace = "System"
+      ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+    |> referenceType builder
+
+/// <summary>Adds a reference to the <see cref="T:System.ValueType"/> type.</summary>
+let valueType builder mscorlib =
+    { TypeName = Identifier.ofStr "ValueType"
       TypeNamespace = "System"
       ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
     |> referenceType builder
