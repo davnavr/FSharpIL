@@ -91,7 +91,7 @@ let example() =
               Access = TypeVisibility.Public
               Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true))
               Extends = Extends.TypeRef object }
-            |> addStaticClass builder
+            |> StaticClass.addTypeDef builder
 
         let! cache =
             { FieldName = Identifier.ofStr "cache"
@@ -122,8 +122,7 @@ let example() =
                     ImmutableArray.Create(ParamItem.create EncodedType.U4, ParamItem.create EncodedType.U4)
                 )
               Body = calculateBody }
-            |> StaticMethod
-            |> addMethod builder factorial
+            |> StaticClass.addStaticMethod builder factorial
 
         let! _ =
             { MethodName = Identifier.ofStr "Calculate"
@@ -160,8 +159,7 @@ let example() =
                     writer.Ret()
                     { MaxStack = 8us; InitLocals = false }
                 |> MethodBody.create }
-            |> StaticMethod
-            |> addMethod builder factorial
+            |> StaticClass.addStaticMethod builder factorial
 
         // Class constructor to initialize cache
         let! _ =
@@ -178,8 +176,7 @@ let example() =
                 (),
                 fun _ _ -> failwith "class constructor has no arguments"
             )
-            |> ClassConstructor
-            |> addMethod builder factorial
+            |> StaticClass.addClassConstructor builder factorial
 
         let! tfm_ctor =
             { Class = MemberRefParent.TypeRef tfmAttr

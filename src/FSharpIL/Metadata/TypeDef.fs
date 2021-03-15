@@ -67,10 +67,10 @@ type ClassFlags = struct
     interface IFlags<TypeAttributes> with member this.Value = this.Value
 end
 
-[<AbstractClass; Sealed>] type ConcreteClassFlags = class end
-[<AbstractClass; Sealed>] type AbstractClassFlags = class end
-[<AbstractClass; Sealed>] type SealedClassFlags = class end
-[<AbstractClass; Sealed>] type StaticClassFlags = class end
+[<AbstractClass; Sealed>] type ConcreteClassTag = class end
+[<AbstractClass; Sealed>] type AbstractClassTag = class end
+[<AbstractClass; Sealed>] type SealedClassTag = class end
+[<AbstractClass; Sealed>] type StaticClassTag = class end
 
 // TODO: Make these other TypeDef flag types normal structs.
 [<Struct; IsReadOnly>]
@@ -118,9 +118,7 @@ type Extends =
     /// </summary>
     | Null
 
-/// <summary>
-/// Represents a row in the <c>TypeDef</c> table (II.22.37).
-/// </summary>
+/// <summary>Represents a row in the <c>TypeDef</c> table (II.22.37).</summary>
 /// <seealso cref="T:FSharpIL.Metadata.ClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.DelegateDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.EnumDef"/>
@@ -250,13 +248,13 @@ type ClassDef<'Flags> =
       Extends: Extends }
 
 /// Represents a class that is not sealed or abstract.
-type ConcreteClassDef = ClassDef<ConcreteClassFlags>
+type ConcreteClassDef = ClassDef<ConcreteClassTag>
 /// Represents an abstract class.
-type AbstractClassDef = ClassDef<AbstractClassFlags>
-type SealedClassDef = ClassDef<SealedClassFlags>
+type AbstractClassDef = ClassDef<AbstractClassTag>
+type SealedClassDef = ClassDef<SealedClassTag>
 // TODO: Remove Extends field for static classes, and make them inherit from System.Object if this is a requirement by ECMA-335.
 /// Represents a sealed and abstract class, meaning that it can only contain static members.
-type StaticClassDef = ClassDef<StaticClassFlags>
+type StaticClassDef = ClassDef<StaticClassTag>
 
 /// <summary>
 /// Represents a delegate type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Delegate"/>.

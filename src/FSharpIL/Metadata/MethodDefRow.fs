@@ -138,16 +138,8 @@ type DuplicateMethodError (method: MethodDefRow) =
     inherit ValidationError()
     member _.Method = method
 
-type IMethod<'Parent> =
-    inherit IIndexValue
-    abstract Definition : unit -> MethodDefRow
-
 [<RequireQualifiedAccess>]
 type MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile private () =
     interface IMethodDefSignature with
         member _.CheckOwner _ = ()
         member _.Signature() = failwith "uh oh signature"
-
-[<AutoOpen>]
-module internal MethodHelpers =
-    let inline (|MethodDef|) (mthd: #IMethod<_>) = mthd.Definition()

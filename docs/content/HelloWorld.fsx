@@ -93,8 +93,17 @@ let example() =
           |> Some }
         |> addCustomAttribute builder
 
+        // Create the class that will contain the entrypoint method.
+        let! program =
+            { Access = TypeVisibility.Public
+              ClassName = Identifier.ofStr "Program"
+              Extends = Extends.TypeRef object
+              Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass))
+              TypeNamespace = "HelloWorld" }
+            |> StaticClass.addTypeDef builder
+
         // Create the entrypoint method of the current assembly.
-        let main =
+        let! main =
             { Body =
                 fun content ->
                     let writer = MethodBodyWriter content
@@ -108,20 +117,9 @@ let example() =
               Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))
               Signature = EntryPointSignature.voidWithArgs
               ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "args" } }
-            |> EntryPointMethod
+            |> StaticClass.addEntryPoint builder program
 
-        // Create the class that will contain the entrypoint method.
-        let! program =
-            { Access = TypeVisibility.Public
-              ClassName = Identifier.ofStr "Program"
-              Extends = Extends.TypeRef object
-              Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass))
-              TypeNamespace = "HelloWorld" }
-            |> addStaticClass builder
-
-        let! main' = addMethod builder program main
-
-        setEntryPoint builder main'
+        setEntryPoint builder main
 
         return CliMetadata builder
     }

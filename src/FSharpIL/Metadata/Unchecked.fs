@@ -8,7 +8,62 @@ open System.Collections.Immutable
 
 /// Contains static methods for modifying the CLI metadata without regard for generation of correct metadata.
 [<AbstractClass; Sealed>]
-type Unsafe = class
+type Unsafe private () = class
+    static member val ClassConstructorSignature =
+        MethodDefSignature(
+            false,
+            false,
+            MethodCallingConventions.Default,
+            ReturnTypeItem ReturnTypeVoid.Item,
+            ImmutableArray.Empty
+        )
+
+    static member AddField<'Tag>(builder: CliMetadataBuilder, owner, field) =
+        IndexOwner.checkOwner builder.Owner field
+        match builder.Field.Add(owner, field) with
+        | ValueSome index -> FieldIndex<'Tag> index |> Result<FieldIndex<_>, _>.Ok
+        | ValueNone -> DuplicateFieldError field :> ValidationError |> Error
+
+    static member AddMethod<'Tag>(builder: CliMetadataBuilder, owner, method) =
+        IndexOwner.checkOwner builder.Owner method
+        match builder.Method.Add(owner, method) with
+        | ValueSome index -> MethodDefIndex<'Tag> index |> Result<MethodDefIndex<_>, _>.Ok
+        | ValueNone -> DuplicateMethodError method :> ValidationError |> Error
+
+    static member AddMethod<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :> IMethodDefSignature>
+        (
+            builder: CliMetadataBuilder,
+            owner,
+            method: Method<'Body, 'Flags, 'Signature>
+        ) =
+        Unsafe.AddMethod<Method<'Body, 'Flags, 'Signature>>(builder, owner, method.Definition())
+
+    static member private AddConstructor<'Tag, 'Signature>
+        (
+            builder: CliMetadataBuilder,
+            owner,
+            method: Constructor<'Tag, 'Signature>,
+            name,
+            signature
+        ) =
+        let row =
+            MethodDefRow (
+                method.Body,
+                method.ImplFlags.Value,
+                method.Flags.Value,
+                Identifier.ofStr name,
+                signature,
+                method.ParamList
+            )
+        IndexOwner.checkOwner builder.Owner row
+        Unsafe.AddMethod<'Tag>(builder, owner, row)
+
+    static member AddConstructor(builder: CliMetadataBuilder, owner, method: ObjectConstructor) =
+        Unsafe.AddConstructor<ObjectConstructorTag, _>(builder, owner, method, ".ctor", method.Signature.Signature())
+
+    static member AddConstructor(builder: CliMetadataBuilder, owner, method: ClassConstructor) =
+        Unsafe.AddConstructor<ClassConstructorTag, _>(builder, owner, method, ".cctor", Unsafe.ClassConstructorSignature)
+
     static member AddTypeDef<'Tag>
         (
             builder: CliMetadataBuilder,
@@ -62,11 +117,87 @@ let private addClassDef (builder: CliMetadataBuilder) (def: ClassDef<'Flags>) =
         def.Access.EnclosingClass
     )
 
-let addClass builder (classDef: ConcreteClassDef): Result<TypeDefIndex<ConcreteClassDef>, _> = addClassDef builder classDef
-let addAbstractClass builder (classDef: AbstractClassDef): Result<TypeDefIndex<AbstractClassDef>, _> =
-    addClassDef builder classDef
-let addSealedClass builder (classDef: SealedClassDef): Result<TypeDefIndex<SealedClassDef>, _> = addClassDef builder classDef
-let addStaticClass builder (classDef: StaticClassDef): Result<TypeDefIndex<StaticClassDef>, _> = addClassDef builder classDef
+[<RequireQualifiedAccess>]
+module ConcreteClass =
+    let addTypeDef builder (classDef: ConcreteClassDef): Result<TypeDefIndex<ConcreteClassDef>, _> = addClassDef builder classDef
+
+    let addInstanceMethod builder (owner: TypeDefIndex<ConcreteClassDef>) (method: InstanceMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<InstanceMethod>, _>
+
+    let addFinalMethod builder (owner: TypeDefIndex<ConcreteClassDef>) (method: FinalMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<FinalMethod>, _>
+
+    let addStaticMethod builder (owner: TypeDefIndex<ConcreteClassDef>) (method: StaticMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<StaticMethod>, _>
+
+    let addConstructor builder (owner: TypeDefIndex<ConcreteClassDef>) (method: ObjectConstructor) =
+        Unsafe.AddConstructor(builder, owner.Index, method)
+
+    let addClassConstructor builder (owner: TypeDefIndex<ConcreteClassDef>) (method: ClassConstructor) =
+        Unsafe.AddConstructor(builder, owner.Index, method)
+
+    let addEntryPoint builder (owner: TypeDefIndex<ConcreteClassDef>) (method: EntryPointMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<EntryPointMethod>, _>
+
+[<RequireQualifiedAccess>]
+module AbstractClass =
+    let addTypeDef builder (classDef: AbstractClassDef): Result<TypeDefIndex<AbstractClassDef>, _> = addClassDef builder classDef
+
+    let addInstanceMethod builder (owner: TypeDefIndex<AbstractClassDef>) (method: InstanceMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<InstanceMethod>, _>
+
+    let addAbstractMethod builder (owner: TypeDefIndex<AbstractClassDef>) (method: AbstractMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<AbstractMethod>, _>
+
+    let addFinalMethod builder (owner: TypeDefIndex<AbstractClassDef>) (method: FinalMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<FinalMethod>, _>
+
+    let addStaticMethod builder (owner: TypeDefIndex<AbstractClassDef>) (method: StaticMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<StaticMethod>, _>
+
+    let addConstructor builder (owner: TypeDefIndex<AbstractClassDef>) (method: ObjectConstructor) =
+        Unsafe.AddConstructor(builder, owner.Index, method)
+
+    let addClassConstructor builder (owner: TypeDefIndex<AbstractClassDef>) (method: ClassConstructor) =
+        Unsafe.AddConstructor(builder, owner.Index, method)
+
+    let addEntryPoint builder (owner: TypeDefIndex<AbstractClassDef>) (method: EntryPointMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<EntryPointMethod>, _>
+
+[<RequireQualifiedAccess>]
+module SealedClass =
+    let addTypeDef builder (classDef: SealedClassDef): Result<TypeDefIndex<SealedClassDef>, _> = addClassDef builder classDef
+
+    let addInstanceMethod builder (owner: TypeDefIndex<SealedClassDef>) (method: InstanceMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<InstanceMethod>, _>
+
+    let addFinalMethod builder (owner: TypeDefIndex<SealedClassDef>) (method: FinalMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<FinalMethod>, _>
+
+    let addStaticMethod builder (owner: TypeDefIndex<SealedClassDef>) (method: StaticMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<StaticMethod>, _>
+
+    let addConstructor builder (owner: TypeDefIndex<SealedClassDef>) (method: ObjectConstructor) =
+        Unsafe.AddConstructor(builder, owner.Index, method)
+
+    let addClassConstructor builder (owner: TypeDefIndex<SealedClassDef>) (method: ClassConstructor) =
+        Unsafe.AddConstructor(builder, owner.Index, method)
+
+    let addEntryPoint builder (owner: TypeDefIndex<SealedClassDef>) (method: EntryPointMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<EntryPointMethod>, _>
+
+[<RequireQualifiedAccess>]
+module StaticClass =
+    let addTypeDef builder (classDef: StaticClassDef): Result<TypeDefIndex<StaticClassDef>, _> = addClassDef builder classDef
+
+    let addStaticMethod builder (owner: TypeDefIndex<StaticClassDef>) (method: StaticMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<StaticMethod>, _>
+
+    let addClassConstructor builder (owner: TypeDefIndex<StaticClassDef>) (method: ClassConstructor) =
+        Unsafe.AddConstructor(builder, owner.Index, method)
+
+    let addEntryPoint builder (owner: TypeDefIndex<StaticClassDef>) (method: EntryPointMethod) =
+        Unsafe.AddMethod(builder, owner.Index, method): Result<MethodDefIndex<EntryPointMethod>, _>
 
 let private addDerivedTypeDef (lookup: TypeLookupCache) (builder: CliMetadataBuilder) extends def (typeDef: 'Type) =
     match lookup.FindType extends with
@@ -80,21 +211,10 @@ let addStruct builder (lookup: TypeLookupCache) = failwith "TODO: Add struct aft
 
 let addField
     (builder: CliMetadataBuilder)
-    (SimpleIndex owner: TypeDefIndex<'Type>)
+    (owner: TypeDefIndex<'Type>)
     (FieldRow field: 'Field when 'Field :> IField<'Type>)
     =
-    match builder.Field.Add(owner, field) with
-    | ValueSome index -> FieldIndex<'Field> index |> Result<FieldIndex<_>, _>.Ok
-    | ValueNone -> DuplicateFieldError field :> ValidationError |> Error
-
-let addMethod
-    (builder: CliMetadataBuilder)
-    (SimpleIndex owner: TypeDefIndex<'Type>)
-    (MethodDef method: 'Method when 'Method :> IMethod<'Type>)
-    =
-    match builder.Method.Add(owner, method) with
-    | ValueSome index -> MethodDefIndex<'Method> index |> Result<MethodDefIndex<_>, _>.Ok
-    | ValueNone -> DuplicateMethodError method :> ValidationError |> Error
+    Unsafe.AddField<'Field>(builder, owner.Index, field)
 
 // TODO: Add functions for adding global fields and global methods.
 

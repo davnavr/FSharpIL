@@ -22,6 +22,4 @@ type Unsafe = class
         Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, None)
 end
 
-let addStruct builder: TypeDefIndex<StructDef> = failwith "TODO: How to add struct?"
-
 let referenceType builder typeRef = Unchecked.referenceType builder typeRef |> throwOnError

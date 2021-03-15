@@ -83,8 +83,7 @@ let example() =
                     | 0 -> "a"
                     | _ -> "b" }
                 |> Param }
-        |> StaticMethod
-        |> addMethod builder posInt
+        |> Struct.addStaticMethod builder posInt
 
     // setTargetFramework
 

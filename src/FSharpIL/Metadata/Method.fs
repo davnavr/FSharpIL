@@ -5,6 +5,13 @@ open System.Reflection
 open System.Runtime.CompilerServices
 open System.Runtime.InteropServices
 
+type [<AbstractClass; Sealed>] InstanceMethodTag = class end
+type [<AbstractClass; Sealed>] AbstractMethodTag = class end
+type [<AbstractClass; Sealed>] FinalMethodTag = class end
+type [<AbstractClass; Sealed>] StaticMethodTag = class end
+type [<AbstractClass; Sealed>] ObjectConstructorTag = class end
+type [<AbstractClass; Sealed>] ClassConstructorTag = class end
+
 type VTableLayout =
     | ReuseSlot
     | NewSlot
@@ -52,15 +59,13 @@ end
 
 [<IsReadOnly; Struct>]
 type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :> IMethodDefSignature> =
-    { Body: ' Body
+    { Body: 'Body
       ImplFlags: MethodImplFlags
       Flags: ValidFlags<'Flags, MethodAttributes>
       MethodName: Identifier
       Signature: 'Signature
       // TODO: Add ParamRow to represent method return type, allowing custom attributes to be applied to the return type.
       ParamList: ParamItem -> int -> ParamRow }
-
-    member internal this.CheckOwner owner = this.Signature.CheckOwner owner
 
     member internal this.Definition() =
         MethodDefRow (
@@ -72,26 +77,9 @@ type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :
             this.ParamList
         )
 
-// TODO: Figure out how to prevent user from implementing IMethod and returning invalid MethodDefRow instances.
-
-[<Sealed>]
-type InstanceMethod (method: Method<ConcreteMethodBody, InstanceMethod, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>) =
-    interface IIndexValue with member _.CheckOwner owner = method.CheckOwner owner
-    interface IMethod<ConcreteClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<AbstractClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<SealedClassDef> with member _.Definition() = method.Definition()
-
-[<Sealed>]
-type AbstractMethod (method: Method<NullMethodBody, AbstractMethod, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>) =
-    interface IIndexValue with member _.CheckOwner owner = method.CheckOwner owner
-    interface IMethod<AbstractClassDef> with member _.Definition() = method.Definition()
-
-[<Sealed>]
-type FinalMethod (method: Method<ConcreteMethodBody, FinalMethod, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>) =
-    interface IIndexValue with member _.CheckOwner owner = method.CheckOwner owner
-    interface IMethod<ConcreteClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<AbstractClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<SealedClassDef> with member _.Definition() = method.Definition()
+type InstanceMethod = Method<ConcreteMethodBody, InstanceMethodTag, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type AbstractMethod = Method<NullMethodBody, AbstractMethodTag, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+type FinalMethod = Method<ConcreteMethodBody, FinalMethodTag, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
 
 [<IsReadOnly>]
 type ConstructorFlags = struct
@@ -144,48 +132,9 @@ end
 // TODO: Prevent constructors from having generic parameters (an entry in the GenericParam table).
 // NOTE: Constructors and Class Constructors cannot be marked CompilerControlled.
 /// <summary>Represents a method named <c>.ctor</c>, which is an object constructor method.</summary>
-[<Sealed>]
-type ObjectConstructor (method: Constructor<ObjectConstructor, ObjectConstructorSignature>) =
-    member private _.Definition() =
-        MethodDefRow (
-            method.Body,
-            method.ImplFlags.Value,
-            method.Flags.Value,
-            Identifier.ofStr ".ctor",
-            method.Signature.Signature(),
-            method.ParamList
-        )
-
-    interface IIndexValue with member _.CheckOwner owner = method.Signature.CheckOwner owner
-    interface IMethod<ConcreteClassDef> with member this.Definition() = this.Definition()
-    interface IMethod<AbstractClassDef> with member this.Definition() = this.Definition()
-    interface IMethod<SealedClassDef> with member this.Definition() = this.Definition()
-
-// TODO: Prevent a ClassConstructor from appearing more than once.
+type ObjectConstructor = Constructor<ObjectConstructorTag, ObjectConstructorSignature>
 /// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
-[<Sealed>]
-type ClassConstructor (method: Constructor<ClassConstructor, unit>) =
-    member private _.Definition() =
-        MethodDefRow (
-            method.Body,
-            method.ImplFlags.Value,
-            method.Flags.Value,
-            Identifier.ofStr ".cctor",
-            MethodDefSignature(
-                false,
-                false,
-                MethodCallingConventions.Default,
-                ReturnTypeItem ReturnTypeVoid.Item,
-                ImmutableArray.Empty
-            ),
-            method.ParamList
-        )
-
-    interface IIndexValue with member _.CheckOwner _ = ()
-    interface IMethod<ConcreteClassDef> with member this.Definition() = this.Definition()
-    interface IMethod<AbstractClassDef> with member this.Definition() = this.Definition()
-    interface IMethod<SealedClassDef> with member this.Definition() = this.Definition()
-    interface IMethod<StaticClassDef> with member this.Definition() = this.Definition()
+type ClassConstructor = Constructor<ClassConstructorTag, unit>
 
 [<IsReadOnly>]
 [<NoComparison; StructuralEquality>]
@@ -207,17 +156,7 @@ type StaticMethodSignature = struct
                 param.CheckOwner owner
 end
 
-[<Sealed>]
-type StaticMethod (method: Method<ConcreteMethodBody, StaticMethod, StaticMethodSignature>) =
-    interface IIndexValue with member _.CheckOwner owner = method.CheckOwner owner
-    interface IMethod<ConcreteClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<AbstractClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<SealedClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<StaticClassDef> with member _.Definition() = method.Definition()
-
-    // NOTE: Static methods should be allowed in Interfaces
-
-    interface IMethod<StructDef> with member _.Definition() = method.Definition()
+type StaticMethod = Method<ConcreteMethodBody, StaticMethodTag, StaticMethodSignature>
 
 [<AbstractClass>]
 type EntryPointSignature internal () =
@@ -228,13 +167,7 @@ type EntryPointSignature internal () =
         member this.CheckOwner owner = this.CheckOwner owner
         member this.Signature() = this.Signature()
 
-[<RequireQualifiedAccess>]
-type EntryPointMethod (method: Method<ConcreteMethodBody, StaticMethod, EntryPointSignature>) =
-    interface IIndexValue with member _.CheckOwner owner = method.CheckOwner owner
-    interface IMethod<ConcreteClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<AbstractClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<SealedClassDef> with member _.Definition() = method.Definition()
-    interface IMethod<StaticClassDef> with member _.Definition() = method.Definition()
+type EntryPointMethod = Method<ConcreteMethodBody, StaticMethodTag, EntryPointSignature>
 
 /// <summary>Represents an <c>EntryPointToken</c> (II.25.3.3).</summary>
 type EntryPointToken =

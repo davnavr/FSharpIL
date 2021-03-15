@@ -1,18 +1,6 @@
 ﻿/// Contains functions for modifying the CLI metadata with CLS checks and warnings.
 module FSharpIL.Metadata.Checked
 
-//let addClass builder classDef =
-//let addAbstractClass builder classDef =
-//let addSealedClass builder classDef =
-//let addStaticClass builder classDef =
-//let addDelegate
-//let addEnum
-//let addInterface
-//let addStruct
-//let addField
-//let addMethod
-//let referenceType
-
 let private referenceMethod (builder: CliMetadataBuilder) (row: MemberRefRow) (warnings: WarningsBuilder) =
     let struct(i, duplicate) = Unchecked.referenceMethod builder row
     if duplicate then warnings.Add(DuplicateMemberRefWarning row)
