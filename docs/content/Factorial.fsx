@@ -89,17 +89,13 @@ let example() =
             { ClassName = Identifier.ofStr "CachedFactorial"
               TypeNamespace = "Factorial"
               Access = TypeVisibility.Public
-              Flags = Flags.staticClass ClassFlags.None
+              Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true))
               Extends = Extends.TypeRef object }
             |> addStaticClass builder
 
         let! cache =
             { FieldName = Identifier.ofStr "cache"
-              Flags =
-                { Visibility = Public
-                  NotSerialized = false
-                  SpecialName = false }
-                |> Flags.staticField
+              Flags = Flags.staticField(FieldFlags Private)
               Signature = EncodedType.GenericInst dictionary_u4_u4 |> FieldSignature.create }
             |> StaticField
             :> IField<StaticClassDef>
@@ -109,13 +105,15 @@ let example() =
 
         let! helper =
             { MethodName = Identifier.ofStr "CalculateHelper"
-              ImplFlags = MethodImplFlags.None
-              Flags = { Visibility = Public; HideBySig = true; SpecialName = false } |> Flags.staticMethod
+              ImplFlags = MethodImplFlags()
+              Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))
               ParamList =
                 fun _ i ->
-                    match i with
-                    | 0 -> { Flags = ParamFlags.None; ParamName = "num" }
-                    | _ -> { Flags = ParamFlags.None; ParamName = "accumulator" }
+                    { Flags = ParamFlags()
+                      ParamName =
+                        match i with
+                        | 0 -> "num"
+                        | _ -> "accumulator" }
                     |> Param
               Signature =
                 StaticMethodSignature(
@@ -129,10 +127,10 @@ let example() =
 
         let! _ =
             { MethodName = Identifier.ofStr "Calculate"
-              ImplFlags = MethodImplFlags.None
-              Flags = { Visibility = Public; HideBySig = true; SpecialName = false } |> Flags.staticMethod
+              ImplFlags = MethodImplFlags()
+              Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))
               // TODO: Figure out why the parameter name is not correct in the decompiler
-              ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "num" }
+              ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "num" }
               Signature =
                 StaticMethodSignature(
                     Default,
@@ -175,7 +173,7 @@ let example() =
                 { MaxStack = 8us; InitLocals = false }
             Constructor(
                 MethodBody.create body,
-                MethodImplFlags.None,
+                MethodImplFlags(),
                 ConstructorFlags(Public, true) |> Flags.classConstructor,
                 (),
                 fun _ _ -> failwith "class constructor has no arguments"

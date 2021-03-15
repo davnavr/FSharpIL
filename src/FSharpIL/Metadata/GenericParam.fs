@@ -7,20 +7,19 @@ open System.Runtime.CompilerServices
 /// <summary>(0x2A) Represents a row in the <c>GenericParam</c> table (II.22.20).</summary>
 [<IsReadOnly>]
 [<NoComparison; CustomEquality>]
-type GenericParam =
-    struct
-        val Flags: GenericParameterAttributes
-        val Name: Identifier
-        val internal ConstraintSet: obj // Constraints
+type GenericParam = struct
+    val Flags: GenericParameterAttributes
+    val Name: Identifier
+    val internal ConstraintSet: obj // Constraints
 
-        internal new (flags, name, constraints) =
-            { Flags = flags
-              Name = name
-              ConstraintSet = constraints }
+    internal new (flags, name, constraints) =
+        { Flags = flags
+          Name = name
+          ConstraintSet = constraints }
 
-        interface IEquatable<GenericParam> with
-            member this.Equals other = this.Name = other.Name
-    end
+    interface IEquatable<GenericParam> with
+        member this.Equals other = this.Name = other.Name
+end
 
 [<IsReadOnly; Struct>]
 type GenericParamFlags =

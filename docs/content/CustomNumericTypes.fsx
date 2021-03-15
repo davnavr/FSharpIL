@@ -52,47 +52,39 @@ let example() =
         |> referenceType builder
 
     // TODO: In the future, this would be a good example to showcase functions to generate XML documentation.
-    let nonNegInt = // TODO: Use helper function to define a struct instead.
+    let posInt = // TODO: Use helper function to define a struct instead.
         let info =
             { StructDef.Access = TypeVisibility.Public
               Flags = failwith "TODO: Get struct flags"
-              StructName = Identifier.ofStr "NonNegInt"
+              StructName = Identifier.ofStr "PosInt"
               TypeNamespace = "CustomNumbers" }
         Unsafe.AddStruct(builder, valueType, info)
 
     let value =
-        { Flags =
-            { Visibility = Private
-              SpecialName = false
-              NotSerialized = false }
-            |> Flags.staticField
+        { Flags = Flags.staticField(FieldFlags Private)
           FieldName = Identifier.ofStr "value"
-          Signature = failwith "" }
+          Signature = FieldSignature.create EncodedType.U4 }
         |> StaticField
         :> IField<StructDef> // TODO: Figure out how to avoid casting when adding members to structs.
-        |> addField builder nonNegInt
+        |> addField builder posInt
 
     let op_Addition =
         { Body =
             failwith "TODO: Add numbers"
-          ImplFlags = MethodImplFlags.None
-          Flags =
-            { Visibility = Public
-              SpecialName = true
-              HideBySig = true }
-            |> Flags.staticMethod
+          ImplFlags = MethodImplFlags()
+          Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
           MethodName = Identifier.ofStr "op_Addition"
           Signature = StaticMethodSignature(MethodCallingConventions.Default, failwith "return", failwith "parameters")
           ParamList =
             fun _ i ->
-                { Flags = ParamFlags.None
+                { Flags = ParamFlags()
                   ParamName =
                     match i with
                     | 0 -> "a"
                     | _ -> "b" }
                 |> Param }
         |> StaticMethod
-        addMethod builder nonNegInt
+        |> addMethod builder posInt
 
     // setTargetFramework
 

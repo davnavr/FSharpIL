@@ -103,11 +103,11 @@ let example() =
                     writer.Ret()
                     { MaxStack = 8us; InitLocals = false }
                 |> MethodBody.create
-              ImplFlags = MethodImplFlags.None
+              ImplFlags = MethodImplFlags()
               MethodName = Identifier.ofStr "Main"
-              Flags = Flags.staticMethod { Visibility = Public; HideBySig = true; SpecialName = false }
+              Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))
               Signature = EntryPointSignature.voidWithArgs
-              ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
+              ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "args" } }
             |> EntryPointMethod
 
         // Create the class that will contain the entrypoint method.
@@ -115,7 +115,7 @@ let example() =
             { Access = TypeVisibility.Public
               ClassName = Identifier.ofStr "Program"
               Extends = Extends.TypeRef object
-              Flags = Flags.staticClass { ClassFlags.None with BeforeFieldInit = true }
+              Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass))
               TypeNamespace = "HelloWorld" }
             |> addStaticClass builder
 

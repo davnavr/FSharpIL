@@ -36,7 +36,7 @@ type Unsafe = class
     static member AddStruct(builder, valueType, structDef: StructDef) =
         Unsafe.AddTypeDef<StructDef>(
             builder,
-            structDef.Flags.Value ||| structDef.Access.Flags,
+            structDef.Flags.Value ||| structDef.Access.Flags, // TODO: Call Flags.structFlags here.
             structDef.StructName,
             structDef.TypeNamespace,
             Extends.TypeRef valueType,

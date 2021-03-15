@@ -4,24 +4,24 @@ open System
 open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
+open System.Runtime.InteropServices
 
 /// <summary>
 /// Represents a <c>FieldSig</c> item, which captures the definition of a field or global variable (II.23.2.4).
 /// </summary>
 [<IsReadOnly>]
 [<NoComparison; StructuralEquality>]
-type FieldSignature =
-    struct
-        val CustomMod: ImmutableArray<CustomModifier>
-        val internal Type: IEncodedType // FieldType
-        internal new (modifiers, fieldType) = { CustomMod = modifiers; Type = fieldType }
+type FieldSignature = struct
+    val CustomMod: ImmutableArray<CustomModifier>
+    val internal Type: IEncodedType // FieldType
+    internal new (modifiers, fieldType) = { CustomMod = modifiers; Type = fieldType }
 
-        member internal this.CheckOwner owner =
-            for modifier in this.CustomMod do modifier.CheckOwner owner
-            this.Type.CheckOwner owner
+    member internal this.CheckOwner owner =
+        for modifier in this.CustomMod do modifier.CheckOwner owner
+        this.Type.CheckOwner owner
 
-        override this.ToString() = this.Type.ToString()
-    end
+    override this.ToString() = this.Type.ToString()
+end
 
 /// <summary>Represents a row in the <c>Field</c> table (II.22.15).</summary>
 [<Sealed>]
@@ -69,9 +69,7 @@ type FieldRow internal (flags, name, signature) =
 
 type FieldIndex<'Tag> = TaggedIndex<'Tag, FieldRow>
 
-/// <summary>
-/// Error used when there is a duplicate row in the <c>Field</c> table (17).
-/// </summary>
+/// <summary>Error used when there is a duplicate row in the <c>Field</c> table (17).</summary>
 /// <category>Errors</category>
 [<Sealed>]
 type DuplicateFieldError (field: FieldRow) =
@@ -86,19 +84,38 @@ type IField<'Parent> =
 module internal FieldHelpers =
     let inline (|FieldRow|) (f: #IField<_>) = f.Row()
 
-[<IsReadOnly; Struct>]
+[<IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
-type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> =
-    { Visibility: 'Visibility
-      NotSerialized: bool
-      // TODO: SpecialName is required to be set if RTSpecialName is set, so allow fields that set special name but don't set RTSpecialName.
-      /// <summary>Sets the <c>SpecialName</c> and <c>RTSpecialName</c> flags.</summary>
-      SpecialName: bool }
+type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> = struct
+    val Visibility: 'Visibility
+    val NotSerialized: bool
+    /// <summary>Gets a value indicating whether the <c>SpecialName</c> or <c>RTSpecialName</c> flags are set.</summary>
+    val SpecialName: SpecialName
+
+    /// <param name="visibility">Specifies from where this field can be accessed.</param>
+    /// <param name="specialName">Sets the <c>SpecialName</c> or <c>RTSpecialName</c> flags.</param>
+    /// <param name="notSerialized">
+    /// If set to <see langword="true"/>, sets the <c>NotSerialized</c> flag. Defaults to <see langword="false"/>.
+    /// </param>
+    new (visibility, specialName, [<Optional; DefaultParameterValue(true)>] notSerialized) =
+        { Visibility = visibility
+          NotSerialized = notSerialized
+          SpecialName = specialName }
+
+    new
+        (
+            visibility,
+            [<Optional; DefaultParameterValue(false)>] isSpecialName,
+            [<Optional; DefaultParameterValue(true)>] notSerialized: bool
+        ) =
+        let specialName = if isSpecialName then SpecialName else NoSpecialName
+        FieldFlags(visibility, specialName, notSerialized)
 
     member this.Value =
-        let mutable flags = this.Visibility.Value
+        let (Flags (specialName: FieldAttributes)) = this.SpecialName
+        let mutable flags = this.Visibility.Value ||| specialName
         if this.NotSerialized then flags <- flags ||| FieldAttributes.NotSerialized
-        if this.SpecialName then flags <- flags ||| FieldAttributes.SpecialName ||| FieldAttributes.RTSpecialName
         flags
 
     interface IFlags<FieldAttributes> with member this.Value = this.Value
+end

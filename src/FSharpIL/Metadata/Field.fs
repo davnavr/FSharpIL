@@ -6,7 +6,7 @@ open System.Reflection
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
 type Field<'Flags> =
-    { Flags: ValidFlags<'Flags, FieldAttributes>
+    { Flags: ValidFlags<'Flags, FieldAttributes> 
       FieldName: Identifier
       Signature: FieldSignature }
 

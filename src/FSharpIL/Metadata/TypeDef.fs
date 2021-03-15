@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 open System.Reflection
 open System.Runtime.CompilerServices
+open System.Runtime.InteropServices
 
 type LayoutFlag =
     | AutoLayout
@@ -29,52 +30,49 @@ type StringFormattingFlag =
         | UnicodeClass -> TypeAttributes.UnicodeClass
         | AutoClass -> TypeAttributes.AutoClass
 
-[<IsReadOnly; Struct>]
-type ClassFlags =
-    { Layout: LayoutFlag
-      SpecialName: bool
-      Import: bool
-      Serializable: bool
-      StringFormat: StringFormattingFlag
-      BeforeFieldInit: bool
-      RTSpecialName: bool }
+[<IsReadOnly>]
+[<StructuralComparison; StructuralEquality>]
+type ClassFlags = struct
+    val Value: TypeAttributes
 
-    member this.Value =
+    new
+        (
+            layout,
+            stringFormat,
+            [<Optional; DefaultParameterValue(false)>] specialName,
+            [<Optional; DefaultParameterValue(false)>] import,
+            [<Optional; DefaultParameterValue(false)>] serializable,
+            [<Optional; DefaultParameterValue(false)>] beforeFieldInit,
+            [<Optional; DefaultParameterValue(false)>] rtSpecialName
+        ) =
         let mutable flags =
-            let layout =
-                match this.Layout with
+            let layout' =
+                match layout with
                 | AutoLayout -> TypeAttributes.AutoLayout
                 | SequentialLayout -> TypeAttributes.SequentialLayout
                 | ExplicitLayout -> TypeAttributes.ExplicitLayout
             let stringf =
-                match this.StringFormat with
+                match stringFormat with
                 | AnsiClass -> TypeAttributes.AnsiClass
                 | UnicodeClass -> TypeAttributes.UnicodeClass
                 | AutoClass -> TypeAttributes.AutoClass
-            layout ||| stringf
-        if this.SpecialName then flags <- flags ||| TypeAttributes.SpecialName
-        if this.Import then flags <- flags ||| TypeAttributes.Import
-        if this.Serializable then flags <- flags ||| TypeAttributes.Serializable
-        if this.BeforeFieldInit then flags <- flags ||| TypeAttributes.BeforeFieldInit
-        if this.RTSpecialName then flags <- flags ||| TypeAttributes.RTSpecialName
-        flags
+            layout' ||| stringf
+        if specialName then flags <- flags ||| TypeAttributes.SpecialName
+        if import then flags <- flags ||| TypeAttributes.Import
+        if serializable then flags <- flags ||| TypeAttributes.Serializable
+        if beforeFieldInit then flags <- flags ||| TypeAttributes.BeforeFieldInit
+        if rtSpecialName then flags <- flags ||| TypeAttributes.RTSpecialName
+        { Value = flags }
 
     interface IFlags<TypeAttributes> with member this.Value = this.Value
-
-    static member None =
-        { Layout = AutoLayout
-          SpecialName = false
-          Import = false
-          Serializable = false
-          StringFormat = AnsiClass
-          BeforeFieldInit = false
-          RTSpecialName = false }
+end
 
 [<AbstractClass; Sealed>] type ConcreteClassFlags = class end
 [<AbstractClass; Sealed>] type AbstractClassFlags = class end
 [<AbstractClass; Sealed>] type SealedClassFlags = class end
 [<AbstractClass; Sealed>] type StaticClassFlags = class end
 
+// TODO: Make these other TypeDef flag types normal structs.
 [<Struct; IsReadOnly>]
 type DelegateFlags =
     { Serializable: bool }

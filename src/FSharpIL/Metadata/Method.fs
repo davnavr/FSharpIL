@@ -10,38 +10,45 @@ type VTableLayout =
     | NewSlot
 
 // TODO: Consider making flags classes with optional arguments in constructors instead of records.
-[<IsReadOnly; Struct>]
-type InstanceMethodFlags =
-    { Visibility: Visibility
-      HideBySig: bool
-      SpecialName: bool
-      VTableLayout: VTableLayout }
+[<IsReadOnly>]
+[<StructuralComparison; StructuralEquality>]
+type InstanceMethodFlags = struct
+    val Value: MethodAttributes
 
-    member this.Value =
-        let vtable =
-            match this.VTableLayout with
-            | ReuseSlot -> MethodAttributes.ReuseSlot
-            | NewSlot -> MethodAttributes.NewSlot
-        let mutable flags = (this.Visibility :> IFlags<MethodAttributes>).Value
-        if this.HideBySig then flags <- flags ||| MethodAttributes.HideBySig
-        if this.SpecialName then flags <- flags ||| MethodAttributes.SpecialName
-        flags ||| vtable
+    new (visibility: Visibility, vTableLayout, specialName: SpecialName, hideBySig) =
+        let mutable flags =
+            let vTableLayout' =
+                match vTableLayout with
+                | ReuseSlot -> MethodAttributes.ReuseSlot
+                | NewSlot -> MethodAttributes.NewSlot
+            let (Flags (specialName': MethodAttributes)) = specialName
+            let (Flags visiblity') = visibility
+            vTableLayout' ||| visiblity' ||| specialName'
+        if hideBySig then flags <- flags ||| MethodAttributes.HideBySig
+        { Value = flags }
+
+    new (visibility, vTableLayout, specialName) = InstanceMethodFlags(visibility, vTableLayout, specialName, false)
+    new (visibility, vTableLayout) = InstanceMethodFlags(visibility, vTableLayout, NoSpecialName)
 
     interface IFlags<MethodAttributes> with member this.Value = this.Value
+end
 
-[<IsReadOnly; Struct>]
+[<IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
-type StaticMethodFlags<'Visibility when 'Visibility :> IFlags<MethodAttributes>> =
-    { Visibility: 'Visibility
-      SpecialName: bool
-      HideBySig: bool }
+type StaticMethodFlags<'Visibility when 'Visibility :> IFlags<MethodAttributes>> = struct
+    val Value: MethodAttributes
 
-    interface IFlags<MethodAttributes> with
-        member this.Value =
-            let mutable flags = this.Visibility.Value
-            if this.HideBySig then flags <- flags ||| MethodAttributes.HideBySig
-            if this.SpecialName then flags <- flags ||| MethodAttributes.SpecialName
-            flags
+    new (visibility: 'Visibility, specialName: SpecialName, [<Optional; DefaultParameterValue(false)>] hideBySig) =
+        let mutable flags =
+            let (Flags (specialName': MethodAttributes)) = specialName
+            visibility.Value ||| specialName'
+        if hideBySig then flags <- flags ||| MethodAttributes.HideBySig
+        { Value = flags }
+
+    new (visibility) = StaticMethodFlags(visibility, NoSpecialName)
+
+    interface IFlags<MethodAttributes> with member this.Value = this.Value
+end
 
 [<IsReadOnly; Struct>]
 type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :> IMethodDefSignature> =
@@ -209,6 +216,8 @@ type StaticMethod (method: Method<ConcreteMethodBody, StaticMethod, StaticMethod
     interface IMethod<StaticClassDef> with member _.Definition() = method.Definition()
 
     // NOTE: Static methods should be allowed in Interfaces
+
+    interface IMethod<StructDef> with member _.Definition() = method.Definition()
 
 [<AbstractClass>]
 type EntryPointSignature internal () =

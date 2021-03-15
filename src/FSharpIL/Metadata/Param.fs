@@ -3,23 +3,31 @@
 open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
+open System.Runtime.InteropServices
 
-[<IsReadOnly; Struct>]
-type ParamFlags =
-    { In: bool
-      Out: bool
-      Optional: bool }
+[<IsReadOnly>]
+[<StructuralComparison; StructuralEquality>]
+type ParamFlags = struct
+    val Value: ParameterAttributes
 
-    member this.Value =
+    new
+        (
+            [<Optional; DefaultParameterValue(false)>] isIn,
+            [<Optional; DefaultParameterValue(false)>] isOut,
+            [<Optional; DefaultParameterValue(false)>] isOptional
+        ) =
         let mutable flags = ParameterAttributes.None
-        if this.In then flags <- flags ||| ParameterAttributes.In
-        if this.Out then flags <- flags ||| ParameterAttributes.Out
-        if this.Optional then flags <- flags ||| ParameterAttributes.Optional
-        flags
+        if isIn then flags <- flags ||| ParameterAttributes.In
+        if isOut then flags <- flags ||| ParameterAttributes.Out
+        if isOptional then flags <- flags ||| ParameterAttributes.Optional
+        { Value = flags }
+
+    member this.In = this.Value.HasFlag ParameterAttributes.In
+    member this.Out = this.Value.HasFlag ParameterAttributes.Out
+    member this.Optional = this.Value.HasFlag ParameterAttributes.Optional
 
     interface IFlags<ParameterAttributes> with member this.Value = this.Value
-
-    static member None = { In = false; Out = false; Optional = false }
+end
 
 /// Represents a parameter.
 [<IsReadOnly; Struct>]
@@ -44,18 +52,16 @@ type ParamRow =
     override this.ToString() = this.ParamName
 
 /// <summary>Represents a <c>Param</c> item used in signatures (II.23.2.10).</summary>
-// TODO: How is BYREF and TYPEDBYREF modeled?
 [<IsReadOnly>]
 [<NoComparison; StructuralEquality>]
-type ParamItem =
-    struct
-        val CustomMod: ImmutableArray<CustomModifier>
-        val internal Type: IEncodedType // ParamType
-        internal new (modifiers, paramType) = { CustomMod = modifiers; Type = paramType }
+type ParamItem = struct
+    val CustomMod: ImmutableArray<CustomModifier>
+    val internal Type: IEncodedType // ParamType
+    internal new (modifiers, paramType) = { CustomMod = modifiers; Type = paramType }
 
-        member internal this.CheckOwner owner =
-            for modifier in this.CustomMod do modifier.CheckOwner owner
-            this.Type.CheckOwner owner
+    member internal this.CheckOwner owner =
+        for modifier in this.CustomMod do modifier.CheckOwner owner
+        this.Type.CheckOwner owner
 
-        override this.ToString() = this.Type.ToString()
-    end
+    override this.ToString() = this.Type.ToString()
+end

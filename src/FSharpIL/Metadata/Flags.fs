@@ -1,18 +1,18 @@
 ﻿namespace FSharpIL.Metadata
 
+open System
 open System.Reflection
 open System.Runtime.CompilerServices
 
-type IFlags<'Flags when 'Flags :> System.Enum> = abstract Value: 'Flags
+type IFlags<'Flags when 'Flags :> Enum> = abstract Value: 'Flags
 
 [<IsReadOnly>]
-type ValidFlags<'Tag, 'Flags when 'Flags :> System.Enum> =
-    struct
-        val Value: 'Flags
-        internal new(flags: 'Flags) = { Value = flags }
-        override this.ToString() = this.Value.ToString()
-        interface IFlags<'Flags> with member this.Value = this.Value
-    end
+type ValidFlags<'Tag, 'Flags when 'Flags :> Enum> = struct
+    val Value: 'Flags
+    internal new(flags: 'Flags) = { Value = flags }
+    override this.ToString() = this.Value.ToString()
+    interface IFlags<'Flags> with member this.Value = this.Value
+end
 
 [<AutoOpen>]
 module internal FlagPatterns =
@@ -64,3 +64,25 @@ type GlobalVisibility =
             | Public -> FieldAttributes.Public
             | CompilerControlled -> FieldAttributes.PrivateScope
             | Private -> FieldAttributes.Private
+
+type SpecialName =
+    /// <summary>Leaves both the <c>SpecialName</c> and <c>RTSpecialName</c> flags clear.</summary>
+    | NoSpecialName
+    /// <summary>Sets the <c>SpecialName</c> flag, and leaves the <c>RTSpecialName</c> flag clear.</summary>
+    | SpecialName
+    /// <summary>Sets both the <c>SpecialName</c> and <c>RTSpecialName</c> flags.</summary>
+    | RTSpecialName
+
+    interface IFlags<FieldAttributes> with
+        member this.Value =
+            match this with
+            | NoSpecialName -> FieldAttributes.PrivateScope
+            | SpecialName -> FieldAttributes.SpecialName
+            | RTSpecialName -> FieldAttributes.RTSpecialName ||| FieldAttributes.SpecialName
+
+    interface IFlags<MethodAttributes> with
+        member this.Value =
+            match this with
+            | NoSpecialName -> MethodAttributes.PrivateScope
+            | SpecialName -> MethodAttributes.SpecialName
+            | RTSpecialName -> MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName

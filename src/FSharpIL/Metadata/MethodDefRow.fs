@@ -4,6 +4,7 @@ open System
 open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
+open System.Runtime.InteropServices
 open System.Text
 
 open Microsoft.FSharp.Core.Printf
@@ -11,28 +12,26 @@ open Microsoft.FSharp.Core.Printf
 // NOTE: For methods, SpecialName has to be set if RTSpecialName is set.
 // NOTE: For methods, RTSpecialName and SpecialName is set when it is a ctor or cctor
 
-[<IsReadOnly; Struct>]
-type MethodImplFlags =
-    { ForwardRef: bool
-      PreserveSig: bool
-      NoInlining: bool
-      NoOptimization: bool }
+[<IsReadOnly>]
+type MethodImplFlags = struct
+    val Value: MethodImplAttributes
 
-    member this.Value =
+    new
+        (
+            [<Optional; DefaultParameterValue(false)>] forwardRef,
+            [<Optional; DefaultParameterValue(false)>] preserveSig,
+            [<Optional; DefaultParameterValue(false)>] noInlining,
+            [<Optional; DefaultParameterValue(false)>] noOptimization
+        ) =
         let mutable flags = enum<MethodImplAttributes> 0
-        if this.ForwardRef then flags <- flags ||| MethodImplAttributes.ForwardRef
-        if this.PreserveSig then flags <- flags ||| MethodImplAttributes.PreserveSig
-        if this.NoInlining then flags <- flags ||| MethodImplAttributes.NoInlining
-        if this.NoOptimization then flags <- flags ||| MethodImplAttributes.NoOptimization
-        flags
+        if forwardRef then flags <- flags ||| MethodImplAttributes.ForwardRef
+        if preserveSig then flags <- flags ||| MethodImplAttributes.PreserveSig
+        if noInlining then flags <- flags ||| MethodImplAttributes.NoInlining
+        if noOptimization then flags <- flags ||| MethodImplAttributes.NoOptimization
+        { Value = flags }
 
     interface IFlags<MethodImplAttributes> with member this.Value = this.Value
-
-    static member None =
-        { ForwardRef = false
-          PreserveSig = false
-          NoInlining = false
-          NoOptimization = false }
+end
 
 type MethodCallingConventions =
     | Default
@@ -50,7 +49,14 @@ type internal CallingConvention =
 /// <summary>Represents a <c>MethodDefSig</c>, which captures the signature of a method or global function (II.23.2.1).</summary>
 // TODO: Ensure that HasThis is set when ExplicitThis is set (31).
 [<IsReadOnly; Struct>]
-type MethodDefSignature internal (hasThis: bool, explicitThis: bool, cconv: MethodCallingConventions, retType: ReturnTypeItem, parameters: ImmutableArray<ParamItem>) =
+type MethodDefSignature internal
+    (
+        hasThis: bool,
+        explicitThis: bool,
+        cconv: MethodCallingConventions,
+        retType: ReturnTypeItem,
+        parameters: ImmutableArray<ParamItem>
+    ) =
     member _.CallingConventions = cconv
     member internal _.Flags =
         let mutable flags =
