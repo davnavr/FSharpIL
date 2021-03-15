@@ -41,11 +41,11 @@ type Unsafe private () = class
         ) =
         Unsafe.AddMethod<Method<'Body, 'Flags, 'Signature>>(builder, owner, method.Definition())
 
-    static member private AddConstructor<'Tag, 'Signature>
+    static member private AddConstructor<'Tag, 'Flags, 'Signature>
         (
             builder: CliMetadataBuilder,
             owner,
-            method: Constructor<'Tag, 'Signature>,
+            method: Constructor<'Flags, 'Signature>,
             name,
             signature
         ) =
@@ -62,10 +62,22 @@ type Unsafe private () = class
         Unsafe.AddMethod<'Tag>(builder, owner, row)
 
     static member AddConstructor(builder: CliMetadataBuilder, owner, method: ObjectConstructor) =
-        Unsafe.AddConstructor<ObjectConstructorTag, _>(builder, owner, method, ".ctor", method.Signature.Signature())
+        Unsafe.AddConstructor<ObjectConstructor, ObjectConstructorTag, _> (
+            builder,
+            owner,
+            method,
+            ".ctor",
+            method.Signature.Signature()
+        )
 
     static member AddConstructor(builder: CliMetadataBuilder, owner, method: ClassConstructor) =
-        Unsafe.AddConstructor<ClassConstructorTag, _>(builder, owner, method, ".cctor", Unsafe.ClassConstructorSignature)
+        Unsafe.AddConstructor<ClassConstructor, ClassConstructorTag, _> (
+            builder,
+            owner,
+            method,
+            ".cctor",
+            Unsafe.ClassConstructorSignature
+        )
 
     static member AddTypeDef<'Tag>
         (

@@ -100,7 +100,8 @@ end
 [<NoComparison; StructuralEquality>]
 type ObjectConstructorSignature = struct
     val Parameters: ImmutableArray<ParamItem>
-    new (parameters) = { Parameters = parameters }
+    new (parameters: ImmutableArray<_>) = { Parameters = parameters }
+    new ([<System.ParamArray>] parameters: ParamItem[]) = ObjectConstructorSignature(parameters.ToImmutableArray())
 
     member internal this.CheckOwner owner =
         for param in this.Parameters do param.CheckOwner owner

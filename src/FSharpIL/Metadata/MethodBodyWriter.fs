@@ -324,14 +324,21 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
             this.WriteU1 0x72uy
             MetadataToken.userString str content.UserString content.Writer
 
-    // TODO: Allow Newobj to accept ObjectConstructor and ClassConstructor method indices.
     // TODO: Figure out of Newobj can accept a .ctor with a VARARG signature.
+    member private this.Newobj(ctor, table: IMetadataTable<_>, tablei) =
+        this.Call(0x73uy, ctor, table.IndexOf ctor, tablei)
+
     /// <summary>
-    /// (0x73) Writes an isntrcution that allocates "an uninitialized object or value type" and calls the specified constructor
-    /// method (III.4.21).
+    /// (0x73) Writes an instruction that allocates "an uninitialized object or value type" and calls the constructor specified
+    /// by a <c>MemberRef</c> with a <c>DEFAULT</c> calling convention (III.4.21).
     /// </summary>
-    member this.Newobj(SimpleIndex ctor: MemberRefIndex<MethodRefDefault>) =
-        this.Call(0x73uy, ctor, content.Metadata.MemberRef.IndexOf ctor, 0xAuy)
+    member this.Newobj(ctor: MemberRefIndex<MethodRefDefault>) = this.Newobj(ctor.Index, content.Metadata.MemberRef, 0xAuy)
+
+    /// <summary>
+    /// (0x73) Writes an instruction that allocates "an uninitialized object or value type" and calls the constructor method
+    /// (III.4.21).
+    /// </summary>
+    member this.Newobj(ctor: MethodDefIndex<ObjectConstructor>) = this.Newobj(ctor.Index, content.Metadata.MethodDef, 0x6uy)
 
     member private this.WriteFieldInstruction(opcode, SimpleIndex field: FieldIndex<_>) =
         this.WriteU1 opcode

@@ -60,53 +60,92 @@ let example() =
         |> referenceType builder
 
     // TODO: In the future, this would be a good example to showcase functions to generate XML documentation.
-    let posInt = // TODO: Use helper function to define a struct instead.
+    let fraction = // TODO: Use helper function to define a struct instead.
         let info =
             { StructDef.Access = TypeVisibility.Public
               Flags = ClassFlags() |> Flags.valueType
               StructName = Identifier.ofStr "PosInt"
               TypeNamespace = "CustomNumbers" }
         Unsafe.AddStruct(builder, valueType, info)
-    let posIntEncoded = EncodedType.typeDefStruct posInt
+    let fractionEncoded = EncodedType.typeDefStruct fraction
 
-    let value =
+    let numerator =
         { Flags = Flags.instanceField(FieldFlags Private)
-          FieldName = Identifier.ofStr "value"
-          Signature = FieldSignature.create EncodedType.U4 }
-        |> Struct.addInstanceField builder posInt
+          FieldName = Identifier.ofStr "numerator"
+          Signature = FieldSignature.create EncodedType.I4 }
+        |> Struct.addInstanceField builder fraction
+    let denominator =
+        { Flags = Flags.instanceField(FieldFlags Private)
+          FieldName = Identifier.ofStr "denominator"
+          Signature = FieldSignature.create EncodedType.I4 }
+        |> Struct.addInstanceField builder fraction
 
-    let op_Addition =
-        { Body =
-            fun content ->
-                let wr = MethodBodyWriter content
-                wr.Ldarg 0us
-                wr.Ldfld value
-                wr.Ldarg 1us
-                wr.Ldfld value
-                wr.Add()
-                // TODO: Call constructor
-                wr.Ret()
-                { MaxStack = 2us; InitLocals = false }
-            |> MethodBody.create
-          ImplFlags = MethodImplFlags()
-          Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
-          MethodName = Identifier.ofStr "op_Addition"
-          Signature =
-            let parameters =
-                ImmutableArray.Create (
-                    ParamItem.create posIntEncoded,
-                    ParamItem.create posIntEncoded
-                )
-            StaticMethodSignature(MethodCallingConventions.Default, ReturnType.encoded posIntEncoded, parameters)
-          ParamList =
-            fun _ i ->
-                { Flags = ParamFlags()
-                  ParamName =
-                    match i with
-                    | 0 -> "a"
-                    | _ -> "b" }
-                |> Param }
-        |> Struct.addStaticMethod builder posInt
+    // TODO: Add properties to access values in numbers example.
+
+    let ctor =
+        let body content =
+            let wr = MethodBodyWriter content
+            wr.Ldarg 0us
+            wr.Ldarg 1us
+            wr.Stfld numerator
+            wr.Ldarg 0us
+            wr.Ldarg 2us
+            wr.Stfld denominator
+            wr.Ret()
+            { MaxStack = 1us; InitLocals = false }
+        Constructor (
+            body = MethodBody.create body,
+            implFlags = MethodImplFlags(),
+            flags = (ConstructorFlags(Public, true) |> Flags.constructor),
+            signature = ObjectConstructorSignature(ParamItem.create EncodedType.I4, ParamItem.create EncodedType.I4),
+            paramList =
+                fun _ i ->
+                    { Flags = ParamFlags()
+                      ParamName =
+                        match i with
+                        | 0 -> "numerator"
+                        | _ -> "denominator" }
+                    |> Param
+        )
+        |> Struct.addConstructor builder fraction
+
+    { Body =
+        fun content ->
+            let wr = MethodBodyWriter content
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Ldarg 1us
+            wr.Ldfld numerator
+            wr.Mul()
+            wr.Ldarg 0us
+            wr.Ldfld denominator
+            wr.Ldarg 1us
+            wr.Ldfld denominator
+            wr.Mul()
+            wr.Newobj ctor
+            wr.Ret()
+            { MaxStack = 2us; InitLocals = false }
+        |> MethodBody.create
+      ImplFlags = MethodImplFlags()
+      Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
+      MethodName = Identifier.ofStr "op_Multiply"
+      Signature =
+        let parameters =
+            ImmutableArray.Create (
+                ParamItem.create fractionEncoded,
+                ParamItem.create fractionEncoded
+            )
+        StaticMethodSignature(MethodCallingConventions.Default, ReturnType.encoded fractionEncoded, parameters)
+      ParamList =
+        fun _ i ->
+            { Flags = ParamFlags()
+              ParamName =
+                match i with
+                | 0 -> "a"
+                | _ -> "b" }
+            |> Param }
+    |> Struct.addStaticMethod builder fraction
+    |> ignore
 
     // setTargetFramework
 
