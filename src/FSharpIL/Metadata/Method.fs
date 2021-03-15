@@ -14,6 +14,7 @@ type VTableLayout =
 type InstanceMethodFlags =
     { Visibility: Visibility
       HideBySig: bool
+      SpecialName: bool
       VTableLayout: VTableLayout }
 
     member this.Value =
@@ -23,6 +24,7 @@ type InstanceMethodFlags =
             | NewSlot -> MethodAttributes.NewSlot
         let mutable flags = (this.Visibility :> IFlags<MethodAttributes>).Value
         if this.HideBySig then flags <- flags ||| MethodAttributes.HideBySig
+        if this.SpecialName then flags <- flags ||| MethodAttributes.SpecialName
         flags ||| vtable
 
     interface IFlags<MethodAttributes> with member this.Value = this.Value
@@ -31,14 +33,15 @@ type InstanceMethodFlags =
 [<StructuralComparison; StructuralEquality>]
 type StaticMethodFlags<'Visibility when 'Visibility :> IFlags<MethodAttributes>> =
     { Visibility: 'Visibility
+      SpecialName: bool
       HideBySig: bool }
 
     interface IFlags<MethodAttributes> with
         member this.Value =
-            let flags = this.Visibility.Value
-            if this.HideBySig
-            then flags ||| MethodAttributes.HideBySig
-            else flags
+            let mutable flags = this.Visibility.Value
+            if this.HideBySig then flags <- flags ||| MethodAttributes.HideBySig
+            if this.SpecialName then flags <- flags ||| MethodAttributes.SpecialName
+            flags
 
 [<IsReadOnly; Struct>]
 type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :> IMethodDefSignature> =
@@ -204,6 +207,8 @@ type StaticMethod (method: Method<ConcreteMethodBody, StaticMethod, StaticMethod
     interface IMethod<AbstractClassDef> with member _.Definition() = method.Definition()
     interface IMethod<SealedClassDef> with member _.Definition() = method.Definition()
     interface IMethod<StaticClassDef> with member _.Definition() = method.Definition()
+
+    // NOTE: Static methods should be allowed in Interfaces
 
 [<AbstractClass>]
 type EntryPointSignature internal () =

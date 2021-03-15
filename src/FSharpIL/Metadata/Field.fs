@@ -35,6 +35,8 @@ type StaticField (field: Field<StaticField>) =
     interface IField<SealedClassDef> with member _.Row() = field.Row()
     interface IField<StaticClassDef> with member _.Row() = field.Row()
 
+    interface IField<StructDef> with member _.Row() = field.Row()
+
     // NOTE: Static fields should also be allowed in interfaces.
 
 // TODO: Make field union type to avoid explicit casting with :>

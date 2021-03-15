@@ -102,6 +102,7 @@ let example() =
                 |> Flags.staticField
               Signature = EncodedType.GenericInst dictionary_u4_u4 |> FieldSignature.create }
             |> StaticField
+            :> IField<StaticClassDef>
             |> addField builder factorial
 
         let calculateBody, setCalculateBody = MethodBody.mutableBody()
@@ -109,7 +110,7 @@ let example() =
         let! helper =
             { MethodName = Identifier.ofStr "CalculateHelper"
               ImplFlags = MethodImplFlags.None
-              Flags = { Visibility = Public; HideBySig = true } |> Flags.staticMethod
+              Flags = { Visibility = Public; HideBySig = true; SpecialName = false } |> Flags.staticMethod
               ParamList =
                 fun _ i ->
                     match i with
@@ -129,7 +130,7 @@ let example() =
         let! _ =
             { MethodName = Identifier.ofStr "Calculate"
               ImplFlags = MethodImplFlags.None
-              Flags = { Visibility = Public; HideBySig = true } |> Flags.staticMethod
+              Flags = { Visibility = Public; HideBySig = true; SpecialName = false } |> Flags.staticMethod
               // TODO: Figure out why the parameter name is not correct in the decompiler
               ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "num" }
               Signature =

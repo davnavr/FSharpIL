@@ -105,7 +105,7 @@ let example() =
                 |> MethodBody.create
               ImplFlags = MethodImplFlags.None
               MethodName = Identifier.ofStr "Main"
-              Flags = Flags.staticMethod { Visibility = Public; HideBySig = true }
+              Flags = Flags.staticMethod { Visibility = Public; HideBySig = true; SpecialName = false }
               Signature = EntryPointSignature.voidWithArgs
               ParamList = fun _ _ -> Param { Flags = ParamFlags.None; ParamName = "args" } }
             |> EntryPointMethod

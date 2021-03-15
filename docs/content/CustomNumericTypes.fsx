@@ -60,7 +60,39 @@ let example() =
               TypeNamespace = "CustomNumbers" }
         Unsafe.AddStruct(builder, valueType, info)
 
+    let value =
+        { Flags =
+            { Visibility = Private
+              SpecialName = false
+              NotSerialized = false }
+            |> Flags.staticField
+          FieldName = Identifier.ofStr "value"
+          Signature = failwith "" }
+        |> StaticField
+        :> IField<StructDef> // TODO: Figure out how to avoid casting when adding members to structs.
+        |> addField builder nonNegInt
 
+    let op_Addition =
+        { Body =
+            failwith "TODO: Add numbers"
+          ImplFlags = MethodImplFlags.None
+          Flags =
+            { Visibility = Public
+              SpecialName = true
+              HideBySig = true }
+            |> Flags.staticMethod
+          MethodName = Identifier.ofStr "op_Addition"
+          Signature = StaticMethodSignature(MethodCallingConventions.Default, failwith "return", failwith "parameters")
+          ParamList =
+            fun _ i ->
+                { Flags = ParamFlags.None
+                  ParamName =
+                    match i with
+                    | 0 -> "a"
+                    | _ -> "b" }
+                |> Param }
+        |> StaticMethod
+        addMethod builder nonNegInt
 
     // setTargetFramework
 
