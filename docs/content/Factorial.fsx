@@ -32,19 +32,25 @@ let example() =
           Mvid = Guid.NewGuid() }
         |> CliMetadataBuilder
 
-    { Name = AssemblyName.ofStr "Factorial"
-      HashAlgId = ()
-      Version = Version(1, 2, 6, 24)
-      Flags = ()
-      PublicKey = None
-      Culture = NullCulture }
-    |> setAssembly builder
-    |> ignore
+    let assembly =
+        { Name = AssemblyName.ofStr "Factorial"
+          HashAlgId = ()
+          Version = Version(1, 2, 6, 24)
+          Flags = ()
+          PublicKey = None
+          Culture = NullCulture }
+        |> setAssembly builder
 
     // TODO: Add target framework attribute to Factorial example.
     validated {
         let! mscorlib = SystemAssembly.Net5_0.private_corelib builder
         let! object = SystemTypes.object builder mscorlib
+        let! tfmAttr =
+            { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
+              TypeNamespace = "System.Runtime.Versioning"
+              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+            |> referenceType builder
+
         let! dictionary =
             { ResolutionScope = ResolutionScope.AssemblyRef mscorlib
               TypeName = Identifier.ofStr "Dictionary`2"
@@ -173,6 +179,16 @@ let example() =
             )
             |> ClassConstructor
             |> addMethod builder factorial
+
+        let! tfm_ctor =
+            { Class = MemberRefParent.TypeRef tfmAttr
+              MemberName = Identifier.ofStr ".ctor"
+              Signature =
+                let parameters = ImmutableArray.Create(ParamItem.create EncodedType.String)
+                MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
+            |> referenceDefaultMethod builder
+
+        setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
 
         setCalculateBody <| fun content ->
             let writer = MethodBodyWriter content

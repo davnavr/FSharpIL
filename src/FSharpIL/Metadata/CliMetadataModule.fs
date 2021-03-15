@@ -53,6 +53,18 @@ let setEntryPointToken (builder: CliMetadataBuilder) entryPoint = builder.SetEnt
 /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
 let setEntryPoint builder main = setEntryPointToken builder (EntryPointToken.ValidEntryPoint main)
 
+/// <summary>Adds a <c>TargetFrameworkAttribute</c> to the current assembly specifying the target framework.</summary>
+/// <param name="builder" />
+/// <param name="assembly">Dummy object used to guarantee that the CLI metadata is an assembly.</param>
+/// <param name="ctor">The constructor for a <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/>.</param>
+/// <param name="tfm">The target framework moniker. For .NET 5, the value is <c>.NETCoreApp,Version=v5.0</c>.</param>
+let setTargetFramework builder (assembly: AssemblyIndex) (ctor: MemberRefIndex<_>) tfm =
+    let tfm' = FixedArg.Elem (SerString tfm)
+    { Parent = CustomAttributeParent.Assembly assembly
+      Type = CustomAttributeType.MethodRefDefault ctor
+      Value = Some { FixedArg = ImmutableArray.Create tfm'; NamedArg = ImmutableArray.Empty } }
+    |> addCustomAttribute builder
+
 /// Contains functions for modifying the CLI metadata with warnings only and no CLS checks.
 module WarningChecked =
     // TODO: Enforce common warning checks for types.
