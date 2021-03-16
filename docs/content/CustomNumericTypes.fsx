@@ -61,11 +61,13 @@ let example() =
         |> referenceType builder
 
     // TODO: In the future, this would be a good example to showcase functions to generate XML documentation.
+    // TODO: Mark struct and its fields as readonly.
+
     let fraction = // TODO: Use helper function to define a struct instead.
         let info =
             { StructDef.Access = TypeVisibility.Public
               Flags = ClassFlags() |> Flags.valueType
-              StructName = Identifier.ofStr "PosInt"
+              StructName = Identifier.ofStr "Fraction"
               TypeNamespace = "CustomNumbers" }
         Unsafe.AddStruct(builder, valueType, info)
     let fractionEncoded = EncodedType.typeDefStruct fraction
@@ -76,11 +78,13 @@ let example() =
         |> TypeSpec.genericInst
         |> addTypeSpec builder
 
+    // val private numerator: int32
     let numerator =
         { Flags = Flags.instanceField(FieldFlags Private)
           FieldName = Identifier.ofStr "numerator"
           Signature = FieldSignature.create EncodedType.I4 }
         |> Struct.addInstanceField builder fraction
+    // val private denominator: int32
     let denominator =
         { Flags = Flags.instanceField(FieldFlags Private)
           FieldName = Identifier.ofStr "denominator"
@@ -89,6 +93,7 @@ let example() =
 
     // TODO: Add properties to access values in numbers example.
 
+    // new (numerator: int32, denominator: int32)
     let ctor =
         let body content =
             let wr = MethodBodyWriter content
@@ -116,9 +121,11 @@ let example() =
         )
         |> Struct.addConstructor builder fraction
 
+    // static member op_Multiply(a: Fraction, b: Fraction): Fraction
     { Body =
         fun content ->
             let wr = MethodBodyWriter content
+            // new Fraction(a.numerator * b.numerator, a.denominator * b.denominator)
             wr.Ldarg 0us
             wr.Ldfld numerator
             wr.Ldarg 1us
@@ -156,6 +163,26 @@ let example() =
 
     // Implement System.IComparable`1
     Struct.implementSpec builder fraction icomparable_fraction |> ignore
+
+    // member this.CompareTo(other: Fraction): Fraction
+    { Body =
+        fun content ->
+            let wr = MethodBodyWriter content
+            wr.Ldarg 0us
+            wr.Ldfld denominator // this.denominator
+            wr.Ldarg 1us
+            wr.Ldfld denominator // other.denominator
+            // TODO: Check if numerators are the same
+            wr.Ret()
+            { MaxStack = 2us; InitLocals = false }
+        |> MethodBody.create
+      ImplFlags = MethodImplFlags()
+      Flags = InstanceMethodFlags(Public, VTableLayout.ReuseSlot, NoSpecialName, true) |> Flags.instanceMethod
+      MethodName = Identifier.ofStr "CompareTo"
+      Signature = InstanceMethodSignature(ReturnType.itemI4, ParamItem.create fractionEncoded)
+      ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "other" } }
+    |> Struct.addInstanceMethod builder fraction
+    |> ignore
 
     // setTargetFramework
 

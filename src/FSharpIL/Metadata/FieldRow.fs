@@ -98,7 +98,7 @@ type FieldFlags<'Visibility when 'Visibility :> IFlags<FieldAttributes>> = struc
         (
             visibility,
             [<Optional; DefaultParameterValue(false)>] isSpecialName,
-            [<Optional; DefaultParameterValue(true)>] notSerialized: bool
+            [<Optional; DefaultParameterValue(false)>] notSerialized: bool
         ) =
         let specialName = if isSpecialName then SpecialName else NoSpecialName
         FieldFlags(visibility, specialName, notSerialized)

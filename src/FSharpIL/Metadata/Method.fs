@@ -1,5 +1,6 @@
 ﻿namespace FSharpIL.Metadata
 
+open System
 open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
@@ -77,9 +78,33 @@ type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :
             this.ParamList
         )
 
-type InstanceMethod = Method<ConcreteMethodBody, InstanceMethodTag, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
-type AbstractMethod = Method<NullMethodBody, AbstractMethodTag, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
-type FinalMethod = Method<ConcreteMethodBody, FinalMethodTag, MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile>
+[<IsReadOnly>]
+[<NoComparison; StructuralEquality>]
+type InstanceMethodSignature = struct
+    val CallingConventions: MethodCallingConventions
+    val ReturnType: ReturnTypeItem
+    val Parameters: ImmutableArray<ParamItem>
+
+    new (cconv, rtype, parameters) = { CallingConventions = cconv; ReturnType = rtype; Parameters = parameters }
+    new (rtype, parameters) = InstanceMethodSignature(Default, rtype, parameters)
+    new (rtype, [<ParamArray>] parameters: ParamItem[]) = InstanceMethodSignature(rtype, parameters.ToImmutableArray())
+
+    member internal this.Signature() =
+        MethodDefSignature(true, false, this.CallingConventions, this.ReturnType, this.Parameters)
+
+    member internal this.CheckOwner owner =
+        this.ReturnType.CheckOwner owner
+        for param in this.Parameters do
+            param.CheckOwner owner
+
+    interface IMethodDefSignature with
+        member this.Signature() = this.Signature()
+        member this.CheckOwner owner = this.CheckOwner owner
+end
+
+type InstanceMethod = Method<ConcreteMethodBody, InstanceMethodTag, InstanceMethodSignature>
+type AbstractMethod = Method<NullMethodBody, AbstractMethodTag, InstanceMethodSignature>
+type FinalMethod = Method<ConcreteMethodBody, FinalMethodTag, InstanceMethodSignature>
 
 [<IsReadOnly>]
 type ConstructorFlags = struct
@@ -101,7 +126,7 @@ end
 type ObjectConstructorSignature = struct
     val Parameters: ImmutableArray<ParamItem>
     new (parameters: ImmutableArray<_>) = { Parameters = parameters }
-    new ([<System.ParamArray>] parameters: ParamItem[]) = ObjectConstructorSignature(parameters.ToImmutableArray())
+    new ([<ParamArray>] parameters: ParamItem[]) = ObjectConstructorSignature(parameters.ToImmutableArray())
 
     member internal this.CheckOwner owner =
         for param in this.Parameters do param.CheckOwner owner
@@ -140,21 +165,22 @@ type ClassConstructor = Constructor<ClassConstructorTag, unit>
 [<IsReadOnly>]
 [<NoComparison; StructuralEquality>]
 type StaticMethodSignature = struct
-    val CallingConventions: MethodCallingConventions
-    val ReturnType: ReturnTypeItem
-    val Parameters: ImmutableArray<ParamItem>
+    val private signature: InstanceMethodSignature
 
-    new (cconv, rtype, parameters) = { CallingConventions = cconv; ReturnType = rtype; Parameters = parameters }
+    new (cconv, rtype, parameters) = { signature = InstanceMethodSignature(cconv, rtype, parameters) }
+    new (rtype, parameters) = StaticMethodSignature(Default, rtype, parameters)
+    new (rtype, [<ParamArray>] parameters: ParamItem[]) = StaticMethodSignature(rtype, parameters.ToImmutableArray())
+
+    member this.CallingConventions = this.signature.CallingConventions
+    member this.ReturnType = this.signature.ReturnType
+    member this.Parameters = this.signature.Parameters
 
     member internal this.Signature() =
         MethodDefSignature(false, false, this.CallingConventions, this.ReturnType, this.Parameters)
 
     interface IMethodDefSignature with
         member this.Signature() = this.Signature()
-        member this.CheckOwner owner =
-            this.ReturnType.CheckOwner owner
-            for param in this.Parameters do
-                param.CheckOwner owner
+        member this.CheckOwner owner = this.signature.CheckOwner owner
 end
 
 type StaticMethod = Method<ConcreteMethodBody, StaticMethodTag, StaticMethodSignature>

@@ -73,6 +73,7 @@ type MethodDefSignature internal
         retType.CheckOwner owner
         for param in this.Parameters do param.CheckOwner owner
 
+// TODO: See if interface for retrieving method signatures is really necessary.
 type IMethodDefSignature =
     inherit IIndexValue
     abstract Signature: unit -> MethodDefSignature
