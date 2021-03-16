@@ -52,13 +52,17 @@ type MethodRefDefaultSignature = struct
     val ReturnType: ReturnTypeItem
     val Parameters: ImmutableArray<ParamItem>
 
-    new (hasThis, explicitThis, retType, parameters) =
+    new (hasThis, explicitThis, retType, parameters: ImmutableArray<_>) =
         { HasThis = hasThis
           ExplicitThis = explicitThis
           ReturnType = retType
           Parameters = parameters }
 
-    new (retType, parameters) = MethodRefDefaultSignature(false, false, retType, parameters)
+    new (hasThis, explicitThis, retType, [<System.ParamArray>] parameters: ParamItem[]) =
+        MethodRefDefaultSignature(hasThis, explicitThis, retType, parameters.ToImmutableArray())
+
+    new (retType, parameters: ImmutableArray<_>) =
+        MethodRefDefaultSignature(false, false, retType, parameters)
 
     member internal this.CallingConventions = CallingConvention.flags this.HasThis this.ExplicitThis 0u true
 

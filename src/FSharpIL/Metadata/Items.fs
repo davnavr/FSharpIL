@@ -115,6 +115,7 @@ type EncodedType =
     /// <summary>Represents the <see cref="T:System.UIntPtr"/> type.</summary>
     | U
     | Array of EncodedType * ArrayShape
+    | Class of TypeDefOrRefOrSpecEncoded
     | FunctionPointer // of MethodDefSig
     //| FunctionPointer // of MethodRefSig
     | GenericInst of GenericInst
@@ -137,6 +138,7 @@ type EncodedType =
         | U8 -> "uint64"
         | R4 -> "float32"
         | R8 -> "float64"
+        | Class item -> sprintf "class %O" item
         | GenericInst inst -> string inst
         | MVar num -> sprintf "!!%i" num
         | String -> "string"
@@ -172,6 +174,7 @@ type EncodedType =
             | SZArray(modifiers, item) ->
                 for modifier in modifiers do modifier.CheckOwner owner
                 IndexOwner.checkOwner owner item
+            | Class item
             | ValueType item -> IndexOwner.checkOwner owner item
             | bad -> failwithf "Cannot validate owner of unsupported encoded type %A" bad
 
@@ -240,6 +243,7 @@ type MethodSpec (garguments: ImmutableArray<EncodedType>) =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EncodedType =
     let typeDefStruct (typeDef: TypeDefIndex<_>) = TypeDefOrRefOrSpecEncoded.TypeDef typeDef.Index |> EncodedType.ValueType
+    let typeRefClass (typeRef: SimpleIndex<TypeRef>) = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.Class
     let typeRefStruct (typeRef: SimpleIndex<TypeRef>) = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.ValueType
 
 [<RequireQualifiedAccess>]

@@ -59,6 +59,37 @@ let example() =
           TypeNamespace = "System"
           ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
         |> referenceType builder
+    let stringBuilder =
+        { TypeName = Identifier.ofStr "StringBuilder"
+          TypeNamespace = "System.Text"
+          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        |> referenceType builder
+
+    let struct (stringBuilder_ctor, _) =
+        { Class = MemberRefParent.TypeRef stringBuilder
+          MemberName = Identifier.ofStr ".ctor"
+          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid) }
+        |> referenceDefaultMethod builder
+    let struct (stringBuilder_ToString, _) =
+        { Class = MemberRefParent.TypeRef stringBuilder
+          MemberName = Identifier.ofStr "ToString"
+          Signature = MethodRefDefaultSignature(true, false, ReturnType.encoded EncodedType.String) }
+        |> referenceDefaultMethod builder
+    let stringBuilder_Append item =
+        let struct (append, _) =
+            { Class = MemberRefParent.TypeRef stringBuilder
+              MemberName = Identifier.ofStr "Append"
+              Signature =
+                MethodRefDefaultSignature (
+                    true,
+                    false,
+                    EncodedType.typeRefClass stringBuilder |> ReturnType.encoded,
+                    ParamItem.create item
+                ) }
+            |> referenceDefaultMethod builder
+        append
+    let stringBuilder_Append_I4 = stringBuilder_Append EncodedType.I4
+    let stringBuilder_Append_Char = stringBuilder_Append EncodedType.Char
 
     // TODO: In the future, this would be a good example to showcase functions to generate XML documentation.
     // TODO: Mark struct and its fields as readonly.
@@ -103,7 +134,7 @@ let example() =
                 { MaxStack = 1us; InitLocals = false }
             |> MethodBody.create
           ImplFlags = MethodImplFlags()
-          Flags = InstanceMethodFlags(Public, VTableLayout.ReuseSlot, NoSpecialName, true) |> Flags.instanceMethod
+          Flags = InstanceMethodFlags(Public, NoSpecialName, VTableLayout.ReuseSlot, true) |> Flags.instanceMethod
           MethodName = Identifier.ofStr "get_Numerator"
           Signature = InstanceMethodSignature ReturnType.itemI4
           ParamList = ParamList.empty }
@@ -120,7 +151,7 @@ let example() =
                 { MaxStack = 1us; InitLocals = false }
             |> MethodBody.create
           ImplFlags = MethodImplFlags()
-          Flags = InstanceMethodFlags(Public, VTableLayout.ReuseSlot, NoSpecialName, true) |> Flags.instanceMethod
+          Flags = InstanceMethodFlags(Public, NoSpecialName, VTableLayout.ReuseSlot, true) |> Flags.instanceMethod
           MethodName = Identifier.ofStr "get_Denominator"
           Signature = InstanceMethodSignature ReturnType.itemI4
           ParamList = ParamList.empty }
@@ -285,15 +316,45 @@ let example() =
             { MaxStack = 2us; InitLocals = false }
         |> MethodBody.create
       ImplFlags = MethodImplFlags()
-      Flags = InstanceMethodFlags(Public, VTableLayout.ReuseSlot, NoSpecialName, true) |> Flags.instanceMethod
+      Flags = InstanceMethodFlags(Public, NoSpecialName, VTableLayout.ReuseSlot, hideBySig = true) |> Flags.instanceMethod
       MethodName = Identifier.ofStr "CompareTo"
       Signature = InstanceMethodSignature(ReturnType.itemI4, ParamItem.create fractionEncoded)
       ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "other" } }
     |> Struct.addInstanceMethod builder fraction
     |> ignore
 
-    // TODO: Overload ToString() method, and maybe use StringBuilder.
     // override this.ToString(): string
+    { Body =
+        fun content ->
+            let wr = MethodBodyWriter content
+            // new System.Text.StringBuilder().Append(this.numerator).Append('/').Append(this.denominator).ToString()
+            wr.Newobj stringBuilder_ctor
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Call stringBuilder_Append_I4
+            wr.Ldc_i4 '/'
+            wr.Call stringBuilder_Append_Char
+            wr.Ldarg 0us
+            wr.Ldfld denominator
+            wr.Call stringBuilder_Append_I4
+            wr.Callvirt stringBuilder_ToString
+            wr.Ret()
+            { MaxStack = 2us; InitLocals = false }
+        |> MethodBody.create
+      ImplFlags = MethodImplFlags()
+      Flags =
+        InstanceMethodFlags(
+            Public,
+            NoSpecialName,
+            ReuseSlot,
+            hideBySig = true,
+            isVirtual = true
+        ) |> Flags.instanceMethod
+      MethodName = Identifier.ofStr "ToString"
+      Signature = InstanceMethodSignature(ReturnType.encoded EncodedType.String)
+      ParamList = ParamList.empty }
+    |> Struct.addInstanceMethod builder fraction
+    |> ignore
 
     // setTargetFramework
 

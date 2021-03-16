@@ -86,6 +86,10 @@ type internal BlobWriter = struct
             this.EncodedType element
             this.ArrayShape shape
         | EncodedType.Boolean -> this.Writer.WriteU1 ElementType.Boolean
+        | EncodedType.Char -> this.Writer.WriteU1 ElementType.Char
+        | EncodedType.Class item ->
+            this.Writer.WriteU1 ElementType.Class
+            this.TypeDefOrRefOrSpecEncoded item
 
         | EncodedType.GenericInst inst -> this.GenericInst inst
 

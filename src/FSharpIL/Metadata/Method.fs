@@ -23,7 +23,14 @@ type VTableLayout =
 type InstanceMethodFlags = struct
     val Value: MethodAttributes
 
-    new (visibility: Visibility, vTableLayout, specialName: SpecialName, hideBySig) =
+    new
+        (
+            visibility: Visibility,
+            specialName: SpecialName,
+            vTableLayout,
+            [<Optional; DefaultParameterValue(false)>] hideBySig,
+            [<Optional; DefaultParameterValue(false)>] isVirtual
+        ) =
         let mutable flags =
             let vTableLayout' =
                 match vTableLayout with
@@ -33,10 +40,11 @@ type InstanceMethodFlags = struct
             let (Flags visiblity') = visibility
             vTableLayout' ||| visiblity' ||| specialName'
         if hideBySig then flags <- flags ||| MethodAttributes.HideBySig
+        if isVirtual then flags <- flags ||| MethodAttributes.Virtual
         { Value = flags }
 
-    new (visibility, vTableLayout, specialName) = InstanceMethodFlags(visibility, vTableLayout, specialName, false)
-    new (visibility, vTableLayout) = InstanceMethodFlags(visibility, vTableLayout, NoSpecialName)
+    new (visibility, specialName) = InstanceMethodFlags(visibility, specialName, ReuseSlot)
+    new (visibility) = InstanceMethodFlags(visibility, NoSpecialName)
 
     interface IFlags<MethodAttributes> with member this.Value = this.Value
 end

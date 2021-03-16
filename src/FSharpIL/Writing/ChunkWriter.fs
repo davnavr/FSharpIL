@@ -75,6 +75,8 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, default
 
     member inline this.WriteU8 value = this.WriteU8(uint64 value)
 
+    member this.WriteI1(value: int8) = this.WriteU1(uint8 value)
+
     member _.CreateWriter() = ChunkWriter(current, pos, defaultCapacity)
 
     member this.WriteBytes(bytes: Span<byte>) =

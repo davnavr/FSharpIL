@@ -108,26 +108,34 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Ldnull() = this.WriteU1 0x14uy
 
     /// <summary>
-    /// (0x15 to 0x1E, 0x20) Writes an instruction that pushes a signed four-byte integer onto the stack (III.3.40).
+    /// (0x15 to 0x1F) Writes an instruction that pushes a signed one-byte integer onto the stack as an <c>int32</c> (III.3.40).
+    /// </summary>
+    member this.Ldc_i4(num: int8) =
+        match num with
+        | -1y -> this.WriteU1 0x15uy
+        | _ when num <= 8y -> this.WriteU1(0x16uy + uint8 num)
+        | _ ->
+            this.WriteU1 0x1Fuy
+            content.Writer.WriteI1 num
+
+    /// <summary>
+    /// (0x15 to 0x1F) Writes an instruction that pushes a <c>char</c> onto the stack as an <c>int32</c> (III.3.40).
+    /// </summary>
+    member this.Ldc_i4(c: char) = this.Ldc_i4(int8 c)
+
+    /// <summary>
+    /// (0x15 to 0x1F, 0x20) Writes an instruction that pushes a signed four-byte integer onto the stack (III.3.40).
     /// </summary>
     /// <remarks>
     /// This method automatically writes the short forms of these opcodes depending on the number that is to be pushed onto the
     /// stack.
     /// </remarks>
     member this.Ldc_i4(num: int32) =
-        match num with
-        | -1 -> this.WriteU1 0x15uy
-        | _ when num <= 8 -> this.WriteU1(0x16uy + uint8 num)
-        | _ ->
+        if num >= -1 && num <= 127
+        then this.Ldc_i4(int8 num)
+        else
             this.WriteU1 0x20uy
             failwith "TODO: How is an int32 written?"
-
-    /// <summary>
-    /// (0x1F) Writes an instruction that pushes a signed one-byte integer onto the stack as an <c>int32</c> (III.3.40).
-    /// </summary>
-    member this.Ldc_i4(num: int8) =
-        this.WriteU1 0x1Fuy
-        failwith "TODO: How is an int32 written?"
 
     /// (0x21) Writes an instruction that pushes a signed eight-byte integer onto the stack (III.3.40).
     member this.Ldc_i8(num: int64) =
