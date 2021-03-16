@@ -26,6 +26,7 @@ open System.Collections.Immutable
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.CliMetadata
+open FSharpIL.Metadata.Unchecked
 open FSharpIL.Metadata.UncheckedExn
 open FSharpIL.PortableExecutable
 
@@ -68,6 +69,12 @@ let example() =
               TypeNamespace = "CustomNumbers" }
         Unsafe.AddStruct(builder, valueType, info)
     let fractionEncoded = EncodedType.typeDefStruct fraction
+
+    let icomparable_fraction =
+        EncodedType.typeDefStruct fraction
+        |> GenericInst.typeRef1 false icomparable_1
+        |> TypeSpec.genericInst
+        |> addTypeSpec builder
 
     let numerator =
         { Flags = Flags.instanceField(FieldFlags Private)
@@ -146,6 +153,9 @@ let example() =
             |> Param }
     |> Struct.addStaticMethod builder fraction
     |> ignore
+
+    // Implement System.IComparable`1
+    Struct.implementSpec builder fraction icomparable_fraction |> ignore
 
     // setTargetFramework
 

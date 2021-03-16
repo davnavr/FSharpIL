@@ -59,7 +59,8 @@ let example() =
               TypeNamespace = "System.Collections.Generic" }
             |> referenceType builder
 
-        let dictionary_u4_u4 = GenericInst.typeRef false dictionary [ EncodedType.U4; EncodedType.U4 ]
+        let dictionary_u4_u4 =
+            GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef dictionary, false, EncodedType.U4, EncodedType.U4)
         let! dictionary_u4_u4_spec = TypeSpec.genericInst dictionary_u4_u4 |> addTypeSpec builder
 
         let! containsKey =

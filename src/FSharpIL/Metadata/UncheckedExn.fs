@@ -34,3 +34,5 @@ module Struct =
     let addStaticField builder owner field = Unchecked.Struct.addStaticField builder owner field |> throwOnError
 
 let referenceType builder typeRef = Unchecked.referenceType builder typeRef |> throwOnError
+
+let addTypeSpec builder typeSpec = Unchecked.addTypeSpec builder typeSpec |> throwOnError

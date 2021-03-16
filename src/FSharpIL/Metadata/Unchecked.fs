@@ -126,6 +126,9 @@ type Unsafe private () = class
         TaggedIndex<'To, 'Value> index.Index
 
     static member CreateFlags<'Tag, 'Flags when 'Flags :> Enum> flags = ValidFlags<'Tag, 'Flags> flags
+
+    static member ImplementInterface(builder: CliMetadataBuilder, typeDef: SimpleIndex<TypeDefRow>, intf) =
+        builder.InterfaceImpl.Add(typeDef, intf)
 end
 
 let private addClassDef (builder: CliMetadataBuilder) (def: ClassDef<'Flags>) =
@@ -282,6 +285,14 @@ module Struct =
 
     let addStaticField builder (owner: TypeDefIndex<StructDef>) (field: StaticField) =
         Unsafe.AddField<_>(builder, owner.Index, field): Result<FieldIndex<StaticField>, _>
+
+    // let implementDef
+
+    let implementRef builder (structDef: TypeDefIndex<StructDef>) (intf: SimpleIndex<TypeRef>) =
+        Unsafe.ImplementInterface(builder, structDef.Index, InterfaceIndex.TypeRef intf)
+
+    let implementSpec builder (structDef: TypeDefIndex<StructDef>) (spec: SimpleIndex<TypeSpecRow>) =
+        Unsafe.ImplementInterface(builder, structDef.Index, InterfaceIndex.TypeSpec spec)
 
 // TODO: Add functions for adding global fields and global methods.
 

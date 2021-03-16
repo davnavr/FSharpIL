@@ -73,14 +73,11 @@ type internal BlobWriter = struct
         | TypeDefOrRefOrSpecEncoded.TypeRef tref -> this.TypeDefOrRefOrSpecEncoded tref
 
     member this.GenericInst(inst: GenericInst) =
-        match inst with
-        | GenericInst.TypeRef(valueType, tref, head, tail) ->
-            this.Writer.WriteU1 ElementType.GenericInst
-            this.Writer.WriteU1(if valueType then ElementType.ValueType else ElementType.Class)
-            this.TypeDefOrRefOrSpecEncoded tref
-            this.CompressedUnsigned(1u + uint32 tail.Length)
-            this.EncodedType head
-            for gparam in tail do this.EncodedType gparam
+        this.Writer.WriteU1 ElementType.GenericInst
+        this.Writer.WriteU1(if inst.IsValueType then ElementType.ValueType else ElementType.Class)
+        this.TypeDefOrRefOrSpecEncoded inst.Type
+        this.CompressedUnsigned inst.GenericArguments.Length
+        for garg in inst.GenericArguments do this.EncodedType garg
 
     member this.EncodedType(item: EncodedType) =
         match item with

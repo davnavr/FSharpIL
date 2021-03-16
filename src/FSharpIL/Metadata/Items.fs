@@ -3,6 +3,7 @@
 open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
+open System.Runtime.InteropServices
 open System.Text
 
 open Microsoft.FSharp.Core.Printf
@@ -43,28 +44,44 @@ type ArrayShape =
       /// <remarks>Corresponds to the <c>NumLoBounds</c> item and <c>LoBound</c> items in the signature.</remarks>
       LowerBounds: ImmutableArray<int32> }
 
-[<RequireQualifiedAccess>]
-type GenericInst =
-    // TODO: Add other GenericInst types for TypeDefs.
-    | TypeRef of valueType: bool * SimpleIndex<TypeRef> * head: EncodedType * tail: ImmutableArray<EncodedType>
+[<IsReadOnly>]
+type GenericInst = struct
+    val IsValueType: bool
+    val Type: TypeDefOrRefOrSpecEncoded
+    val GenericArguments: ImmutableArray<EncodedType>
+
+    /// <exception cref="T:System.ArgumentException">The generic argument list is empty.</exception>
+    new (t, genericArguments: ImmutableArray<_>, [<Optional; DefaultParameterValue(false)>] isValueType) =
+        if genericArguments.IsEmpty then
+            invalidArg "genericArguments" "More than one generic arguments must be specified"
+        { IsValueType = isValueType
+          Type = t
+          GenericArguments = genericArguments }
+
+    new (t, isValueType, head, [<ParamArray>] tail: EncodedType[]) =
+        let gargs = ImmutableArray.CreateBuilder<EncodedType>(1 + tail.Length)
+        gargs.Add head
+        gargs.AddRange tail
+        GenericInst(t, gargs.ToImmutable(), isValueType)
 
     override this.ToString() =
-        match this with
-        | TypeRef(_, tref, head, tail) ->
-            let tail' =
-                let text = StringBuilder()
-                for gparam in tail do
-                    bprintf text ", %O" gparam
-                text.ToString()
-            sprintf "%O<%O%O>" tref.Value head tail'
+        let text =
+            if this.IsValueType
+            then "valuetype "
+            else "class "
+            |> StringBuilder
+        text.Append(this.Type).Append '<' |> ignore
+        for i = 0 to this.GenericArguments.Length - 1 do
+            if i > 0 then
+                text.Append ", " |> ignore
+            text.Append this.GenericArguments.[i] |> ignore
+        text.Append('>').ToString()
 
     interface IIndexValue with
         member this.CheckOwner owner =
-            match this with
-            | TypeRef(_, item, head, tail) ->
-                IndexOwner.checkIndex owner item
-                IndexOwner.checkOwner owner head
-                for gparam in tail do IndexOwner.checkOwner owner gparam
+            IndexOwner.checkOwner owner this.Type
+            for garg in this.GenericArguments do IndexOwner.checkOwner owner garg
+end
 
 /// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
 [<RequireQualifiedAccess>]
@@ -237,12 +254,14 @@ module ReturnType =
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module GenericInst =
-    // TODO: Figure out if using list when making generic TypeSpec is bad for performance.
-    /// <exception cref="T:System.ArgumentException">Thrown when the generic parameter list is empty.</exception>
-    let typeRef valueType typeRef genericParameters =
-        match genericParameters with
-        | head :: tail -> GenericInst.TypeRef(valueType, typeRef, head, tail.ToImmutableArray())
-        | _ -> invalidArg "genericParameters" "The generic parameter list should not be empty."
+    let private inst1 valueType t (gargument: EncodedType) =
+        GenericInst(t, valueType, gargument)
+
+    let typeRef1 valueType typeRef gargument =
+        inst1 valueType (TypeDefOrRefOrSpecEncoded.TypeRef typeRef) gargument
+
+    let typeDef1 valueType (typeDef: TypeDefIndex<_>) gargument =
+        inst1 valueType (TypeDefOrRefOrSpecEncoded.TypeDef typeDef.Index) gargument
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

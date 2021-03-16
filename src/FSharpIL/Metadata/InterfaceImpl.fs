@@ -68,11 +68,8 @@ type InterfaceImplTableBuilder internal (owner: IndexOwner) =
 
     /// <param name="typeRow">The <c>TypeDef</c> that will implement the interface.</param>
     /// <param name="intf">The interface to implement.</param>
-    /// <param name="duplicate">
-    /// When this method returns, contains <see langword="true"/> if the type already implements the specified interface;
-    /// otherwise, contains <see langword="false"/>.
-    /// </param>
-    member _.Add(typeRow, intf, duplicate: outref<bool>): unit =
+    /// <returns><see langword="true"/>, if the entry was not a duplicate; otherwise <see langword="false"/>.</returns>
+    member _.Add(typeRow, intf) =
         IndexOwner.checkIndex owner typeRow
         IndexOwner.checkOwner owner intf
         let impls =
@@ -83,7 +80,9 @@ type InterfaceImplTableBuilder internal (owner: IndexOwner) =
                 mapping.[typeRow] <- empty
                 empty
         count <- count + 1
+        let mutable duplicate = false
         impls.Add(intf, &duplicate)
+        not duplicate
 
     member internal _.ToImmutable() =
         let rows = ImmutableArray.CreateBuilder<_> count
