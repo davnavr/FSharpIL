@@ -311,13 +311,13 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             info.StringsStream.WriteStringIndex(method.Name, writer)
             info.BlobStream.WriteIndex(method.Signature, writer) // Signature
 
-            let param' = if method.ParamList.IsEmpty then 0u else param // Param
-            param <- param + uint32 method.ParamList.Length
             // TODO: Since both the Param table (which is an ImmutableArray) and the ImmutableTable class have an implementation for writing an index, maybe make it an extension method?
             // If doing the above, maybe add an extension member to allow retrieval of IndexSize as well.
             if tables.Param.Length < 65536
-            then writer.WriteU2 param'
-            else writer.WriteU4 param'
+            then writer.WriteU2 param
+            else writer.WriteU4 param
+
+            param <- param + uint32 method.ParamList.Length
 
     // Param (0x08)
     for sequence, row in tables.Param do
