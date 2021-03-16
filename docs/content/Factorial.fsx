@@ -173,7 +173,7 @@ let example() =
                 MethodImplFlags(),
                 ConstructorFlags(Public, true) |> Flags.classConstructor,
                 (),
-                fun _ _ -> failwith "class constructor has no arguments"
+                ParamList.empty
             )
             |> StaticClass.addClassConstructor builder factorial
 
@@ -201,13 +201,13 @@ let example() =
 
             writer.Ldarg 0us
             writer.Ldc_i4 1
-            writer.conv_u4()
+            writer.Conv_u4()
             writer.Sub()
 
             // TODO: Maybe store this in a local variable instead of duplicating it.
             writer.Ldarg 0us
             writer.Ldc_i4 1
-            writer.conv_u4()
+            writer.Conv_u4()
             writer.Sub()
 
             writer.Ldarg 1us

@@ -107,14 +107,17 @@ type internal BlobWriter = struct
 
             this.EncodedType element
 
-        | EncodedType.ValueType item ->
-            this.Writer.WriteU1 ElementType.ValueType
-            this.TypeDefOrRefOrSpecEncoded item
 
+        | EncodedType.R4 -> this.Writer.WriteU1 ElementType.R4
+        | EncodedType.R8 -> this.Writer.WriteU1 ElementType.R8
         | EncodedType.U1 -> this.Writer.WriteU1 ElementType.U1
         | EncodedType.U2 -> this.Writer.WriteU1 ElementType.U2
         | EncodedType.U4 -> this.Writer.WriteU1 ElementType.U4
         | EncodedType.U8 -> this.Writer.WriteU1 ElementType.U8
+
+        | EncodedType.ValueType item ->
+            this.Writer.WriteU1 ElementType.ValueType
+            this.TypeDefOrRefOrSpecEncoded item
 
         | EncodedType.Var num ->
             this.Writer.WriteU1 ElementType.Var

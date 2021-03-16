@@ -65,3 +65,7 @@ type ParamItem = struct
 
     override this.ToString() = this.Type.ToString()
 end
+
+[<RequireQualifiedAccess>]
+module ParamList =
+    let empty (_: ParamItem) (_: int32) = failwith "The parameter list was expected to be empty."

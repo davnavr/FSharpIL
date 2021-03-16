@@ -144,6 +144,9 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         this.WriteU1 0x23uy
         failwith "TODO: How is a r8 written?"
 
+    /// (0x25) Writes an instruction that duplicates the value on the stack (III.3.33).
+    member this.Dup() = this.WriteU1 0x25uy
+
     /// (0x26) Writes an instruction that "removes the top element from the stack" (III.3.54).
     member this.Pop() = this.WriteU1 0x26uy
 
@@ -221,6 +224,12 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Beq_s() = this.Branch(0x2Euy, true)
 
     /// <summary>
+    /// (0x33) Writes the short form of an instruction that branches to the specified target if <c>value1</c> does not equal
+    /// <c>value2</c> (III.3.14).
+    /// </summary>
+    member this.Bne_un_s() = this.Branch(0x33uy, true)
+
+    /// <summary>
     /// (0x35) Writes the short form of an instruction that branches to the specified target if <c>value1 > value2</c> (III.3.9).
     /// </summary>
     member this.Bgt_un_s() = this.Branch(0x35uy, true)
@@ -283,10 +292,41 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     // member this.Mul_ovf
 
     /// <summary>
+    /// (0x5B) Writes an instruction that divides two values and pushes the result onto the stack without an overflow check
+    /// (III.3.48).
+    /// </summary>
+    member this.Div() = this.WriteU1 0x5Buy
+
+    // member this.Div_un
+
+    /// <summary>
+    /// (0x5D) Writes an instruction that divides <c>value1</c> by <c>value2</c> and pushes the remainder onto the stack
+    /// (III.3.55).
+    /// </summary>
+    member this.Rem() = this.WriteU1 0x5Duy
+
+    // member this.Rem_un
+    
+    /// <summary>
+    /// (0x6B) Writes an instruction that converts the value on top of the stack to a <c>float32</c> without an overflow check
+    /// (III.3.27).
+    /// </summary>
+    member this.Conv_r4() = this.WriteU1 0x6Buy
+
+    /// <summary>
+    /// (0x6C) Writes an instruction that converts the value on top of the stack to a <c>float64</c> without an overflow check
+    /// (III.3.27).
+    /// </summary>
+    member this.Conv_r8() = this.WriteU1 0x6Cuy
+
+    /// <summary>
     /// (0x6D) Writes an instruction that converts the value on top of the stack to a unsigned four-byte integer without an
     /// overflow check (III.3.27).
     /// </summary>
-    member this.conv_u4() = this.WriteU1 0x6Duy
+    member this.Conv_u4() = this.WriteU1 0x6Duy
+
+    // member this.Conv_ovf
+    // member this.Conv_ovf__un
 
     /// <summary>
     /// (0x6F) Writes an instruction that calls a late-bound method specified by a <c>MethodRef</c> with a <c>DEFAULT</c>

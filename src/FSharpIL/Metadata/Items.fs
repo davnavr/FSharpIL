@@ -134,6 +134,9 @@ type EncodedType =
     override this.ToString() =
         match this with
         | U4 -> "uint32"
+        | U8 -> "uint64"
+        | R4 -> "float32"
+        | R8 -> "float64"
         | GenericInst inst -> string inst
         | MVar num -> sprintf "!!%i" num
         | String -> "string"

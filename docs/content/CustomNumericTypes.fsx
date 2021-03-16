@@ -90,8 +90,44 @@ let example() =
           FieldName = Identifier.ofStr "denominator"
           Signature = FieldSignature.create EncodedType.I4 }
         |> Struct.addInstanceField builder fraction
-
     // TODO: Add properties to access values in numbers example.
+    // member this.get_Numerator(): int32
+    let get_numerator =
+        { Body =
+            fun content ->
+                let wr = MethodBodyWriter content
+                // this.numerator
+                wr.Ldarg 0us
+                wr.Ldfld numerator
+                wr.Ret()
+                { MaxStack = 1us; InitLocals = false }
+            |> MethodBody.create
+          ImplFlags = MethodImplFlags()
+          Flags = InstanceMethodFlags(Public, VTableLayout.ReuseSlot, NoSpecialName, true) |> Flags.instanceMethod
+          MethodName = Identifier.ofStr "get_Numerator"
+          Signature = InstanceMethodSignature ReturnType.itemI4
+          ParamList = ParamList.empty }
+        |> Struct.addInstanceMethod builder fraction
+        |> ignore
+    let get_denominator =
+        { Body =
+            fun content ->
+                let wr = MethodBodyWriter content
+                // this.denominator
+                wr.Ldarg 0us
+                wr.Ldfld denominator
+                wr.Ret()
+                { MaxStack = 1us; InitLocals = false }
+            |> MethodBody.create
+          ImplFlags = MethodImplFlags()
+          Flags = InstanceMethodFlags(Public, VTableLayout.ReuseSlot, NoSpecialName, true) |> Flags.instanceMethod
+          MethodName = Identifier.ofStr "get_Denominator"
+          Signature = InstanceMethodSignature ReturnType.itemI4
+          ParamList = ParamList.empty }
+        |> Struct.addInstanceMethod builder fraction
+        |> ignore
+    // member this.Numerator: int32 with get
+    // member this.Denominator: int32 with get
 
     // new (numerator: int32, denominator: int32)
     let ctor =
@@ -161,6 +197,51 @@ let example() =
     |> Struct.addStaticMethod builder fraction
     |> ignore
 
+    // static member op_Explicit(fraction: Fraction): System.Single
+    { Body =
+        fun content ->
+            let wr = MethodBodyWriter content
+            // (float32 this.numerator) / (float32 this.denominator)
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Conv_r4()
+            wr.Ldarg 0us
+            wr.Ldfld denominator
+            wr.Conv_r4()
+            wr.Div()
+            wr.Ret()
+            { MaxStack = 2us; InitLocals = false }
+        |> MethodBody.create
+      ImplFlags = MethodImplFlags()
+      Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
+      MethodName = Identifier.ofStr "op_Explicit"
+      Signature = StaticMethodSignature(ReturnType.encoded EncodedType.R4, ParamItem.create fractionEncoded)
+      ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" } }
+    |> Struct.addStaticMethod builder fraction
+    |> ignore
+    // static member op_Explicit(fraction: Fraction): System.Double
+    { Body =
+        fun content ->
+            let wr = MethodBodyWriter content
+            // (float this.numerator) / (float this.denominator)
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Conv_r8()
+            wr.Ldarg 0us
+            wr.Ldfld denominator
+            wr.Conv_r8()
+            wr.Div()
+            wr.Ret()
+            { MaxStack = 2us; InitLocals = false }
+        |> MethodBody.create
+      ImplFlags = MethodImplFlags()
+      Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
+      MethodName = Identifier.ofStr "op_Explicit"
+      Signature = StaticMethodSignature(ReturnType.encoded EncodedType.R8, ParamItem.create fractionEncoded)
+      ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" } }
+    |> Struct.addStaticMethod builder fraction
+    |> ignore
+
     // Implement System.IComparable`1
     Struct.implementSpec builder fraction icomparable_fraction |> ignore
 
@@ -172,7 +253,34 @@ let example() =
             wr.Ldfld denominator // this.denominator
             wr.Ldarg 1us
             wr.Ldfld denominator // other.denominator
-            // TODO: Check if numerators are the same
+            let ne = wr.Bne_un_s()
+            let ne_pos = wr.ByteCount
+
+            // Both denominators are equal here
+            // this.numerator - other.numerator
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Ldarg 1us
+            wr.Ldfld numerator
+            wr.Sub()
+            wr.Ret()
+
+            ne.SetTarget(int32 (wr.ByteCount - ne_pos))
+
+            // Both denominators are not equal here
+            // TODO: Account for fact that denominators might be negative when comparing fractions.
+            // (this.numerator * other.denominator) - (other.numerator * this.denominator)
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Ldarg 1us
+            wr.Ldfld denominator
+            wr.Mul()
+            wr.Ldarg 1us
+            wr.Ldfld numerator
+            wr.Ldarg 0us
+            wr.Ldfld denominator
+            wr.Mul()
+            wr.Sub()
             wr.Ret()
             { MaxStack = 2us; InitLocals = false }
         |> MethodBody.create
@@ -183,6 +291,9 @@ let example() =
       ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "other" } }
     |> Struct.addInstanceMethod builder fraction
     |> ignore
+
+    // TODO: Overload ToString() method, and maybe use StringBuilder.
+    // override this.ToString(): string
 
     // setTargetFramework
 
@@ -198,18 +309,30 @@ let tests =
             with
             | ValidationErrorException err as ex -> raise(Exception(err.ToString(), ex))
     let metadata = lazy PEFile.toCecilModule example'.Value
-    let context =
-        lazy
-            let (ctx, assembly) = PEFile.toLoadContext "factorial" example'.Value
-            {| Context = ctx; Assembly = assembly |}
 
-    afterRunTests <| fun() ->
-        if context.IsValueCreated then context.Value.Context.Unload()
-        metadata.Value.Dispose()
+    afterRunTests <| fun() -> metadata.Value.Dispose()
 
     testList "custom numeric types" [
         testCase "can save to disk" <| fun() ->
             let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "CustomNumbers.dll")
             WritePE.toPath path example'.Value
+
+        testCase "fraction methods are in correct order" <| fun() ->
+            let fraction = metadata.Value.GetType("CustomNumbers", "Fraction")
+            let expected =
+                [
+                    "get_Numerator"
+                    "get_Denominator"
+                    ".ctor"
+                    "op_Multiply"
+                    "op_Explicit"
+                    "op_Explicit"
+                    "CompareTo"
+                ]
+            let actual =
+                fraction.Methods
+                |> Seq.map (fun method -> method.Name)
+                |> List.ofSeq
+            expected =! actual
     ]
 #endif
