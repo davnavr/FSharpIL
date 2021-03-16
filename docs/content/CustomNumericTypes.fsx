@@ -351,7 +351,7 @@ let example() =
             isVirtual = true
         ) |> Flags.instanceMethod
       MethodName = Identifier.ofStr "ToString"
-      Signature = InstanceMethodSignature(ReturnType.encoded EncodedType.String) // TODO: Figure out why Mono cannot parse all methods, maybe the lack of a parameter here is the problem.
+      Signature = InstanceMethodSignature(ReturnType.encoded EncodedType.String)
       ParamList = ParamList.empty }
     |> Struct.addInstanceMethod builder fraction
     |> ignore
