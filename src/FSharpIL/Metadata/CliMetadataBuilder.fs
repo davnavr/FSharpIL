@@ -127,7 +127,7 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     // (0x14)
     // member Event
     // (0x15)
-    // member PropertyMap
+    member val PropertyMap = OwnedMetadataTableBuilder<TypeDefRow, PropertyRow> owner
     // (0x17)
     // member Property
     // (0x18)

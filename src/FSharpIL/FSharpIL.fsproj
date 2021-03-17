@@ -39,6 +39,7 @@
     <Compile Include="Metadata\OwnedMetadataTable.fs" />
     <Compile Include="Metadata\Field.fs" />
     <Compile Include="Metadata\Method.fs" />
+    <Compile Include="Metadata\Property.fs" />
     <Compile Include="Metadata\MemberRef.fs" />
     <Compile Include="Metadata\MethodSpec.fs" />
     <Compile Include="Metadata\CustomAttribute.fs" />
