@@ -45,10 +45,14 @@ let example() =
           Culture = NullCulture }
         |> setAssembly builder
 
-    // TODO: Make versions of SystemAssembly and SystemType modules that don't use warning builders.
-    let throwaway = ImmutableArray.CreateBuilder<_>()
-
-    let mscorlib = SystemAssembly.Net5_0.private_corelib builder throwaway
+    // TODO: Reference System.Runtime or netstandard to allow Fraction class to be used in tests.
+    let struct (mscorlib, _) =
+        { Version = Version(5, 0, 0, 0)
+          PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+          Name = AssemblyName.ofStr "System.Runtime"
+          Culture = NullCulture
+          HashValue = None }
+        |> referenceAssembly builder
     let valueType =
         { TypeName = Identifier.ofStr "ValueType"
           TypeNamespace = "System"
@@ -273,6 +277,8 @@ let example() =
     |> Struct.addStaticMethod builder fraction
     |> ignore
 
+
+
     // Implement System.IComparable`1
     Struct.implementSpec builder fraction icomparable_fraction |> ignore
 
@@ -316,7 +322,7 @@ let example() =
             { MaxStack = 2us; InitLocals = false }
         |> MethodBody.create
       ImplFlags = MethodImplFlags()
-      Flags = InstanceMethodFlags(Public, NoSpecialName, VTableLayout.ReuseSlot, hideBySig = true) |> Flags.instanceMethod
+      Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, true, true) |> Flags.instanceMethod
       MethodName = Identifier.ofStr "CompareTo"
       Signature = InstanceMethodSignature(ReturnType.itemI4, ParamItem.create fractionEncoded)
       ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "other" } }
@@ -356,7 +362,22 @@ let example() =
     |> Struct.addInstanceMethod builder fraction
     |> ignore
 
-    // setTargetFramework
+    // TODO: Figure out how to avoid duplicating code for setting target framework.
+    let tfm =
+        { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
+          TypeNamespace = "System.Runtime.Versioning"
+          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        |> referenceType builder
+
+    let struct(tfm_ctor, _) =
+        { Class = MemberRefParent.TypeRef tfm
+          MemberName = Identifier.ofStr ".ctor"
+          Signature =
+            let parameters = ImmutableArray.Create(ParamItem.create EncodedType.String)
+            MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
+        |> referenceDefaultMethod builder
+
+    setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

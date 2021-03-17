@@ -22,6 +22,8 @@ type Unsafe = class
         Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, None)
 end
 
+// TODO: Throw exceptions on duplicates instead of returning a struct(_ * bool)
+
 [<RequireQualifiedAccess>]
 module Struct =
     let addTypeDef builder lookup structDef = Unchecked.Struct.addTypeDef builder lookup structDef |> throwOnError
@@ -34,5 +36,7 @@ module Struct =
     let addStaticField builder owner field = Unchecked.Struct.addStaticField builder owner field |> throwOnError
 
 let referenceType builder typeRef = Unchecked.referenceType builder typeRef |> throwOnError
+
+let referenceAssembly builder assembly = Unchecked.referenceAssembly builder assembly
 
 let addTypeSpec builder typeSpec = Unchecked.addTypeSpec builder typeSpec |> throwOnError

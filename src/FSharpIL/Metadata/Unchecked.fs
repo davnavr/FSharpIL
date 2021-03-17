@@ -322,7 +322,10 @@ let referenceVarArgMethod builder method: struct(MemberRefIndex<MethodRefVarArg>
 let referenceModule (builder: CliMetadataBuilder) moduleRef = builder.ModuleRef.Add moduleRef
 
 /// Adds a reference to an assembly.
-let referenceAssembly (builder: CliMetadataBuilder) assembly = builder.AssemblyRef.Add assembly
+let referenceAssembly (builder: CliMetadataBuilder) assembly =
+    let mutable dup = false
+    let i = builder.AssemblyRef.Add(assembly, &dup)
+    struct(i, dup)
 
 let addTypeSpec (builder: CliMetadataBuilder) typeSpec =
     match builder.TypeSpec.TryAdd typeSpec with

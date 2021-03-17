@@ -24,6 +24,6 @@ let referenceModule (builder: CliMetadataBuilder) moduleRef (warnings: WarningsB
     i
 
 let referenceAssembly (builder: CliMetadataBuilder) assembly (warnings: WarningsBuilder) =
-    let i, duplicate = Unchecked.referenceAssembly builder assembly
+    let struct(i, duplicate) = Unchecked.referenceAssembly builder assembly
     if duplicate then warnings.Add(DuplicateAssemblyRefWarning assembly)
     i
