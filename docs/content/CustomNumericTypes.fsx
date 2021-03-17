@@ -95,7 +95,6 @@ let example() =
     let stringBuilder_Append_Char = stringBuilder_Append EncodedType.Char
 
     // TODO: In the future, this would be a good example to showcase functions to generate XML documentation.
-    // TODO: Mark struct and its fields as readonly.
 
     let fraction = // TODO: Use helper function to define a struct instead.
         let info =
@@ -112,15 +111,32 @@ let example() =
         |> TypeSpec.genericInst
         |> addTypeSpec builder
 
-    // val private numerator: int32
+    let readonly =
+        { TypeName = Identifier.ofStr "IsReadOnlyAttribute"
+          TypeNamespace = "System.Runtime.CompilerServices"
+          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        |> referenceType builder
+    let struct (readonly_ctor, _) =
+        { Class = MemberRefParent.TypeRef readonly
+          MemberName = Identifier.ofStr ".ctor"
+          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid) }
+        |> referenceDefaultMethod builder
+
+    // [<System.Runtime.CompilerServices.IsReadOnly>]
+    { Parent = CustomAttributeParent.TypeDef fraction.Index
+      Type = CustomAttributeType.MethodRefDefault readonly_ctor
+      Value = None }
+    |> addCustomAttribute builder
+
+    // val private (*initonly*) numerator: int32
     let numerator =
-        { Flags = Flags.instanceField(FieldFlags Private)
+        { Flags = FieldFlags(Private, initOnly = true) |> Flags.instanceField
           FieldName = Identifier.ofStr "numerator"
           Signature = FieldSignature.create EncodedType.I4 }
         |> Struct.addInstanceField builder fraction
-    // val private denominator: int32
+    // val private (*initonly*) denominator: int32
     let denominator =
-        { Flags = Flags.instanceField(FieldFlags Private)
+        { Flags = FieldFlags(Private, initOnly = true) |> Flags.instanceField
           FieldName = Identifier.ofStr "denominator"
           Signature = FieldSignature.create EncodedType.I4 }
         |> Struct.addInstanceField builder fraction

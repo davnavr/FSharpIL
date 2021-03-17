@@ -223,7 +223,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             + tables.TypeRef.Count
             + tables.TypeDef.Count
             + tables.Param.Length
-            // InterfaceImpl
+            + tables.InterfaceImpl.Count
             + tables.MemberRef.Count
             + 1 // Module
             // Permission
@@ -231,7 +231,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             // Event
             // StandAloneSig
             + tables.ModuleRef.Count
-            // TypeSpec
+            + tables.TypeSpec.Count
             + if tables.Assembly.IsSome then 1 else 0
             + tables.AssemblyRef.Count
             + tables.File.Count
@@ -241,6 +241,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             // GenericParamConstraint
             // MethodSpec
         function
+        | CustomAttributeParent.TypeDef tdef -> tables.TypeDef.IndexOf tdef, 3u
         | CustomAttributeParent.Assembly _ -> 1u, 14u
         | bad -> failwithf "Unsupported custom attribute parent %A" bad
         |> codedIndex total 5

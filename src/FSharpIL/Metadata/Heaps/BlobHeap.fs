@@ -59,7 +59,7 @@ type internal BlobHeap =
     member this.WriteIndex(signature, writer) =
         match signature with
         | Some signature' -> this.WriteRawIndex(this.CustomAttribute.Item signature', writer)
-        | None -> ()
+        | None -> this.WriteRawIndex(0u, writer)
 
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.TypeSpec.Item signature, writer)
 

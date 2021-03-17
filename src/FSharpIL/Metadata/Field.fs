@@ -27,4 +27,7 @@ type InstanceField = Field<InstanceFieldTag>
 /// <summary>Represents a static field in the <c>Field</c> table.</summary>
 type StaticField = Field<StaticFieldTag>
 
+// NOTE: Prevent setting of InitOnly field for fields marked Literal
+// type LiteralField
+
 // NOTE: Static fields should also be allowed in interfaces.

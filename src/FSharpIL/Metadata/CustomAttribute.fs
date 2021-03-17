@@ -56,7 +56,7 @@ type CustomAttributeSignature =
 
 [<RequireQualifiedAccess>]
 type CustomAttributeParent =
-    // | MethodDef // of ?
+    | MethodDef of SimpleIndex<MethodDefRow>
     // | Field // of ?
     // | TypeRef // of ?
     | TypeDef of SimpleIndex<TypeDefRow>
@@ -72,7 +72,7 @@ type CustomAttributeParent =
     // | TypeSpec // of ?
     | Assembly of AssemblyIndex
     // | AssemblyRef // of ?
-    // | File // of ?
+    | File of SimpleIndex<File>
     // | ExportedType // of ?
     // | ManifestResource // of ?
     // | GenericParam // of ?
