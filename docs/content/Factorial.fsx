@@ -59,8 +59,15 @@ let example() =
               ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
             |> referenceType builder
 
+        let! collections =
+            { Version = Version(5, 0, 0, 0)
+              PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+              Name = AssemblyName.ofStr "System.Collections"
+              Culture = NullCulture
+              HashValue = None }
+            |> referenceAssembly builder
         let! dictionary =
-            { ResolutionScope = ResolutionScope.AssemblyRef mscorlib
+            { ResolutionScope = ResolutionScope.AssemblyRef collections
               TypeName = Identifier.ofStr "Dictionary`2"
               TypeNamespace = "System.Collections.Generic" }
             |> referenceType builder
