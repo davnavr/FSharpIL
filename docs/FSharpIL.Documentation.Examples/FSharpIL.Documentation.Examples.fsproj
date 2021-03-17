@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="ExampleAssemblyLoadContext.fs" />
     <Compile Include="ExampleHelpers.fs" />
     <Compile Include="..\content\HelloWorld.fsx" />
     <Compile Include="..\content\Factorial.fsx" />

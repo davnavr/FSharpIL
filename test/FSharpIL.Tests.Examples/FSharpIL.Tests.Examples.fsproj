@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="FactorialTests.fs" />
     <Compile Include="FractionTests.fs" />
     <Compile Include="$(RootDirectory)\test\FSharpIL.Tests\Test.fs" />
 
@@ -16,6 +17,7 @@
     <PackageReference Include="Unquote" Version="5.0.0" />
 
     <Reference Include="$(RootDirectory)\docs\content\exout\CustomNumbers.dll" />
+    <Reference Include="$(RootDirectory)\docs\content\exout\Factorial.dll" />
   </ItemGroup>
 
 </Project>

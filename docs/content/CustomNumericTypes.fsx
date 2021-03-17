@@ -45,7 +45,6 @@ let example() =
           Culture = NullCulture }
         |> setAssembly builder
 
-    // TODO: Reference System.Runtime or netstandard to allow Fraction class to be used in tests.
     let struct (mscorlib, _) =
         { Version = Version(5, 0, 0, 0)
           PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
@@ -277,8 +276,6 @@ let example() =
     |> Struct.addStaticMethod builder fraction
     |> ignore
 
-
-
     // Implement System.IComparable`1
     Struct.implementSpec builder fraction icomparable_fraction |> ignore
 
@@ -385,11 +382,7 @@ let example() =
 #if COMPILED
 [<Tests>]
 let tests =
-    let example' =
-        lazy
-            try example()
-            with
-            | ValidationErrorException err as ex -> raise(Exception(err.ToString(), ex))
+    let example' = lazy example()
     let metadata = lazy PEFile.toCecilModule example'.Value
 
     afterRunTests <| fun() -> metadata.Value.Dispose()

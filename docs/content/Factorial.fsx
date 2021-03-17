@@ -45,7 +45,13 @@ let example() =
 
     // TODO: Add target framework attribute to Factorial example.
     validated {
-        let! mscorlib = SystemAssembly.Net5_0.private_corelib builder
+        let! mscorlib =
+            { Version = Version(5, 0, 0, 0)
+              PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+              Name = AssemblyName.ofStr "System.Runtime"
+              Culture = NullCulture
+              HashValue = None }
+            |> referenceAssembly builder
         let! object = SystemType.object builder mscorlib
         let! tfmAttr =
             { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
@@ -227,15 +233,8 @@ let example() =
 let tests =
     let example' = lazy example()
     let metadata = lazy PEFile.toCecilModule example'.Value
-    let context =
-        lazy
-            let (ctx, assembly) = PEFile.toLoadContext "factorial" example'.Value
-            let calculate = assembly.GetType("Factorial.CachedFactorial").GetMethod("Calculate")
-            {| Context = ctx; Assembly = assembly; Calculate = calculate |}
 
-    afterRunTests <| fun() ->
-        context.Value.Context.Unload()
-        metadata.Value.Dispose()
+    afterRunTests <| fun() -> metadata.Value.Dispose()
 
     // TODO: Shuffle tests?
     testList "factorial" [
@@ -252,11 +251,5 @@ let tests =
         testCase "can save to disk" <| fun() ->
             let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "Factorial.dll")
             WritePE.toPath path example'.Value
-
-        // TODO: Use a property test can be used to test factorial calculation.
-        testCase "method can be called" <| fun () ->
-            let expected = 6u
-            let actual = context.Value.Calculate.Invoke(null, [| 3u |]) |> unbox
-            expected =! actual
     ]
 #endif

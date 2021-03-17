@@ -5,7 +5,6 @@ open Expecto
 
 open System.Diagnostics
 open System.IO
-open System.Runtime.Loader
 
 open Mono.Cecil
 
@@ -13,10 +12,6 @@ open Mono.Cecil
 module PEFile =
     let toCecilModule pe =
         WritePE.stream pe |> ModuleDefinition.ReadModule
-    let toLoadContext name pe: AssemblyLoadContext * _ =
-        let context = ExampleAssemblyLoadContext name
-        let assembly = context.LoadFromStream(WritePE.stream pe)
-        context :> AssemblyLoadContext, assembly
 
 let private testExec testf (Lazy file) (name: string) dir path fileName (test: Process -> _ -> unit): Test =
     fun() ->
