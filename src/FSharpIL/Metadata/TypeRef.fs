@@ -1,50 +1,48 @@
 ﻿namespace rec FSharpIL.Metadata
 
+open System.Runtime.CompilerServices
+
+type ResolutionScopeTag =
+    | Module = 0uy
+    | ModuleRef = 1uy
+    | AssemblyRef = 2uy
+    | TypeRef = 3uy
+    | Null = 4uy
+
 /// <summary>
 /// Indicates where the target <see cref="T:FSharpIL.Metadata.TypeRef"/> is defined (II.22.38).
 /// </summary>
-[<RequireQualifiedAccess>]
-type ResolutionScope =
-    /// Indicates that "the target type is defined in the current module", and produces a warning as this value should not be used.
-    | Module
-    /// Indicates that the target type "is defined in another module within the same assembly as this one".
-    | ModuleRef of SimpleIndex<ModuleRef>
-    /// Indicates that "The target type is defined in a different assembly".
-    | AssemblyRef of SimpleIndex<AssemblyRef>
-    | TypeRef of SimpleIndex<TypeRef>
-    | Null // of SimpleIndex<ExportedTypeRow> // TODO: How to enforce that a row exists in the ExportedType table?
+type ResolutionScope = TaggedIndex<ResolutionScopeTag>
 
-    override this.ToString() =
-        match this with
-        | ModuleRef moduleRef -> sprintf ".module %O" moduleRef.Value.Name
-        | AssemblyRef assembly -> string assembly.Value.Name
-        | _ -> "unknown resolution scope"
+[<RequireQualifiedAccess>]
+module ResolutionScope =
+    let (|Module|ModuleRef|AssemblyRef|TypeRef|Null|) (scope: ResolutionScope) =
+        match scope.Tag with
+        | ResolutionScopeTag.ModuleRef -> ModuleRef(scope.ToRawIndex<ModuleRef>())
+        | ResolutionScopeTag.AssemblyRef -> AssemblyRef(scope.ToRawIndex<AssemblyRef>())
+        | ResolutionScopeTag.TypeRef -> TypeRef(scope.ToRawIndex<TypeRef>())
+        | ResolutionScopeTag.Null -> Null
+        | ResolutionScopeTag.Module
+        | _ -> Module
+
+    /// Indicates that "the target type is defined in the current module", and produces a warning as this value should not be used.
+    let Module = TaggedIndex ResolutionScopeTag.Module
+    /// Indicates that the target type "is defined in another module within the same assembly as this one".
+    let ModuleRef (index: RawIndex<ModuleRef>) = index.ToTaggedIndex ResolutionScopeTag.ModuleRef
+    /// Indicates that "The target type is defined in a different assembly".
+    let AssemblyRef (index: RawIndex<AssemblyRef>) = index.ToTaggedIndex ResolutionScopeTag.AssemblyRef
+    let TypeRef (index: RawIndex<TypeRef>) = index.ToTaggedIndex ResolutionScopeTag.TypeRef
+    let Null = TaggedIndex ResolutionScopeTag.Null // of SimpleIndex<ExportedTypeRow> // TODO: How to enforce that a row exists in the ExportedType table?
 
 /// <summary>
 /// (0x01) Represents a row in the <c>TypeRef</c> table (II.22.38).
 /// </summary>
+[<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type TypeRef =
     { ResolutionScope: ResolutionScope
       TypeName: Identifier
       TypeNamespace: string }
-
-    override this.ToString() =
-        let name =
-            if this.TypeNamespace.Length > 0
-            then sprintf "%s.%A" this.TypeNamespace this.TypeName
-            else string this.TypeName
-        sprintf "[%O]%s" this.ResolutionScope name
-
-    interface IIndexValue with
-        member this.CheckOwner actual =
-            match this.ResolutionScope with
-            | ResolutionScope.Module
-            | ResolutionScope.Null -> ()
-            | ResolutionScope.ModuleRef mref -> IndexOwner.checkIndex actual mref
-            | ResolutionScope.AssemblyRef assm -> IndexOwner.ensureEqual actual assm.Owner
-            | ResolutionScope.TypeRef tref -> IndexOwner.checkIndex actual tref
 
 /// (1d)
 [<Sealed>]

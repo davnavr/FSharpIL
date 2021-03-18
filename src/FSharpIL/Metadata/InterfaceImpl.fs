@@ -3,26 +3,26 @@
 open System.Collections.Generic
 open System.Collections.Immutable
 
+type InterfaceIndexTag =
+    | TypeDef = 0uy
+    | TypeRef = 1uy
+    | TypeSpec = 2uy
+
 /// <summary>Specifies an interface that is implemented by a <c>TypeDef</c> (II.22.23).</summary>
+type InterfaceIndex = TaggedIndex<InterfaceIndexTag>
+
 [<RequireQualifiedAccess>]
-[<NoComparison; StructuralEquality>]
-type InterfaceIndex =
-    | TypeDef of TypeDefIndex<InterfaceDef>
-    | TypeRef of SimpleIndex<TypeRef>
-    | TypeSpec of SimpleIndex<TypeSpecRow>
+module InterfaceIndex =
+    let (|TypeDef|TypeRef|TypeSpec|) (index: InterfaceIndex) =
+        match index.Tag with
+        | InterfaceIndexTag.TypeRef -> TypeRef(index.ToRawIndex<TypeRef>())
+        | InterfaceIndexTag.TypeSpec -> TypeSpec(index.ToRawIndex<TypeSpecRow>())
+        | InterfaceIndexTag.TypeDef
+        | _ -> TypeDef(index.ToRawIndex<InterfaceDef>())
 
-    override this.ToString() =
-        match this with
-        | TypeDef(SimpleIndex tdef) -> tdef.Value.GetFullName()
-        | TypeRef tref -> tref.Value.ToString()
-        | TypeSpec tspec -> tspec.Value.ToString()
-
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | TypeDef(SimpleIndex tdef) -> IndexOwner.checkIndex owner tdef
-            | TypeRef tref -> IndexOwner.checkIndex owner tref
-            | TypeSpec tspec -> IndexOwner.checkIndex owner tspec
+    let TypeDef (index: RawIndex<InterfaceDef>) = index.ToTaggedIndex InterfaceIndexTag.TypeDef
+    let TypeRef (index: RawIndex<TypeRef>) = index.ToTaggedIndex InterfaceIndexTag.TypeRef
+    let TypeSpec (index: RawIndex<TypeSpecRow>) = index.ToTaggedIndex InterfaceIndexTag.TypeSpec
 
 [<Sealed>]
 type internal InterfaceIndexEntries internal () =
@@ -42,26 +42,26 @@ type internal InterfaceIndexEntries internal () =
 /// </summary>
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type InterfaceImpl =
-    { Class: SimpleIndex<TypeDefRow>
+    { Class: RawIndex<TypeDefRow>
       Interface: InterfaceIndex }
 
-    override this.ToString() = sprintf "%O implements %O" (this.Class.Value.GetFullName()) this.Interface
-
-type internal InterfaceImplLookup = IReadOnlyDictionary<SimpleIndex<TypeDefRow>, IReadOnlyDictionary<InterfaceIndex, int32>>
+type internal InterfaceImplLookup = IReadOnlyDictionary<RawIndex<TypeDefRow>, ImmutableArray<RawIndex<InterfaceImpl>>>
 
 [<Sealed>]
 type InterfaceImplTable internal (rows: ImmutableArray<InterfaceImpl>, lookup: InterfaceImplLookup) =
     member _.Count = rows.Length
     member _.Rows = rows
-    member _.Item with get(tdef: SimpleIndex<TypeDefRow>, index: InterfaceIndex) = lookup.[tdef].[index]
+    member _.Item with get (index: RawIndex<InterfaceImpl>) = rows.[index.Value - 1]
+
+    member _.GetIndices (tindex: RawIndex<TypeDefRow>) = lookup.[tindex]
 
     interface IMetadataTable<InterfaceImpl> with
         member this.Count = this.Count
-        member this.Item with get ({ Class = tdef; Interface = impl }) = this.[tdef, impl]
+        member this.Item with get index = this.[index]
 
 [<Sealed>]
-type InterfaceImplTableBuilder internal (owner: IndexOwner) =
-    let mapping = Dictionary<SimpleIndex<TypeDefRow>, InterfaceIndexEntries>()
+type InterfaceImplTableBuilder internal () =
+    let mapping = Dictionary<RawIndex<TypeDefRow>, InterfaceIndexEntries>()
     let mutable count = 0
 
     member _.Count = count
@@ -70,8 +70,6 @@ type InterfaceImplTableBuilder internal (owner: IndexOwner) =
     /// <param name="intf">The interface to implement.</param>
     /// <returns><see langword="true"/>, if the entry was not a duplicate; otherwise <see langword="false"/>.</returns>
     member _.Add(typeRow, intf) =
-        IndexOwner.checkIndex owner typeRow
-        IndexOwner.checkOwner owner intf
         let impls =
             match mapping.TryGetValue typeRow with
             | (true, existing) -> existing
@@ -85,12 +83,12 @@ type InterfaceImplTableBuilder internal (owner: IndexOwner) =
         not duplicate
 
     member internal _.ToImmutable() =
-        let rows = ImmutableArray.CreateBuilder<_> count
-        let lookup = Dictionary<_, _> count
+        let rows = ImmutableArray.CreateBuilder count
+        let lookup = Dictionary count
         for KeyValue(typeDef, entries) in mapping do
-            let imap = Dictionary<_, int32> entries.Count
+            let iset = HashSet entries.Count
             for impl in entries do
-                imap.[impl] <- rows.Count
                 rows.Add { Class = typeDef; Interface = impl }
-            lookup.[typeDef] <- imap :> IReadOnlyDictionary<_, _>
+                if not (iset.Add(RawIndex rows.Count)) then failwith "Duplicate interface index detected"
+            lookup.[typeDef] <- iset.ToImmutableArray()
         InterfaceImplTable(rows.ToImmutable(), lookup)

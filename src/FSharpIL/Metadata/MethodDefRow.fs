@@ -69,13 +69,7 @@ type MethodDefSignature internal
     member _.ReturnType = retType
     member _.Parameters: ImmutableArray<ParamItem> = parameters
 
-    member internal this.CheckOwner owner =
-        retType.CheckOwner owner
-        for param in this.Parameters do param.CheckOwner owner
-
-// TODO: See if interface for retrieving method signatures is really necessary.
 type IMethodDefSignature =
-    inherit IIndexValue
     abstract Signature: unit -> MethodDefSignature
 
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
@@ -96,39 +90,11 @@ type MethodDefRow internal (body, iflags, attr, name, signature: MethodDefSignat
 
     member internal _.SkipDuplicateChecking = attr &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
 
-    override this.ToString() =
-        let visibility =
-            match attr ||| MethodAttributes.MemberAccessMask with
-            | MethodAttributes.Private -> "private"
-            | MethodAttributes.FamANDAssem -> "famandassem"
-            | MethodAttributes.Assembly -> "assembly"
-            | MethodAttributes.Family -> "family"
-            | MethodAttributes.FamORAssem -> "famorassem"
-            | MethodAttributes.Public -> "public"
-            | _ -> "compilercontrolled"
-        let hidebysig = if attr.HasFlag MethodAttributes.HideBySig then " hidebysig" else String.Empty
-        let mstatic = if attr.HasFlag MethodAttributes.Static then " static" else String.Empty
-        let parameters =
-            let builder = StringBuilder()
-            let parameters' = signature.Parameters
-            for i = 0 to parameters'.Length - 1 do
-                let sep = if i < parameters'.Length - 1 then ", " else String.Empty
-                bprintf builder "%O %O%s" parameters'.[i] this.ParamList.[i] sep
-            builder.ToString()
-
-        // TODO: Add extra flags when printing MethodDef.
-
-        sprintf ".method %s%s%s %O (%s)" visibility hidebysig mstatic signature.ReturnType parameters
-
     interface IEquatable<MethodDefRow> with
         member this.Equals other =
             if this.SkipDuplicateChecking || other.SkipDuplicateChecking
             then false
             else this.Name = other.Name && this.Signature = other.Signature
-
-    interface IIndexValue with member this.CheckOwner owner = this.Signature.CheckOwner owner
-
-type MethodDefIndex<'Tag> = TaggedIndex<'Tag, MethodDefRow>
 
 /// <summary>
 /// Error used when there is a duplicate row in the <c>MethodDef</c> table (21).
@@ -142,5 +108,4 @@ type DuplicateMethodError (method: MethodDefRow) =
 [<RequireQualifiedAccess>]
 type MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile private () =
     interface IMethodDefSignature with
-        member _.CheckOwner _ = ()
         member _.Signature() = failwith "uh oh signature"

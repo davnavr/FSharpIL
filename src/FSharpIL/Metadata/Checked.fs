@@ -7,15 +7,15 @@ let private referenceMethod (builder: CliMetadataBuilder) (row: MemberRefRow) (w
     i
 
 /// <summary>Adds a reference to a method with the <c>DEFAULT</c> calling convention.</summary>
-let referenceDefaultMethod builder method warnings: MemberRefIndex<MethodRefDefault> =
+let referenceDefaultMethod builder method warnings: RawIndex<MethodRefDefault> =
     referenceMethod builder (MethodRefDefault method) warnings
 
 /// <summary>Adds a reference to a method with the <c>GENERIC</c> calling convention.</summary>
-let referenceGenericMethod builder method warnings: MemberRefIndex<MethodRefGeneric> =
+let referenceGenericMethod builder method warnings: RawIndex<MethodRefGeneric> =
     referenceMethod builder (MethodRefGeneric method) warnings
 
 /// <summary>Adds a reference to a method with the <c>VARARG</c> calling convention.</summary>
-let referenceVarArgMethod builder method warnings: MemberRefIndex<MethodRefVarArg> =
+let referenceVarArgMethod builder method warnings: RawIndex<MethodRefVarArg> =
     referenceMethod builder (MethodRefVarArg method) warnings
 
 let referenceModule (builder: CliMetadataBuilder) moduleRef (warnings: WarningsBuilder) =

@@ -18,7 +18,6 @@
     <Compile Include="Metadata\MetadataTable.fs" />
     <Compile Include="Metadata\RowArrayList.fs" />
     <Compile Include="Metadata\RowHashSet.fs" />
-    <Compile Include="Metadata\MetadataTableBuilder.fs" />
     <Compile Include="Metadata\Assembly.fs" />
     <Compile Include="Metadata\AssemblyRef.fs" />
     <Compile Include="Metadata\Identifier.fs" />
@@ -33,8 +32,8 @@
     <Compile Include="Metadata\MethodBody.fs" />
     <Compile Include="Metadata\MethodDefRow.fs" />
     <Compile Include="Metadata\IndexedList.fs" />
-    <Compile Include="Metadata\TypeDef.fs" />
     <Compile Include="Metadata\TypeSpec.fs" />
+    <Compile Include="Metadata\TypeDef.fs" />
     <Compile Include="Metadata\InterfaceImpl.fs" />
     <Compile Include="Metadata\OwnedMetadataTable.fs" />
     <Compile Include="Metadata\Field.fs" />
@@ -52,6 +51,7 @@
     <Compile Include="Metadata\EntryPointSignature.fs" />
     <Compile Include="Metadata\TypeLookupCache.fs" />
     <Compile Include="Metadata\CliMetadata.fs" />
+    <Compile Include="Metadata\IndexConversions.fs" />
     <Compile Include="Metadata\Unchecked.fs" />
     <Compile Include="Metadata\Checked.fs" />
     <Compile Include="Metadata\UncheckedExn.fs" />

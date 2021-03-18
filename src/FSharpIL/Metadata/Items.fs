@@ -4,27 +4,31 @@ open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 open System.Runtime.InteropServices
-open System.Text
 
-open Microsoft.FSharp.Core.Printf
+type internal TypeDefOrRefOrSpecTag =
+    | Def = 0uy
+    | Ref = 1uy
+    | Spec = 2uy
 
 /// II.23.2.8
-type TypeDefOrRefOrSpecEncoded =
-    | TypeDef of SimpleIndex<TypeDefRow>
-    | TypeRef of SimpleIndex<TypeRef>
-    // TypeSpec // of ?
-
-    override this.ToString() =
-        match this with
-        | TypeDef tdef -> tdef.Value.ToString()
-        | TypeRef tref -> tref.Value.ToString()
-
+[<IsReadOnly; Struct>]
+type TypeDefOrRefOrSpecEncoded internal (tag: TypeDefOrRefOrSpecTag, index: int32) =
+    member internal _.Tag = tag
+    member _.Value = index
     interface ITypeDefOrRefOrSpec
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | TypeDef tdef -> IndexOwner.checkIndex owner tdef
-            | TypeRef tref -> IndexOwner.checkIndex owner tref
+
+[<RequireQualifiedAccess>]
+module TypeDefOrRefOrSpecEncoded =
+    let (|TypeDef|TypeRef|TypeSpec|) (encoded: TypeDefOrRefOrSpecEncoded) =
+        match encoded.Tag with
+        | TypeDefOrRefOrSpecTag.Ref -> TypeRef(RawIndex<TypeRef> encoded.Value)
+        | TypeDefOrRefOrSpecTag.Spec -> TypeSpec(RawIndex<TypeSpecRow> encoded.Value)
+        | TypeDefOrRefOrSpecTag.Def
+        | _ -> TypeDef(RawIndex<TypeDefRow> encoded.Value)
+
+    let TypeDef (index: RawIndex<TypeDefRow>) = TypeDefOrRefOrSpecEncoded(TypeDefOrRefOrSpecTag.Def, index.Value)
+    let TypeRef (index: RawIndex<TypeRef>) = TypeDefOrRefOrSpecEncoded(TypeDefOrRefOrSpecTag.Ref, index.Value)
+    let TypeSpec (index: RawIndex<TypeSpecRow>) = TypeDefOrRefOrSpecEncoded(TypeDefOrRefOrSpecTag.Spec, index.Value)
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -63,24 +67,6 @@ type GenericInst = struct
         gargs.Add head
         gargs.AddRange tail
         GenericInst(t, gargs.ToImmutable(), isValueType)
-
-    override this.ToString() =
-        let text =
-            if this.IsValueType
-            then "valuetype "
-            else "class "
-            |> StringBuilder
-        text.Append(this.Type).Append '<' |> ignore
-        for i = 0 to this.GenericArguments.Length - 1 do
-            if i > 0 then
-                text.Append ", " |> ignore
-            text.Append this.GenericArguments.[i] |> ignore
-        text.Append('>').ToString()
-
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            IndexOwner.checkOwner owner this.Type
-            for garg in this.GenericArguments do IndexOwner.checkOwner owner garg
 end
 
 /// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
@@ -132,51 +118,7 @@ type EncodedType =
     /// Represents a generic parameter in a generic type definition.
     | Var of number: uint32
 
-    override this.ToString() =
-        match this with
-        | U4 -> "uint32"
-        | U8 -> "uint64"
-        | R4 -> "float32"
-        | R8 -> "float64"
-        | Class item -> sprintf "class %O" item
-        | GenericInst inst -> string inst
-        | MVar num -> sprintf "!!%i" num
-        | String -> "string"
-        | SZArray(_, item) -> sprintf "%O[]" item
-        | ValueType item -> sprintf "valuetype %O" item
-        | Var num -> sprintf "!%i" num
-        | _ -> "unknown encoded type"
-
     interface IEncodedType
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | Boolean
-            | Char
-            | I1
-            | U1
-            | I2
-            | U2
-            | I4
-            | U4
-            | I8
-            | U8
-            | R4
-            | R8
-            | I
-            | U
-            | Object
-            | MVar _
-            | String
-            | Var _ -> ()
-            | Array(item, _) -> IndexOwner.checkOwner owner item
-            | GenericInst inst -> IndexOwner.checkOwner owner inst
-            | SZArray(modifiers, item) ->
-                for modifier in modifiers do modifier.CheckOwner owner
-                IndexOwner.checkOwner owner item
-            | Class item
-            | ValueType item -> IndexOwner.checkOwner owner item
-            | bad -> failwithf "Cannot validate owner of unsupported encoded type %A" bad
 
 /// <summary>Represents all different possible return types encoded in a <c>RetType</c> (II.23.2.11).</summary>
 /// <seealso cref="T:FSharpIL.Metadata.ReturnTypeItem"/>
@@ -187,20 +129,7 @@ type ReturnType =
     | TypedByRef
     | Void
 
-    override this.ToString() =
-        match this with
-        | Type t -> string t
-        | Void -> "void"
-        | _ -> "unknown return type"
-
     interface IReturnType
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | Type item
-            | ByRefType item -> IndexOwner.checkOwner owner item
-            | TypedByRef
-            | Void -> ()
 
 /// <summary>Represents a <c>TypeSpec</c> item in the <c>#Blob</c> heap (II.23.2.14).</summary>
 [<RequireQualifiedAccess>]
@@ -208,15 +137,7 @@ type TypeSpec =
     /// <summary>Represents a <c>GENERICINST</c> followed by a <c>TypeRef</c>.</summary>
     | GenericInst of GenericInst
 
-    override this.ToString() =
-        match this with
-        | GenericInst inst -> inst.ToString()
-
     interface ITypeSpec
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | GenericInst generic -> IndexOwner.checkOwner owner generic
 
 /// <summary>Represents a <c>MethodSpec</c> item in the <c>#Blob</c> heap (II.23.2.15).</summary>
 /// <exception cref="T:System.ArgumentException">Thrown when the generic argument list is empty.</exception>
@@ -236,15 +157,13 @@ type MethodSpec (garguments: ImmutableArray<EncodedType>) =
         member this.Equals other = this.ToImmutableArray() = other.ToImmutableArray()
 
     interface IMethodSpec
-    interface IIndexValue with
-        member _.CheckOwner owner = for gparam in garguments do IndexOwner.checkOwner owner gparam
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EncodedType =
-    let typeDefStruct (typeDef: TypeDefIndex<_>) = TypeDefOrRefOrSpecEncoded.TypeDef typeDef.Index |> EncodedType.ValueType
-    let typeRefClass (typeRef: SimpleIndex<TypeRef>) = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.Class
-    let typeRefStruct (typeRef: SimpleIndex<TypeRef>) = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.ValueType
+    let typeDefStruct typeDef = TypeDefOrRefOrSpecEncoded.TypeDef typeDef |> EncodedType.ValueType
+    let typeRefClass typeRef = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.Class
+    let typeRefStruct typeRef = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.ValueType
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -267,8 +186,8 @@ module GenericInst =
     let typeRef1 valueType typeRef gargument =
         inst1 valueType (TypeDefOrRefOrSpecEncoded.TypeRef typeRef) gargument
 
-    let typeDef1 valueType (typeDef: TypeDefIndex<_>) gargument =
-        inst1 valueType (TypeDefOrRefOrSpecEncoded.TypeDef typeDef.Index) gargument
+    let typeDef1 valueType typeDef gargument =
+        inst1 valueType (TypeDefOrRefOrSpecEncoded.TypeDef typeDef) gargument
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

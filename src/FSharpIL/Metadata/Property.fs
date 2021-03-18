@@ -17,11 +17,6 @@ type PropertySignature internal
     member internal _.Type = propertyType // PropertyType
     member _.Parameters = parameters
 
-    member internal _.CheckOwner owner =
-        for modf in customMod do modf.CheckOwner owner
-        propertyType.CheckOwner owner
-        for param in parameters do param.CheckOwner owner
-
 type IPropertySignature =
     abstract Signature: unit -> PropertySignature
 
@@ -31,9 +26,6 @@ type PropertyRow = struct
     val Flags: PropertyAttributes
     val Name: Identifier
     val Type: PropertySignature
-
-    interface IIndexValue with
-        member this.CheckOwner owner = this.Type.CheckOwner owner
 end
 
 [<IsReadOnly; Struct>]

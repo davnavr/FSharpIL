@@ -15,7 +15,7 @@ type Unsafe = class
             typeNamespace,
             extends,
             parent
-        ): Result<TypeDefIndex<'Tag>, _> =
+        ): Result<RawIndex<'Tag>, _> =
         let row =
             TypeDefRow (
                 flags,
@@ -25,11 +25,11 @@ type Unsafe = class
                 parent
             )
         match builder.TypeDef.TryAdd row with
-        | ValueSome index -> TypeDefIndex<'Tag> index |> Ok
+        | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
         | ValueNone -> DuplicateTypeDefError row :> ValidationError |> Error
 
     static member AddTypeDef<'Tag>(builder, flags, typeName, extends) =
-        Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, None)
+        Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, ValueNone)
 
     // ChangeTag
 end
@@ -59,7 +59,7 @@ let setEntryPoint builder main = setEntryPointToken builder (EntryPointToken.Val
 /// <param name="assembly">Dummy object used to guarantee that the CLI metadata is an assembly.</param>
 /// <param name="ctor">The constructor for a <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/>.</param>
 /// <param name="tfm">The target framework moniker. For .NET 5, the value is <c>.NETCoreApp,Version=v5.0</c>.</param>
-let setTargetFramework builder (assembly: AssemblyIndex) (ctor: MemberRefIndex<_>) tfm =
+let setTargetFramework builder (assembly: RawIndex<Assembly>) (ctor: RawIndex<_>) tfm =
     let tfm' = FixedArg.Elem (SerString tfm)
     // TODO: Check that the constructor is correct.
     { Parent = CustomAttributeParent.Assembly assembly

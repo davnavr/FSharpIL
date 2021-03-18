@@ -100,14 +100,7 @@ type InstanceMethodSignature = struct
     member internal this.Signature() =
         MethodDefSignature(true, false, this.CallingConventions, this.ReturnType, this.Parameters)
 
-    member internal this.CheckOwner owner =
-        this.ReturnType.CheckOwner owner
-        for param in this.Parameters do
-            param.CheckOwner owner
-
-    interface IMethodDefSignature with
-        member this.Signature() = this.Signature()
-        member this.CheckOwner owner = this.CheckOwner owner
+    interface IMethodDefSignature with member this.Signature() = this.Signature()
 end
 
 type InstanceMethod = Method<ConcreteMethodBody, InstanceMethodTag, InstanceMethodSignature>
@@ -136,15 +129,10 @@ type ObjectConstructorSignature = struct
     new (parameters: ImmutableArray<_>) = { Parameters = parameters }
     new ([<ParamArray>] parameters: ParamItem[]) = ObjectConstructorSignature(parameters.ToImmutableArray())
 
-    member internal this.CheckOwner owner =
-        for param in this.Parameters do param.CheckOwner owner
-
     member internal this.Signature() =
         MethodDefSignature(true, false, MethodCallingConventions.Default, ReturnTypeItem ReturnTypeVoid.Item, this.Parameters)
 
-    interface IMethodDefSignature with
-        member this.CheckOwner owner = this.CheckOwner owner
-        member this.Signature() = this.Signature()
+    interface IMethodDefSignature with  member this.Signature() = this.Signature()
 end
 
 [<IsReadOnly>]
@@ -186,39 +174,41 @@ type StaticMethodSignature = struct
     member internal this.Signature() =
         MethodDefSignature(false, false, this.CallingConventions, this.ReturnType, this.Parameters)
 
-    interface IMethodDefSignature with
-        member this.Signature() = this.Signature()
-        member this.CheckOwner owner = this.signature.CheckOwner owner
+    interface IMethodDefSignature with member this.Signature() = this.Signature()
 end
 
 type StaticMethod = Method<ConcreteMethodBody, StaticMethodTag, StaticMethodSignature>
 
 [<AbstractClass>]
 type EntryPointSignature internal () =
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    abstract CheckOwner: IndexOwner -> unit
     abstract Signature: unit -> MethodDefSignature
-    interface IMethodDefSignature with
-        member this.CheckOwner owner = this.CheckOwner owner
-        member this.Signature() = this.Signature()
+    interface IMethodDefSignature with member this.Signature() = this.Signature()
 
 type EntryPointMethod = Method<ConcreteMethodBody, StaticMethodTag, EntryPointSignature>
 
+type EntryPointTokenTag =
+    | Custom = 0uy
+    | Valid = 1uy
+    | File = 2uy
+
 /// <summary>Represents an <c>EntryPointToken</c> (II.25.3.3).</summary>
-type EntryPointToken =
+type EntryPointToken = TaggedIndex<EntryPointTokenTag>
+
+[<AutoOpen>]
+module EntryPointToken =
+    let (|ValidEntryPoint|CustomEntryPoint|EntryPointFile|) (token: EntryPointToken) =
+        match token.Tag with
+        | EntryPointTokenTag.Valid -> ValidEntryPoint(token.ToRawIndex<EntryPointMethod>())
+        | EntryPointTokenTag.File -> EntryPointFile(token.ToRawIndex<ModuleRef>())
+        | EntryPointTokenTag.Custom
+        | _ -> CustomEntryPoint(token.ToRawIndex<StaticMethod>())
+
     /// Indicates that the entrypoint is a static method in the current assembly.
-    | ValidEntryPoint of MethodDefIndex<EntryPointMethod>
+    let ValidEntryPoint (index: RawIndex<EntryPointMethod>) = index.ToTaggedIndex EntryPointTokenTag.Valid
     /// <summary>
     /// Indicates that the entrypoint is a static method in the current assembly. Its signature may not be valid in some implementations
     /// of the CLR.
     /// </summary>
-    | CustomEntryPoint of MethodDefIndex<StaticMethod> // TODO: See if this option is needed to allow usage of Task or Task<int> in signature.
+    let CustomEntryPoint (index: RawIndex<StaticMethod>) = index.ToTaggedIndex EntryPointTokenTag.Custom // TODO: See if this option is needed to allow usage of Task or Task<int> in signature.
     /// Indicates that the entrypoint is defined in another module.
-    | EntryPointFile of SimpleIndex<ModuleRef>
-
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | ValidEntryPoint method -> IndexOwner.checkIndex owner method.Index
-            | CustomEntryPoint method -> IndexOwner.checkIndex owner method.Index
-            | EntryPointFile file -> IndexOwner.checkIndex owner file
+    let EntryPointFile (index: RawIndex<ModuleRef>) = index.ToTaggedIndex EntryPointTokenTag.File

@@ -54,23 +54,15 @@ type ModuleTable =
 [<Struct; IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
 type NestedClass =
-    { NestedClass: SimpleIndex<TypeDefRow>
-      EnclosingClass: SimpleIndex<TypeDefRow> }
-
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            IndexOwner.checkIndex owner this.NestedClass
-            IndexOwner.checkIndex owner this.EnclosingClass
+    { NestedClass: RawIndex<TypeDefRow>
+      EnclosingClass: RawIndex<TypeDefRow> }
 
 [<Sealed>]
 type CliMetadataBuilder (mdle: ModuleTable) =
     let mutable entrypoint = ValueNone
     let mutable assembly = ValueNone
 
-    let owner = IndexOwner()
-    let typeDef = TypeDefTableBuilder owner
-
-    member internal _.Owner = owner
+    let typeDef = TypeDefTableBuilder()
 
     member val Header = CliHeaderFields.Default with get, set
     member this.HeaderFlags =
@@ -95,23 +87,23 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     /// (0x00)
     member val Module = mdle
     /// (0x01)
-    member val TypeRef = MetadataTableBuilder<TypeRef> owner
+    member val TypeRef = RowHashSet<TypeRef>.Create()
     /// (0x02)
     member _.TypeDef: TypeDefTableBuilder = typeDef
     /// (0x04)
-    member val Field = OwnedMetadataTableBuilder<TypeDefRow, FieldRow> owner
+    member val Field = OwnedMetadataTableBuilder<TypeDefRow, FieldRow>()
     /// (0x06)
-    member val Method = OwnedMetadataTableBuilder<TypeDefRow, MethodDefRow> owner
+    member val Method = OwnedMetadataTableBuilder<TypeDefRow, MethodDefRow>()
     // (0x08)
     // member Param
     /// (0x09)
-    member val InterfaceImpl = InterfaceImplTableBuilder owner
+    member val InterfaceImpl = InterfaceImplTableBuilder()
     /// (0x0A)
-    member val MemberRef: MemberRefTableBuilder = MemberRefTableBuilder owner
+    member val MemberRef: MemberRefTableBuilder = MemberRefTableBuilder()
     // (0x0B)
     // member Constant
     /// (0x0C)
-    member val CustomAttribute: CustomAttributeTable = CustomAttributeTable owner
+    member val CustomAttribute: CustomAttributeTable = CustomAttributeTable()
     // (0x0D)
     // member FieldMarshal
     // (0x0E)
@@ -127,7 +119,7 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     // (0x14)
     // member Event
     // (0x15)
-    member val PropertyMap = OwnedMetadataTableBuilder<TypeDefRow, PropertyRow> owner
+    member val PropertyMap = OwnedMetadataTableBuilder<TypeDefRow, PropertyRow>()
     // (0x17)
     // member Property
     // (0x18)
@@ -135,9 +127,9 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     // (0x19)
     // member MethodImpl
     /// (0x1A)
-    member val ModuleRef = RowArrayList<ModuleRef> owner
+    member val ModuleRef = RowArrayList<ModuleRef>.Create()
     /// (0x1B)
-    member val TypeSpec = MetadataTableBuilder<TypeSpecRow> owner
+    member val TypeSpec = RowHashSet<TypeSpecRow>.Create()
     // (0x1C)
     // member ImplMap
     // (0x1D)
@@ -147,36 +139,33 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// <summary>Represents the <c>AssemblyRef</c> table, which contains references to other assemblies (0x23).</summary>
-    member val AssemblyRef = RowArrayList<AssemblyRef> owner
+    member val AssemblyRef = RowArrayList<AssemblyRef>.Create()
     // AssemblyRefProcessor // 0x24 // Not used when writing a PE file
     // AssemblyRefOS // 0x25 // Not used when writing a PE file
     /// (0x26)
-    member val File = RowArrayList<File> owner
+    member val File = RowArrayList<File>.Create()
     // (0x27)
     // member ExportedType
     // (0x28)
     // member ManifestResource
     /// (0x29)
     member val NestedClass =
-        Seq.choose
-            (fun (tdef: TypeDefRow) ->
+        seq {
+            let mutable i = 0
+            for tdef in typeDef do
+                i <- i + 1
                 match tdef.EnclosingClass with
-                | Some parent ->
-                    { NestedClass = SimpleIndex(owner, tdef)
+                | ValueSome parent ->
+                    { NestedClass = RawIndex i
                       EnclosingClass = parent }
-                    |> Some
-                | _ -> None)
-            typeDef
+                | ValueNone -> ()
+        }
     // (0x2A)
     // member GenericParam // TODO: Create custom table type for generic parameters.
     // (0x2B)
-    member val MethodSpec = MetadataTableBuilder<MethodSpecRow> owner
+    member val MethodSpec = RowHashSet<MethodSpecRow>.Create()
     // (0x2C)
     // member GenericParamConstraint
 
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException" />
-    member _.SetEntryPointToken (main: EntryPointToken) =
-        IndexOwner.checkOwner owner main
-        entrypoint <- ValueSome main
-
-    member _.SetAssembly(assem: Assembly) = assembly <- ValueSome assem; AssemblyIndex(owner, ())
+    member _.SetEntryPointToken(main: EntryPointToken) = entrypoint <- ValueSome main
+    member _.SetAssembly(assem: Assembly) = assembly <- ValueSome assem; RawIndex<Assembly>()

@@ -158,37 +158,33 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0x26) Writes an instruction that "removes the top element from the stack" (III.3.54).
     member this.Pop() = this.WriteU1 0x26uy
 
-    member private this.Call(opcode, method, index, table) =
-        IndexOwner.checkIndex content.Metadata.Owner method
+    member private this.Call(opcode, index: RawIndex<_>, table) =
         this.WriteU1 opcode
-        this.WriteMetadataToken(index, table)
+        this.WriteMetadataToken(uint32 index, table)
 
     // TODO: Allow call and callvirt to accept a MethodSpec.
+    member private this.CallMethodRef method = this.Call(0x28uy, method, 0xAuy)
+
     /// <summary>
     /// (0x28) Writes an instruction that calls a <c>MethodRef</c> with a <c>DEFAULT</c> calling convention (III.3.19).
     /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Call(SimpleIndex method: MemberRefIndex<MethodRefDefault>) =
-        this.Call(0x28uy, method, content.Metadata.MemberRef.IndexOf method, 0xAuy)
+    member this.Call(method: RawIndex<MethodRefDefault>) = this.CallMethodRef method
 
     /// <summary>
     /// (0x28) Writes an instruction that calls a <c>MethodRef</c> with a <c>GENERIC</c> calling convention (III.3.19).
     /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Call(SimpleIndex method: MemberRefIndex<MethodRefGeneric>) =
-        this.Call(0x28uy, method, content.Metadata.MemberRef.IndexOf method, 0xAuy)
+    member this.Call(method: RawIndex<MethodRefGeneric>) = this.CallMethodRef method
 
     /// <summary>
     /// (0x28) Writes an instruction that calls a <c>MethodRef</c> with a <c>VARARG</c> calling convention (III.3.19).
     /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Call(SimpleIndex method: MemberRefIndex<MethodRefVarArg>) =
-        this.Call(0x28uy, method, content.Metadata.MemberRef.IndexOf method, 0xAuy)
+    member this.Call(method: RawIndex<MethodRefVarArg>) = this.CallMethodRef method
 
     /// <summary>(0x28) Writes an instruction that calls a <c>MethodDef</c> (III.3.19).</summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Call(SimpleIndex method: MethodDefIndex<_>) =
-        this.Call(0x28uy, method, content.Metadata.MethodDef.IndexOf method, 0x6uy)
+    member this.Call(method: RawIndex<MethodDefRow>) = this.Call(0x28uy, method, 0x6uy)
+
+    /// <summary>(0x28) Writes an instruction that calls a static method specified by a <c>MethodDef</c> (III.3.19).</summary>
+    member this.Call(method: RawIndex<StaticMethod>) = this.Call(method.AsMethodIndex())
 
     member private this.Branch(opcode, isByte) =
         this.WriteU1 opcode
@@ -336,29 +332,25 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     // member this.Conv_ovf
     // member this.Conv_ovf__un
 
+    member private this.CallvirtMethodRef method = this.Call(0x6Fuy, method, 0xAuy)
+
     /// <summary>
     /// (0x6F) Writes an instruction that calls a late-bound method specified by a <c>MethodRef</c> with a <c>DEFAULT</c>
     /// calling convention (III.4.2).
     /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Callvirt(SimpleIndex method: MemberRefIndex<MethodRefDefault>) =
-        this.Call(0x6Fuy, method, content.Metadata.MemberRef.IndexOf method, 0xAuy)
+    member this.Callvirt(method: RawIndex<MethodRefDefault>) = this.CallvirtMethodRef method
 
     /// <summary>
     /// (0x6F) Writes an instruction that calls a late-bound method specified by a <c>MethodRef</c> with a <c>GENERIC</c>
     /// calling convention (III.4.2).
     /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Callvirt(SimpleIndex method: MemberRefIndex<MethodRefGeneric>) =
-        this.Call(0x6Fuy, method, content.Metadata.MemberRef.IndexOf method, 0xAuy)
+    member this.Callvirt(method: RawIndex<MethodRefGeneric>) = this.CallvirtMethodRef method
 
     /// <summary>
     /// (0x6F) Writes an instruction that calls a late-bound method specified by a <c>MethodRef</c> with a <c>VARARG</c>
     /// calling convention (III.4.2).
     /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Callvirt(SimpleIndex method: MemberRefIndex<MethodRefVarArg>) =
-        this.Call(0x6Fuy, method, content.Metadata.MemberRef.IndexOf method, 0xAuy)
+    member this.Callvirt(method: RawIndex<MethodRefVarArg>) = this.CallvirtMethodRef method
 
     /// <summary>
     /// (0x72) Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
@@ -373,35 +365,34 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
             MetadataToken.userString str content.UserString content.Writer
 
     // TODO: Figure out of Newobj can accept a .ctor with a VARARG signature.
-    member private this.Newobj(ctor, table: IMetadataTable<_>, tablei) =
-        this.Call(0x73uy, ctor, table.IndexOf ctor, tablei)
+    member private this.Newobj(ctor, table) = this.Call(0x73uy, ctor, table)
 
     /// <summary>
     /// (0x73) Writes an instruction that allocates "an uninitialized object or value type" and calls the constructor specified
     /// by a <c>MemberRef</c> with a <c>DEFAULT</c> calling convention (III.4.21).
     /// </summary>
-    member this.Newobj(ctor: MemberRefIndex<MethodRefDefault>) = this.Newobj(ctor.Index, content.Metadata.MemberRef, 0xAuy)
+    member this.Newobj(ctor: RawIndex<MethodRefDefault>) = this.Newobj(ctor, 0xAuy)
 
     /// <summary>
     /// (0x73) Writes an instruction that allocates "an uninitialized object or value type" and calls the constructor method
     /// (III.4.21).
     /// </summary>
-    member this.Newobj(ctor: MethodDefIndex<ObjectConstructor>) = this.Newobj(ctor.Index, content.Metadata.MethodDef, 0x6uy)
+    member this.Newobj(ctor: RawIndex<ObjectConstructor>) = this.Newobj(ctor, 0x6uy)
 
-    member private this.WriteFieldInstruction(opcode, SimpleIndex field: FieldIndex<_>) =
+    member private this.WriteFieldInstruction(opcode, field: RawIndex<_>) =
         this.WriteU1 opcode
-        this.WriteMetadataToken(content.Metadata.Field.IndexOf field, 0x4uy)
+        this.WriteMetadataToken(uint32 field, 0x4uy)
     // TODO: Allow a FieldRef to be used when loading an instance field.
     /// <summary>(0x7B) Writes an instruction that pushes the value of an object's field onto the stack (III.4.10).</summary>
     /// <param name="field">The field to load the value of.</param>
-    member this.Ldfld field = this.WriteFieldInstruction(0x7Buy, field)
+    member this.Ldfld(field: RawIndex<InstanceField>) = this.WriteFieldInstruction(0x7Buy, field)
 
     /// <summary>(0x7D) Writes an instruction that stores a value into an object's field (III.4.28).</summary>
-    member this.Stfld field = this.WriteFieldInstruction(0x7Duy, field)
+    member this.Stfld(field: RawIndex<InstanceField>) = this.WriteFieldInstruction(0x7Duy, field)
     // TODO: Allow a FieldRef to be used when loading a static field.
     /// <summary>(0x7E) Writes an instruction that pushes the value of a static field onto the stack (III.4.14).</summary>
     /// <param name="field">The static field to load the value of.</param>
-    member this.Ldsfld(field: FieldIndex<StaticField>) = this.WriteFieldInstruction(0x7Euy, field)
+    member this.Ldsfld(field: RawIndex<StaticField>) = this.WriteFieldInstruction(0x7Euy, field)
 
     /// <summary>(0x7D) Writes an instruction that stores a value into a static field (III.4.30).</summary>
     member this.Stsfld field = this.WriteFieldInstruction(0x80uy, field)
@@ -413,27 +404,29 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> with the
     /// <c>DEFAULT</c> calling convention (III.2.4)
     /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Tail_call(method: MemberRefIndex<MethodRefDefault>) = this.Tail(); this.Call method
+    member this.Tail_call(method: RawIndex<MethodRefDefault>) = this.Tail(); this.Call method
 
     /// <summary>
     /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> with the
     /// <c>GENERIC</c> calling convention (III.2.4)
     /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Tail_call(method: MemberRefIndex<MethodRefGeneric>) = this.Tail(); this.Call method
+    member this.Tail_call(method: RawIndex<MethodRefGeneric>) = this.Tail(); this.Call method
 
     /// <summary>
     /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodRef</c> with the
     /// <c>VARARG</c> calling convention (III.2.4)
     /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Tail_call(method: MemberRefIndex<MethodRefVarArg>) = this.Tail(); this.Call method
+    member this.Tail_call(method: RawIndex<MethodRefVarArg>) = this.Tail(); this.Call method
 
     /// <summary>
     /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a <c>MethodDef</c> (III.2.4)
     /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member this.Tail_call(method: MethodDefIndex<_>) = this.Tail(); this.Call method
+    member this.Tail_call(method: RawIndex<MethodDefRow>) = this.Tail(); this.Call method
+
+    /// <summary>
+    /// (0xFE 0x14 0x28) Writes an instruction that discards the current stack frame before calling a static method specified by
+    /// a <c>MethodDef</c> (III.2.4)
+    /// </summary>
+    member this.Tail_call(method: RawIndex<StaticMethod>) = this.Tail(); this.Call method
 
     // member this.Tail_callvirt

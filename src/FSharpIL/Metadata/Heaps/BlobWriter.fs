@@ -56,21 +56,13 @@ type internal BlobWriter = struct
     /// <exception cref="T:System.ArgumentOutOfRangeException">
     /// Thrown when the <paramref name="index"/> cannot fit into 3 bytes.
     /// </exception>
-    member this.TypeDefOrRefOrSpecEncoded(table, index: uint32) =
+    member this.TypeDefOrRefOrSpecEncoded(table, index) =
         if index > 0xFFFFFFu then
             ArgumentOutOfRangeException("index", index, "The type index must be able to fit into 3 bytes") |> raise
         this.CompressedUnsigned(table ||| (index <<< 2))
 
-    member this.TypeDefOrRefOrSpecEncoded(index: SimpleIndex<TypeDefRow>) =
-        this.TypeDefOrRefOrSpecEncoded(0u, this.Metadata.TypeDef.IndexOf index)
-    member this.TypeDefOrRefOrSpecEncoded(index: SimpleIndex<TypeRef>) =
-        this.TypeDefOrRefOrSpecEncoded(1u, this.Metadata.TypeRef.IndexOf index)
-    member this.TypeDefOrRefOrSpecEncoded(index: SimpleIndex<TypeSpecRow>) =
-        this.TypeDefOrRefOrSpecEncoded(2u, this.Metadata.TypeSpec.IndexOf index)
     member this.TypeDefOrRefOrSpecEncoded(index: TypeDefOrRefOrSpecEncoded) =
-        match index with
-        | TypeDefOrRefOrSpecEncoded.TypeDef tdef -> this.TypeDefOrRefOrSpecEncoded tdef
-        | TypeDefOrRefOrSpecEncoded.TypeRef tref -> this.TypeDefOrRefOrSpecEncoded tref
+        this.TypeDefOrRefOrSpecEncoded(uint32 index.Tag, uint32 index.Value)
 
     member this.GenericInst(inst: GenericInst) =
         this.Writer.WriteU1 ElementType.GenericInst

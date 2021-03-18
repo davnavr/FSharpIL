@@ -35,12 +35,6 @@ type NamedArg =
     | Field // of FieldOrPropType * string * FixedArg
     | Property // of FieldOrPropType * string * FixedArg
 
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | Field
-            | Property -> ()
-
 /// <summary>
 /// Represents a <c>CustomAttrib</c>, which stores the arguments provided to a custom attribute's constructor,
 /// as well as any values assigned to its fields or properties. (II.23.3).
@@ -49,17 +43,12 @@ type CustomAttributeSignature =
     { FixedArg: ImmutableArray<FixedArg>
       NamedArg: ImmutableArray<NamedArg> }
 
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            for namedArg in this.NamedArg do
-                IndexOwner.checkOwner owner namedArg
-
 [<RequireQualifiedAccess>]
-type CustomAttributeParent =
-    | MethodDef of SimpleIndex<MethodDefRow>
+type CustomAttributeParent = // TODO: Make custom attribute parent a struct
+    | MethodDef of RawIndex<MethodDefRow>
     // | Field // of ?
     // | TypeRef // of ?
-    | TypeDef of SimpleIndex<TypeDefRow>
+    | TypeDef of RawIndex<TypeDefRow>
     // | Param // of ?
     // | InterfaceImpl // of ?
     // | MemberRef of SimpleIndex<MemberRefRow>
@@ -70,21 +59,36 @@ type CustomAttributeParent =
     // | StandAloneSig // of ?
     // | ModuleRef // of ?
     // | TypeSpec // of ?
-    | Assembly of AssemblyIndex
+    | Assembly of RawIndex<Assembly>
     // | AssemblyRef // of ?
-    | File of SimpleIndex<File>
+    | File of RawIndex<File>
     // | ExportedType // of ?
     // | ManifestResource // of ?
     // | GenericParam // of ?
     // | GenericParamConstraint // of ?
     // | MethodSpec // of ?
 
+type CustomAttributeTypeTag =
+   | Def = 0uy
+   | RefDefault = 1uy
+   | RefGeneric = 2uy
+   | RefVarArg = 3uy
+
+type CustomAttributeType = TaggedIndex<CustomAttributeTypeTag>
+
 [<RequireQualifiedAccess>]
-type CustomAttributeType =
-    // | MethodDef // of ?
-    | MethodRefDefault of MemberRefIndex<MethodRefDefault>
-    | MethodRefGeneric of MemberRefIndex<MethodRefGeneric>
-    | MethodRefVarArg of MemberRefIndex<MethodRefVarArg>
+module CustomAttributeType =
+    let (|MethodDef|MethodRefDefault|MethodRefGeneric|MethodRefVarArg|) (index: CustomAttributeType) =
+        match index.Tag with
+        | CustomAttributeTypeTag.RefDefault -> MethodRefDefault(index.ToRawIndex<MethodRefDefault>())
+        | CustomAttributeTypeTag.RefGeneric -> MethodRefGeneric(index.ToRawIndex<MethodRefGeneric>())
+        | CustomAttributeTypeTag.RefVarArg -> MethodRefVarArg(index.ToRawIndex<MethodRefVarArg>())
+        | CustomAttributeTypeTag.Def
+        | _ -> MethodDef(index.ToRawIndex<MethodDefRow>())
+    let MethodDef (index: RawIndex<MethodDefRow>) = index.ToTaggedIndex CustomAttributeTypeTag.Def
+    let MethodRefDefault (index: RawIndex<MethodRefDefault>) = index.ToTaggedIndex CustomAttributeTypeTag.RefDefault
+    let MethodRefGeneric (index: RawIndex<MethodRefGeneric>) = index.ToTaggedIndex CustomAttributeTypeTag.RefGeneric
+    let MethodRefVarArg (index: RawIndex<MethodRefVarArg>) = index.ToTaggedIndex CustomAttributeTypeTag.RefVarArg
 
 /// <summary>Represents a row in the <c>CustomAttribute</c> table (II.22.10).</summary>
 type CustomAttribute =
@@ -94,28 +98,13 @@ type CustomAttribute =
       Value: CustomAttributeSignature option }
       // TODO: How to validate signature to ensure types of fixed arguments match method signature? Maybe have FixedArgs field of signature type be ParamItem -> int -> FixedArg?
 
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this.Parent with
-            | CustomAttributeParent.TypeDef tdef -> IndexOwner.checkIndex owner tdef
-            | CustomAttributeParent.Assembly(IndexOwner other) -> IndexOwner.ensureEqual owner other
-
-            match this.Type with
-            | CustomAttributeType.MethodRefDefault(SimpleIndex method)
-            | CustomAttributeType.MethodRefGeneric(SimpleIndex method)
-            | CustomAttributeType.MethodRefVarArg(SimpleIndex method) -> IndexOwner.checkIndex owner method
-
-            Option.iter (IndexOwner.checkOwner owner) this.Value
-
 [<Sealed>]
-type CustomAttributeTable internal (owner: IndexOwner) =
+type CustomAttributeTable internal () =
     let attrs = List<CustomAttribute>()
 
     member _.Count = attrs.Count
 
-    member _.Add(attr: CustomAttribute) =
-        IndexOwner.checkOwner owner attr
-        attrs.Add attr
+    member _.Add(attr: CustomAttribute) = attrs.Add attr
 
     interface IReadOnlyCollection<CustomAttribute> with
         member _.Count = attrs.Count

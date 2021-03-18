@@ -13,7 +13,6 @@ type Field<'Flags> =
       FieldName: Identifier
       Signature: FieldSignature }
 
-    member internal this.CheckOwner actual = this.Signature.CheckOwner actual
     member internal this.Row() = FieldRow(this.Flags.Value, this.FieldName, this.Signature)
 
 /// <summary>

@@ -12,14 +12,14 @@ let private throwOnError: Result<_, ValidationError> -> _ =
 
 [<AbstractClass; Sealed>]
 type Unsafe = class
-    static member AddStruct(builder, valueType: SimpleIndex<TypeRef>, structDef): TypeDefIndex<_> =
+    static member AddStruct(builder, valueType: RawIndex<TypeRef>, structDef): RawIndex<_> =
         Unchecked.Unsafe.AddStruct(builder, valueType, structDef) |> throwOnError
 
-    static member AddTypeDef<'Tag>(builder, flags, typeName, typeNamespace, extends, parent): TypeDefIndex<'Tag> =
+    static member AddTypeDef<'Tag>(builder, flags, typeName, typeNamespace, extends, parent): RawIndex<'Tag> =
         Unchecked.Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, typeNamespace, extends, parent) |> throwOnError
 
-    static member AddTypeDef<'Tag>(builder, flags, typeName, extends): TypeDefIndex<_> =
-        Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, None)
+    static member AddTypeDef<'Tag>(builder, flags, typeName, extends): RawIndex<_> =
+        Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, ValueNone)
 end
 
 // TODO: Throw exceptions on duplicates instead of returning a struct(_ * bool)

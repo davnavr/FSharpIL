@@ -1,21 +1,29 @@
 ﻿namespace FSharpIL.Metadata
 
-[<Interface>] type internal IMethodSpec = inherit IIndexValue
+type internal IMethodSpec = interface end
 
-[<NoComparison; StructuralEquality>]
-type MethodDefOrRef =
-    | Def of SimpleIndex<MethodDefRow>
-    | RefDefault of MemberRefIndex<MethodRefDefault>
-    | RefGeneric of MemberRefIndex<MethodRefGeneric>
-    | RefVarArg of MemberRefIndex<MethodRefVarArg>
+type MethodDefOrRefTag =
+    | Def = 0uy
+    | RefDefault = 1uy
+    | RefGeneric = 2uy
+    | RefVarArg = 3uy
 
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | Def method -> IndexOwner.checkIndex owner method
-            | RefDefault (SimpleIndex method)
-            | RefGeneric (SimpleIndex method)
-            | RefVarArg (SimpleIndex method) -> IndexOwner.checkIndex owner method
+type MethodDefOrRef = TaggedIndex<MethodDefOrRefTag>
+
+[<RequireQualifiedAccess>]
+module MethodDefOrRef =
+    let (|Def|RefDefault|RefGeneric|RefVarArg|) (index: MethodDefOrRef) =
+        match index.Tag with
+        | MethodDefOrRefTag.Def -> Def(index.ToRawIndex<MethodDefRow>())
+        | MethodDefOrRefTag.RefGeneric -> RefGeneric(index.ToRawIndex<MethodRefGeneric>())
+        | MethodDefOrRefTag.RefVarArg -> RefVarArg(index.ToRawIndex<MethodRefVarArg>())
+        | MethodDefOrRefTag.RefDefault
+        | _ -> RefDefault(index.ToRawIndex<MethodRefDefault>())
+
+    let Def (index: RawIndex<MethodDefRow>) = index.ToTaggedIndex MethodDefOrRefTag.Def
+    let RefDefault (index: RawIndex<MethodRefDefault>) = index.ToTaggedIndex MethodDefOrRefTag.RefDefault
+    let RefGeneric (index: RawIndex<MethodRefGeneric>) = index.ToTaggedIndex MethodDefOrRefTag.RefGeneric
+    let RefVarArg (index: RawIndex<MethodRefVarArg>) = index.ToTaggedIndex MethodDefOrRefTag.RefVarArg
 
 /// <summary>Represents a row in the <c>MethodSpec</c> table (II.22.29).</summary>
 [<System.Runtime.CompilerServices.IsReadOnly>]
@@ -24,12 +32,6 @@ type MethodSpecRow = struct
     val Method: MethodDefOrRef
     val internal Item: IMethodSpec // Instantiation
     internal new (method, instantiation) = { Method = method; Item = instantiation }
-
-    member internal this.CheckOwner owner =
-        IndexOwner.checkOwner owner this.Method
-        IndexOwner.checkOwner owner this.Item
-
-    interface IIndexValue with member this.CheckOwner owner = this.CheckOwner owner
 end
 
 /// <category>Errors</category>

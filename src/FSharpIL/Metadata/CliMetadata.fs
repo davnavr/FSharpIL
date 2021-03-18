@@ -90,7 +90,6 @@ type CliMetadata (builder: CliMetadataBuilder) =
 
         bits, counts
 
-    member val internal Owner = builder.Owner
     member val Header = builder.Header
     /// <summary>Corresponds to the <c>Flags</c> field of the CLI header (II.25.3.3).</summary>
     member val HeaderFlags = builder.HeaderFlags

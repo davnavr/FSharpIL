@@ -10,36 +10,46 @@ type private TypeLookupKey = struct
     new (typeNamespace, typeName) = { TypeNamespace = typeNamespace; TypeName = typeName }
 end
 
+type TypeLookupResultTag =
+    | Def = 0uy
+    | Ref = 1uy
+
+type TypeLookupResult = TaggedIndex<TypeLookupResultTag>
+
 [<RequireQualifiedAccess>]
-type TypeLookupResult =
-    | TypeDef of SimpleIndex<TypeDefRow>
-    | TypeRef of SimpleIndex<TypeRef>
+module TypeLookupResult =
+    let (|TypeDef|TypeRef|) (result: TypeLookupResult) =
+        match result.Tag with
+        | TypeLookupResultTag.Ref -> TypeRef(result.ToRawIndex<TypeRef>())
+        | TypeLookupResultTag.Def
+        | _ -> TypeDef(result.ToRawIndex<TypeDefRow>())
+    let TypeDef (index: RawIndex<TypeDefRow>) = index.ToTaggedIndex TypeLookupResultTag.Def
+    let TypeRef (index: RawIndex<TypeRef>) = index.ToTaggedIndex TypeLookupResultTag.Ref
 
 [<Sealed>]
 type TypeLookupCache (builder: CliMetadataBuilder) =
     let cache = Dictionary<TypeLookupKey, TypeLookupResult>()
 
-    member private _.CreateIndex value = SimpleIndex<_>(builder.Owner, value)
-
-    member this.FindType(typeNamespace, typeName) =
+    member _.FindType(typeNamespace, typeName) =
         let key = TypeLookupKey(typeNamespace, typeName)
         match cache.TryGetValue key with
         | (true, existing) -> ValueSome existing
         | (false, _) ->
-            let mutable result = ValueNone
+            let mutable result, i = ValueNone, 0
 
             let mutable typeRefEnumerator = builder.TypeRef.GetEnumerator()
             while result.IsNone && typeRefEnumerator.MoveNext() do
+                i <- i + 1
                 let tref = typeRefEnumerator.Current
                 if tref.TypeName = typeName && tref.TypeNamespace = typeNamespace then
-                    let index = this.CreateIndex tref
-                    result <- ValueSome (TypeLookupResult.TypeRef index)
+                    result <- ValueSome(TypeLookupResult.TypeRef(RawIndex i))
 
+            i <- 0
             let mutable typeDefEnumerator = builder.TypeDef.GetEnumerator()
             while result.IsNone && typeDefEnumerator.MoveNext() do
+                i <- i + 1
                 let tdef = typeDefEnumerator.Current
                 if tdef.TypeName = typeName && tdef.TypeNamespace = typeNamespace then
-                    let index = this.CreateIndex tdef
-                    result <- ValueSome (TypeLookupResult.TypeDef index)
+                    result <- ValueSome(TypeLookupResult.TypeDef(RawIndex i))
 
             result

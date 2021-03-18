@@ -37,8 +37,6 @@ type Assembly =
       Name: AssemblyName
       Culture: AssemblyCulture }
 
-type AssemblyIndex = TaggedIndex<Assembly, unit>
-
 [<RequireQualifiedAccess>]
 module AssemblyName =
     let tryOfStr (str: string) =

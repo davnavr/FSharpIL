@@ -103,11 +103,10 @@ let example() =
               StructName = Identifier.ofStr "Fraction"
               TypeNamespace = "CustomNumbers" }
         Unsafe.AddStruct(builder, valueType, info)
-    let fractionEncoded = EncodedType.typeDefStruct fraction
+    let fractionEncoded = fraction.AsTypeIndex() |> EncodedType.typeDefStruct
 
     let icomparable_fraction =
-        EncodedType.typeDefStruct fraction
-        |> GenericInst.typeRef1 false icomparable_1
+        GenericInst.typeRef1 false icomparable_1 fractionEncoded
         |> TypeSpec.genericInst
         |> addTypeSpec builder
 
@@ -123,7 +122,7 @@ let example() =
         |> referenceDefaultMethod builder
 
     // [<System.Runtime.CompilerServices.IsReadOnly>]
-    { Parent = CustomAttributeParent.TypeDef fraction.Index
+    { Parent = CustomAttributeParent.TypeDef(fraction.AsTypeIndex())
       Type = CustomAttributeType.MethodRefDefault readonly_ctor
       Value = None }
     |> addCustomAttribute builder

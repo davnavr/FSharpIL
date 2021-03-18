@@ -6,26 +6,18 @@ open System.Reflection
 
 // II.22.21
 [<StructuralComparison; StructuralEquality>]
-type GenericParamConstraint =
-    | ClassConstraint of TypeDefIndex<ConcreteClassDef>
+type GenericParamConstraint = // TODO: Replace generic constraint with a struct.
+    | ClassConstraint of RawIndex<ConcreteClassDef>
     /// <summary>
     /// Indicates that the generic parameter is constrainted to derive from a <c>TypeDef</c> representing an abstract class.
     /// </summary>
-    | AbstractClassConstraint of TypeDefIndex<AbstractClassDef>
-    | InterfaceConstraint of TypeDefIndex<InterfaceDef>
+    | AbstractClassConstraint of RawIndex<AbstractClassDef>
+    | InterfaceConstraint of RawIndex<InterfaceDef>
     /// <summary>
     /// Indicates that the generic parameter is constrainted to derive from a <c>TypeRef</c> representing a class or interface.
     /// </summary>
-    | TypeRefConstraint of SimpleIndex<TypeRef>
+    | TypeRefConstraint of RawIndex<TypeRef>
     // | TypeSpecConstraint
-
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | ClassConstraint (SimpleIndex concrete) -> IndexOwner.checkIndex owner concrete
-            | AbstractClassConstraint (SimpleIndex abst) -> IndexOwner.checkIndex owner abst
-            | InterfaceConstraint (SimpleIndex intf) -> IndexOwner.checkIndex owner intf
-            | TypeRefConstraint tref -> IndexOwner.checkIndex owner tref
 
 // NOTE: It is an error to have duplicate constraints.
 /// <summary>Represents the constraints of a generic parameter, contained in the <c>GenericParamConstraint</c> table (II.22.21).</summary>
@@ -36,10 +28,6 @@ type GenericParamConstraintSet private (constraints: IReadOnlyCollection<Generic
 
     member _.Count = constraints.Count
 
-    interface IIndexValue with
-        member _.CheckOwner owner =
-            for constr in constraints do IndexOwner.checkOwner owner constr
-
 [<AutoOpen>]
 module GenericParamExtensions =
     type GenericParam with
@@ -47,15 +35,14 @@ module GenericParamExtensions =
         member this.Constraints = this.ConstraintSet :?> GenericParamConstraintSet
 
 [<Sealed>]
-type internal GenericParamList<'Flags> (owner: IndexOwner) =
+type internal GenericParamList<'Flags> () =
     let lookup = HashSet<Identifier>()
     let gparams = ImmutableArray.CreateBuilder<GenericParam>()
 
     member _.Count = gparams.Count
-    member _.ToImmutable() = IndexedList(owner, gparams)
+    member _.ToImmutable() = IndexedList(gparams.ToImmutable())
 
     member _.Add(Flags flags: ValidFlags<'Flags, GenericParameterAttributes>, name, constraints: GenericParamConstraintSet) =
-        IndexOwner.checkOwner owner constraints
         if lookup.Add name then
             let i = gparams.Count
             GenericParam(flags, name, constraints) |> gparams.Add

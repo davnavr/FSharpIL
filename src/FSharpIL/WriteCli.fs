@@ -34,7 +34,7 @@ type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * ui
         let index = this.IndexOf item
         if large then writer.WriteU4 index else writer.WriteU2 index
 
-let codedIndex count n indexer = CodedIndex<_>(count, n, indexer)
+let codedIndex count n indexer = CodedIndex(count, n, indexer)
 
 [<RequireQualifiedAccess>]
 module private ILMethodFlags =
@@ -73,11 +73,11 @@ let header info (writer: ChunkWriter) =
     let entryPointTable, entryPointToken =
         match info.Cli.EntryPointToken with
         | ValueNone -> 0uy, 0u
-        | ValueSome (ValidEntryPoint (SimpleIndex main))
-        | ValueSome (CustomEntryPoint (SimpleIndex main)) ->
-            0x6uy, info.Cli.MethodDef.IndexOf main
+        | ValueSome (ValidEntryPoint (Index main))
+        | ValueSome (CustomEntryPoint (Index main)) ->
+            0x6uy, uint32 main
         | ValueSome (EntryPointFile file) ->
-            0x26uy, info.Cli.File.IndexOf file.Value.File
+            0x26uy, uint32 file
 
     MetadataToken.write entryPointToken entryPointTable writer
 
@@ -175,11 +175,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // Calculate how big indices and coded indices should be.
     let interfaceImpl = // TypeDefOrRef
         let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.TypeSpec.Count
-        function
-        | InterfaceIndex.TypeDef(SimpleIndex tdef) -> tables.TypeDef.IndexOf tdef, 0u
-        | InterfaceIndex.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
-        | InterfaceIndex.TypeSpec tspec -> tables.TypeSpec.IndexOf tspec, 2u
-        |> codedIndex total 2
+        codedIndex total 2 (fun (index: InterfaceIndex) -> uint32 index.Value, uint32 index.Tag)
 
     let resolutionScope =
         let total =
@@ -187,20 +183,20 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             + tables.ModuleRef.Count
             + tables.AssemblyRef.Count
             + tables.TypeRef.Count
-        function
-        | ResolutionScope.Module -> 1u, 0u
-        | ResolutionScope.ModuleRef moduleRef -> tables.ModuleRef.IndexOf moduleRef, 1u
-        | ResolutionScope.AssemblyRef assm -> tables.AssemblyRef.IndexOf assm, 2u
-        | bad -> failwithf "Unsupported resolution scope %A" bad
+        fun rscope ->
+            match rscope with
+            | ResolutionScope.Null -> 0u, 0u
+            | _ -> uint32 rscope.Value, uint32 rscope.Tag
         |> codedIndex total 2
 
     let extends =
         // TODO: Include TypeSpec table.
-        let total = tables.TypeDef.Count + tables.TypeRef.Count
+        let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.TypeSpec.Count
         function
-        | Extends.AbstractClass (SimpleIndex tdef)
-        | Extends.ConcreteClass (SimpleIndex tdef) -> tables.TypeDef.IndexOf tdef, 0u
-        | Extends.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
+        | Extends.AbstractClass (Index tdef)
+        | Extends.ConcreteClass (Index tdef) -> uint32 tdef, 0u
+        | Extends.TypeRef tref -> uint32 tref, 1u
+        | Extends.TypeSpec tspec -> uint32 tspec, 2u
         | Extends.Null -> 0u, 0u
         |> codedIndex total 2
 
@@ -211,10 +207,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             + tables.ModuleRef.Count
             + tables.MethodDef.Count
             + tables.TypeSpec.Count
-        function
-        | MemberRefParent.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
-        | MemberRefParent.TypeSpec tspec -> tables.TypeSpec.IndexOf tspec, 4u
-        |> codedIndex total 3
+        codedIndex total 3 (fun (index: MemberRefParent) -> uint32 index.Value, uint32 index.Tag)
 
     let customAttriuteParent =
         let total =
@@ -241,7 +234,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             // GenericParamConstraint
             // MethodSpec
         function
-        | CustomAttributeParent.TypeDef tdef -> tables.TypeDef.IndexOf tdef, 3u
+        | CustomAttributeParent.TypeDef tdef -> uint32 tdef, 3u
         | CustomAttributeParent.Assembly _ -> 1u, 14u
         | bad -> failwithf "Unsupported custom attribute parent %A" bad
         |> codedIndex total 5
@@ -250,18 +243,19 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         // TODO: Figure out if table count for MethodDefOrRef coded index includes all of MemberRef or just MethodRefs.
         let total = tables.MethodDef.Count + tables.MemberRef.Count
         function
-        | MethodDefOrRef.Def method -> tables.MethodDef.IndexOf method, 0u
-        | MethodDefOrRef.RefDefault(SimpleIndex method)
-        | MethodDefOrRef.RefGeneric(SimpleIndex method)
-        | MethodDefOrRef.RefVarArg(SimpleIndex method) -> tables.MemberRef.IndexOf method, 1u
+        | MethodDefOrRef.Def method -> uint32 method, 0u
+        | MethodDefOrRef.RefDefault (Index method)
+        | MethodDefOrRef.RefGeneric (Index method)
+        | MethodDefOrRef.RefVarArg (Index method) -> uint32 method, 1u
         |> codedIndex total 1
 
     let customAttributeType =
         let total = tables.MethodDef.Count + tables.MemberRef.Count
         function
-        | CustomAttributeType.MethodRefDefault (SimpleIndex mref)
-        | CustomAttributeType.MethodRefGeneric (SimpleIndex mref)
-        | CustomAttributeType.MethodRefVarArg (SimpleIndex mref) -> tables.MemberRef.IndexOf mref, 3u
+        | CustomAttributeType.MethodRefDefault (Index mref)
+        | CustomAttributeType.MethodRefGeneric (Index mref)
+        | CustomAttributeType.MethodRefVarArg (Index mref) -> uint32 mref, 3u
+        | CustomAttributeType.MethodDef mdef -> uint32 mdef, 2u
         |> codedIndex total 3
 
     // Module (0x00)
@@ -279,21 +273,22 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
     // TypeDef (0x02)
     if tables.TypeDef.Count > 0 then
-        let mutable field = 1u
-        let mutable method = 1u
+        let mutable index, field, method = 1, 1u, 1u
 
-        for index in tables.TypeDef.Indices do
-            let tdef = index.Value
+        for tdef in tables.TypeDef.Rows do
             writer.WriteU4 tdef.Flags
             info.StringsStream.WriteStringIndex(tdef.TypeName, writer)
             info.StringsStream.WriteIndex(tdef.TypeNamespace, writer)
             extends.WriteIndex(tdef.Extends, writer)
 
-            tables.Field.WriteSimpleIndex(field, writer)
-            field <- field + (tables.Field.GetCount index)
+            let index' = RawIndex index
+            index <- index + 1
 
-            tables.Field.WriteSimpleIndex(method, writer)
-            method <- method + (tables.MethodDef.GetCount index)
+            tables.Field.WriteSimpleIndex(RawIndex field, writer)
+            field <- field + (tables.Field.GetCount index')
+
+            tables.Field.WriteSimpleIndex(RawIndex method, writer)
+            method <- method + (tables.MethodDef.GetCount index')
 
     // Field (0x04)
     for row in tables.Field.Rows do
@@ -360,7 +355,8 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
     // ModuleRef (0x1A)
     for moduleRef in tables.ModuleRef.Rows do
-        info.StringsStream.WriteStringIndex(moduleRef.Name, writer) // Name
+        let name = tables.File.[moduleRef.File].FileName
+        info.StringsStream.WriteStringIndex(name, writer)
 
     // TypeSpec (0x1B)
     for typeSpec in tables.TypeSpec.Rows do info.BlobStream.WriteIndex(typeSpec.Signature, writer)

@@ -99,24 +99,41 @@ type InterfaceFlags =
 [<AbstractClass; Sealed>] type StructFlags = class end
 
 type TypeFlags<'Tag> = ValidFlags<'Tag, TypeAttributes>
-type TypeDefIndex<'Type> = TaggedIndex<'Type, TypeDefRow>
+
+type ExtendsTag =
+    | Null = 0uy
+    | ConcreteClass = 1uy
+    | AbstractClass = 2uy
+    | TypeRef = 3uy
+    | TypeSpec = 4uy
 
 /// <summary>
 /// Specifies which type is extended by a <c>TypeDef</c>.
 /// </summary>
+type Extends = TaggedIndex<ExtendsTag>
+
 [<RequireQualifiedAccess>]
-type Extends =
-    /// Extend a class that is not sealed or abstract.
-    | ConcreteClass of TypeDefIndex<ConcreteClassDef>
-    /// Extend an abstract class.
-    | AbstractClass of TypeDefIndex<AbstractClassDef>
+module Extends =
+    let (|ConcreteClass|AbstractClass|TypeRef|TypeSpec|Null|) (extends: Extends) =
+        match extends.Tag with
+        | ExtendsTag.ConcreteClass -> ConcreteClass(extends.ToRawIndex<ConcreteClassDef>())
+        | ExtendsTag.AbstractClass -> AbstractClass(extends.ToRawIndex<AbstractClassDef>())
+        | ExtendsTag.TypeRef -> TypeRef(extends.ToRawIndex<TypeRef>())
+        | ExtendsTag.TypeSpec -> TypeSpec(extends.ToRawIndex<TypeSpecRow>())
+        | ExtendsTag.Null
+        | _ -> Null
+
+    /// Extends a class that is not sealed or abstract.
+    let ConcreteClass (index: RawIndex<ConcreteClassDef>) = index.ToTaggedIndex ExtendsTag.ConcreteClass
+    /// Extends an abstract class.
+    let AbstractClass (index: RawIndex<AbstractClassDef>) = index.ToTaggedIndex ExtendsTag.AbstractClass
     /// Extends a type referenced in another assembly.
-    | TypeRef of SimpleIndex<TypeRef>
-    // | TypeSpec of SimpleIndex<?>
+    let TypeRef (index: RawIndex<TypeRef>) = index.ToTaggedIndex ExtendsTag.TypeRef
+    let TypeSpec (index: RawIndex<TypeSpecRow>) = index.ToTaggedIndex ExtendsTag.TypeSpec
     /// <summary>
     /// Indicates that a class does not extend another class, used by <see cref="T:System.Object"/> and interfaces.
     /// </summary>
-    | Null
+    let Null = TaggedIndex ExtendsTag.Null
 
 /// <summary>Represents a row in the <c>TypeDef</c> table (II.22.37).</summary>
 /// <seealso cref="T:FSharpIL.Metadata.ClassDef"/>
@@ -130,7 +147,7 @@ type TypeDefRow internal (flags, name, ns, extends, parent) =
     member _.TypeName: Identifier = name
     member _.TypeNamespace: string = ns
     member _.Extends: Extends = extends
-    member _.EnclosingClass: SimpleIndex<TypeDefRow> option = parent
+    member _.EnclosingClass: RawIndex<TypeDefRow> voption = parent
 
     override this.Equals obj =
         match obj with
@@ -169,66 +186,56 @@ type TypeDefRow internal (flags, name, ns, extends, parent) =
         let name = this.GetFullName()
 
         // TODO: Add other flags when printing TypeDefRow.
-        let extends =
-            match extends with
-            | Extends.ConcreteClass(SimpleIndex tdef)
-            | Extends.AbstractClass(SimpleIndex tdef) -> tdef.Value.GetFullName() |> sprintf " extends %s"
-            | Extends.TypeRef tref -> sprintf " extends %O" tref
-            | Extends.Null -> String.Empty
 
-        sprintf ".class %s %s%s %s%s" visibility layout str name extends
+        sprintf ".class %s %s%s %s" visibility layout str name
 
     interface IEquatable<TypeDefRow> with
         member _.Equals other = ns = other.TypeNamespace && name = other.TypeName
 
-    interface IIndexValue with
-        member _.CheckOwner owner =
-            match extends with
-            | Extends.ConcreteClass (SimpleIndex concrete) -> IndexOwner.checkIndex owner concrete
-            | Extends.AbstractClass (SimpleIndex abst) -> IndexOwner.checkIndex owner abst
-            | Extends.TypeRef tref -> IndexOwner.checkIndex owner tref
-            | Extends.Null -> ()
-
-            Option.iter (IndexOwner.checkIndex owner) parent
+type TypeVisibility = TaggedIndex<TypeAttributes>
 
 [<RequireQualifiedAccess>]
-type TypeVisibility =
-    | NotPublic
-    | Public
-    | NestedPublic of SimpleIndex<TypeDefRow>
-    | NestedPrivate of SimpleIndex<TypeDefRow>
-    /// <summary>Equivalent to the C# <see langword="protected"/> keyword.</summary>
-    | NestedFamily of SimpleIndex<TypeDefRow>
-    /// <summary>Equivalent to the C# <see langword="internal"/> keyword.</summary>
-    | NestedAssembly of SimpleIndex<TypeDefRow>
+module TypeVisibility =
+    let (|NotPublic|Public|Nested|) (visibility: TypeVisibility) =
+        match visibility.Tag with
+        | TypeAttributes.Public -> Public
+        | TypeAttributes.NotPublic -> NotPublic
+        | _ -> Nested(visibility.ToRawIndex<TypeDefRow>())
+
+    let (|NotNested|NestedPublic|NestedPrivate|NestedFamily|NestedAssembly|NestedFamilyAndAssembly|NestedFamilyOrAssembly|) (visibility: TypeVisibility) =
+        match visibility.Tag with
+        | TypeAttributes.Public -> NotNested
+        | TypeAttributes.NotPublic -> NotNested
+        | nested ->
+            let tindex = visibility.ToRawIndex<TypeDefRow>
+            match nested with
+            | TypeAttributes.NestedPublic -> NestedPublic tindex
+            | TypeAttributes.NestedPrivate -> NestedPrivate tindex
+            | TypeAttributes.NestedFamily -> NestedFamily tindex
+            | TypeAttributes.NestedAssembly -> NestedAssembly tindex
+            | TypeAttributes.NestedFamANDAssem -> NestedFamilyAndAssembly tindex
+            | TypeAttributes.NestedFamORAssem -> NestedFamilyOrAssembly tindex
+            | _ -> NotNested
+
+    let NotPublic = TaggedIndex TypeAttributes.NotPublic
+    let Public = TaggedIndex TypeAttributes.Public
+    let NestedPublic (index: RawIndex<TypeDefRow>) = index.ToTaggedIndex TypeAttributes.NestedPublic
+    let NestedPrivate (index: RawIndex<TypeDefRow>) = index.ToTaggedIndex TypeAttributes.NestedPrivate
+    /// <summary>Equivalent to the C# keyword <see langword="protected"/> applied on a nested type.</summary>
+    let NestedFamily (index: RawIndex<TypeDefRow>) = index.ToTaggedIndex TypeAttributes.NestedFamily
+    /// <summary>Equivalent to the C# keyword <see langword="internal"/> applied on a nested type.</summary>
+    let NestedAssembly (index: RawIndex<TypeDefRow>) = index.ToTaggedIndex TypeAttributes.NestedAssembly
     /// <summary>Equivalent to the C# <see langword="private protected"/> keyword.</summary>
-    | NestedFamilyAndAssembly of SimpleIndex<TypeDefRow>
+    let NestedFamilyAndAssembly (index: RawIndex<TypeDefRow>) = index.ToTaggedIndex TypeAttributes.NestedFamANDAssem
     /// <summary>Equivalent to the C# <see langword="protected internal"/> keyword.</summary>
-    | NestedFamilyOrAssembly of SimpleIndex<TypeDefRow>
+    let NestedFamilyOrAssembly (index: RawIndex<TypeDefRow>) = index.ToTaggedIndex TypeAttributes.NestedFamORAssem
 
     /// <summary>Retrieves the enclosing class of this nested class.</summary>
-    /// <remarks>In the actual metadata, nested type information is actually stored in the NestedClass table (II.22.32).</remarks>
-    member this.EnclosingClass =
-        match this with
-        | NotPublic
-        | Public -> None
-        | NestedPublic parent
-        | NestedPrivate parent
-        | NestedFamily parent
-        | NestedAssembly parent
-        | NestedFamilyAndAssembly parent
-        | NestedFamilyOrAssembly parent -> Some parent
-
-    member this.Flags =
-        match this with
-        | NotPublic -> TypeAttributes.NotPublic
-        | Public -> TypeAttributes.Public
-        | NestedPublic _ -> TypeAttributes.NestedPublic
-        | NestedPrivate _ -> TypeAttributes.NestedPrivate
-        | NestedFamily _ -> TypeAttributes.NestedFamily
-        | NestedAssembly _ -> TypeAttributes.NestedAssembly
-        | NestedFamilyAndAssembly _ -> TypeAttributes.NestedFamANDAssem
-        | NestedFamilyOrAssembly _ -> TypeAttributes.NestedFamORAssem
+    /// <remarks>In the actual metadata, nested type information is stored in the NestedClass table (II.22.32).</remarks>
+    let enclosingClass (visibility: TypeVisibility) =
+        match visibility with
+        | Nested parent -> ValueSome parent
+        | _ -> ValueNone
 
 /// <summary>
 /// Represents a <c>TypeDef</c> that is neither a delegate, enumeration, interface, or user-defined value type.
@@ -329,15 +336,15 @@ type MissingTypeError (ns: string, name: Identifier) =
 [<AbstractClass; Sealed>]
 type ModuleType private () =
     static member val Name = Identifier.ofStr "<Module>"
-    static member val internal Row = TypeDefRow(TypeAttributes.NotPublic, ModuleType.Name, String.Empty, Extends.Null, None)
+    static member val internal Row = TypeDefRow(TypeAttributes.NotPublic, ModuleType.Name, String.Empty, Extends.Null, ValueNone)
 
 [<Sealed>]
-type TypeDefTableBuilder internal (owner: IndexOwner) =
-    let definitions = MetadataTableBuilder<TypeDefRow> owner
+type TypeDefTableBuilder internal () =
+    let definitions = RowHashSet<TypeDefRow>.Create()
 
     member val Module =
         match definitions.TryAdd ModuleType.Row with
-        | ValueSome i -> TypeDefIndex<ModuleType> i
+        | ValueSome i -> RawIndex<ModuleType> i.Value
         | ValueNone -> failwith "Unable to add <Module> type to TypeDef table"
 
     member _.Count = definitions.Count

@@ -3,33 +3,39 @@
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
-open System.Text
 
 open Microsoft.FSharp.Core.Printf
 
-[<RequireQualifiedAccess>]
-type MemberRefParent =
-    // | MethodDef // of ?
-    // | ModuleRef // of ?
-    // | TypeDef // of ?
-    | TypeRef of SimpleIndex<TypeRef>
-    | TypeSpec of SimpleIndex<TypeSpecRow>
+type MemberRefParentTag =
+    | TypeDef = 0uy
+    | TypeRef = 1uy
+    | ModuleRef = 2uy
+    | MethodDef = 3uy
+    | TypeSpec = 4uy
 
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | TypeRef tref -> IndexOwner.checkIndex owner tref
-            | TypeSpec tref -> IndexOwner.checkIndex owner tref
+type MemberRefParent = TaggedIndex<MemberRefParentTag>
+
+[<RequireQualifiedAccess>]
+module MemberRefParent =
+    let (|TypeDef|TypeRef|ModuleRef|MethodDef|TypeSpec|) (parent: MemberRefParent) =
+        match parent.Tag with
+        | MemberRefParentTag.TypeRef -> TypeRef(parent.ToRawIndex<TypeRef>())
+        | MemberRefParentTag.ModuleRef -> ModuleRef(parent.ToRawIndex<ModuleRef>())
+        | MemberRefParentTag.MethodDef -> MethodDef(parent.ToRawIndex<MethodDefRow>())
+        | MemberRefParentTag.TypeSpec -> TypeSpec(parent.ToRawIndex<TypeSpecRow>())
+        | MemberRefParentTag.TypeDef
+        | _ -> TypeDef(parent.ToRawIndex<TypeDefRow>())
+
+    let TypeRef (index: RawIndex<TypeRef>) = index.ToTaggedIndex MemberRefParentTag.TypeRef
+    let TypeDef (index: RawIndex<TypeDefRow>) = index.ToTaggedIndex MemberRefParentTag.TypeDef
+    let TypeSpec (index: RawIndex<TypeSpecRow>) = index.ToTaggedIndex MemberRefParentTag.TypeSpec
+    let ModuleRef (index: RawIndex<ModuleRef>) = index.ToTaggedIndex MemberRefParentTag.ModuleRef
 
 [<NoComparison; StructuralEquality>]
-type MemberRef<'Signature when 'Signature : equality and 'Signature : struct and 'Signature :> IIndexValue> =
+type MemberRef<'Signature when 'Signature : equality and 'Signature : struct> =
     { Class: MemberRefParent
       MemberName: Identifier
       Signature: 'Signature }
-
-    member internal this.CheckOwner owner =
-        IndexOwner.checkOwner owner this.Class
-        this.Signature.CheckOwner owner
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -65,11 +71,6 @@ type MethodRefDefaultSignature = struct
         MethodRefDefaultSignature(false, false, retType, parameters)
 
     member internal this.CallingConventions = CallingConvention.flags this.HasThis this.ExplicitThis 0u true
-
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            this.ReturnType.CheckOwner owner
-            for param in this.Parameters do param.CheckOwner owner
 end
 
 /// <summary>Represents a generic <c>MethodRefSig</c> item (II.23.2.1).</summary>
@@ -92,11 +93,6 @@ type MethodRefGenericSignature = struct
     new (genParamCount, retType, parameters) = MethodRefGenericSignature(false, false, genParamCount, retType, parameters)
 
     member internal this.CallingConventions = CallingConvention.flags this.HasThis this.ExplicitThis this.GenParamCount true
-
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            this.ReturnType.CheckOwner owner
-            for param in this.Parameters do param.CheckOwner owner
 end
 
 /// <summary>Represents a <c>MethodRefSig</c> with a <c>VARARG</c> calling convention (II.23.2.2).</summary>
@@ -123,12 +119,6 @@ type MethodRefVarArgSignature = struct
     member this.ParamCount = uint32 (this.Parameters.Length + this.VarArgParameters.Length)
 
     member internal this.CallingConventions = CallingConvention.flags this.HasThis this.ExplicitThis 0u this.VarArgParameters.IsEmpty
-
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            this.ReturnType.CheckOwner owner
-            for parameter in this.Parameters do parameter.CheckOwner owner
-            for parameter in this.VarArgParameters do parameter.CheckOwner owner
 end
 
 type MethodRefDefault = MemberRef<MethodRefDefaultSignature>
@@ -148,15 +138,6 @@ type MemberRefRow =
     | MethodRefVarArg of MethodRefVarArg
     // | FieldRef // of ?
 
-    interface IIndexValue with
-        member this.CheckOwner owner =
-            match this with
-            | MethodRefDefault method -> method.CheckOwner owner
-            | MethodRefGeneric method -> method.CheckOwner owner
-            | MethodRefVarArg method -> method.CheckOwner owner
-
-type MemberRefIndex<'Member> = TaggedIndex<'Member, MemberRefRow>
-
 /// <summary>
 /// Error used when there is a duplicate row in the <c>MemberRef</c> table (6).
 /// </summary>
@@ -171,16 +152,15 @@ type DuplicateMemberRefWarning (row: MemberRefRow) =
             this.Member
 
 [<Sealed>]
-type MemberRefTableBuilder internal (owner: IndexOwner) =
-    let members = RowArrayList<MemberRefRow> owner
+type MemberRefTableBuilder internal () =
+    let members = RowArrayList<MemberRefRow>.Create()
 
     member _.Count = members.Count
 
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member internal _.Add<'MemberRef>(row: MemberRefRow): struct(MemberRefIndex<_> * _) =
-        IndexOwner.checkOwner owner row
+    member internal _.Add<'MemberRef>(row: MemberRefRow) =
         let i, duplicate = members.Add row
-        struct(MemberRefIndex<'MemberRef> i, duplicate)
+        struct(RawIndex<'MemberRef> i.Value, duplicate)
 
     member this.Add(method: MethodRefDefault) = this.Add<MethodRefDefault>(MethodRefDefault method)
     member this.Add(method: MethodRefGeneric) = this.Add<MethodRefGeneric>(MethodRefGeneric method)

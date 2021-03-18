@@ -1,6 +1,6 @@
 ﻿namespace FSharpIL.Metadata
 
-[<Interface>] type internal ITypeSpec = inherit IIndexValue
+type internal ITypeSpec = interface end
 
 /// <summary>Represents a row in the <c>TypeSpec</c> table (II.22.39)</summary>
 [<System.Runtime.CompilerServices.IsReadOnly>]
@@ -11,10 +11,6 @@ type TypeSpecRow = struct
     internal new (typeSpec: ITypeSpec) = { Type = typeSpec }
 
     override this.ToString() = this.Type.ToString()
-
-    member internal this.CheckOwner owner = IndexOwner.checkOwner owner this.Type
-
-    interface IIndexValue with member this.CheckOwner owner = this.CheckOwner owner
 end
 
 /// <category>Errors</category>

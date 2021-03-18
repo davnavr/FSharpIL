@@ -15,11 +15,6 @@ type FieldSignature = struct
     val CustomMod: ImmutableArray<CustomModifier>
     val internal Type: IEncodedType // FieldType
     internal new (modifiers, fieldType) = { CustomMod = modifiers; Type = fieldType }
-
-    member internal this.CheckOwner owner =
-        for modifier in this.CustomMod do modifier.CheckOwner owner
-        this.Type.CheckOwner owner
-
     override this.ToString() = this.Type.ToString()
 end
 
@@ -39,35 +34,11 @@ type FieldRow internal (flags, name, signature) =
 
     override _.GetHashCode() = hash(name, signature)
 
-    override _.ToString() =
-        let visibility =
-            match flags ||| FieldAttributes.FieldAccessMask with
-            | FieldAttributes.Private -> "private"
-            | FieldAttributes.Assembly -> "assembly"
-            | FieldAttributes.FamANDAssem -> "famandassem"
-            | FieldAttributes.Family -> "family"
-            | FieldAttributes.FamORAssem -> "famorassem"
-            | FieldAttributes.Public -> "public"
-            | _ -> "compilercontrolled"
-
-        let fstatic =
-            if flags.HasFlag FieldAttributes.Static
-            then " static" // + " class"
-            else String.Empty
-
-        // TODO: Add other flags when printing fields.
-        sprintf ".field %s%s %O %O" visibility fstatic signature name
-
     interface IEquatable<FieldRow> with
         member this.Equals other =
             if this.SkipDuplicateChecking || other.SkipDuplicateChecking
             then false
             else name = other.Name && signature = other.Signature
-
-    interface IIndexValue with
-        member _.CheckOwner owner = signature.CheckOwner owner
-
-type FieldIndex<'Tag> = TaggedIndex<'Tag, FieldRow>
 
 /// <summary>Error used when there is a duplicate row in the <c>Field</c> table (17).</summary>
 /// <category>Errors</category>

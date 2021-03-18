@@ -32,7 +32,7 @@ type internal ElementType =
 
     | Sentinel = 0x41uy
 
-[<Interface>] type internal ITypeDefOrRefOrSpec = inherit IIndexValue
+type internal ITypeDefOrRefOrSpec = interface end
 
 /// (II.23.2.7)
 [<IsReadOnly; Struct>]
@@ -41,19 +41,14 @@ type CustomModifier = struct
     val internal CMod: ITypeDefOrRefOrSpec // ModifierType
 
     internal new (required, modifierType) = { Required = required; CMod = modifierType }
-
-    member internal this.CheckOwner owner = this.CMod.CheckOwner owner
-
-    interface IIndexValue with member this.CheckOwner owner = this.CheckOwner owner
 end
 
-[<Interface>] type internal IReturnType = inherit IIndexValue
+type internal IReturnType = interface end
 
 [<Sealed>]
 type internal ReturnTypeVoid private () =
     static member Item = ReturnTypeVoid()
     interface IReturnType
-    interface IIndexValue with member _.CheckOwner _ = ()
 
 /// <summary>Represents a <c>RetType</c> used in a signature (II.23.2.11).</summary>
 [<IsReadOnly>]
@@ -65,12 +60,6 @@ type ReturnTypeItem = struct
     internal new (returnType) = ReturnTypeItem(ImmutableArray.Empty, returnType)
 
     override this.ToString() = this.RetType.ToString()
-
-    member internal this.CheckOwner owner =
-        for cmod in this.CustomMod do cmod.CheckOwner owner
-        this.RetType.CheckOwner owner
-
-    interface IIndexValue with member this.CheckOwner owner = this.CheckOwner owner
 end
 
-[<Interface>] type internal IEncodedType = inherit IIndexValue
+type internal IEncodedType = interface end
