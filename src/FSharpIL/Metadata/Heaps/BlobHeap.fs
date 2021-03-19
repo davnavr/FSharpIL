@@ -23,6 +23,8 @@ type internal BlobHeap =
 
       CustomAttribute: Dictionary<CustomAttributeSignature, BlobIndex>
 
+      Property: Dictionary<PropertySignature, BlobIndex>
+
       TypeSpec: Dictionary<TypeSpec, BlobIndex>
 
       MethodSpec: Dictionary<MethodSpec, BlobIndex>
@@ -38,6 +40,8 @@ type internal BlobHeap =
         + this.MemberRef.Count
 
         + this.CustomAttribute.Count
+
+        + this.Property.Count
 
         + this.TypeSpec.Count
 
@@ -60,6 +64,8 @@ type internal BlobHeap =
         match signature with
         | Some signature' -> this.WriteRawIndex(this.CustomAttribute.Item signature', writer)
         | None -> this.WriteRawIndex(0u, writer)
+
+    member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.Property.Item signature, writer)
 
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.TypeSpec.Item signature, writer)
 

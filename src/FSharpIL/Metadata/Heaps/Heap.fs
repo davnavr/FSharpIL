@@ -94,6 +94,9 @@ module internal Heap =
               MemberRef = Dictionary<_, _> metadata.MemberRef.Count
 
               CustomAttribute = Dictionary<_, _> metadata.CustomAttribute.Length
+
+              Property = Dictionary<_, _> metadata.Property.Count
+
               TypeSpec = Dictionary<_, _> metadata.TypeSpec.Count
 
               MethodSpec = Dictionary<_, _> metadata.MethodSpec.Count
@@ -172,6 +175,18 @@ module internal Heap =
                 blobIndex pos signature blob.CustomAttribute
             | _ -> ()
 
+        for row in metadata.Property.Rows do
+            let signature = row.Type
+            if not (blob.Property.ContainsKey signature) then
+                let pos = writer.Position
+                let property = if signature.HasThis then 0x28uy else 0x8uy
+                writer.Writer.WriteU1 property
+                writer.CompressedUnsigned signature.Parameters.Length // ParamCount
+                writer.CustomMod signature.CustomMod
+                writer.EncodedType signature.Type
+                writer.Parameters signature.Parameters
+                blobIndex pos signature blob.Property
+
         for typeSpec in metadata.TypeSpec.Rows do
             let signature = typeSpec.Signature
             if not (blob.TypeSpec.ContainsKey signature) then
@@ -245,6 +260,7 @@ module internal Heap =
         writeAll blobs.MethodDef
         writeAll blobs.MemberRef
         writeAll blobs.CustomAttribute
+        writeAll blobs.Property
         writeAll blobs.TypeSpec
         writeAll blobs.MethodSpec
         writeAll blobs.PublicKeyTokens

@@ -10,6 +10,7 @@ type RawIndex<'Tag> internal (value: int32) =
     /// <remarks>A value of <c>1</c> refers to the first row in the metadata table.</remarks>
     member _.Value = value
     member internal _.ToTaggedIndex(tag) = TaggedIndex(tag, value)
+    member internal _.ChangeTag<'To>() = RawIndex<'To> value
     override _.ToString() = sprintf "%s (%x)" typeof<'Tag>.Name value
     static member op_Implicit(index: RawIndex<'Tag>) = index.Value
     static member op_Implicit(index: RawIndex<'Tag>) = uint32 index.Value

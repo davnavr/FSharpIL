@@ -100,7 +100,8 @@ let inline internal iterStrings action (metadata: CliMetadata) =
         | MethodRefVarArg { MemberName = name } ->
             string name |> action
 
-    // ModuleRef table not necessary, since its names will correspond to names used in the File table
+    for property in metadata.Property.Rows do
+        string property.Name |> action
 
     match metadata.Assembly with
     | ValueSome assembly ->

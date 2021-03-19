@@ -14,6 +14,8 @@ type CliMetadata (builder: CliMetadataBuilder) =
         |> Seq.collect(fun method -> Seq.indexed method.ParamList)
         |> ImmutableArray.CreateRange
 
+    let propertyMap = builder.PropertyMap.ToImmutable()
+
     let nestedClass = builder.NestedClass |> ImmutableArray.CreateRange
 
     let valid, rowCounts =
@@ -52,6 +54,20 @@ type CliMetadata (builder: CliMetadataBuilder) =
         if builder.CustomAttribute.Count > 0 then
             bits <- bits ||| (1UL <<< 0xC)
             uint32 builder.CustomAttribute.Count |> counts.Add
+
+
+
+        if builder.PropertyMap.Owners.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x15)
+            uint32 builder.PropertyMap.Owners.Count |> counts.Add
+
+        if builder.Property.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x17)
+            uint32 builder.Property.Count |> counts.Add
+
+        if builder.MethodSemantics.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x18)
+            uint32 builder.MethodSemantics.Count |> counts.Add
 
 
 
@@ -115,6 +131,10 @@ type CliMetadata (builder: CliMetadataBuilder) =
     member val MemberRef = builder.MemberRef.ToImmutable()
 
     member val CustomAttribute = builder.CustomAttribute.ToImmutableArray()
+
+    member val PropertyMap = propertyMap
+    member val Property = MetadataTable propertyMap.Rows
+    member val MethodSemantics = builder.MethodSemantics.ToImmutable()
 
     member val ModuleRef = builder.ModuleRef.ToImmutable()
     member val TypeSpec = builder.TypeSpec.ToImmutable()

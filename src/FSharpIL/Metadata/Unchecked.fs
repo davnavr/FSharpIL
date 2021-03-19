@@ -6,6 +6,7 @@ module FSharpIL.Metadata.Unchecked
 open System
 open System.Collections.Immutable
 
+// TODO: Figure out if using inref with static methods in Unsafe is a performance improvement.
 /// Contains static methods for modifying the CLI metadata without regard for generation of correct metadata.
 [<AbstractClass; Sealed>]
 type Unsafe private () = class
@@ -119,12 +120,43 @@ type Unsafe private () = class
     static member ChangeFlagTag<'Flags, 'From, 'To when 'Flags :> Enum>(flags: ValidFlags<'From, 'Flags>) =
         ValidFlags<'To, 'Flags> flags.Value
 
-    static member ChangeIndexTag<'From, 'To>(index: RawIndex<'From>) = RawIndex<'To> index.Value
+    static member ChangeIndexTag<'From, 'To>(index: RawIndex<'From>) = index.ChangeTag<'To>()
 
     static member CreateFlags<'Tag, 'Flags when 'Flags :> Enum> flags = ValidFlags<'Tag, 'Flags> flags
 
     static member ImplementInterface(builder: CliMetadataBuilder, typeDef: RawIndex<TypeDefRow>, intf) =
         builder.InterfaceImpl.Add(typeDef, intf)
+
+    static member AddProperty
+        (
+            builder: CliMetadataBuilder,
+            parent: RawIndex<TypeDefRow>,
+            property: Property<_, _>,
+            methods: PropertyMethods
+        ) =
+        let row = property.Definition()
+        match builder.PropertyMap.Add(parent, row) with
+        | ValueSome index ->
+            if builder.MethodSemantics.TryAddProperty(index, methods)
+            then Ok index
+            else ExistingPropertyMethodsError index :> ValidationError |> Error
+        | ValueNone -> DuplicatePropertyError row :> ValidationError |> Error
+
+    static member AddProperty<'Tag, 'Signature, 'Method when 'Signature :> IPropertySignature>
+        (
+            builder,
+            parent,
+            property: Property<'Tag, 'Signature>,
+            getter: RawIndex<'Method> voption,
+            setter: RawIndex<'Method> voption
+        ) =
+        let getter' = ValueOption.map Unsafe.ChangeIndexTag<_, MethodDefRow> getter
+        let setter' = ValueOption.map Unsafe.ChangeIndexTag<_, MethodDefRow> setter
+        let methods = PropertyMethods(getter', setter', ImmutableArray.Empty)
+        Unsafe.AddProperty(builder, parent, property, methods)
+
+    static member AddInstanceProperty(builder, parent, property: InstanceProperty, getter, setter) =
+        Unsafe.AddProperty<_, _, InstanceMethod>(builder, parent, property, getter, setter)
 end
 
 let private addClassDef (builder: CliMetadataBuilder) (def: ClassDef<'Flags>) =

@@ -157,7 +157,6 @@ let example() =
           Signature = InstanceMethodSignature ReturnType.itemI4
           ParamList = ParamList.empty }
         |> Struct.addInstanceMethod builder fraction
-        |> ignore
     let get_denominator =
         { Body =
             fun content ->
@@ -174,9 +173,29 @@ let example() =
           Signature = InstanceMethodSignature ReturnType.itemI4
           ParamList = ParamList.empty }
         |> Struct.addInstanceMethod builder fraction
-        |> ignore
     // member this.Numerator: int32 with get
-    // member this.Denominator: int32 with get
+    // TODO: Use helper functions for adding properties instead.
+    Unsafe.AddInstanceProperty (
+        builder,
+        fraction.AsTypeIndex(),
+        { PropertyName = Identifier.ofStr "Numerator"
+          Flags = Unsafe.CreateFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
+          Type = InstancePropertySignature EncodedType.I4 },
+        getter = ValueSome get_numerator,
+        setter = ValueNone
+    )
+    |> ignore
+    //// member this.Denominator: int32 with get
+    //Unsafe.AddInstanceProperty (
+    //    builder,
+    //    fraction.AsTypeIndex(),
+    //    { PropertyName = Identifier.ofStr "Denominator"
+    //      Flags = Unsafe.CreateFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
+    //      Type = InstancePropertySignature EncodedType.I4 },
+    //    getter = ValueSome get_denominator,
+    //    setter = ValueNone
+    //)
+    //|> ignore
 
     // new (numerator: int32, denominator: int32)
     let ctor =

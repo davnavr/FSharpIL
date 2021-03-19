@@ -5,6 +5,7 @@ open FSharp.Core.Operators.Checked
 
 open System
 open System.Collections.Generic
+open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Heaps
@@ -20,11 +21,9 @@ module Size =
     [<Literal>]
     let FatFormat = 3us
 
-[<Sealed>]
+[<IsReadOnly; IsByRefLike; Struct>]
 type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * uint32) =
-    let large = count > (65535 <<< n)
-
-    member val IndexSize = if large then 4 else 2
+    member _.LargeIndices = count > (65535 <<< n)
 
     member _.IndexOf (item: 'T) =
         let index, tag = indexer item
@@ -32,7 +31,9 @@ type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * ui
     
     member this.WriteIndex(item, writer: ChunkWriter) =
         let index = this.IndexOf item
-        if large then writer.WriteU4 index else writer.WriteU2 index
+        if this.LargeIndices
+        then writer.WriteU4 index
+        else writer.WriteU2 index
 
 let codedIndex count n indexer = CodedIndex(count, n, indexer)
 
@@ -175,7 +176,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // Calculate how big indices and coded indices should be.
     let interfaceImpl = // TypeDefOrRef
         let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.TypeSpec.Count
-        codedIndex total 2 (fun (index: InterfaceIndex) -> uint32 index.Value, uint32 index.Tag)
+        CodedIndex(total, 2, fun (index: InterfaceIndex) -> uint32 index.Value, uint32 index.Tag)
 
     let resolutionScope =
         let total =
@@ -183,22 +184,23 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             + tables.ModuleRef.Count
             + tables.AssemblyRef.Count
             + tables.TypeRef.Count
-        fun rscope ->
+        let indexer rscope =
             match rscope with
             | ResolutionScope.Null -> 0u, 0u
             | _ -> uint32 rscope.Value, uint32 rscope.Tag
-        |> codedIndex total 2
+        CodedIndex(total, 2, indexer)
 
     let extends =
         // TODO: Include TypeSpec table.
         let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.TypeSpec.Count
-        function
-        | Extends.AbstractClass (Index tdef)
-        | Extends.ConcreteClass (Index tdef) -> uint32 tdef, 0u
-        | Extends.TypeRef tref -> uint32 tref, 1u
-        | Extends.TypeSpec tspec -> uint32 tspec, 2u
-        | Extends.Null -> 0u, 0u
-        |> codedIndex total 2
+        let indexer =
+            function
+            | Extends.AbstractClass (Index tdef)
+            | Extends.ConcreteClass (Index tdef) -> uint32 tdef, 0u
+            | Extends.TypeRef tref -> uint32 tref, 1u
+            | Extends.TypeSpec tspec -> uint32 tspec, 2u
+            | Extends.Null -> 0u, 0u
+        CodedIndex(total, 2, indexer)
 
     let memberRefParent =
         let total =
@@ -207,9 +209,9 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             + tables.ModuleRef.Count
             + tables.MethodDef.Count
             + tables.TypeSpec.Count
-        codedIndex total 3 (fun (index: MemberRefParent) -> uint32 index.Value, uint32 index.Tag)
+        CodedIndex(total, 3, fun (index: MemberRefParent) -> uint32 index.Value, uint32 index.Tag)
 
-    let customAttriuteParent =
+    let customAttriuteParent = // HasCustomAttribute
         let total =
             tables.MethodDef.Count
             + tables.Field.Count
@@ -233,30 +235,37 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             // GenericParam
             // GenericParamConstraint
             // MethodSpec
-        function
-        | CustomAttributeParent.TypeDef tdef -> uint32 tdef, 3u
-        | CustomAttributeParent.Assembly _ -> 1u, 14u
-        | bad -> failwithf "Unsupported custom attribute parent %A" bad
-        |> codedIndex total 5
+        let indexer =
+            function
+            | CustomAttributeParent.TypeDef tdef -> uint32 tdef, 3u
+            | CustomAttributeParent.Assembly _ -> 1u, 14u
+            | bad -> failwithf "Unsupported custom attribute parent %A" bad
+        CodedIndex(total, 5, indexer)
+
+    let methodSemanticsAssociation = // HasSemantics
+        let total = tables.Property.Count // + tables.Event.Count
+        CodedIndex(total, 1, fun (index: MethodAssociation) -> uint32 index.Value, uint32 index.Tag)
 
     let methodDefOrRef =
         // TODO: Figure out if table count for MethodDefOrRef coded index includes all of MemberRef or just MethodRefs.
         let total = tables.MethodDef.Count + tables.MemberRef.Count
-        function
-        | MethodDefOrRef.Def method -> uint32 method, 0u
-        | MethodDefOrRef.RefDefault (Index method)
-        | MethodDefOrRef.RefGeneric (Index method)
-        | MethodDefOrRef.RefVarArg (Index method) -> uint32 method, 1u
-        |> codedIndex total 1
+        let indexer =
+            function
+            | MethodDefOrRef.Def method -> uint32 method, 0u
+            | MethodDefOrRef.RefDefault (Index method)
+            | MethodDefOrRef.RefGeneric (Index method)
+            | MethodDefOrRef.RefVarArg (Index method) -> uint32 method, 1u
+        CodedIndex(total, 1, indexer)
 
     let customAttributeType =
         let total = tables.MethodDef.Count + tables.MemberRef.Count
-        function
-        | CustomAttributeType.MethodRefDefault (Index mref)
-        | CustomAttributeType.MethodRefGeneric (Index mref)
-        | CustomAttributeType.MethodRefVarArg (Index mref) -> uint32 mref, 3u
-        | CustomAttributeType.MethodDef mdef -> uint32 mdef, 2u
-        |> codedIndex total 3
+        let indexer =
+            function
+            | CustomAttributeType.MethodRefDefault (Index mref)
+            | CustomAttributeType.MethodRefGeneric (Index mref)
+            | CustomAttributeType.MethodRefVarArg (Index mref) -> uint32 mref, 3u
+            | CustomAttributeType.MethodDef mdef -> uint32 mdef, 2u
+        CodedIndex(total, 3, indexer)
 
     // Module (0x00)
     writer.WriteU2 0us // Generation
@@ -349,6 +358,31 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         customAttriuteParent.WriteIndex(row.Parent, writer)
         customAttributeType.WriteIndex(row.Type, writer)
         info.BlobStream.WriteIndex(row.Value, writer)
+
+
+
+
+    // PropertyMap (0x15)
+    if tables.PropertyMap.Count > 0 then
+        let mutable property = 1
+
+        // TODO: Will the order of the parent types matter for PropertyMap?
+        for parent in tables.PropertyMap.Owners do
+            tables.TypeDef.WriteSimpleIndex(parent, writer)
+            tables.Property.WriteSimpleIndex(RawIndex property, writer)
+            property <- property + int32 (tables.PropertyMap.GetCount parent)
+
+    // Property (0x17)
+    for row in tables.Property.Rows do
+        writer.WriteU2 row.Flags
+        info.StringsStream.WriteStringIndex(row.Name, writer)
+        info.BlobStream.WriteIndex(row.Type, writer)
+
+    // MethodSemantics (0x18)
+    for row in tables.MethodSemantics.Rows do
+        writer.WriteU2 row.Semantics
+        tables.MethodDef.WriteSimpleIndex(row.Method, writer)
+        methodSemanticsAssociation.WriteIndex(row.Association, writer)
 
 
 

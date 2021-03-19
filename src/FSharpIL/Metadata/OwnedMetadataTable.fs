@@ -9,9 +9,11 @@ type OwnedMetadataTable<'Owner, 'T when 'Owner : equality and 'T : equality> int
         lookup: Dictionary<RawIndex<'Owner>, ImmutableArray<RawIndex<'T>>>,
         items: ImmutableArray<'T>
     ) =
+    /// Gets the sum of the number of items associated with each owning row.
     member _.Count = items.Length
+    member _.Owners = lookup.Keys
     member _.Rows = items
-    member this.Item with get (index: RawIndex<'T>) = items.[index.Value - 1]
+    member _.Item with get (index: RawIndex<'T>) = items.[index.Value - 1]
 
     member _.TryGetRows owner =
         match lookup.TryGetValue owner with
@@ -34,6 +36,9 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
     let mutable count = 0
 
     member _.Count = count
+    member _.Owners = items.Keys
+    /// Gets the rows of this metadata table, unordered.
+    member _.Rows = items.Values
 
     /// <returns>An index to the value added to the table, or <c>ValueNone</c> if the value is a duplicate.</returns>
     member _.Add(key, value) = // TODO: Rename to TryAdd
@@ -49,6 +54,7 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
             ValueSome(RawIndex<'T> count)
         else ValueNone
 
+    // TODO: Ensure that order of items matches owners in OwnedMetadataTable`2.
     member internal _.ToImmutable() =
         let lookup = Dictionary items.Count
         let tableItems = ImmutableArray.CreateBuilder<_> count

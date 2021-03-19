@@ -20,6 +20,9 @@ type Unsafe = class
 
     static member AddTypeDef<'Tag>(builder, flags, typeName, extends): RawIndex<_> =
         Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, ValueNone)
+
+    static member AddInstanceProperty(builder, parent, property, getter, setter) =
+        Unchecked.Unsafe.AddInstanceProperty(builder, parent, property, getter = getter, setter = setter) |> throwOnError
 end
 
 // TODO: Throw exceptions on duplicates instead of returning a struct(_ * bool)
