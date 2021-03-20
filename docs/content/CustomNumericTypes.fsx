@@ -152,7 +152,7 @@ let example() =
                 { MaxStack = 1us; InitLocals = false }
             |> MethodBody.create
           ImplFlags = MethodImplFlags()
-          Flags = InstanceMethodFlags(Public, NoSpecialName, VTableLayout.ReuseSlot, true) |> Flags.instanceMethod
+          Flags = InstanceMethodFlags(Public, SpecialName, VTableLayout.ReuseSlot, true) |> Flags.instanceMethod
           MethodName = Identifier.ofStr "get_Numerator"
           Signature = InstanceMethodSignature ReturnType.itemI4
           ParamList = ParamList.empty }
@@ -168,7 +168,7 @@ let example() =
                 { MaxStack = 1us; InitLocals = false }
             |> MethodBody.create
           ImplFlags = MethodImplFlags()
-          Flags = InstanceMethodFlags(Public, NoSpecialName, VTableLayout.ReuseSlot, true) |> Flags.instanceMethod
+          Flags = InstanceMethodFlags(Public, SpecialName, VTableLayout.ReuseSlot, true) |> Flags.instanceMethod
           MethodName = Identifier.ofStr "get_Denominator"
           Signature = InstanceMethodSignature ReturnType.itemI4
           ParamList = ParamList.empty }
@@ -185,17 +185,17 @@ let example() =
         setter = ValueNone
     )
     |> ignore
-    //// member this.Denominator: int32 with get
-    //Unsafe.AddInstanceProperty (
-    //    builder,
-    //    fraction.AsTypeIndex(),
-    //    { PropertyName = Identifier.ofStr "Denominator"
-    //      Flags = Unsafe.CreateFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
-    //      Type = InstancePropertySignature EncodedType.I4 },
-    //    getter = ValueSome get_denominator,
-    //    setter = ValueNone
-    //)
-    //|> ignore
+    // member this.Denominator: int32 with get
+    Unsafe.AddInstanceProperty (
+        builder,
+        fraction.AsTypeIndex(),
+        { PropertyName = Identifier.ofStr "Denominator"
+          Flags = Unsafe.CreateFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
+          Type = InstancePropertySignature EncodedType.I4 },
+        getter = ValueSome get_denominator,
+        setter = ValueNone
+    )
+    |> ignore
 
     // new (numerator: int32, denominator: int32)
     let ctor =
@@ -418,16 +418,18 @@ let example() =
 let tests =
     let example' = lazy example()
     let metadata = lazy PEFile.toCecilModule example'.Value
+    let fraction = lazy metadata.Value.GetType("CustomNumbers", "Fraction")
 
-    afterRunTests <| fun() -> metadata.Value.Dispose()
+    afterRunTests <| fun() -> if metadata.IsValueCreated then metadata.Value.Dispose()
 
     testList "custom numeric types" [
         testCase "can save to disk" <| fun() ->
             let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "CustomNumbers.dll")
             WritePE.toPath path example'.Value
 
+        testCase "assembly name is correct" <| fun() -> test <@ metadata.Value.Assembly.Name.Name = "CustomNumbers" @>
+
         testCase "fraction methods are in correct order" <| fun() ->
-            let fraction = metadata.Value.GetType("CustomNumbers", "Fraction")
             let expected =
                 [
                     "get_Numerator"
@@ -440,8 +442,16 @@ let tests =
                     "ToString"
                 ]
             let actual =
-                fraction.Methods
+                fraction.Value.Methods
                 |> Seq.map (fun method -> method.Name)
+                |> List.ofSeq
+            expected =! actual
+
+        testCase "property names are correct" <| fun() ->
+            let expected = [ "Numerator"; "Denominator" ]
+            let actual =
+                fraction.Value.Properties
+                |> Seq.map (fun prop -> prop.Name)
                 |> List.ofSeq
             expected =! actual
     ]

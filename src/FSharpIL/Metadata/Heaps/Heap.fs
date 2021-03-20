@@ -50,6 +50,8 @@ module internal Heap =
 
                 + metadata.MemberRef.Count
 
+                + metadata.Property.Count
+
                 + if metadata.Assembly.IsSome then 2 else 0
                 + (2 * metadata.AssemblyRef.Count)
             Dictionary<_, _> capacity

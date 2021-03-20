@@ -43,6 +43,7 @@ type Property<'Tag, 'Signature when 'Signature :> IPropertySignature> =
     member internal this.Definition() = PropertyRow(this.Flags.Value, this.PropertyName, this.Type.Signature())
 
 [<IsReadOnly; Struct>]
+[<NoComparison; StructuralEquality>]
 type InstancePropertySignature
     (
         modifiers: ImmutableArray<CustomModifier>,

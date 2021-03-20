@@ -61,9 +61,9 @@ type CliMetadata (builder: CliMetadataBuilder) =
             bits <- bits ||| (1UL <<< 0x15)
             uint32 builder.PropertyMap.Owners.Count |> counts.Add
 
-        if builder.Property.Count > 0 then
+        if builder.PropertyMap.Count > 0 then
             bits <- bits ||| (1UL <<< 0x17)
-            uint32 builder.Property.Count |> counts.Add
+            uint32 builder.PropertyMap.Count |> counts.Add
 
         if builder.MethodSemantics.Count > 0 then
             bits <- bits ||| (1UL <<< 0x18)

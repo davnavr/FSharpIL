@@ -20,7 +20,11 @@ let tests =
             let str = Fraction(num, den).ToString()
             test <@ str.Contains(string num) && str.Contains(string den) @>
 
-        //testProperty "numerators and denominators match" <| fun(num, den) ->
+        testProperty "numerators and denominators match" <| fun(num, den) ->
+            let fraction = Fraction(num, den)
+            // TODO: Figure out what causes an internal compiler error.
+            //fraction.Numerator
+            ()
         //    <@
         //        let fraction = Fraction(num, den)
         //        fraction.get_Numerator() = num
