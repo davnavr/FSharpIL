@@ -61,7 +61,7 @@ type InstancePropertySignature
         InstancePropertySignature(ImmutableArray.Empty, propertyType, parameters)
 
     interface IPropertySignature with
-        member _.Signature() = PropertySignature(false, modifiers, propertyType, parameters)
+        member _.Signature() = PropertySignature(true, modifiers, propertyType, parameters)
 
 type InstanceProperty = Property<InstanceMethodTag, InstancePropertySignature>
 
