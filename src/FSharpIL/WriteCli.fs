@@ -235,11 +235,11 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             // GenericParam
             // GenericParamConstraint
             // MethodSpec
-        let indexer =
-            function
-            | CustomAttributeParent.TypeDef tdef -> uint32 tdef, 3u
-            | CustomAttributeParent.Assembly _ -> 1u, 14u
-            | bad -> failwithf "Unsupported custom attribute parent %A" bad
+        let indexer (parent: CustomAttributeParent) =
+            match parent.Tag with
+            | CustomAttributeParentTag.TypeDef -> parent.ToRawIndex<TypeDefRow>() |> uint32, 3u
+            | CustomAttributeParentTag.Assembly -> 1u, 14u
+            | _ -> ArgumentOutOfRangeException("parent", parent, "Invalid custom attribute parent") |> raise
         CodedIndex(total, 5, indexer)
 
     let methodSemanticsAssociation = // HasSemantics

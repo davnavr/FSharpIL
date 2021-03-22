@@ -43,30 +43,38 @@ type CustomAttributeSignature =
     { FixedArg: ImmutableArray<FixedArg>
       NamedArg: ImmutableArray<NamedArg> }
 
+type CustomAttributeParentTag =
+    | MethodDef = 0uy
+    | Field = 1uy
+    | TypeRef = 2uy
+    | TypeDef = 3uy
+    | Param = 4uy
+    | InterfaceImpl = 5uy
+    | MemberRef = 6uy
+    | Module = 7uy
+    | Permission = 8uy
+    | Property = 9uy
+    | Event = 10uy
+    | StandAloneSig = 11uy
+    | ModuleRef = 12uy
+    | TypeSpec = 13uy
+    | Assembly = 14uy
+    | AssemblyRef = 15uy
+    | File = 16uy
+    | ExportedType = 17uy
+    | ManifestResource = 18uy
+    | GenericParam = 19uy
+    | GenericParamConstraint = 20uy
+    | MethodSpec = 21uy
+
+type CustomAttributeParent = TaggedIndex<CustomAttributeParentTag>
+
 [<RequireQualifiedAccess>]
-type CustomAttributeParent = // TODO: Make custom attribute parent a struct
-    | MethodDef of RawIndex<MethodDefRow>
-    // | Field // of ?
-    // | TypeRef // of ?
-    | TypeDef of RawIndex<TypeDefRow>
-    // | Param // of ?
-    // | InterfaceImpl // of ?
-    // | MemberRef of SimpleIndex<MemberRefRow>
-    // | Module // of ?
-    // | Permission // of ?
-    // | Property // of ?
-    // | Event // of ?
-    // | StandAloneSig // of ?
-    // | ModuleRef // of ?
-    // | TypeSpec // of ?
-    | Assembly of RawIndex<Assembly>
-    // | AssemblyRef // of ?
-    | File of RawIndex<File>
-    // | ExportedType // of ?
-    // | ManifestResource // of ?
-    // | GenericParam // of ?
-    // | GenericParamConstraint // of ?
-    // | MethodSpec // of ?
+module CustomAttributeParent =
+    let MethodDef (index: RawIndex<MethodDefRow>) = index.ToTaggedIndex CustomAttributeParentTag.MethodDef
+    let TypeDef (index: RawIndex<TypeDefRow>) = index.ToTaggedIndex CustomAttributeParentTag.TypeDef
+    let Assembly (index: RawIndex<Assembly>) = index.ToTaggedIndex CustomAttributeParentTag.Assembly
+    let File (index: RawIndex<File>) = index.ToTaggedIndex CustomAttributeParentTag.File
 
 type CustomAttributeTypeTag =
    | Def = 0uy
