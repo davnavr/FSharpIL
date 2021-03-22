@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyName>FSharpIL.Tests.Examples</AssemblyName>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>net5.0</TargetFrameworks>
+    <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>

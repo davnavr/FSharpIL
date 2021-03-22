@@ -46,7 +46,7 @@ Target.create "Build" <| fun _ ->
                 NoRestore = true })
         slnFile
 
-Target.create "Test Examples" <| fun _ ->
+Target.create "Generate Examples" <| fun _ ->
     docsDir </> "FSharpIL.Documentation.Examples" </> "FSharpIL.Documentation.Examples.fsproj"
     |> sprintf "-p %s -c Release --no-build --no-restore"
     |> DotNet.exec id "run"
@@ -62,9 +62,6 @@ Target.create "Build Documentation" <| fun _ ->
     |> DotNet.exec id "run"
     |> handleErr "Error occured while generating documentation"
 
-// TODO: Since exceptions may not be handled well in documentation .fsx files, consider running them by calling the F# interactive here.
-// Target.create "Test Examples"
-
 Target.create "Test" <| fun _ ->
     let proj = testDir </> "FSharpIL.Tests" </> "FSharpIL.Tests.fsproj"
     for tfm in [ "netcoreapp3.1"; "net5.0" ] do
@@ -75,6 +72,12 @@ Target.create "Test" <| fun _ ->
         |> DotNet.exec id "run"
         |> handleErr "One or more tests failed"
 
+Target.create "Test Examples" <| fun _ ->
+    testDir </> "FSharpIL.Tests.Examples" </> "FSharpIL.Tests.Examples.fsproj"
+    |> sprintf "-p %s -c Release --no-build --no-restore"
+    |> DotNet.exec id "run"
+    |> handleErr "One or more tests failed"
+
 Target.create "Publish" <| fun _ ->
     Trace.trace "Publishing..."
 
@@ -84,6 +87,7 @@ Target.create "Publish" <| fun _ ->
 ==> "Publish"
 
 "Build"
+==> "Generate Examples"
 ==> "Test Examples"
 ==> "Build Documentation"
 ==> "Publish"
