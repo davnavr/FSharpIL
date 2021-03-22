@@ -3,16 +3,16 @@
 #r "../Dependencies.fsx"
 #else
 module FSharpIL.HelloWorld
-
+#if !BENCHMARK
 open Expecto
 
 open Swensen.Unquote
-
 open System.IO
 
 open Mono.Cecil
 
 open FSharpIL
+#endif
 #endif
 (**
 # Hello World
@@ -126,7 +126,7 @@ let example() =
     |> ValidationResult.get
     |> PEFile.ofMetadata ImageFileFlags.exe
 (*** hide ***)
-#if COMPILED
+#if COMPILED && !BENCHMARK
 [<Tests>]
 let tests =
     let example' = lazy example()

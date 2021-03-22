@@ -25,7 +25,10 @@ type Unsafe = class
         Unchecked.Unsafe.AddInstanceProperty(builder, parent, property, getter = getter, setter = setter) |> throwOnError
 end
 
-// TODO: Throw exceptions on duplicates instead of returning a struct(_ * bool)
+[<RequireQualifiedAccess>]
+module StaticClass =
+    let addTypeDef builder classDef = Unchecked.StaticClass.addTypeDef builder classDef |> throwOnError
+    let addEntryPoint builder owner method = Unchecked.StaticClass.addEntryPoint builder owner method |> throwOnError
 
 [<RequireQualifiedAccess>]
 module Struct =

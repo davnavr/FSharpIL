@@ -5,23 +5,122 @@ open BenchmarkDotNet.Running
 
 open System
 open System.Collections.Immutable
-open System.IO
 
-open Mono.Cecil
-open Mono.Cecil.Cil
+open FSharpIL
+open FSharpIL.PortableExecutable
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.CliMetadata
-open FSharpIL.PortableExecutable
+open FSharpIL.Metadata.Unchecked
+open FSharpIL.Metadata.UncheckedExn
+
+open Mono.Cecil
+open Mono.Cecil.Cil
 
 [<StatisticalTestColumn>]
 [<MemoryDiagnoser>]
 type HelloWorld () =
     [<Benchmark>]
-    member _.FSharpIL_ComputationExpression() =
-        invalidOp "// TODO: Figure out how to share this code with the HelloWorld.fsx example file."
-        |> PEFile.ofMetadata ImageFileFlags.exe
-        |> WritePE.toArray
+    member _.FSharpIL_ComputationExpression() = HelloWorld.example()
+
+    [<Benchmark>]
+    member _.FSharpIL_UncheckedExn() =
+        let builder =
+            { Name = Identifier.ofStr "HelloWorld.exe"
+              Mvid = Guid.NewGuid() }
+            |> CliMetadataBuilder
+
+        let assem =
+            { Name = AssemblyName.ofStr "HelloWorld"
+              HashAlgId = ()
+              Version = Version()
+              Flags = ()
+              PublicKey = None
+              Culture = NullCulture }
+            |> setAssembly builder
+
+        let struct (mscorlib, _) =
+            { Version = Version(5, 0, 0, 0)
+              PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
+              Name = AssemblyName.ofStr "System.Private.CoreLib"
+              Culture = NullCulture
+              HashValue = None }
+            |> referenceAssembly builder
+
+        let struct (consolelib, _) =
+            { Version = Version(5, 0, 0, 0)
+              PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+              Name = AssemblyName.ofStr "System.Console"
+              Culture = NullCulture
+              HashValue = None }
+            |> referenceAssembly builder
+
+        let console =
+            { TypeName = Identifier.ofStr "Console"
+              TypeNamespace = "System"
+              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+            |> referenceType builder
+        let object =
+            { TypeName = Identifier.ofStr "Object"
+              TypeNamespace = "System"
+              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+            |> referenceType builder
+        let tfmAttr =
+            { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
+              TypeNamespace = "System.Runtime.Versioning"
+              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+            |> referenceType builder
+        let string = ParamItem.create EncodedType.String
+
+        let struct (writeLine, _) =
+            { Class = MemberRefParent.TypeRef console
+              MemberName = Identifier.ofStr "WriteLine"
+              Signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string) }
+            |> referenceDefaultMethod builder
+        let struct (tfmAttrCtor, _) =
+            { Class = MemberRefParent.TypeRef tfmAttr
+              MemberName = Identifier.ofStr ".ctor"
+              Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string) }
+            |> referenceDefaultMethod builder
+
+        // Defines a custom attribute on the current assembly specifying the target framework.
+        { Parent = CustomAttributeParent.Assembly assem
+          Type = CustomAttributeType.MethodRefDefault tfmAttrCtor
+          Value =
+          { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
+            NamedArg = ImmutableArray.Empty }
+          |> Some }
+        |> addCustomAttribute builder
+
+        // Create the class that will contain the entrypoint method.
+        let program =
+            { Access = TypeVisibility.Public
+              ClassName = Identifier.ofStr "Program"
+              Extends = Extends.TypeRef object
+              Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass))
+              TypeNamespace = "HelloWorld" }
+            |> StaticClass.addTypeDef builder
+
+        // Create the entrypoint method of the current assembly.
+        let main =
+            { Body =
+                fun content ->
+                    let writer = MethodBodyWriter content
+                    writer.Ldstr "Hello World!"
+                    writer.Call writeLine
+                    writer.Ret()
+                    { MaxStack = 8us; InitLocals = false }
+                |> MethodBody.create
+              ImplFlags = MethodImplFlags()
+              MethodName = Identifier.ofStr "Main"
+              Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))
+              Signature = EntryPointSignature.voidWithArgs
+              ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "args" } }
+            |> StaticClass.addEntryPoint builder program
+
+        setEntryPoint builder main
+
+        CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.exe
 
     [<Benchmark>]
     member _.Mono_Cecil() =
@@ -69,7 +168,7 @@ type HelloWorld () =
         CustomAttributeArgument(mdle.TypeSystem.String, ".NETCoreApp,Version=v5.0") |> tfm.ConstructorArguments.Add
         assembly.CustomAttributes.Add tfm
 
-        assembly.Write(Stream.Null)
+        assembly
 
 [<EntryPoint>]
 let main argv =
