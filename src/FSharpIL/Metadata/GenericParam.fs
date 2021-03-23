@@ -8,8 +8,8 @@ open System.Runtime.CompilerServices
 open System.Runtime.InteropServices
 
 type GenericParamOwnerTag =
-    | TypeDef = 1uy
-    | MethodDef = 2uy
+    | TypeDef = 0uy
+    | MethodDef = 1uy
 
 /// <summary>Represents a <c>TypeOrMethodDef</c> coded index, which specifies the owner of a generic parameter</summary>
 type GenericParamOwner = TaggedIndex<GenericParamOwnerTag>
@@ -77,17 +77,38 @@ type GenericParamConstraintTag =
     | Spec = 4uy
 
 [<IsReadOnly; Struct>]
-[<NoComparison; CustomEquality>]
+[<CustomComparison; CustomEquality>]
 type GenericParamConstraint internal (tag: GenericParamConstraintTag, value: int32) =
     member _.Tag = tag
     member _.Value = value
 
+    member _.IsTypeDef = tag < GenericParamConstraintTag.DefInterface
+
     member internal _.ToRawIndex() = RawIndex value
 
-    interface IEquatable<GenericParamConstraint> with
-        member _.Equals other =
-            let intf = GenericParamConstraintTag.DefInterface
-            (tag <= intf && other.Tag <= intf) || (tag = other.Tag && value = other.Value)
+    member private this.Equals(other: GenericParamConstraint) =
+        (this.IsTypeDef && other.IsTypeDef) || (tag = other.Tag && value = other.Value)
+
+    override this.GetHashCode() = (this.Value <<< 3) ||| int32 tag
+
+    override this.Equals obj =
+        match obj with
+        | :? GenericParamConstraint as other -> this.Equals other
+        | _ -> false
+
+    interface IComparable<GenericParamConstraint> with
+        member this.CompareTo other =
+            if this.IsTypeDef && other.IsTypeDef
+            then compare value other.Value
+            else
+                match compare tag other.Tag with
+                | 0 -> compare value other.Value
+                | i -> i
+
+    interface IEquatable<GenericParamConstraint> with member this.Equals other = this.Equals other
+
+    interface IComparable with
+        member this.CompareTo other = (this :> IComparable<GenericParamConstraint>).CompareTo(other :?> GenericParamConstraint)
 
 [<RequireQualifiedAccess>]
 module GenericParamConstraint =
@@ -107,11 +128,32 @@ module GenericParamConstraint =
     let TypeSpec (Index index: RawIndex<TypeSpecRow>) = GenericParamConstraint(GenericParamConstraintTag.Spec, index)
 
 // TODO: Figure out how to represent covariant or contravariant generic parameters.
-//[<Sealed>]
-//type GenericParamConstraintBuilder internal () =
-//    let lookup = HashSet<GenericParamConstraint>()
-//    member _.TryAdd constr = lookup.Add constr
-//    member _.ToImmutable() = lookup.ToImmutableArray()
+
+[<IsReadOnly; Struct>]
+type GenericParamConstraintSet internal (constraints: ImmutableArray<GenericParamConstraint>) =
+    member _.GetEnumerator() = constraints.GetEnumerator()
+    member _.ToImmutableArray() = constraints
+    static member val Empty = GenericParamConstraintSet ImmutableArray.Empty
+
+/// Contains operations for creating sets of generic parameter constraints.
+[<RequireQualifiedAccess>]
+module ConstraintSet =
+    let empty = GenericParamConstraintSet.Empty
+    let ofSeq (constraints: seq<GenericParamConstraint>) =
+        let lookup, constraints' = HashSet(), ImmutableArray.CreateBuilder()
+        let mutable enumerator, success = constraints.GetEnumerator(), true
+        while success && enumerator.MoveNext() do
+            let current = enumerator.Current
+            if lookup.Add current
+            then constraints'.Add current
+            else success <- false
+        if success
+        then GenericParamConstraintSet(constraints'.ToImmutable()) |> ValueSome
+        else ValueNone
+    let inline private create (constraints: seq<_>) = GenericParamConstraintSet(constraints.ToImmutableArray())
+    let ofSet (constraints: Set<_>) = create constraints
+    let ofHashSet (constraints: HashSet<_>) = create constraints
+    let ofImmutableSet (constraints: IImmutableSet<_>) = create constraints
 
 /// <summary>(0x2C) Represents a row in the <c>GenericParamConstraint</c> table (II.22.21).</summary>
 [<IsReadOnly; Struct>]
@@ -131,7 +173,6 @@ type GenericParamTableBuilder internal () =
     member internal _.GetConstraints() = MetadataTable(constraints'.ToImmutable())
 
     // TODO: Ensure that owner of generic parameters cannot be a non-nested enum type.
-    // TODO: Prevent duplicate constraints, so maybe use ISet instead of ImmutableArray?
     member private _.TryAdd(flags, owner, name, constraints: ImmutableArray<GenericParamConstraint>) =
         let gparams =
             match lookup.TryGetValue owner with
@@ -154,5 +195,20 @@ type GenericParamTableBuilder internal () =
             struct(parami, constraints'') |> ValueSome
         else ValueNone
 
-    member _.TryAddNonVariant(Flags flags: GenericParamFlags, owner, name) =
-        ()
+    member this.TryAddNonvariant(Flags flags: GenericParamFlags, owner, name, constraints: GenericParamConstraintSet) =
+        this.TryAdd(flags, owner, name, constraints.ToImmutableArray())
+
+/// <summary>
+/// Error used when a duplicate generic parameter was added to the <c>GenericParam</c> table (10, 11).
+/// </summary>
+/// <category>Errors</category>
+[<Sealed>]
+type DuplicateGenericParamError (owner: GenericParamOwner, name: Identifier) =
+    inherit ValidationError()
+    member _.Owner = owner
+    member _.Name = name
+    override _.ToString() =
+        sprintf
+            "Unable to add duplicate generic parameter \"%O\", a generic parameter with the same name and owner \"%O\" already exists"
+            name
+            owner

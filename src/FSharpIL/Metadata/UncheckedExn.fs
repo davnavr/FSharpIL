@@ -26,6 +26,10 @@ type Unsafe = class
 end
 
 [<RequireQualifiedAccess>]
+module ConcreteClass =
+    let addTypeDef builder classDef = Unchecked.ConcreteClass.addTypeDef builder classDef |> throwOnError
+
+[<RequireQualifiedAccess>]
 module StaticClass =
     let addTypeDef builder classDef = Unchecked.StaticClass.addTypeDef builder classDef |> throwOnError
     let addEntryPoint builder owner method = Unchecked.StaticClass.addEntryPoint builder owner method |> throwOnError
@@ -46,3 +50,8 @@ let referenceType builder typeRef = Unchecked.referenceType builder typeRef |> t
 let referenceAssembly builder assembly = Unchecked.referenceAssembly builder assembly
 
 let addTypeSpec builder typeSpec = Unchecked.addTypeSpec builder typeSpec |> throwOnError
+
+[<RequireQualifiedAccess>]
+module GenericParam =
+    let addNonvariant builder flags owner name constraints =
+        Unchecked.GenericParam.addNonvariant builder flags owner name constraints |> throwOnError

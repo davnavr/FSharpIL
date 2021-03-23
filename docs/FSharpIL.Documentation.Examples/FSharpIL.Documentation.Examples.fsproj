@@ -11,6 +11,7 @@
     <Compile Include="..\content\HelloWorld.fsx" />
     <Compile Include="..\content\Factorial.fsx" />
     <Compile Include="..\content\CustomNumericTypes.fsx" />
+    <Compile Include="..\content\CustomCollections.fsx" />
     <Compile Include="$(RootDirectory)\test\FSharpIL.Tests\Test.fs" />
 
     <PackageReference Include="Expecto" Version="9.0.2" />

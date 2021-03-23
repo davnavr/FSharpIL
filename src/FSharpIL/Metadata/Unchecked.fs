@@ -360,3 +360,11 @@ let addMethodSpec (builder: CliMetadataBuilder) method (garguments: seq<_>) =
     match builder.MethodSpec.TryAdd spec' with
     | ValueSome index -> Ok index
     | ValueNone -> DuplicateMethodSpecError spec' :> ValidationError |> Error
+
+[<RequireQualifiedAccess>]
+module GenericParam =
+    let addNonvariant (builder: CliMetadataBuilder) flags owner name constraints =
+        let result = builder.GenericParam.TryAddNonvariant(flags, owner, name, constraints)
+        match result with
+        | ValueSome info -> Ok info
+        | ValueNone -> DuplicateGenericParamError(owner ,name) :> ValidationError |> Error
