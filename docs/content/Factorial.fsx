@@ -99,6 +99,7 @@ let example() =
               Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Empty) }
             |> referenceDefaultMethod builder
 
+        // [<AbstractClass; Sealed>] type CachedFactorial
         let! factorial =
             { ClassName = Identifier.ofStr "CachedFactorial"
               TypeNamespace = "Factorial"
@@ -140,7 +141,6 @@ let example() =
             { MethodName = Identifier.ofStr "Calculate"
               ImplFlags = MethodImplFlags()
               Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))
-              // TODO: Figure out why the parameter name is not correct in the decompiler
               ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "num" }
               Signature =
                 StaticMethodSignature(

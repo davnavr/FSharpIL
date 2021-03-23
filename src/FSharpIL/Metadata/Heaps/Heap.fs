@@ -196,6 +196,13 @@ module internal Heap =
 
                 match signature with
                 | TypeSpec.GenericInst inst -> writer.GenericInst inst
+                // TODO: Factor out common code shared between writing of TypeSpec and encoded Type.
+                | TypeSpec.MVar num ->
+                    writer.Writer.WriteU1 ElementType.MVar
+                    writer.CompressedUnsigned num
+                | TypeSpec.Var num ->
+                    writer.Writer.WriteU1 ElementType.Var
+                    writer.CompressedUnsigned num
 
                 blobIndex pos signature blob.TypeSpec
 

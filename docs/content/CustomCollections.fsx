@@ -55,7 +55,13 @@ let example() =
           TypeNamespace = "System"
           ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
         |> referenceType builder
+    let struct (object_ctor, _) =
+        { Class = MemberRefParent.TypeRef object
+          MemberName = Identifier.ofStr ".ctor"
+          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid) }
+        |> referenceDefaultMethod builder
 
+    // type MyCollection
     let myCollection =
         { Access = TypeVisibility.Public
           Flags = ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true) |> Flags.concreteClass
@@ -65,9 +71,94 @@ let example() =
           Extends = Extends.TypeRef object }
         |> ConcreteClass.addTypeDef builder
 
-    let struct(g_t, _) =
-        let owner = myCollection.AsTypeIndex() |> GenericParamOwner.TypeDef
-        GenericParam.addNonvariant builder GenericParamFlags.None owner (Identifier.ofStr "T") ConstraintSet.empty
+    // 'T
+    GenericParam.addNonvariant
+        builder
+        GenericParamFlags.None
+        (myCollection.AsTypeIndex() |> GenericParamOwner.TypeDef)
+        (Identifier.ofStr "T")
+        ConstraintSet.empty
+    |> ignore
+
+    let tparam = TypeSpec.Var 0u |> TypeSpec.create |> addTypeSpec builder
+    let tencoded = EncodedType.Var 0u
+
+    // val private (*initonly*) items: 'T[]
+    let items =
+        { Flags = FieldFlags(Private, initOnly = true) |> Flags.instanceField
+          FieldName = Identifier.ofStr "items"
+          Signature = EncodedType.SZArray(ImmutableArray.Empty, tencoded) |> FieldSignature.create }
+        |> ConcreteClass.addInstanceField builder myCollection
+    // val mutable private index: int32
+    let index =
+        { Flags = Flags.instanceField(FieldFlags Private)
+          FieldName = Identifier.ofStr "index"
+          Signature = FieldSignature.create EncodedType.I4 }
+        |> ConcreteClass.addInstanceField builder myCollection
+
+    // TODO: Need to make typespec for MyCollection<!T>
+    let myCollectionSpec =
+        GenericInst.typeDef1 false (myCollection.AsTypeIndex()) tencoded
+        |> TypeSpec.genericInst
+        |> addTypeSpec builder
+
+    let ctor_p_params =
+        [|
+            EncodedType.SZArray(ImmutableArray.Empty, tencoded) |> ParamItem.create
+            ParamItem.create EncodedType.I4
+        |]
+
+    // private new (items: 'T[], index: int32)
+    let ctor_p =
+        let body content =
+            let wr = MethodBodyWriter content
+            wr.Ldarg 0us
+            wr.Call object_ctor
+            // { items = items;
+            wr.Ldarg 0us
+            wr.Ldarg 1us
+            wr.Stfld items // TODO: Use field ref
+            // index = 0 }
+            wr.Ldarg 0us
+            wr.Ldarg 2us
+            wr.Stfld index
+            wr.Ret()
+            { MaxStack = 2us; InitLocals = false }
+        Constructor (
+            body = MethodBody.create body,
+            implFlags = MethodImplFlags(),
+            flags = (ConstructorFlags(Private, true) |> Flags.constructor),
+            signature = ObjectConstructorSignature(parameters = ctor_p_params),
+            paramList = fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "items" else "index" }
+        )
+        |> ConcreteClass.addConstructor builder myCollection
+
+    let struct(ctor_p', _) =
+        { MemberRef.MemberName = Identifier.ofStr ".ctor"
+          Class = MemberRefParent.TypeSpec myCollectionSpec
+          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ctor_p_params) }
+        |> builder.MemberRef.Add
+
+    // new (capacity: int32)
+    let ctor =
+        let body content =
+            let wr = MethodBodyWriter content
+            // = MyCollection(Array.zeroCreate<'T> capacity, 0)
+            wr.Ldarg 0us
+            wr.Ldarg 1us
+            wr.Newarr tparam
+            wr.Ldc_i4 0y
+            wr.Call ctor_p'
+            wr.Ret()
+            { MaxStack = 3us; InitLocals = false }
+        Constructor (
+            body = MethodBody.create body,
+            implFlags = MethodImplFlags(),
+            flags = (ConstructorFlags(Public, true) |> Flags.constructor),
+            signature = ObjectConstructorSignature(ParamItem.create EncodedType.I4),
+            paramList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "capacity" }
+        )
+        |> ConcreteClass.addConstructor builder myCollection
 
     let tfm =
         { TypeName = Identifier.ofStr "TargetFrameworkAttribute"

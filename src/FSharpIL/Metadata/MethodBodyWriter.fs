@@ -397,6 +397,26 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <summary>(0x7D) Writes an instruction that stores a value into a static field (III.4.30).</summary>
     member this.Stsfld field = this.WriteFieldInstruction(0x80uy, field)
 
+    member private this.Newarr(index: RawIndex<_>, table) =
+        this.WriteU1 0x8Duy
+        this.WriteMetadataToken(uint32 index, table)
+
+    /// <summary>
+    /// (0x8D) Writes an instruction that creates a new one-dimensional array containing <c>numElem</c> elements of a type specified by a
+    /// <c>TypeRef</c> token (III.4.20).
+    /// </summary>
+    member this.Newarr(etype: RawIndex<TypeRef>) = this.Newarr(etype, 0x1uy)
+    /// <summary>
+    /// (0x8D) Writes an instruction that creates a new one-dimensional array containing <c>numElem</c> elements of a type specified by a
+    /// <c>TypeDef</c> token (III.4.20).
+    /// </summary>
+    member this.Newarr(etype: RawIndex<TypeDefRow>) = this.Newarr(etype, 0x2uy)
+    /// <summary>
+    /// (0x8D) Writes an instruction that creates a new one-dimensional array containing <c>numElem</c> elements of a type specified by a
+    /// <c>TypeSpec</c> token (III.4.20).
+    /// </summary>
+    member this.Newarr(etype: RawIndex<TypeSpecRow>) = this.Newarr(etype, 0x1Buy)
+
     // TODO: Add checks to ensure that the next written instruction after tail. is ret
     member private this.Tail() = this.WriteU1 0xFEuy; this.WriteU1 0x14uy
 

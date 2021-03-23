@@ -361,6 +361,7 @@ let addMethodSpec (builder: CliMetadataBuilder) method (garguments: seq<_>) =
     | ValueSome index -> Ok index
     | ValueNone -> DuplicateMethodSpecError spec' :> ValidationError |> Error
 
+// TODO: Move functions for manipulating generic parameters to Unsafe.
 [<RequireQualifiedAccess>]
 module GenericParam =
     let addNonvariant (builder: CliMetadataBuilder) flags owner name constraints =

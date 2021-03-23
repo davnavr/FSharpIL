@@ -11,4 +11,5 @@ type IndexConversions =
     [<Extension>] static member AsTypeIndex(index: RawIndex<ClassDef<_>>) = index.ToTypeIndex()
     [<Extension>] static member AsTypeIndex(index: RawIndex<StructDef>) = index.ToTypeIndex()
     [<Extension>] static member AsMethodIndex(index: RawIndex<Method<_, _, _>>) = RawIndex<MethodDefRow> index.Value
+    [<Extension>] static member AsMethodIndex(index: RawIndex<Constructor<_, _>>) = RawIndex<MethodDefRow> index.Value
     [<Extension>] static member AsFieldIndex(index: RawIndex<Field<_>>) = RawIndex<FieldRow> index.Value

@@ -96,6 +96,7 @@ let example() =
 
     // TODO: In the future, this would be a good example to showcase functions to generate XML documentation.
 
+    // [<Struct>] type Fraction
     let fraction = // TODO: Use helper function to define a struct instead.
         let info =
             { StructDef.Access = TypeVisibility.Public

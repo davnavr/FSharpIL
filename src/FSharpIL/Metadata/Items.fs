@@ -134,8 +134,11 @@ type ReturnType =
 /// <summary>Represents a <c>TypeSpec</c> item in the <c>#Blob</c> heap (II.23.2.14).</summary>
 [<RequireQualifiedAccess>]
 type TypeSpec =
+    // NOTE: According to ECMA-336 augmentations, TypeSpec blob format extends the Type blob format.
     /// <summary>Represents a <c>GENERICINST</c> followed by a <c>TypeRef</c>.</summary>
     | GenericInst of GenericInst
+    | MVar of number: uint32
+    | Var of number: uint32
 
     interface ITypeSpec
 
