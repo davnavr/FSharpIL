@@ -139,6 +139,7 @@ type GenericParamConstraintSet internal (constraints: ImmutableArray<GenericPara
 [<RequireQualifiedAccess>]
 module ConstraintSet =
     let empty = GenericParamConstraintSet.Empty
+    let singleton(constr: GenericParamConstraint) = GenericParamConstraintSet(ImmutableArray.Create constr)
     let ofSeq (constraints: seq<GenericParamConstraint>) =
         let lookup, constraints' = HashSet(), ImmutableArray.CreateBuilder()
         let mutable enumerator, success = constraints.GetEnumerator(), true
@@ -183,13 +184,13 @@ type GenericParamTableBuilder internal () =
                 empty
         let row = GenericParamRow(uint16 gparams.Count,flags, owner, name)
         if gparams.TryAdd(row, constraints) then
-            let parami = RawIndex<GenericParamRow> rows.Count
             rows.Add row
+            let parami = RawIndex<GenericParamRow> rows.Count
             let constraints'' =
                 Array.init
                     constraints.Length
                     (fun i ->
-                        let i' = RawIndex<GenericParamConstraintRow> constraints'.Count
+                        let i' = RawIndex<GenericParamConstraintRow>(constraints'.Count + 1)
                         constraints'.Add(GenericParamConstraintRow(parami, constraints.[i]))
                         i')
             struct(parami, constraints'') |> ValueSome

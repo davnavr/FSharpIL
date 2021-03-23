@@ -97,7 +97,6 @@ let example() =
           Signature = FieldSignature.create EncodedType.I4 }
         |> ConcreteClass.addInstanceField builder myCollection
 
-    // TODO: Need to make typespec for MyCollection<!T>
     let myCollectionSpec =
         GenericInst.typeDef1 false (myCollection.AsTypeIndex()) tencoded
         |> TypeSpec.genericInst
@@ -171,6 +170,41 @@ let example() =
             paramList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "capacity" }
         )
         |> ConcreteClass.addConstructor builder myCollection
+
+    // 'TOther
+    let tother = EncodedType.MVar 0u |> GenericInst.typeDef1 false (myCollection.AsTypeIndex())
+    let tother_spec = TypeSpec.genericInst tother |> addTypeSpec builder
+
+    // member this.Cast<'TOther>(): MyCollection<'TOther when 'TOther :> 'T>
+    let cast =
+        { Body =
+            fun content ->
+                let wr = MethodBodyWriter content
+                wr.Ldarg 0us
+                // TODO: Add local variable to store new array.
+                wr.Ldfld items'
+                wr.Ret()
+                { MaxStack = 1us; InitLocals = false }
+            |> MethodBody.create
+          ImplFlags = MethodImplFlags()
+          Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
+          MethodName = Identifier.ofStr "Cast"
+          Signature =
+            EncodedType.GenericInst tother
+            |> ReturnType.encoded
+            |> InstanceMethodSignature
+          ParamList = ParamList.empty }
+        |> ConcreteClass.addInstanceMethod builder myCollection
+
+    // 'TOther when 'TOther :> 'T
+    GenericParamConstraint.TypeSpec tother_spec
+    |> ConstraintSet.singleton
+    |> GenericParam.addNonvariant
+        builder
+        GenericParamFlags.None
+        (cast.AsMethodIndex() |> GenericParamOwner.MethodDef)
+        (Identifier.ofStr "TOther")
+    |> ignore
 
     let tfm =
         { TypeName = Identifier.ofStr "TargetFrameworkAttribute"

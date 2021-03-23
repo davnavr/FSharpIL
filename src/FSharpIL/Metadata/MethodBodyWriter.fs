@@ -382,10 +382,15 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member private this.WriteFieldInstruction(opcode, field: RawIndex<_>, table) =
         this.WriteU1 opcode
         this.WriteMetadataToken(uint32 field, table)
-    // TODO: Allow a FieldRef to be used when loading an instance field.
     /// <summary>(0x7B) Writes an instruction that pushes the value of an object's field onto the stack (III.4.10).</summary>
     /// <param name="field">The field to load the value of.</param>
     member this.Ldfld(field: RawIndex<InstanceField>) = this.WriteFieldInstruction(0x7Buy, field, 0x4uy)
+
+    /// <summary>
+    /// (0x7B) Writes an instruction that pushes the value of an instance field specified by a <c>FieldRef</c> onto the stack
+    /// (III.4.10).
+    /// </summary>
+    member this.Ldfld(field: RawIndex<FieldRef>) = this.WriteFieldInstruction(0x7Buy, field, 0xAuy)
 
     /// <summary>(0x7D) Writes an instruction that stores a value into an object's field (III.4.28).</summary>
     member this.Stfld(field: RawIndex<InstanceField>) = this.WriteFieldInstruction(0x7Duy, field, 0x4uy)
