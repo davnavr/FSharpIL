@@ -154,4 +154,9 @@ type internal BlobWriter = struct
         match arg with
         | FixedArg.Elem elem -> this.Elem elem
         | FixedArg.SZArray _ -> failwith "TODO: Implement writing of SZArray for FixedArg"
+
+    member this.FieldSig(signature: FieldSignature) =
+        this.Writer.WriteU1 0x6uy // FIELD
+        this.CustomMod signature.CustomMod
+        this.EncodedType signature.FieldType
 end

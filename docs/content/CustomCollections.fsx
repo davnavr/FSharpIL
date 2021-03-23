@@ -82,12 +82,13 @@ let example() =
 
     let tparam = TypeSpec.Var 0u |> TypeSpec.create |> addTypeSpec builder
     let tencoded = EncodedType.Var 0u
+    let tarray = EncodedType.SZArray(ImmutableArray.Empty, tencoded)
 
     // val private (*initonly*) items: 'T[]
     let items =
         { Flags = FieldFlags(Private, initOnly = true) |> Flags.instanceField
           FieldName = Identifier.ofStr "items"
-          Signature = EncodedType.SZArray(ImmutableArray.Empty, tencoded) |> FieldSignature.create }
+          Signature = FieldSignature.create tarray }
         |> ConcreteClass.addInstanceField builder myCollection
     // val mutable private index: int32
     let index =
@@ -108,6 +109,17 @@ let example() =
             ParamItem.create EncodedType.I4
         |]
 
+    let struct (items', _) =
+        { MemberRef.MemberName = Identifier.ofStr "items"
+          Class = MemberRefParent.TypeSpec myCollectionSpec
+          Signature = FieldSignature.create tarray }
+        |> builder.MemberRef.Add
+    let struct (index', _) =
+        { MemberRef.MemberName = Identifier.ofStr "index"
+          Class = MemberRefParent.TypeSpec myCollectionSpec
+          Signature = FieldSignature.create EncodedType.I4 }
+        |> builder.MemberRef.Add
+
     // private new (items: 'T[], index: int32)
     let ctor_p =
         let body content =
@@ -117,11 +129,11 @@ let example() =
             // { items = items;
             wr.Ldarg 0us
             wr.Ldarg 1us
-            wr.Stfld items // TODO: Use field ref
+            wr.Stfld items'
             // index = 0 }
             wr.Ldarg 0us
             wr.Ldarg 2us
-            wr.Stfld index
+            wr.Stfld index'
             wr.Ret()
             { MaxStack = 2us; InitLocals = false }
         Constructor (

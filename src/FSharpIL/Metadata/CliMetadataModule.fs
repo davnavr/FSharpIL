@@ -97,7 +97,8 @@ let inline internal iterStrings action (metadata: CliMetadata) =
         match mref with
         | MethodRefDefault { MemberName = name }
         | MethodRefGeneric { MemberName = name }
-        | MethodRefVarArg { MemberName = name } ->
+        | MethodRefVarArg { MemberName = name }
+        | FieldRef { MemberName = name } ->
             name.ToString() |> action
 
     for property in metadata.Property.Rows do

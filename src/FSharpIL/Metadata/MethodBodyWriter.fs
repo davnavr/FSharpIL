@@ -379,23 +379,29 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// </summary>
     member this.Newobj(ctor: RawIndex<ObjectConstructor>) = this.Newobj(ctor, 0x6uy)
 
-    member private this.WriteFieldInstruction(opcode, field: RawIndex<_>) =
+    member private this.WriteFieldInstruction(opcode, field: RawIndex<_>, table) =
         this.WriteU1 opcode
-        this.WriteMetadataToken(uint32 field, 0x4uy)
+        this.WriteMetadataToken(uint32 field, table)
     // TODO: Allow a FieldRef to be used when loading an instance field.
     /// <summary>(0x7B) Writes an instruction that pushes the value of an object's field onto the stack (III.4.10).</summary>
     /// <param name="field">The field to load the value of.</param>
-    member this.Ldfld(field: RawIndex<InstanceField>) = this.WriteFieldInstruction(0x7Buy, field)
+    member this.Ldfld(field: RawIndex<InstanceField>) = this.WriteFieldInstruction(0x7Buy, field, 0x4uy)
 
     /// <summary>(0x7D) Writes an instruction that stores a value into an object's field (III.4.28).</summary>
-    member this.Stfld(field: RawIndex<InstanceField>) = this.WriteFieldInstruction(0x7Duy, field)
-    // TODO: Allow a FieldRef to be used when loading a static field.
+    member this.Stfld(field: RawIndex<InstanceField>) = this.WriteFieldInstruction(0x7Duy, field, 0x4uy)
+
+    /// <summary>
+    /// (0x7D) Writes an instruction that stores a value into an instance field specified by a <c>FieldRef</c> (III.4.28).
+    /// </summary>
+    member this.Stfld(field: RawIndex<FieldRef>) = this.WriteFieldInstruction(0x7Duy, field, 0xAuy)
+
+    // TODO: Allow a FieldRef to be used when loading and storing a static field.
     /// <summary>(0x7E) Writes an instruction that pushes the value of a static field onto the stack (III.4.14).</summary>
     /// <param name="field">The static field to load the value of.</param>
-    member this.Ldsfld(field: RawIndex<StaticField>) = this.WriteFieldInstruction(0x7Euy, field)
+    member this.Ldsfld(field: RawIndex<StaticField>) = this.WriteFieldInstruction(0x7Euy, field, 0x4uy)
 
     /// <summary>(0x7D) Writes an instruction that stores a value into a static field (III.4.30).</summary>
-    member this.Stsfld field = this.WriteFieldInstruction(0x80uy, field)
+    member this.Stsfld field = this.WriteFieldInstruction(0x80uy, field, 0x4uy)
 
     member private this.Newarr(index: RawIndex<_>, table) =
         this.WriteU1 0x8Duy

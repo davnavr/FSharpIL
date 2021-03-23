@@ -124,7 +124,7 @@ end
 type MethodRefDefault = MemberRef<MethodRefDefaultSignature>
 type MethodRefGeneric = MemberRef<MethodRefGenericSignature>
 type MethodRefVarArg = MemberRef<MethodRefVarArgSignature>
-// type FieldRef = MemberRef<>
+type FieldRef = MemberRef<FieldSignature>
 
 /// <summary>
 /// Represents a row in the <c>MemberRef</c> table, which contains references to the methods and fields of a class (II.22.25).
@@ -136,7 +136,7 @@ type MemberRefRow =
     | MethodRefDefault of MethodRefDefault
     | MethodRefGeneric of MethodRefGeneric
     | MethodRefVarArg of MethodRefVarArg
-    // | FieldRef // of ?
+    | FieldRef of FieldRef
 
 /// <summary>
 /// Error used when there is a duplicate row in the <c>MemberRef</c> table (6).
@@ -165,7 +165,7 @@ type MemberRefTableBuilder internal () =
     member this.Add(method: MethodRefDefault) = this.Add<MethodRefDefault>(MethodRefDefault method)
     member this.Add(method: MethodRefGeneric) = this.Add<MethodRefGeneric>(MethodRefGeneric method)
     member this.Add(method: MethodRefVarArg) = this.Add<MethodRefVarArg>(MethodRefVarArg method)
-    //member this.GetIndex(field: FieldRef) = this.GetIndex<FieldRef>(FieldRef field)
+    member this.Add(field: FieldRef) = this.Add<FieldRef>(FieldRef field)
 
     member internal _.ToImmutable() = members.ToImmutable()
 

@@ -116,9 +116,7 @@ module internal Heap =
             let signature = field.Signature
             if not (blob.Field.ContainsKey signature) then
                 let pos = writer.Position
-                writer.Writer.WriteU1 0x6uy // FIELD
-                writer.CustomMod signature.CustomMod
-                writer.EncodedType signature.FieldType
+                writer.FieldSig signature
                 blobIndex pos signature blob.Field
 
         for method in metadata.MethodDef.Rows do
@@ -160,7 +158,7 @@ module internal Heap =
                     if not signature.VarArgParameters.IsEmpty then
                         writer.Writer.WriteU1 ElementType.Sentinel
                         writer.Parameters signature.VarArgParameters
-                //| FieldRef { Signature = signature } ->
+                | FieldRef { Signature = signature } -> writer.FieldSig signature
 
                 blobIndex pos memberRef blob.MemberRef
 

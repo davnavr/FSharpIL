@@ -356,7 +356,8 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         match row with
         | MethodRefDefault { Class = mclass; MemberName = name }
         | MethodRefGeneric { Class = mclass; MemberName = name }
-        | MethodRefVarArg { Class = mclass; MemberName = name }->
+        | MethodRefVarArg { Class = mclass; MemberName = name }
+        | FieldRef { Class = mclass; MemberName = name } ->
             memberRefParent.WriteIndex(mclass, writer)
             info.StringsStream.WriteStringIndex(name, writer)
 
