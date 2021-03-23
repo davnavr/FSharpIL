@@ -76,8 +76,18 @@ type GenericParamConstraintTag =
     | Ref = 3uy
     | Spec = 4uy
 
-// TODO: Make new constraint struct type, since TypeDef constraints should be equal to prevent more than one class constraint.
-type GenericParamConstraint = TaggedIndex<GenericParamConstraintTag>
+[<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
+type GenericParamConstraint internal (tag: GenericParamConstraintTag, value: int32) =
+    member _.Tag = tag
+    member _.Value = value
+
+    member internal _.ToRawIndex() = RawIndex value
+
+    interface IEquatable<GenericParamConstraint> with
+        member _.Equals other =
+            let intf = GenericParamConstraintTag.DefInterface
+            (tag <= intf && other.Tag <= intf) || (tag = other.Tag && value = other.Value)
 
 [<RequireQualifiedAccess>]
 module GenericParamConstraint =
@@ -90,17 +100,18 @@ module GenericParamConstraint =
         | GenericParamConstraintTag.Spec -> TypeSpec(constr.ToRawIndex<TypeSpecRow>())
         | bad -> ArgumentOutOfRangeException("constr", bad, "Invalid generic parameter constraint tag") |> raise
 
-    let Class (index: RawIndex<ConcreteClassDef>) = index.ToTaggedIndex GenericParamConstraintTag.DefConcrete
-    let AbstractClass (index: RawIndex<AbstractClassDef>) = index.ToTaggedIndex GenericParamConstraintTag.DefAbstract
-    let Interface (index: RawIndex<InterfaceDef>) = index.ToTaggedIndex GenericParamConstraintTag.DefInterface
-    let TypeRef (index: RawIndex<TypeRef>) = index.ToTaggedIndex GenericParamConstraintTag.Ref
-    let TypeSpec (index: RawIndex<TypeSpecRow>) = index.ToTaggedIndex GenericParamConstraintTag.Spec
+    let Class (Index index: RawIndex<ConcreteClassDef>) = GenericParamConstraint(GenericParamConstraintTag.DefConcrete, index)
+    let AbstractClass (Index index: RawIndex<AbstractClassDef>) = GenericParamConstraint(GenericParamConstraintTag.DefAbstract, index)
+    let Interface (Index index: RawIndex<InterfaceDef>) = GenericParamConstraint(GenericParamConstraintTag.DefInterface, index)
+    let TypeRef (Index index: RawIndex<TypeRef>) = GenericParamConstraint(GenericParamConstraintTag.Ref, index)
+    let TypeSpec (Index index: RawIndex<TypeSpecRow>) = GenericParamConstraint(GenericParamConstraintTag.Spec, index)
 
 // TODO: Figure out how to represent covariant or contravariant generic parameters.
 //[<Sealed>]
 //type GenericParamConstraintBuilder internal () =
 //    let lookup = HashSet<GenericParamConstraint>()
 //    member _.TryAdd constr = lookup.Add constr
+//    member _.ToImmutable() = lookup.ToImmutableArray()
 
 /// <summary>(0x2C) Represents a row in the <c>GenericParamConstraint</c> table (II.22.21).</summary>
 [<IsReadOnly; Struct>]
@@ -120,8 +131,8 @@ type GenericParamTableBuilder internal () =
     member internal _.GetConstraints() = MetadataTable(constraints'.ToImmutable())
 
     // TODO: Ensure that owner of generic parameters cannot be a non-nested enum type.
-    // TODO: Ensure that constraint specifies only zero or one class, since multi-class inheritance does not exist.
-    member internal _.TryAdd(flags, owner, name, constraints: ImmutableArray<GenericParamConstraint>) =
+    // TODO: Prevent duplicate constraints, so maybe use ISet instead of ImmutableArray?
+    member private _.TryAdd(flags, owner, name, constraints: ImmutableArray<GenericParamConstraint>) =
         let gparams =
             match lookup.TryGetValue owner with
             | (true, existing) -> existing
@@ -142,3 +153,6 @@ type GenericParamTableBuilder internal () =
                         i')
             struct(parami, constraints'') |> ValueSome
         else ValueNone
+
+    member _.TryAddNonVariant(Flags flags: GenericParamFlags, owner, name) =
+        ()
