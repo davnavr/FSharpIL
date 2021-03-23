@@ -41,7 +41,7 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
     member _.Rows = items.Values
 
     /// <returns>An index to the value added to the table, or <c>ValueNone</c> if the value is a duplicate.</returns>
-    member _.Add(key, value) = // TODO: Rename to TryAdd
+    member _.TryAdd(key, value) =
         let lookup =
             match items.TryGetValue key with
             | (true, existing) -> existing
@@ -50,7 +50,7 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
                 items.[key] <- empty
                 empty
         if lookup.Add value then
-            count <- count + 1
+            count <- count + 1 // TODO: Fix, this index will not be correct if TryAdd is called with different owners.
             ValueSome(RawIndex<'T> count)
         else ValueNone
 

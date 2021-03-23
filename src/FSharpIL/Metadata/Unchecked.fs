@@ -20,7 +20,7 @@ type Unsafe private () = class
         )
 
     static member internal AddField<'Tag>(builder: CliMetadataBuilder, owner, field) =
-        match builder.Field.Add(owner, field) with
+        match builder.Field.TryAdd(owner, field) with
         | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
         | ValueNone -> DuplicateFieldError field :> ValidationError |> Error
 
@@ -28,7 +28,7 @@ type Unsafe private () = class
         Unsafe.AddField<Field<'Flags>>(builder, owner, field.Row())
 
     static member internal AddMethod<'Tag>(builder: CliMetadataBuilder, owner, method) =
-        match builder.Method.Add(owner, method) with
+        match builder.Method.TryAdd(owner, method) with
         | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
         | ValueNone -> DuplicateMethodError method :> ValidationError |> Error
 
@@ -135,7 +135,7 @@ type Unsafe private () = class
             methods: PropertyMethods
         ) =
         let row = property.Definition()
-        match builder.PropertyMap.Add(parent, row) with
+        match builder.PropertyMap.TryAdd(parent, row) with
         | ValueSome index ->
             if builder.MethodSemantics.TryAddProperty(index, methods)
             then Ok index

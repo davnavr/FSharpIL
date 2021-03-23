@@ -28,12 +28,11 @@
     <Compile Include="Metadata\Signatures.fs" />
     <Compile Include="Metadata\FieldRow.fs" />
     <Compile Include="Metadata\Param.fs" />
-    <Compile Include="Metadata\GenericParam.fs" />
     <Compile Include="Metadata\MethodBody.fs" />
     <Compile Include="Metadata\MethodDefRow.fs" />
-    <Compile Include="Metadata\IndexedList.fs" />
     <Compile Include="Metadata\TypeSpec.fs" />
     <Compile Include="Metadata\TypeDef.fs" />
+    <Compile Include="Metadata\GenericParam.fs" />
     <Compile Include="Metadata\InterfaceImpl.fs" />
     <Compile Include="Metadata\OwnedMetadataTable.fs" />
     <Compile Include="Metadata\Field.fs" />
@@ -48,7 +47,6 @@
     <Compile Include="Metadata\FlagsModule.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\CliMetadataBuilder.fs" />
-    <Compile Include="Metadata\GenericParamModule.fs" />
     <Compile Include="Metadata\EntryPointSignature.fs" />
     <Compile Include="Metadata\TypeLookupCache.fs" />
     <Compile Include="Metadata\CliMetadata.fs" />

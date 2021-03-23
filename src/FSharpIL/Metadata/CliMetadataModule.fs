@@ -72,21 +72,21 @@ let setTargetFramework builder (assembly: RawIndex<Assembly>) (ctor: RawIndex<_>
 /// the CLI metadata tables (II.24.2.6).
 /// </summary>
 let inline internal iterStrings action (metadata: CliMetadata) =
-    string metadata.Module.Name |> action
+    metadata.Module.Name.ToString() |> action
 
     for tref in metadata.TypeRef.Rows do
-        string tref.TypeName |> action
+        tref.TypeName.ToString() |> action
         action tref.TypeNamespace
 
     for tdef in metadata.TypeDef.Rows do
-        string tdef.TypeName |> action
+        tdef.TypeName.ToString() |> action
         action tdef.TypeNamespace
 
     for field in metadata.Field.Rows do
-        string field.Name |> action
+        field.Name.ToString() |> action
 
     for method in metadata.MethodDef.Rows do
-        string method.Name |> action
+        method.Name.ToString() |> action
 
     for _, param in metadata.Param do
         action param.ParamName
@@ -98,20 +98,23 @@ let inline internal iterStrings action (metadata: CliMetadata) =
         | MethodRefDefault { MemberName = name }
         | MethodRefGeneric { MemberName = name }
         | MethodRefVarArg { MemberName = name } ->
-            string name |> action
+            name.ToString() |> action
 
     for property in metadata.Property.Rows do
-        string property.Name |> action
+        property.Name.ToString() |> action
 
     match metadata.Assembly with
     | ValueSome assembly ->
-        string assembly.Name |> action
-        string assembly.Culture |> action
+        assembly.Name.ToString() |> action
+        assembly.Culture.ToString() |> action
     | ValueNone -> ()
 
     for assembly in metadata.AssemblyRef.Rows do
-        string assembly.Name |> action
-        string assembly.Culture |> action
+        assembly.Name.ToString() |> action
+        assembly.Culture.ToString() |> action
 
     for { FileName = name } in metadata.File.Rows do
-        string name |> action
+        name.ToString() |> action
+
+    for gparam in metadata.GenericParam.Rows do
+        gparam.Name.ToString() |> action

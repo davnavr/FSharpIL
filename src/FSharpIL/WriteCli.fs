@@ -174,9 +174,19 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // Tables
 
     // Calculate how big indices and coded indices should be.
+    let typeCount = tables.TypeDef.Count + tables.TypeRef.Count + tables.TypeSpec.Count
     let interfaceImpl = // TypeDefOrRef
-        let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.TypeSpec.Count
-        CodedIndex(total, 2, fun (index: InterfaceIndex) -> uint32 index.Value, uint32 index.Tag)
+        CodedIndex(typeCount, 2, fun (index: InterfaceIndex) -> uint32 index.Value, uint32 index.Tag)
+
+    let genericParamConstraint = // TypeDefOrRef
+        let indexer =
+            function
+            | GenericParamConstraint.AbstractClass (Index tdef)
+            | GenericParamConstraint.Class (Index tdef) 
+            | GenericParamConstraint.Interface (Index tdef) -> uint32 tdef, 0u
+            | GenericParamConstraint.TypeRef tref -> uint32 tref, 1u
+            | GenericParamConstraint.TypeSpec tspec -> uint32 tspec, 2u
+        CodedIndex(typeCount, 2, indexer)
 
     let resolutionScope =
         let total =
@@ -191,8 +201,6 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         CodedIndex(total, 2, indexer)
 
     let extends =
-        // TODO: Include TypeSpec table.
-        let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.TypeSpec.Count
         let indexer =
             function
             | Extends.AbstractClass (Index tdef)
@@ -200,7 +208,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             | Extends.TypeRef tref -> uint32 tref, 1u
             | Extends.TypeSpec tspec -> uint32 tspec, 2u
             | Extends.Null -> 0u, 0u
-        CodedIndex(total, 2, indexer)
+        CodedIndex(typeCount, 2, indexer)
 
     let memberRefParent =
         let total =
@@ -266,6 +274,10 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             | CustomAttributeType.MethodRefVarArg (Index mref) -> uint32 mref, 3u
             | CustomAttributeType.MethodDef mdef -> uint32 mdef, 2u
         CodedIndex(total, 3, indexer)
+
+    let genericParamOwner = // TypeOrMethodDef
+        let total = tables.TypeDef.Count + tables.MethodDef.Count
+        CodedIndex(total, 1, fun (index: GenericParamOwner) -> uint32 index.Value, uint32 index.Tag)
 
     // Module (0x00)
     writer.WriteU2 0us // Generation
@@ -439,18 +451,27 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
 
 
+    // NestedClass (0x29)
+    for row in tables.NestedClass do
+        tables.TypeDef.WriteSimpleIndex(row.NestedClass, writer)
+        tables.TypeDef.WriteSimpleIndex(row.EnclosingClass, writer)
+
+    // GenericParam (0x2A)
+    for row in tables.GenericParam.Rows do
+        writer.WriteU2 row.Number
+        writer.WriteU2 row.Flags
+        genericParamOwner.WriteIndex(row.Owner, writer)
+        info.StringsStream.WriteStringIndex(row.Name, writer)
+
     // MethodSpec (0x2B)
     for methodSpec in tables.MethodSpec.Rows do
         methodDefOrRef.WriteIndex(methodSpec.Method, writer)
         info.BlobStream.WriteIndex(methodSpec.Instantiation, writer)
 
-
-
-
-    // NestedClass (0x29)
-    for row in tables.NestedClass do
-        tables.TypeDef.WriteSimpleIndex(row.NestedClass, writer)
-        tables.TypeDef.WriteSimpleIndex(row.EnclosingClass, writer)
+    // GenericParamConstraint (0x2C)
+    for row in tables.GenericParamConstraint.Rows do
+        tables.GenericParam.WriteSimpleIndex(row.Owner, writer)
+        genericParamConstraint.WriteIndex(row.Constraint, writer)
 
     // TODO: Write more tables.
     ()

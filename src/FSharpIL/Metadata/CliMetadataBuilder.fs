@@ -160,8 +160,8 @@ type CliMetadataBuilder (mdle: ModuleTable) =
                       EnclosingClass = parent }
                 | ValueNone -> ()
         }
-    // (0x2A)
-    // member GenericParam // TODO: Create custom table type for generic parameters.
+    /// (0x2A)
+    member val GenericParam = GenericParamTableBuilder()
     // (0x2B)
     member val MethodSpec = RowHashSet<MethodSpecRow>.Create()
     // (0x2C)

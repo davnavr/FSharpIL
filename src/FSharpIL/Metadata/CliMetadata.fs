@@ -16,7 +16,9 @@ type CliMetadata (builder: CliMetadataBuilder) =
 
     let propertyMap = builder.PropertyMap.ToImmutable()
 
-    let nestedClass = builder.NestedClass |> ImmutableArray.CreateRange
+    let nestedClass = ImmutableArray.CreateRange builder.NestedClass
+    let genericParam = builder.GenericParam.ToImmutable()
+    let genericParamConstraints = builder.GenericParam.GetConstraints()
 
     let valid, rowCounts =
         // Module table is always present
@@ -94,15 +96,21 @@ type CliMetadata (builder: CliMetadataBuilder) =
 
 
 
+        if nestedClass.Length > 0 then
+            bits <- bits ||| (1UL <<< 0x29)
+            uint32 nestedClass.Length |> counts.Add
+
+        if genericParam.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x2A)
+            uint32 genericParam.Count |> counts.Add
+
         if builder.MethodSpec.Count > 0 then
             bits <- bits ||| (1UL <<< 0x2B)
             uint32 builder.MethodSpec.Count |> counts.Add
 
-
-
-        if nestedClass.Length > 0 then
-            bits <- bits ||| (1UL <<< 0x29)
-            uint32 nestedClass.Length |> counts.Add
+        if genericParamConstraints.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x2C)
+            uint32 genericParamConstraints.Count |> counts.Add
 
         bits, counts
 
@@ -144,9 +152,10 @@ type CliMetadata (builder: CliMetadataBuilder) =
 
     member val File = builder.File.ToImmutable()
 
-    member val MethodSpec = builder.MethodSpec.ToImmutable()
-
     member _.NestedClass = nestedClass
+    member _.GenericParam = genericParam
+    member val MethodSpec = builder.MethodSpec.ToImmutable()
+    member _.GenericParamConstraint: MetadataTable<_> = genericParamConstraints
 
     /// Gets a bit vector that indicates which tables are present (II.24.2.6).
     member _.Valid: uint64 = valid

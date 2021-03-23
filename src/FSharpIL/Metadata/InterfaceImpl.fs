@@ -8,6 +8,7 @@ type InterfaceIndexTag =
     | TypeRef = 1uy
     | TypeSpec = 2uy
 
+// TODO: Replace InterfaceIndex with TypeDefOrRefOrSpec as used in Items.fs
 /// <summary>Specifies an interface that is implemented by a <c>TypeDef</c> (II.22.23).</summary>
 type InterfaceIndex = TaggedIndex<InterfaceIndexTag>
 
