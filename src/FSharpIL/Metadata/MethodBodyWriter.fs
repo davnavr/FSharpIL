@@ -232,39 +232,50 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         target.ReserveBytes content.Writer
         target
 
+    /// <summary>
+    /// (0x2B) Writes the short form of an instruction that branches to the specified <c>target</c> (III.3.15).
+    /// </summary>
+    member this.Br_s() = this.Branch(0x2Buy, true)
+
     // TODO: Create methods or helper functions that make writing branching instructions easier.
     /// <summary>
-    /// (0x2C) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is false or zero
-    /// (III.3.17).
+    /// (0x2C) Writes the short form of an instruction that branches to the specified <c>target</c> if the <c>value</c> is false
+    /// or zero (III.3.17).
     /// </summary>
     member this.Brfalse_s() = this.Branch(0x2Cuy, true)
     /// <summary>
-    /// (0x2C) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is
+    /// (0x2C) Writes the short form of an instruction that branches to the specified <c>target</c> if the <c>value</c> is
     /// <see langword="null"/> (III.3.17).
     /// </summary>
     /// <remarks>This opcode is an alias for the <c>brfalse.s</c> instruction.</remarks>
     member this.Brnull_s() = this.Brfalse_s()
     /// <summary>
-    /// (0x2C) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is zero
+    /// (0x2C) Writes the short form of an instruction that branches to the specified <c>target</c> if the <c>value</c> is zero
     /// (III.3.17).
     /// </summary>
     /// <remarks>This opcode is an alias for the <c>brfalse.s</c> instruction.</remarks>
     member this.Brzero_s() = this.Brfalse_s()
 
     /// <summary>
-    /// (0x2D) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is true or
-    /// non-zero (III.3.18).
+    /// (0x2D) Writes the short form of an instruction that branches to the specified <c>target</c> if the <c>value</c> is true
+    /// or non-zero (III.3.18).
     /// </summary>
     member this.Brtrue_s() = this.Branch(0x2Duy, true)
     /// <summary>
-    /// (0x2D) Writes the short form of an instruction that branches to the specified target if the <c>value</c> is a non-null
-    /// object reference (III.3.18).
+    /// (0x2D) Writes the short form of an instruction that branches to the specified <c>target</c> if the <c>value</c> is a
+    /// non-null object reference (III.3.18).
     /// </summary>
     /// <remarks>This opcode is an alias for the <c>brtrue.s</c> instruction.</remarks>
     member this.Brinst_s() = this.Brtrue_s()
 
     /// (0x2E)
     member this.Beq_s() = this.Branch(0x2Euy, true)
+
+    /// <summary>
+    /// (0x32) Writes the short form of an instruction that branches to the specified <c>target</c> if <c>value1</c> is less than
+    /// <c>value2</c> (III.3.12).
+    /// </summary>
+    member this.Blt_s() = this.Branch(0x32uy, true)
 
     /// <summary>
     /// (0x33) Writes the short form of an instruction that branches to the specified target if <c>value1</c> does not equal
@@ -455,6 +466,17 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <summary>(0x7D) Writes an instruction that stores a value into a static field (III.4.30).</summary>
     member this.Stsfld field = this.WriteFieldInstruction(0x80uy, field, 0x4uy)
 
+    member private this.Box(index: RawIndex<_>, table) =
+        this.WriteU1 0x8Cuy
+        this.WriteMetadataToken(uint32 index, table)
+
+    // TODO: For box, ensure that "typeTok [represents] a boxable type" (I.8.2.4)
+    /// <summary>
+    /// (0x8C) Writes an instruction that converts the value on the stack of a type specified by a <c>TypeSpec</c> token to its
+    /// boxed form (III.4.1).
+    /// </summary>
+    member this.Box(tspec: RawIndex<TypeSpecRow>) = this.Box(tspec, 0x1Buy)
+
     member private this.Newarr(index: RawIndex<_>, table) =
         this.WriteU1 0x8Duy
         this.WriteMetadataToken(uint32 index, table)
@@ -477,6 +499,40 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     /// (0x8E) Writes an instruction that pushes the length of an array onto the stack as an unsigned native integer (III.4.12).
     member this.Ldlen() = this.WriteU1 0x8Euy
+
+    /// <summary>
+    /// (0x94) Writes an instruction that loads an element of an <c>int32</c> array at the specified <c>index</c> (III.4.8).
+    /// </summary>
+    member this.Ldelem_i4() = this.WriteU1 0x94uy
+
+    member private this.Ldelem(index: RawIndex<_>, table) =
+        this.WriteU1 0xA3uy
+        this.WriteMetadataToken(uint32 index, table)
+
+    /// <summary>
+    /// (0xA3) Writes an instruction that loads an array element of a type specified by a <c>TypeSpec</c> token at the specified
+    /// <c>index</c> (III.4.8).
+    /// </summary>
+    member this.Ldelem(etype: RawIndex<TypeSpecRow>) = this.Ldelem(etype, 0x1Buy)
+
+    member private this.Stelem(index: RawIndex<_>, table) =
+        this.WriteU1 0xA4uy
+        this.WriteMetadataToken(uint32 index, table)
+
+    /// <summary>
+    /// (0xA4) Writes an instruction that replaces an array element of a type specified by a <c>TypeSpec</c> token at the
+    /// specified <c>index</c> (III.4.8).
+    /// </summary>
+    member this.Stelem(etype: RawIndex<TypeSpecRow>) = this.Stelem(etype, 0x1Buy)
+
+    member private this.Unbox_any(index: RawIndex<_>, table) =
+        this.WriteU1 0xA5uy
+        this.WriteMetadataToken(uint32 index, table)
+
+    /// <summary>
+    /// (0xA5) Writes an instruction that "extracts a value-type" as a type specified by a <c>TypeSpec</c> token (III.4.33).
+    /// </summary>
+    member this.Unbox_any(tspec: RawIndex<TypeSpecRow>) = this.Unbox_any(tspec, 0x1Buy)
 
     // TODO: Add checks to ensure that the next written instruction after tail. is ret
     member private this.Tail() = this.WriteU1 0xFEuy; this.WriteU1 0x14uy
@@ -511,3 +567,18 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Tail_call(method: RawIndex<StaticMethod>) = this.Tail(); this.Call method
 
     // member this.Tail_callvirt
+
+/// Helper class for generating branching CIL instructions.
+[<IsReadOnly; IsByRefLike; Struct>]
+type Label private (position: uint32) =
+    new (writer: MethodBodyWriter) = Label(writer.ByteCount)
+    member _.Position = position
+    member _.SetTarget(target: BranchTarget) =
+        let position' = int32 position
+        let offset =
+            let other = int32 target.Position
+            if target.IsByte
+            then position' - other
+            else failwith "TODO: Figure out if 4 needs to be added or subtracted to get correct offset for large branch targets" //position' - other
+        target.SetTarget(int32 offset)
+    override _.ToString() = sprintf "IL_%04x" position

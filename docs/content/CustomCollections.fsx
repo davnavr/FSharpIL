@@ -178,25 +178,86 @@ let example() =
         |> addTypeSpec builder
 
     let cast_locals =
-        EncodedType.SZArray(ImmutableArray.Empty, EncodedType.MVar 0u)
-        |> LocalVariable.Type ImmutableArray.Empty ImmutableArray.Empty
-        |> ImmutableArray.Create
+        [
+            EncodedType.SZArray(ImmutableArray.Empty, EncodedType.MVar 0u) // other: 'TOther[]
+            EncodedType.I4 // i: int32
+        ]
+        |> List.map (LocalVariable.Type ImmutableArray.Empty ImmutableArray.Empty)
+        |> ImmutableArray.CreateRange
         |> builder.StandAloneSig.AddLocals
         |> ValueSome
+
+    let struct(ctor_p_other, _) =
+        { MemberRef.MemberName = Identifier.ofStr ".ctor"
+          Class =
+            EncodedType.MVar 0u
+            |> GenericInst.typeDef1 false (myCollection_1.AsTypeIndex())
+            |> TypeSpec.genericInst
+            |> addTypeSpec builder
+            |> MemberRefParent.TypeSpec
+          Signature =
+            let parameters =
+                [|
+                    EncodedType.SZArray(ImmutableArray.Empty, EncodedType.Var 0u) |> ParamItem.create
+                    ParamItem.create EncodedType.I4
+                |]
+            MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
+        |> builder.MemberRef.Add
 
     // member this.Cast<'TOther>(): MyCollection<'TOther when 'TOther :> 'T>
     let cast =
         { Body =
             fun content ->
                 let wr = MethodBodyWriter content
+                // let other: 'TOther[] = Array.zeroCreate<'TOther> this.index
                 wr.Ldarg 0us
                 wr.Ldfld index'
                 wr.Newarr tother_spec
                 wr.Stloc 0us
-                // TODO: Loop over elements and cast them.
-                wr.Ldnull() // TEMP
+
+                // let mutable i: int32 = 0
+                wr.Ldc_i4 0
+                wr.Stloc 1us
+
+                (*go to condition of loop*)
+                let start = wr.Br_s()
+                let start_offset = wr.ByteCount
+
+                (*body of the loop*)
+                let lbody = Label wr
+                // other.[i] <- this.items.[i] :?> 'TOther
+                wr.Ldloc 0us
+                wr.Ldloc 1us
+                wr.Ldarg 0us
+                wr.Ldfld items'
+                wr.Ldloc 1us
+                wr.Ldelem tparam
+                wr.Box tparam
+                wr.Unbox_any tother_spec
+                wr.Stelem tother_spec
+
+                // i <- i + 1
+                wr.Ldloc 1us
+                wr.Ldc_i4 1
+                wr.Add()
+                wr.Stloc 1us
+
+                start.SetTarget(int32 (wr.ByteCount - start_offset))
+                // i < this.index
+                wr.Ldloc 1us
+                wr.Ldarg 0us
+                wr.Ldfld index'
+                (*go to start if true*)
+                let go = wr.Blt_s()
+                lbody.SetTarget go
+
+                // new MyCollection<TOther>(other, this.index)
+                wr.Ldloc 0us
+                wr.Ldarg 0us
+                wr.Ldfld index'
+                wr.Newobj ctor_p_other
                 wr.Ret()
-                MethodBody(0xFFFFus, true)
+                MethodBody(0x4us, true) // NOTE: Don't forget to check that max stack is correct!
             |> MethodBody.create cast_locals
           ImplFlags = MethodImplFlags()
           Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
