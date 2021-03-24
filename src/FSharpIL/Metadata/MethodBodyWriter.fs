@@ -3,10 +3,8 @@
 open System
 open System.Runtime.CompilerServices
 
-open FSharpIL.Bytes
-open FSharpIL.Writing
-
 open FSharpIL.Metadata.Heaps
+open FSharpIL.Writing
 
 // TODO: Come up with better name for this class.
 /// <exception cref="T:System.ArgumentException">
@@ -62,6 +60,14 @@ type BranchTarget = struct
             failwith "TODO: Write the offset as a signed 4-byte integer"
 end
 
+[<RequireQualifiedAccess>]
+module private LocalVarIndex =
+    let (|Simple|Short|Long|) (index: uint16) =
+        if index <= 0xFFus then
+            if index <= 3us then Simple else Short
+        elif index < 0xFFFFus then Long
+        else ArgumentOutOfRangeException("indx", index, "A local variable index of 65535 is invalid") |> raise
+
 // TODO: Figure out how exception handling information will be included.
 // TODO: Figure out how to prevent (some) invalid method bodies.
 [<IsByRefLike; Struct>]
@@ -85,7 +91,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Break() = this.WriteU1 1uy
 
     /// <summary>
-    /// (0x2 to 0x5, 0xE, 0xFE 0x09) Writes an instruction that loads an argument onto the stack (III.3.38).
+    /// (0x02 to 0x05, 0x0E, 0xFE 0x09) Writes an instruction that loads an argument onto the stack (III.3.38).
     /// </summary>
     /// <remarks>
     /// For argument numbers 0 through 3, and for argument numbers less than 255, the short forms of the opcodes are used.
@@ -100,6 +106,39 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
             this.WriteU1 0xFEuy
             this.WriteU1 0x09uy
             content.Writer.WriteU2 num
+
+    /// <summary>
+    /// (0x06 to 0x09, 0x11, 0xFE 0x0C) Writes an instruction that pushes the contents of a local variable onto the stack
+    /// (III.3.43).
+    /// </summary>
+    /// <exception cref="T:System.ArgumentOutOfRangeException">
+    /// Thrown when the local variable <paramref name="index"/> is equal to <c>65535</c>, which is an invalid index.
+    /// </exception>
+    member this.Ldloc(index: uint16) =
+        match index with
+        | LocalVarIndex.Simple -> this.WriteU1(6uy + uint8 index)
+        | LocalVarIndex.Short -> this.WriteU1 0x11uy; content.Writer.WriteU1 index
+        | LocalVarIndex.Long ->
+            this.WriteU1 0xFEuy
+            this.WriteU1 0x0Cuy
+            content.Writer.WriteU2 index
+
+    /// <summary>
+    /// (0x0A to 0x0D, 0x13, 0xFE 0x0E) Writes an instruction that pops a value from the stack and stores in into a local
+    /// variable (III.3.43).
+    /// </summary>
+    /// <exception cref="T:System.ArgumentOutOfRangeException">
+    /// Thrown when the local variable <paramref name="index"/> is equal to <c>65535</c>, which is an invalid index.
+    /// </exception>
+    member this.Stloc(index: uint16) =
+        match index with
+        | LocalVarIndex.Simple -> this.WriteU1(0xAuy + uint8 index)
+        | LocalVarIndex.Short -> this.WriteU1 0x13uy; content.Writer.WriteU1 index
+        | LocalVarIndex.Long ->
+            this.WriteU1 0xFEuy
+            this.WriteU1 0x0Euy
+            content.Writer.WriteU2 index
+
 
     /// (0x2A) Writes an instruction used to return from the current method (III.3.56).
     member this.Ret() = this.WriteU1 0x2Auy

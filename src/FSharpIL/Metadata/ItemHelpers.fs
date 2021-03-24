@@ -26,7 +26,12 @@ module ItemExtensions =
     type FieldSignature with
         member this.FieldType = this.Type :?> EncodedType
 
+    type LocalVariable with
+        member this.LocalType = this.Type :?> EncodedType
+
 namespace FSharpIL.Metadata
+
+open System
 
 [<AutoOpen>]
 module ItemHelpers =
@@ -35,3 +40,19 @@ module ItemHelpers =
         if cmod.Required
         then RequiredCustomModifier modifierType
         else OptionalCustomModifier modifierType
+
+[<RequireQualifiedAccess>]
+module LocalVariable =
+    let (|Type|ByRef|TypedByRef|) (localvar: LocalVariable) =
+        match localvar.Tag with
+        | LocalVariableTag.Type -> Type
+        | LocalVariableTag.ByRef -> ByRef
+        | LocalVariableTag.TypedByRef -> TypedByRef
+        | _ -> invalidArg "localvar" "Invalid local variable type"
+
+    let Type modifiers constraints (ltype: EncodedType) =
+        LocalVariable(LocalVariableTag.Type, modifiers, constraints, ltype)
+    let ByRef modifiers constraints (ltype: EncodedType) =
+        LocalVariable(LocalVariableTag.ByRef, modifiers, constraints, ltype)
+    let TypedByRef modifiers constraints (ltype: EncodedType) =
+        LocalVariable(LocalVariableTag.TypedByRef, modifiers, constraints, ltype)
