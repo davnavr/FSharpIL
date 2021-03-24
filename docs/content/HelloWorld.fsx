@@ -110,8 +110,8 @@ let example() =
                     writer.Ldstr "Hello World!"
                     writer.Call writeLine
                     writer.Ret()
-                    { MaxStack = 8us; InitLocals = false }
-                |> MethodBody.create
+                    MethodBody(maxStack = 1us)
+                |> MethodBody.create ValueNone
               ImplFlags = MethodImplFlags()
               MethodName = Identifier.ofStr "Main"
               Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))

@@ -113,7 +113,7 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     // (0x10)
     // member FieldLayout
     // (0x11)
-    // member StandAloneSig
+    member val StandAloneSig = StandAloneSigTableBuilder()
     // (0x12)
     // member EventMap
     // (0x14)

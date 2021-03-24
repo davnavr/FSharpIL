@@ -3,7 +3,6 @@
 open System.Collections.Generic
 
 open FSharpIL.Metadata
-
 open FSharpIL.Writing
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
@@ -30,10 +29,11 @@ type internal BlobHeap =
       MethodSpec: Dictionary<MethodSpec, BlobIndex>
 
       PublicKeyTokens: Dictionary<PublicKeyOrToken, BlobIndex>
+      // TODO: See if having key of local variable signature dictionary be an ImmutableArray is bad for performance.
+      LocalVariables: Dictionary<MethodLocalVariables, BlobIndex>
       ByteBlobs: Dictionary<byte[], BlobIndex>
       Content: ChunkWriter }
 
-    // TODO: Turn these Blob methods into functions.
     member this.SignatureCount =
         this.Field.Count
         + this.MethodDef.Count
@@ -48,6 +48,7 @@ type internal BlobHeap =
         + this.MethodSpec.Count
 
          + this.PublicKeyTokens.Count
+         + this.LocalVariables.Count
          + this.ByteBlobs.Count
 
     member private this.WriteRawIndex(i, writer: ChunkWriter) =
@@ -72,6 +73,7 @@ type internal BlobHeap =
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.MethodSpec.Item signature, writer)
 
     member this.WriteIndex(token, writer) = this.WriteRawIndex(this.PublicKeyTokens.Item token, writer)
+    member this.WriteIndex(token, writer) = this.WriteRawIndex(this.LocalVariables.Item token, writer)
     member this.WriteIndex(bytes, writer) = this.WriteRawIndex(this.ByteBlobs.Item bytes, writer)
 
     member this.WriteEmpty writer = this.WriteRawIndex(0u, writer)

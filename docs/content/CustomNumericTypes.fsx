@@ -150,8 +150,8 @@ let example() =
                 wr.Ldarg 0us
                 wr.Ldfld numerator
                 wr.Ret()
-                { MaxStack = 1us; InitLocals = false }
-            |> MethodBody.create
+                MethodBody.Default
+            |> MethodBody.create ValueNone
           ImplFlags = MethodImplFlags()
           Flags = InstanceMethodFlags(Public, SpecialName, VTableLayout.ReuseSlot, true) |> Flags.instanceMethod
           MethodName = Identifier.ofStr "get_Numerator"
@@ -166,8 +166,8 @@ let example() =
                 wr.Ldarg 0us
                 wr.Ldfld denominator
                 wr.Ret()
-                { MaxStack = 1us; InitLocals = false }
-            |> MethodBody.create
+                MethodBody.Default
+            |> MethodBody.create ValueNone
           ImplFlags = MethodImplFlags()
           Flags = InstanceMethodFlags(Public, SpecialName, VTableLayout.ReuseSlot, true) |> Flags.instanceMethod
           MethodName = Identifier.ofStr "get_Denominator"
@@ -209,9 +209,9 @@ let example() =
             wr.Ldarg 2us
             wr.Stfld denominator
             wr.Ret()
-            { MaxStack = 1us; InitLocals = false }
+            MethodBody.Default
         Constructor (
-            body = MethodBody.create body,
+            body = MethodBody.create ValueNone body,
             implFlags = MethodImplFlags(),
             flags = (ConstructorFlags(Public, true) |> Flags.constructor),
             signature = ObjectConstructorSignature(ParamItem.create EncodedType.I4, ParamItem.create EncodedType.I4),
@@ -243,8 +243,8 @@ let example() =
             wr.Mul()
             wr.Newobj ctor
             wr.Ret()
-            { MaxStack = 2us; InitLocals = false }
-        |> MethodBody.create
+            MethodBody.Default
+        |> MethodBody.create ValueNone
       ImplFlags = MethodImplFlags()
       Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
       MethodName = Identifier.ofStr "op_Multiply"
@@ -279,8 +279,8 @@ let example() =
             wr.Conv_r4()
             wr.Div()
             wr.Ret()
-            { MaxStack = 2us; InitLocals = false }
-        |> MethodBody.create
+            MethodBody.Default
+        |> MethodBody.create ValueNone
       ImplFlags = MethodImplFlags()
       Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
       MethodName = Identifier.ofStr "op_Explicit"
@@ -301,8 +301,8 @@ let example() =
             wr.Conv_r8()
             wr.Div()
             wr.Ret()
-            { MaxStack = 2us; InitLocals = false }
-        |> MethodBody.create
+            MethodBody.Default
+        |> MethodBody.create ValueNone
       ImplFlags = MethodImplFlags()
       Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
       MethodName = Identifier.ofStr "op_Explicit"
@@ -351,8 +351,8 @@ let example() =
             wr.Mul()
             wr.Sub()
             wr.Ret()
-            { MaxStack = 2us; InitLocals = false }
-        |> MethodBody.create
+            MethodBody.Default
+        |> MethodBody.create ValueNone
       ImplFlags = MethodImplFlags()
       Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, true, true) |> Flags.instanceMethod
       MethodName = Identifier.ofStr "CompareTo"
@@ -377,8 +377,8 @@ let example() =
             wr.Call stringBuilder_Append_I4
             wr.Callvirt stringBuilder_ToString
             wr.Ret()
-            { MaxStack = 2us; InitLocals = false }
-        |> MethodBody.create
+            MethodBody.Default
+        |> MethodBody.create ValueNone
       ImplFlags = MethodImplFlags()
       Flags =
         InstanceMethodFlags(

@@ -44,6 +44,7 @@
     <Compile Include="Metadata\Property.fs" />
     <Compile Include="Metadata\MethodSemantics.fs" />
     <Compile Include="Metadata\CustomAttribute.fs" />
+    <Compile Include="Metadata\StandAloneSig.fs" />
     <Compile Include="Metadata\FlagsModule.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\CliMetadataBuilder.fs" />

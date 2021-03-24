@@ -21,16 +21,20 @@ type internal ElementType =
     | R8 = 0xDuy
     | String = 0xEuy
 
+    | ByRef = 0x10uy
     | ValueType = 0x11uy
     | Class = 0x12uy
     | Var = 0x13uy
     | Array = 0x14uy
     | GenericInst = 0x15uy
+    | TypedByRef = 0x16uy
 
     | SZArray = 0x1Duy
     | MVar = 0x1Euy
 
     | Sentinel = 0x41uy
+
+    | Pinned = 0x45uy
 
 type internal ITypeDefOrRefOrSpec = interface end
 

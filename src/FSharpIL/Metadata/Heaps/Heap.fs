@@ -91,20 +91,21 @@ module internal Heap =
     let blob (metadata: CliMetadata) size =
         let mutable offset = 1u
         let blob =
-            { Field = Dictionary<_, _> metadata.Field.Count
-              MethodDef = Dictionary<_, _> metadata.MethodDef.Count
-              MemberRef = Dictionary<_, _> metadata.MemberRef.Count
+            { Field = Dictionary metadata.Field.Count
+              MethodDef = Dictionary metadata.MethodDef.Count
+              MemberRef = Dictionary metadata.MemberRef.Count
 
-              CustomAttribute = Dictionary<_, _> metadata.CustomAttribute.Length
+              CustomAttribute = Dictionary metadata.CustomAttribute.Length
 
-              Property = Dictionary<_, _> metadata.Property.Count
+              Property = Dictionary metadata.Property.Count
 
-              TypeSpec = Dictionary<_, _> metadata.TypeSpec.Count
+              TypeSpec = Dictionary metadata.TypeSpec.Count
 
-              MethodSpec = Dictionary<_, _> metadata.MethodSpec.Count
+              MethodSpec = Dictionary metadata.MethodSpec.Count
 
-              PublicKeyTokens = Dictionary<_, _> metadata.AssemblyRef.Count
-              ByteBlobs = Dictionary<_, _>(metadata.File.Count)
+              PublicKeyTokens = Dictionary metadata.AssemblyRef.Count
+              LocalVariables = Dictionary metadata.MethodDef.Count
+              ByteBlobs = Dictionary metadata.File.Count
               Content = ChunkWriter(LinkedList<_>().AddFirst(Array.zeroCreate size)) }
         let writer = BlobWriter(metadata, blob.Content)
         let inline blobIndex pos item (dict: Dictionary<_, BlobIndex>) =
@@ -229,6 +230,24 @@ module internal Heap =
                 | _ -> failwithf "Unable to write unsupported public key token %A" token
                 blobIndex pos token blob.PublicKeyTokens
 
+        for locals in metadata.StandAloneSig.LocalVariables do
+            if not (locals.IsEmpty || blob.LocalVariables.ContainsKey locals) then
+                let pos = writer.Position
+                writer.Writer.WriteU1 0x7uy // LOCAL_SIG
+                writer.CompressedUnsigned locals.Length // Count
+                for local in locals do
+                    match local with
+                    | LocalVariable.TypedByRef -> writer.Writer.WriteU1 ElementType.TypedByRef
+                    | _ ->
+                        writer.CustomMod local.CustomMod
+                        for constr in local.Constraints do
+                            match constr with
+                            | LocalVariableConstraint.Pinned -> writer.Writer.WriteU1 ElementType.Pinned
+                        if local.Tag = LocalVariableTag.ByRef then
+                            writer.Writer.WriteU1 ElementType.ByRef
+                        writer.EncodedType local.LocalType
+                blobIndex pos locals blob.LocalVariables
+
         for { File.HashValue = hashValue } in metadata.File.Rows do 
             if not (blob.ByteBlobs.ContainsKey hashValue) then
                 writer.Writer.WriteBytes hashValue
@@ -271,6 +290,7 @@ module internal Heap =
         writeAll blobs.TypeSpec
         writeAll blobs.MethodSpec
         writeAll blobs.PublicKeyTokens
+        writeAll blobs.LocalVariables
         writeAll blobs.ByteBlobs
 
     let writeUS (us: UserStringHeap) metadata (writer: ChunkWriter) =

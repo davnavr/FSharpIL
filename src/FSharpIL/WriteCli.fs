@@ -102,6 +102,10 @@ let header info (writer: ChunkWriter) =
 /// <param name="start">
 /// The first node that the method bodies will temporarily be written to before being written as part of the CLI metadata.
 /// </param>
+/// <param name="body"/>
+/// <param name="info">
+/// Provides the CLI metadata and the strings that are referenced in the method body.
+/// </param>
 let methodBody (start: LinkedListNode<byte[]>) (body: IMethodBody) (info: CliInfo) =
     if not body.Exists then invalidArg "body" "The method body should exist"
 
@@ -121,7 +125,11 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
             
             // NOTE: For fat (and tiny) formats, "two least significant bits of first byte" indicate the type.
             // TODO: Add checks for no exceptions and extra data sections to generate Tiny format.
-            let tiny = size < 64u && body.MaxStack <= 8us (*no exceptions and no extra data sections*)
+            let locals, localsi =
+                match method.Body.LocalVariables with
+                | ValueSome i -> info.Cli.StandAloneSig.GetSignature(i).Length, uint32 i
+                | ValueNone -> 0, 0u
+            let tiny = size < 64u && body.MaxStack <= 8us && locals <= 0 // &&
             let pos = uint32 writer.Position
 
             // Header
@@ -133,7 +141,7 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
                 flags ||| (Size.FatFormat <<< 12) |> writer.WriteU2 // Flags and Size
                 writer.WriteU2 body.MaxStack
                 writer.WriteU4 size
-                writer.WriteU4 0u // LocalVarSigTok // TODO: Figure out how to set local variable information.
+                MetadataToken.write localsi 0x11uy writer // LocalVarSigTok
 
             // Body
             writer.WriteBytes(chunk, 0, size) |> ignore
@@ -371,6 +379,12 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         customAttriuteParent.WriteIndex(row.Parent, writer)
         customAttributeType.WriteIndex(row.Type, writer)
         info.BlobStream.WriteIndex(row.Value, writer)
+
+
+
+    // StandAloneSig, LocalVarSig (0x11)
+    for locals in tables.StandAloneSig.LocalVariables do
+        info.BlobStream.WriteIndex(locals, writer)
 
 
 

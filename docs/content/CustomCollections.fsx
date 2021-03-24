@@ -62,7 +62,7 @@ let example() =
         |> referenceDefaultMethod builder
 
     // type MyCollection
-    let myCollection =
+    let myCollection_1 =
         { Access = TypeVisibility.Public
           Flags = ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true) |> Flags.concreteClass
           // C#, VB, and F# compilers append the number of generic parameters to the class name
@@ -75,7 +75,7 @@ let example() =
     GenericParam.addNonvariant
         builder
         GenericParamFlags.None
-        (myCollection.AsTypeIndex() |> GenericParamOwner.TypeDef)
+        (myCollection_1.AsTypeIndex() |> GenericParamOwner.TypeDef)
         (Identifier.ofStr "T")
         ConstraintSet.empty
     |> ignore
@@ -89,16 +89,16 @@ let example() =
         { Flags = FieldFlags(Private, initOnly = true) |> Flags.instanceField
           FieldName = Identifier.ofStr "items"
           Signature = FieldSignature.create tarray }
-        |> ConcreteClass.addInstanceField builder myCollection
+        |> ConcreteClass.addInstanceField builder myCollection_1
     // val mutable private index: int32
     let index =
         { Flags = Flags.instanceField(FieldFlags Private)
           FieldName = Identifier.ofStr "index"
           Signature = FieldSignature.create EncodedType.I4 }
-        |> ConcreteClass.addInstanceField builder myCollection
+        |> ConcreteClass.addInstanceField builder myCollection_1
 
-    let myCollectionSpec =
-        GenericInst.typeDef1 false (myCollection.AsTypeIndex()) tencoded
+    let myCollection_1_spec =
+        GenericInst.typeDef1 false (myCollection_1.AsTypeIndex()) tencoded
         |> TypeSpec.genericInst
         |> addTypeSpec builder
 
@@ -110,12 +110,12 @@ let example() =
 
     let struct (items', _) =
         { MemberRef.MemberName = Identifier.ofStr "items"
-          Class = MemberRefParent.TypeSpec myCollectionSpec
+          Class = MemberRefParent.TypeSpec myCollection_1_spec
           Signature = FieldSignature.create tarray }
         |> builder.MemberRef.Add
     let struct (index', _) =
         { MemberRef.MemberName = Identifier.ofStr "index"
-          Class = MemberRefParent.TypeSpec myCollectionSpec
+          Class = MemberRefParent.TypeSpec myCollection_1_spec
           Signature = FieldSignature.create EncodedType.I4 }
         |> builder.MemberRef.Add
 
@@ -134,19 +134,19 @@ let example() =
             wr.Ldarg 2us
             wr.Stfld index'
             wr.Ret()
-            { MaxStack = 2us; InitLocals = false }
+            MethodBody.Default
         Constructor (
-            body = MethodBody.create body,
+            body = MethodBody.create ValueNone body,
             implFlags = MethodImplFlags(),
             flags = (ConstructorFlags(Private, true) |> Flags.constructor),
             signature = ObjectConstructorSignature(parameters = ctor_p_params),
             paramList = fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "items" else "index" }
         )
-        |> ConcreteClass.addConstructor builder myCollection
+        |> ConcreteClass.addConstructor builder myCollection_1
 
     let struct(ctor_p', _) =
         { MemberRef.MemberName = Identifier.ofStr ".ctor"
-          Class = MemberRefParent.TypeSpec myCollectionSpec
+          Class = MemberRefParent.TypeSpec myCollection_1_spec
           Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ctor_p_params) }
         |> builder.MemberRef.Add
 
@@ -161,19 +161,28 @@ let example() =
             wr.Ldc_i4 0y
             wr.Call ctor_p'
             wr.Ret()
-            { MaxStack = 3us; InitLocals = false }
+            MethodBody.Default
         Constructor (
-            body = MethodBody.create body,
+            body = MethodBody.create ValueNone body,
             implFlags = MethodImplFlags(),
             flags = (ConstructorFlags(Public, true) |> Flags.constructor),
             signature = ObjectConstructorSignature(ParamItem.create EncodedType.I4),
             paramList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "capacity" }
         )
-        |> ConcreteClass.addConstructor builder myCollection
+        |> ConcreteClass.addConstructor builder myCollection_1
 
     // 'TOther
-    let tother = EncodedType.MVar 0u |> GenericInst.typeDef1 false (myCollection.AsTypeIndex())
-    let tother_spec = TypeSpec.genericInst tother |> addTypeSpec builder
+    let tother_spec =
+        TypeSpec.MVar 0u
+        |> TypeSpec.create
+        |> addTypeSpec builder
+
+    let cast_locals =
+        EncodedType.SZArray(ImmutableArray.Empty, EncodedType.MVar 0u)
+        |> LocalVariable.Type ImmutableArray.Empty ImmutableArray.Empty
+        |> ImmutableArray.Create
+        |> builder.StandAloneSig.AddLocals
+        |> ValueSome
 
     // member this.Cast<'TOther>(): MyCollection<'TOther when 'TOther :> 'T>
     let cast =
@@ -181,23 +190,28 @@ let example() =
             fun content ->
                 let wr = MethodBodyWriter content
                 wr.Ldarg 0us
-                // TODO: Add local variable to store new array.
-                wr.Ldfld items'
+                wr.Ldfld index'
+                wr.Newarr tother_spec
+                wr.Stloc 0us
+                // TODO: Loop over elements and cast them.
+                wr.Ldnull() // TEMP
                 wr.Ret()
-                { MaxStack = 1us; InitLocals = false }
-            |> MethodBody.create
+                MethodBody(0xFFFFus, true)
+            |> MethodBody.create cast_locals
           ImplFlags = MethodImplFlags()
           Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
           MethodName = Identifier.ofStr "Cast"
           Signature =
-            EncodedType.GenericInst tother
+            EncodedType.MVar 0u
+            |> GenericInst.typeDef1 false (myCollection_1.AsTypeIndex())
+            |> EncodedType.GenericInst
             |> ReturnType.encoded
             |> InstanceMethodSignature
           ParamList = ParamList.empty }
-        |> ConcreteClass.addInstanceMethod builder myCollection
+        |> ConcreteClass.addInstanceMethod builder myCollection_1
 
     // 'TOther when 'TOther :> 'T
-    GenericParamConstraint.TypeSpec tother_spec
+    GenericParamConstraint.TypeSpec tparam
     |> ConstraintSet.singleton
     |> GenericParam.addNonvariant
         builder

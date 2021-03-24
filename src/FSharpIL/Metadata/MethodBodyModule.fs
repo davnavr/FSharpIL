@@ -2,19 +2,19 @@
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module FSharpIL.Metadata.MethodBody
 
-let create (writer: MethodBodyContent -> MethodBody) =
-    { new ConcreteMethodBody() with member _.WriteBody content = writer content }
+let create localVarSig (writer: MethodBodyContent -> MethodBody) =
+    { new ConcreteMethodBody(localVarSig) with member _.WriteBody content = writer content }
 
 /// Represents a method body that does not exist, used for abstract methods.
 let none = NullMethodBody()
 
 /// <summary>A method body containing a single <c>ret</c> instruction.</summary>
-let empty =
-    { new ConcreteMethodBody() with
+let empty localVarSig =
+    { new ConcreteMethodBody(localVarSig) with
         member _.WriteBody content =
             let writer = MethodBodyWriter content
             writer.Ret()
-            { MaxStack = 0us; InitLocals = false } }
+            MethodBody() }
 
 /// <remarks>
 /// This method can be used to create recursive methods.

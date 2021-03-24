@@ -349,7 +349,15 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Rem() = this.WriteU1 0x5Duy
 
     // member this.Rem_un
-    
+
+    /// <summary>
+    /// (0x69) Writes an instruction that converts the value on top of the stack to an <c>int32</c> without an overflow check
+    /// (III.3.27).
+    /// </summary>
+    member this.Conv_i4() = this.WriteU1 0x69uy
+
+
+
     /// <summary>
     /// (0x6B) Writes an instruction that converts the value on top of the stack to a <c>float32</c> without an overflow check
     /// (III.3.27).
@@ -466,6 +474,9 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <c>TypeSpec</c> token (III.4.20).
     /// </summary>
     member this.Newarr(etype: RawIndex<TypeSpecRow>) = this.Newarr(etype, 0x1Buy)
+
+    /// (0x8E) Writes an instruction that pushes the length of an array onto the stack as an unsigned native integer (III.4.12).
+    member this.Ldlen() = this.WriteU1 0x8Euy
 
     // TODO: Add checks to ensure that the next written instruction after tail. is ret
     member private this.Tail() = this.WriteU1 0xFEuy; this.WriteU1 0x14uy

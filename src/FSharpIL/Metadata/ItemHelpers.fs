@@ -42,6 +42,7 @@ module ItemHelpers =
         else OptionalCustomModifier modifierType
 
 [<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module LocalVariable =
     let (|Type|ByRef|TypedByRef|) (localvar: LocalVariable) =
         match localvar.Tag with

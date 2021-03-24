@@ -30,18 +30,19 @@ type LocalVariable internal
     //member _.Position: int
     //member _.Write(writer: FSharpIL.Writing.ChunkWriter)
 
+type MethodLocalVariables = ImmutableArray<LocalVariable>
+
 [<IsReadOnly; Struct>]
-type MethodBody = // TODO: Make this a normal struct instead.
-    { /// Specifies the maximum "number of items on the operand stack" (II.25.4.3).
-      MaxStack: uint16
-      // TODO: Include exception information and local variable information for method bodies here.
-      /// <summary>Corresponds to the <c>CorILMethod_InitLocals</c> flag (II.25.4.4).</summary>
-      InitLocals: bool
-      /// <summary>
-      /// Corresponds to the <c>LocalVarSigTok</c> field, which describes "the layout of the local variables for the method"
-      /// (II.25.4.3)
-      /// </summary>
-      LocalVariableSignature: ImmutableArray<LocalVariable> voption }
+type MethodBody (maxStack: uint16, initLocals: bool) =
+    new (maxStack) = MethodBody(maxStack, false)
+
+    /// Specifies the maximum "number of items on the operand stack" (II.25.4.3).
+    member _.MaxStack = maxStack
+    /// <summary>Corresponds to the <c>CorILMethod_InitLocals</c> flag (II.25.4.4).</summary>
+    member _.InitLocals = initLocals
+    // TODO: Include exception information for method bodies here.
+
+    static member val Default = MethodBody 8us
 
 [<AbstractClass>]
 type MethodBodyContent internal (writer: FSharpIL.Writing.ChunkWriter) =
@@ -49,6 +50,11 @@ type MethodBodyContent internal (writer: FSharpIL.Writing.ChunkWriter) =
 
 type IMethodBody =
     abstract Exists: bool
+    /// <summary>
+    /// Corresponds to the <c>LocalVarSigTok</c> field, which describes "the layout of the local variables for the method"
+    /// (II.25.4.3)
+    /// </summary>
+    abstract LocalVariables: RawIndex<MethodLocalVariables> voption
     /// <summary>Writes the CLI opcodes that make up the body of the method.</summary>
     /// <exception cref="T:System.NotSupportedException">The method does not have a body.</exception>
     // TODO: Make argument a byref struct to prevent "escaping" of method body writers.
@@ -59,20 +65,24 @@ type IMethodBody =
 type NullMethodBody internal () =
     interface IMethodBody with
         member _.Exists = false
+        member _.LocalVariables = ValueNone
         member _.WriteBody _ = NotSupportedException "Abstract methods do not have method bodies" |> raise
 
 /// <summary>Represents a non-null method body.</summary>
 [<AbstractClass>]
-type ConcreteMethodBody () =
+type ConcreteMethodBody (localVarSig) =
     abstract WriteBody: MethodBodyContent -> MethodBody
+    member _.LocalVariables = localVarSig
     interface IMethodBody with
         member _.Exists = true
+        member _.LocalVariables = localVarSig
         member this.WriteBody content = this.WriteBody content
 
 [<Sealed>]
-type internal MutableMethodBody (writer) =
-    inherit ConcreteMethodBody()
+type internal MutableMethodBody (localVarSig, writer) =
+    inherit ConcreteMethodBody(localVarSig)
     let mutable writer' = writer
-    new() = MutableMethodBody(fun _ -> invalidOp "The method body was not initialized")
+    new(localVarSig) = MutableMethodBody(localVarSig, fun _ -> invalidOp "The method body was not initialized")
+    new() = MutableMethodBody ValueNone
     member _.SetBody writer = writer' <- writer
     override _.WriteBody content = writer' content

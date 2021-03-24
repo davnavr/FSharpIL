@@ -169,8 +169,8 @@ let example() =
                     writer.Ldarg 0us
                     writer.Call helper
                     writer.Ret()
-                    { MaxStack = 8us; InitLocals = false }
-                |> MethodBody.create }
+                    MethodBody.Default
+                |> MethodBody.create ValueNone }
             |> StaticClass.addStaticMethod builder factorial
 
         // Class constructor to initialize cache
@@ -180,9 +180,9 @@ let example() =
                 writer.Newobj dictionary_u4_u4_ctor
                 writer.Stsfld cache
                 writer.Ret()
-                { MaxStack = 8us; InitLocals = false }
+                MethodBody.Default
             Constructor(
-                MethodBody.create body,
+                MethodBody.create ValueNone body,
                 MethodImplFlags(),
                 ConstructorFlags(Public, true) |> Flags.classConstructor,
                 (),
@@ -227,7 +227,7 @@ let example() =
             writer.Mul()
             writer.Tail_call helper
             writer.Ret()
-            { MaxStack = 8us; InitLocals = false }
+            MethodBody.Default
 
         return CliMetadata builder
     }

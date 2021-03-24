@@ -14,6 +14,8 @@ type CliMetadata (builder: CliMetadataBuilder) =
         |> Seq.collect(fun method -> Seq.indexed method.ParamList)
         |> ImmutableArray.CreateRange
 
+    let standAloneSig = builder.StandAloneSig.ToImmutable()
+
     let propertyMap = builder.PropertyMap.ToImmutable()
 
     let nestedClass = ImmutableArray.CreateRange builder.NestedClass
@@ -56,6 +58,12 @@ type CliMetadata (builder: CliMetadataBuilder) =
         if builder.CustomAttribute.Count > 0 then
             bits <- bits ||| (1UL <<< 0xC)
             uint32 builder.CustomAttribute.Count |> counts.Add
+
+
+
+        if standAloneSig.TotalCount > 0 then
+            bits <- bits ||| (1UL <<< 0x11)
+            uint32 standAloneSig.TotalCount |> counts.Add
 
 
 
@@ -139,6 +147,8 @@ type CliMetadata (builder: CliMetadataBuilder) =
     member val MemberRef = builder.MemberRef.ToImmutable()
 
     member val CustomAttribute = builder.CustomAttribute.ToImmutableArray()
+
+    member _.StandAloneSig = standAloneSig
 
     member val PropertyMap = propertyMap
     member val Property = MetadataTable propertyMap.Rows
