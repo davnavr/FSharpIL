@@ -60,6 +60,22 @@ let example() =
           MemberName = Identifier.ofStr ".ctor"
           Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid) }
         |> referenceDefaultMethod builder
+    let array =
+        { TypeName = Identifier.ofStr "Array"
+          TypeNamespace = "System"
+          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        |> referenceType builder
+    let struct (array_copy, _) =
+        let array_encoded =
+            TypeDefOrRefOrSpecEncoded.TypeRef array
+            |> EncodedType.Class
+            |> ParamItem.create
+        { Class = MemberRefParent.TypeRef array
+          MemberName = Identifier.ofStr "Copy"
+          Signature =
+            let parameters = [| array_encoded; array_encoded; ParamItem.create EncodedType.I4 |]
+            MethodRefDefaultSignature (false, false, ReturnType.itemVoid, parameters) }
+        |> referenceDefaultMethod builder
 
     // type MyCollection
     let myCollection_1 =
@@ -84,18 +100,18 @@ let example() =
     let tencoded = EncodedType.Var 0u
     let tarray = EncodedType.SZArray(ImmutableArray.Empty, tencoded)
 
-    // val private (*initonly*) items: 'T[]
-    let items =
-        { Flags = FieldFlags(Private, initOnly = true) |> Flags.instanceField
-          FieldName = Identifier.ofStr "items"
-          Signature = FieldSignature.create tarray }
-        |> ConcreteClass.addInstanceField builder myCollection_1
+    // val mutable private items: 'T[]
+    { Flags = Flags.instanceField(FieldFlags Private)
+      FieldName = Identifier.ofStr "items"
+      Signature = FieldSignature.create tarray }
+    |> ConcreteClass.addInstanceField builder myCollection_1
+    |> ignore
     // val mutable private index: int32
-    let index =
-        { Flags = Flags.instanceField(FieldFlags Private)
-          FieldName = Identifier.ofStr "index"
-          Signature = FieldSignature.create EncodedType.I4 }
-        |> ConcreteClass.addInstanceField builder myCollection_1
+    { Flags = Flags.instanceField(FieldFlags Private)
+      FieldName = Identifier.ofStr "index"
+      Signature = FieldSignature.create EncodedType.I4 }
+    |> ConcreteClass.addInstanceField builder myCollection_1
+    |> ignore
 
     let myCollection_1_spec =
         GenericInst.typeDef1 false (myCollection_1.AsTypeIndex()) tencoded
@@ -198,7 +214,7 @@ let example() =
           Signature =
             let parameters =
                 [|
-                    EncodedType.SZArray(ImmutableArray.Empty, EncodedType.Var 0u) |> ParamItem.create
+                    ParamItem.create tarray
                     ParamItem.create EncodedType.I4
                 |]
             MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
@@ -257,7 +273,7 @@ let example() =
                 wr.Ldfld index'
                 wr.Newobj ctor_p_other
                 wr.Ret()
-                MethodBody(0x4us, true) // NOTE: Don't forget to check that max stack is correct!
+                MethodBody(0x4us, true)
             |> MethodBody.create cast_locals
           ImplFlags = MethodImplFlags()
           Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
@@ -279,6 +295,104 @@ let example() =
         GenericParamFlags.None
         (cast.AsMethodIndex() |> GenericParamOwner.MethodDef)
         (Identifier.ofStr "TOther")
+    |> ignore
+
+    // member this.Add(item: 'T)
+    { Body =
+        let locals =
+            [
+                EncodedType.I4 // len: int32
+                tarray // replacement: 'T[]
+            ]
+            |> List.map (LocalVariable.Type ImmutableArray.Empty ImmutableArray.Empty)
+            |> ImmutableArray.CreateRange
+            |> builder.StandAloneSig.AddLocals
+            |> ValueSome
+        fun content ->
+            let wr = MethodBodyWriter content
+            // let mutable len: int32 = this.items.Length
+            wr.Ldarg 0us
+            wr.Ldfld items'
+            wr.Ldlen()
+            wr.Conv_i4()
+            wr.Stloc 0us
+
+            // this.index
+            wr.Ldarg 0us
+            wr.Ldfld index'
+            // this.index < len
+            wr.Ldloc 0us
+            let reallocate = wr.Blt_s()
+
+            // TODO: Make new array here.
+            (*Create a new array that is double the original length*)
+            wr.Ldloc 0us
+            wr.Ldc_i4 0
+            // len > 0
+            let double_length = wr.Bgt_s()
+
+            // len <- 1
+            wr.Ldc_i4 1
+            wr.Stloc 0us
+            let skip_double = wr.Br_s()
+
+            Label(wr).SetTarget double_length
+
+            // len <- len * 2
+            wr.Ldloc 0us
+            wr.Ldc_i4 2
+            wr.Mul()
+            wr.Stloc 0us
+
+            Label(wr).SetTarget skip_double
+
+            // let replacement: 'T[] = Array.zeroCreate<'T> len
+            wr.Ldloc 0us
+            wr.Newarr tparam
+            wr.Stloc 1us
+
+            // System.Array.Copy(this.items, replacement, this.items.Length)
+            wr.Ldarg 0us
+            wr.Ldfld items'
+            wr.Ldloc 1us
+            wr.Ldarg 0us
+            wr.Ldfld items'
+            wr.Ldlen()
+            wr.Conv_i4()
+            wr.Call array_copy
+
+            // this.items <- replacement
+            wr.Ldarg 0us
+            wr.Ldloc 1us
+            wr.Stfld items'
+
+            Label(wr).SetTarget reallocate
+
+            // this.items.[this.index] <- item
+            wr.Ldarg 0us
+            wr.Ldfld items'
+            wr.Ldarg 0us
+            wr.Ldfld index'
+            wr.Ldarg 1us
+            wr.Stelem tparam
+
+            // this.index <- this.index + 1
+            wr.Ldarg 0us
+            wr.Dup()
+            wr.Ldfld index'
+            wr.Ldc_i4 1
+            wr.Add()
+            wr.Stfld index'
+
+            wr.Ret()
+            MethodBody(0x3us, true) // NOTE: Don't forget to check that max stack is correct!
+        |> MethodBody.create locals
+      ImplFlags = MethodImplFlags()
+      Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
+      MethodName = Identifier.ofStr "Add"
+      Signature = InstanceMethodSignature(ReturnType.itemVoid, ParamItem.var 0u)
+      ParamList = fun _ _ -> Param { ParamName = "item"; Flags = ParamFlags() } }
+    |> ConcreteClass.addInstanceMethod builder myCollection_1
     |> ignore
 
     let tfm =

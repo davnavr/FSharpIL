@@ -267,9 +267,24 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// </summary>
     /// <remarks>This opcode is an alias for the <c>brtrue.s</c> instruction.</remarks>
     member this.Brinst_s() = this.Brtrue_s()
-
-    /// (0x2E)
+    
+    /// <summary>
+    /// (0x2E) Writes the short form of an instruction that branches to the specified <c>target</c> if <c>value1</c> is equal to
+    /// <c>value2</c> (III.3.5).
+    /// </summary>
     member this.Beq_s() = this.Branch(0x2Euy, true)
+
+    /// <summary>
+    /// (0x30) Writes the short form of an instruction that branches to the specified <c>target</c> if <c>value1</c> is greater
+    /// than or equal to <c>value2</c> (III.3.6).
+    /// </summary>
+    member this.Bge_s() = this.Branch(0x2Fuy, true)
+
+    /// <summary>
+    /// (0x30) Writes the short form of an instruction that branches to the specified <c>target</c> if <c>value1</c> is greater
+    /// than <c>value2</c> (III.3.8).
+    /// </summary>
+    member this.Bgt_s() = this.Branch(0x30uy, true)
 
     /// <summary>
     /// (0x32) Writes the short form of an instruction that branches to the specified <c>target</c> if <c>value1</c> is less than
@@ -284,7 +299,8 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Bne_un_s() = this.Branch(0x33uy, true)
 
     /// <summary>
-    /// (0x35) Writes the short form of an instruction that branches to the specified target if <c>value1 > value2</c> (III.3.9).
+    /// (0x35) Writes the short form of an instruction that branches to the specified target if <c>value1 > value2</c>, unsigned
+    /// (III.3.9).
     /// </summary>
     member this.Bgt_un_s() = this.Branch(0x35uy, true)
     
@@ -319,7 +335,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Beq() = this.Branch(0x3Buy, false)
 
     /// <summary>
-    /// (0x42) Writes an instruction that branches to the specified target if <c>value1 > value2</c> (III.3.9).
+    /// (0x42) Writes an instruction that branches to the specified target if <c>value1 > value2</c>, unsigned (III.3.9).
     /// </summary>
     member this.Bgt_un() = this.Branch(0x42uy, false)
 

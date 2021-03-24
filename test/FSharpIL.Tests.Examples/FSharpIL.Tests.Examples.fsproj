@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="FactorialTests.fs" />
     <Compile Include="FractionTests.fs" />
+    <Compile Include="CollectionTests.fs" />
     <Compile Include="$(RootDirectory)\test\FSharpIL.Tests\Test.fs" />
 
     <PackageReference Include="Expecto" Version="9.0.2" />
