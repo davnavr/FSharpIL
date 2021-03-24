@@ -19,6 +19,7 @@
 
     <Reference Include="$(RootDirectory)\docs\content\exout\CustomNumbers.dll" />
     <Reference Include="$(RootDirectory)\docs\content\exout\Factorial.dll" />
+    <Reference Include="$(RootDirectory)\docs\content\exout\CustomCollections.dll" />
   </ItemGroup>
 
 </Project>

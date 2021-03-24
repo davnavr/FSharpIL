@@ -385,13 +385,50 @@ let example() =
             wr.Stfld index'
 
             wr.Ret()
-            MethodBody(0x3us, true) // NOTE: Don't forget to check that max stack is correct!
+            MethodBody(0x3us, true)
         |> MethodBody.create locals
       ImplFlags = MethodImplFlags()
       Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
       MethodName = Identifier.ofStr "Add"
       Signature = InstanceMethodSignature(ReturnType.itemVoid, ParamItem.var 0u)
       ParamList = fun _ _ -> Param { ParamName = "item"; Flags = ParamFlags() } }
+    |> ConcreteClass.addInstanceMethod builder myCollection_1
+    |> ignore
+
+    // member this.ToArray()
+    { Body =
+        let locals =
+            // result: 'T[]
+            LocalVariable.Type ImmutableArray.Empty ImmutableArray.Empty tarray
+            |> ImmutableArray.Create
+            |> builder.StandAloneSig.AddLocals
+            |> ValueSome
+        fun content ->
+            let wr = MethodBodyWriter content
+            // let result: 'T[] = Array.zeroCreate<'T> this.index
+            wr.Ldarg 0us
+            wr.Ldfld index'
+            wr.Newarr tparam
+            wr.Stloc 0us
+
+            // System.Array.Copy(this.items, result, this.index)
+            wr.Ldarg 0us
+            wr.Ldfld items'
+            wr.Ldloc 0us
+            wr.Ldarg 0us
+            wr.Ldfld index'
+            wr.Call array_copy
+
+            // result
+            wr.Ldloc 0us
+            wr.Ret()
+            MethodBody(3us, true) // NOTE: Check maxstack
+        |> MethodBody.create locals
+      ImplFlags = MethodImplFlags()
+      Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
+      MethodName = Identifier.ofStr "ToArray"
+      Signature = ReturnType.encoded tarray |> InstanceMethodSignature
+      ParamList = ParamList.empty }
     |> ConcreteClass.addInstanceMethod builder myCollection_1
     |> ignore
 
