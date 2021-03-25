@@ -30,9 +30,18 @@ open FSharpIL.PortableExecutable
 
 let example() =
     let builder =
-        { Name = Identifier.ofStr "DelegatesExample.netmodule"
+        { Name = Identifier.ofStr "DelegatesExample.dll"
           Mvid = Guid.NewGuid() }
         |> CliMetadataBuilder
+
+    { Name = AssemblyName.ofStr "DelegatesExample"
+      HashAlgId = ()
+      Version = Version(68, 101, 108, 101)
+      Flags = ()
+      PublicKey = None
+      Culture = NullCulture }
+    |> setAssembly builder
+    |> ignore
 
     let struct (mscorlib, _) =
         { Version = Version(5, 0, 0, 0)
@@ -192,9 +201,9 @@ let example() =
         |> ConcreteClass.addStaticMethod builder myclass
 
     // member _.
-    // TODO: Add instance method to showcase creating delegates from objects.
+    // TODO: Add instance method to showcase creating delegates from instance method.
 
-    // static member Example1(): MyDelegate
+    // static member Example1(): string
     { MethodName = Identifier.ofStr "Example1"
       ImplFlags = MethodImplFlags()
       Flags = StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod
@@ -208,7 +217,7 @@ let example() =
             |> ValueSome
         fun content ->
             let wr = MethodBodyWriter content
-            // let del = new MyDelegate(MyClass.DuplicateString)
+            // let del = new MyDelegate(fun arg1 arg2 -> MyClass.DuplicateString(arg1, arg2))
             wr.Ldnull()
             wr.Ldftn dupstr
             wr.Newobj mydel.Constructor
@@ -220,7 +229,7 @@ let example() =
             wr.Ldc_i4 4
             wr.Callvirt mydel.Invoke
             wr.Ret()
-            MethodBody(2us, true)
+            MethodBody(3us, true)
         |> MethodBody.create locals }
     |> ConcreteClass.addStaticMethod builder myclass
     |> ignore
@@ -235,7 +244,7 @@ let tests =
 
     testList "delegates example" [
         testCase "can save to disk" <| fun() ->
-            let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "DelegatesExample.netmodule")
+            let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "DelegatesExample.dll")
             WritePE.toPath path example'.Value
     ]
 #endif

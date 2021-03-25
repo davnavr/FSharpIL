@@ -10,6 +10,7 @@
     <Compile Include="FactorialTests.fs" />
     <Compile Include="FractionTests.fs" />
     <Compile Include="CollectionTests.fs" />
+    <Compile Include="DelegatesTests.fs" />
     <Compile Include="$(RootDirectory)\test\FSharpIL.Tests\Test.fs" />
 
     <PackageReference Include="Expecto" Version="9.0.2" />
@@ -20,6 +21,7 @@
     <Reference Include="$(RootDirectory)\docs\content\exout\CustomNumbers.dll" />
     <Reference Include="$(RootDirectory)\docs\content\exout\Factorial.dll" />
     <Reference Include="$(RootDirectory)\docs\content\exout\CustomCollections.dll" />
+    <Reference Include="$(RootDirectory)\docs\content\exout\DelegatesExample.dll" />
   </ItemGroup>
 
 </Project>
