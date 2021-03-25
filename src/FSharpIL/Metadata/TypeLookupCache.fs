@@ -30,7 +30,7 @@ module TypeLookupResult =
 type TypeLookupCache (builder: CliMetadataBuilder) =
     let cache = Dictionary<TypeLookupKey, TypeLookupResult>()
 
-    member _.FindType(typeNamespace, typeName) =
+    member _.TryFindType(typeNamespace, typeName) =
         let key = TypeLookupKey(typeNamespace, typeName)
         match cache.TryGetValue key with
         | (true, existing) -> ValueSome existing
@@ -53,3 +53,16 @@ type TypeLookupCache (builder: CliMetadataBuilder) =
                     result <- ValueSome(TypeLookupResult.TypeDef(RawIndex i))
 
             result
+
+    member this.TryFindTypeEncoded(typeNamespace, typeName, isValueType) =
+        match this.TryFindType(typeNamespace, typeName) with
+        | ValueSome result ->
+            let t =
+                match result with
+                | TypeLookupResult.TypeDef tdef -> TypeDefOrRefOrSpecEncoded.TypeDef tdef
+                | TypeLookupResult.TypeRef tref -> TypeDefOrRefOrSpecEncoded.TypeRef tref
+            if isValueType
+            then EncodedType.ValueType t
+            else EncodedType.Class t
+            |> ValueSome
+        | ValueNone -> ValueNone

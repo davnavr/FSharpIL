@@ -85,6 +85,7 @@ type internal BlobWriter = struct
 
         | EncodedType.GenericInst inst -> this.GenericInst inst
 
+        | EncodedType.I -> this.Writer.WriteU1 ElementType.I
         | EncodedType.I1 -> this.Writer.WriteU1 ElementType.I1
         | EncodedType.I2 -> this.Writer.WriteU1 ElementType.I2
         | EncodedType.I4 -> this.Writer.WriteU1 ElementType.I4
@@ -93,6 +94,8 @@ type internal BlobWriter = struct
         | EncodedType.MVar num ->
             this.Writer.WriteU1 ElementType.MVar
             this.CompressedUnsigned num
+
+        | EncodedType.Object -> this.Writer.WriteU1 ElementType.Object
 
         | EncodedType.String -> this.Writer.WriteU1 ElementType.String
         | EncodedType.SZArray(modifiers, element) ->

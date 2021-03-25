@@ -28,7 +28,10 @@ type internal ElementType =
     | Array = 0x14uy
     | GenericInst = 0x15uy
     | TypedByRef = 0x16uy
-
+    | I = 0x18uy
+    | U = 0x19uy
+    | FnPtr = 0x1Buy
+    | Object = 0x1Cuy
     | SZArray = 0x1Duy
     | MVar = 0x1Euy
 

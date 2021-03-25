@@ -28,7 +28,8 @@ type ValidationWarning internal () = class end
 /// </summary>
 /// <category>Errors</category>
 [<AbstractClass>]
-type ValidationError internal () = class end
+type ValidationError internal () =
+    member this.ToResult(): Result<_, ValidationError> = Error this
 
 exception ValidationErrorException of ValidationError
 

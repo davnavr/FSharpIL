@@ -5,6 +5,24 @@ module FSharpIL.Metadata.Unchecked
 
 open System
 open System.Collections.Immutable
+open System.Reflection
+
+[<RequireQualifiedAccess>]
+module private DelegateHelpers =
+    let ctorSignature =
+        let parameters =
+            [|
+                EncodedType.Object
+                EncodedType.I // native int
+            |]
+            |> Array.map ParamItem.create
+            |> ImmutableArray.CreateRange
+        MethodDefSignature(true, false, MethodCallingConventions.Default, ReturnType.itemVoid, parameters)
+
+    let ctorParameters (_: ParamItem) (i: int32) =
+        { ParamName = if i = 0 then "object" else "method"
+          Flags = ParamFlags() }
+        |> Param
 
 // TODO: Figure out if using inref with static methods in Unsafe is a performance improvement.
 /// Contains static methods for modifying the CLI metadata without regard for generation of correct metadata.
@@ -101,6 +119,119 @@ type Unsafe private () = class
     static member AddTypeDef<'Tag>(builder, flags, typeName, extends) =
         Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, ValueNone)
 
+    // TODO: Add methods for adding struct, delegate, and enum that accept RawIndex<TypeDefRow> if system types are in the current assembly.
+
+    /// <param name="builder"/>
+    /// <param name="del">
+    /// A <c>TypeRef</c> corresponding to the <see cref="T:System.Delegate"/> or <see cref="T:System.MulticastDelegate"/> type.
+    /// </param>
+    /// <param name="asyncResult">A <c>Type</c> corresponding to the <see cref="T:System.IAsyncResult"/> type.</param>
+    /// <param name="asyncCallback">A <c>Type</c> corresponding to the <see cref="T:System.AsyncCallback"/> type.</param>
+    /// <param name="delegateDef"/>
+    static member private AddDelegate(builder, del, asyncResult, asyncCallback, delegateDef: DelegateDef): Result<DelegateInfo, _> =
+        let result =
+            Unsafe.AddTypeDef<DelegateDef> (
+                builder,
+                delegateDef.Flags,
+                delegateDef.DelegateName,
+                delegateDef.TypeNamespace,
+                del,
+                TypeVisibility.enclosingClass delegateDef.Access
+            )
+        match result with
+        | Ok del' ->
+            let trow = del'.ChangeTag<TypeDefRow>()
+            let iflags = MethodImplAttributes.Managed ||| MethodImplAttributes.InternalCall
+            // TODO: Figure out what flag 'strict' corresponds to.
+            let mflags = MethodAttributes.Public ||| MethodAttributes.HideBySig ||| MethodAttributes.Virtual
+
+            let ctor = // TODO: Create easier way to make methods and constructors whose implementations are 'runtime'
+                let row =
+                    MethodDefRow (
+                        MethodBody.none,
+                        // TODO: Does this correspond to 'runtime' keyword?
+                        iflags,
+                        ConstructorFlags(Public, true).Value ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName,
+                        Identifier.ofStr ".ctor",
+                        DelegateHelpers.ctorSignature,
+                        DelegateHelpers.ctorParameters
+                    )
+                builder.Method.TryAdd(trow, row).Value.ChangeTag<ObjectConstructor>()
+
+            let invoke =
+                let row =
+                    MethodDefRow (
+                        MethodBody.none,
+                        iflags,
+                        mflags,
+                        Identifier.ofStr "Invoke",
+                        MethodDefSignature(true, false, Default, delegateDef.ReturnType, delegateDef.Parameters),
+                        ParamList.noname
+                    )
+                builder.Method.TryAdd(trow, row).Value.ChangeTag<InstanceMethod>()
+
+            let beginInvoke =
+                let parameters = ImmutableArray.CreateBuilder(delegateDef.Parameters.Length + 2)
+                parameters.AddRange delegateDef.Parameters
+                parameters.Add(ParamItem.create asyncResult) // callback
+                parameters.Add(ParamItem.create EncodedType.Object) // objects
+                let row =
+                    MethodDefRow (
+                        MethodBody.none,
+                        iflags,
+                        mflags,
+                        Identifier.ofStr "BeginInvoke",
+                        MethodDefSignature(true, false, Default, ReturnType.encoded asyncCallback, parameters.ToImmutable()),
+                        fun _ i ->
+                            let name =
+                                if i = delegateDef.Parameters.Length
+                                then "callback"
+                                elif i = delegateDef.Parameters.Length + 1
+                                then "objects"
+                                else ""
+                            Param { ParamName = name; Flags = ParamFlags() }
+                    )
+                builder.Method.TryAdd(trow, row).Value.ChangeTag<InstanceMethod>()
+
+            let endInvoke =
+                let row =
+                    MethodDefRow (
+                        MethodBody.none,
+                        iflags,
+                        mflags,
+                        Identifier.ofStr "EndInvoke",
+                        MethodDefSignature(true, false, Default, delegateDef.ReturnType, ImmutableArray.Create(ParamItem.create asyncResult)),
+                        fun _ _ -> Param { ParamName = "result"; Flags = ParamFlags() }
+                    )
+                builder.Method.TryAdd(trow, row).Value.ChangeTag<InstanceMethod>()
+
+            DelegateInfo(del', ctor, invoke, beginInvoke, endInvoke) |> Ok
+        | Error err -> Error err
+
+    static member AddDelegate(builder, del, asyncResult, asyncCallback, delegateDef) =
+        Unsafe.AddDelegate(builder, Extends.TypeRef del, asyncResult, asyncCallback, delegateDef)
+
+    static member AddDelegate(builder, lookup: TypeLookupCache, delegateDef) =
+        // TODO: Cleanup these local variables
+        let system = "System"
+        let delName = Identifier.ofStr "MulticastDelegate"
+        let del = lookup.TryFindType(system, delName)
+        let asyncResultName = Identifier.ofStr "IAsyncResult"
+        let asyncResult = lookup.TryFindTypeEncoded(system, asyncResultName, false)
+        let asyncCallbackName = Identifier.ofStr "AsyncCallback"
+        let asyncCallback = lookup.TryFindTypeEncoded(system, asyncCallbackName, false)
+        match del, asyncResult, asyncCallback with
+        | ValueSome del', ValueSome asyncResult', ValueSome asyncCallback' ->
+            let del'' =
+                match del' with
+                // NOTE: This currently assumes System.Delegate is an abstract class, maybe make a special unsafe Extends case for TypeDefRow?
+                | TypeLookupResult.TypeDef tdef -> tdef.ChangeTag() |> Extends.AbstractClass
+                | TypeLookupResult.TypeRef tref -> Extends.TypeRef tref
+            Unsafe.AddDelegate(builder, del'', asyncResult', asyncCallback', delegateDef)
+        | ValueNone, _, _ -> MissingTypeError(system, delName).ToResult()
+        | _, ValueNone, _ -> MissingTypeError(system, asyncResultName).ToResult()
+        | _, _, ValueNone -> MissingTypeError(system, asyncCallbackName).ToResult()
+
     static member private AddStruct(builder, valueType, structDef: StructDef) =
         Unsafe.AddTypeDef<StructDef>(
             builder,
@@ -111,10 +242,9 @@ type Unsafe private () = class
             TypeVisibility.enclosingClass structDef.Access
         )
 
-    static member AddStruct(builder, valueType, structDef: StructDef) =
-        Unsafe.AddStruct(builder, Extends.TypeRef valueType, structDef)
+    static member AddStruct(builder, valueType, structDef) = Unsafe.AddStruct(builder, Extends.TypeRef valueType, structDef)
 
-    static member AddStruct(builder, valueType: RawIndex<TypeDefRow>, structDef: StructDef) =
+    static member AddStruct(builder, valueType: RawIndex<TypeDefRow>, structDef) =
         Unsafe.AddStruct(builder, (invalidOp "TODO: Add Extends.TypeDef to allow addition of structs that derive from System.ValueType in the same assembly": Extends), structDef)
 
     static member ChangeFlagTag<'Flags, 'From, 'To when 'Flags :> Enum>(flags: ValidFlags<'From, 'Flags>) =
@@ -283,10 +413,10 @@ module StaticClass =
 module Struct =
     let addTypeDef builder (lookup: TypeLookupCache) (structDef: StructDef) =
         let valueType = "System", Identifier.ofStr "ValueType"
-        match lookup.FindType valueType with
+        match lookup.TryFindType valueType with
         | ValueSome (TypeLookupResult.TypeRef tref) -> Unsafe.AddStruct(builder, tref, structDef)
         | ValueSome (TypeLookupResult.TypeDef tdef) -> Unsafe.AddStruct(builder, tdef, structDef)
-        | ValueNone -> MissingTypeError valueType :> ValidationError |> Error
+        | ValueNone -> MissingTypeError(valueType).ToResult()
 
     let addInstanceMethod builder (owner: RawIndex<StructDef>) (method: InstanceMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<InstanceMethod>, _>
@@ -323,7 +453,7 @@ module Struct =
 let referenceType (builder: CliMetadataBuilder) typeRef =
     match builder.TypeRef.TryAdd typeRef with
     | ValueSome i -> Ok i
-    | ValueNone -> DuplicateTypeRefError typeRef :> ValidationError |> Error
+    | ValueNone -> DuplicateTypeRefError(typeRef).ToResult()
 
 // TODO: Figure out how to remove warning checks while still having easy way to check if duplicate value was added.
 
@@ -353,13 +483,13 @@ let referenceAssembly (builder: CliMetadataBuilder) assembly =
 let addTypeSpec (builder: CliMetadataBuilder) typeSpec =
     match builder.TypeSpec.TryAdd typeSpec with
     | ValueSome index -> Ok index
-    | ValueNone -> DuplicateTypeSpecError typeSpec :> ValidationError |> Error
+    | ValueNone -> DuplicateTypeSpecError(typeSpec).ToResult()
 
 let addMethodSpec (builder: CliMetadataBuilder) method (garguments: seq<_>) =
     let spec' = MethodSpecRow(method, MethodSpec garguments)
     match builder.MethodSpec.TryAdd spec' with
     | ValueSome index -> Ok index
-    | ValueNone -> DuplicateMethodSpecError spec' :> ValidationError |> Error
+    | ValueNone -> DuplicateMethodSpecError(spec').ToResult()
 
 // TODO: Move functions for manipulating generic parameters to Unsafe.
 [<RequireQualifiedAccess>]
@@ -368,4 +498,4 @@ module GenericParam =
         let result = builder.GenericParam.TryAddNonvariant(flags, owner, name, constraints)
         match result with
         | ValueSome info -> Ok info
-        | ValueNone -> DuplicateGenericParamError(owner ,name) :> ValidationError |> Error
+        | ValueNone -> DuplicateGenericParamError(owner ,name).ToResult()

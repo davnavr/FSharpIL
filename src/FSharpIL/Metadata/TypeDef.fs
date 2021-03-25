@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
 open System.Runtime.InteropServices
@@ -73,17 +74,6 @@ end
 [<AbstractClass; Sealed>] type StaticClassTag = class end
 
 // TODO: Make these other TypeDef flag types normal structs.
-[<Struct; IsReadOnly>]
-type DelegateFlags =
-    { Serializable: bool }
-
-    member this.Value =
-        let mutable flags = TypeAttributes.Sealed
-        if this.Serializable then flags <- flags ||| TypeAttributes.Serializable
-        flags
-
-    interface IFlags<TypeAttributes> with member this.Value = this.Value
-
 [<Struct; IsReadOnly>]
 [<RequireQualifiedAccess>]
 type InterfaceFlags =
@@ -264,13 +254,37 @@ type SealedClassDef = ClassDef<SealedClassTag>
 type StaticClassDef = ClassDef<StaticClassTag>
 
 /// <summary>
-/// Represents a delegate type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Delegate"/>.
+/// Represents a delegate type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Delegate"/> (I.8.9.3).
 /// </summary>
-type DelegateDef =
-    { Access: TypeVisibility
-      Flags: DelegateFlags
-      DelegateName: Identifier
-      TypeNamespace: string }
+type DelegateDef = struct
+    val Access: TypeVisibility
+    val ReturnType: ReturnTypeItem
+    val Parameters: ImmutableArray<ParamItem>
+    val DelegateName: Identifier
+    val TypeNamespace: string
+    val Flags: TypeAttributes
+
+    internal new (access, returnType, parameters, name, ns, flags) =
+        { Access = access
+          ReturnType = returnType
+          Parameters = parameters
+          DelegateName = name
+          Flags = flags
+          TypeNamespace = ns }
+
+    new
+        (
+            access: TypeVisibility,
+            returnType,
+            parameters,
+            name,
+            [<Optional; DefaultParameterValue("")>] ns: string,
+            [<Optional; DefaultParameterValue(false)>] serializable: bool
+        ) =
+        let mutable flags = TypeAttributes.AutoLayout ||| TypeAttributes.AnsiClass ||| TypeAttributes.Sealed ||| access.Tag
+        if serializable then flags <- flags ||| TypeAttributes.Serializable
+        DelegateDef(access, returnType, parameters, name, ns, flags)
+end
 
 /// <summary>
 /// Represents an enumeration type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Enum"/>.

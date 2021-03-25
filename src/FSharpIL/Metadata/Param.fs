@@ -63,4 +63,6 @@ end
 
 [<RequireQualifiedAccess>]
 module ParamList =
-    let empty (_: ParamItem) (_: int32) = failwith "The parameter list was expected to be empty."
+    /// <exception cref="T:System.InvalidOperationException">Thrown when this function is called.</exception>
+    let empty (_: ParamItem) (_: int32) = invalidOp "The parameter list was expected to be empty."
+    let noname (_: ParamItem) (_: int32) = Param { Flags = ParamFlags(); ParamName = "" }

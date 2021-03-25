@@ -115,11 +115,12 @@ type ConstructorFlags = struct
     new (visibility, [<Optional; DefaultParameterValue(false)>] hideBySig) =
         { Visibility = visibility; HideBySig = hideBySig }
 
-    interface IFlags<MethodAttributes> with
-        member this.Value =
-            let mutable flags = (this.Visibility :> IFlags<MethodAttributes>).Value
-            if this.HideBySig then flags <- flags ||| MethodAttributes.HideBySig
-            flags
+    member this.Value =
+        let mutable flags = (this.Visibility :> IFlags<MethodAttributes>).Value
+        if this.HideBySig then flags <- flags ||| MethodAttributes.HideBySig
+        flags
+
+    interface IFlags<MethodAttributes> with member this.Value = this.Value
 end
 
 [<IsReadOnly>]
