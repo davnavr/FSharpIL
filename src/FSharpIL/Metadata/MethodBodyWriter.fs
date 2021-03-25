@@ -584,6 +584,12 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <summary>(0xFE 0x06) Writes an instruction that pushes a pointer to a static method onto the stack (III.3.41)</summary>
     member this.Ldftn(method: RawIndex<StaticMethod>) = this.Ldftn(method.AsMethodIndex())
 
+    /// <summary>
+    /// (0xFE 0x06) Writes an instruction that pushes a pointer to a method specified by a <c>MethodRef</c> with the
+    /// <c>DEFAULT</c> calling convention onto the stack (III.3.41).
+    /// </summary>
+    member this.Ldftn(method: RawIndex<MethodRefDefault>) = this.Ldftn(method, 0xAuy)
+
     // TODO: Add checks to ensure that the next written instruction after tail. is ret
     member private this.Tail() = this.WriteU1 0xFEuy; this.WriteU1 0x14uy
 

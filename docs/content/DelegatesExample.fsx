@@ -80,12 +80,23 @@ let example() =
           TypeNamespace = "System"
           ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
         |> referenceType builder
+    let func_2 =
+        { TypeName = Identifier.ofStr "Func`2"
+          TypeNamespace = "System"
+          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        |> referenceType builder
 
     let struct (str_length, _) =
         { Class = MemberRefParent.TypeRef str
           MemberName = Identifier.ofStr "get_Length"
           // member _.get_Length(): string
           Signature = MethodRefDefaultSignature(true, false, ReturnType.itemI4) }
+        |> referenceDefaultMethod builder
+    let struct (str_indexof, _) =
+        { Class = MemberRefParent.TypeRef str
+          MemberName = Identifier.ofStr "IndexOf"
+          // member _.IndexOf(value: string): int
+          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemI4, ParamItem.create EncodedType.String) }
         |> referenceDefaultMethod builder
     let struct (stringb_ctor, _) =
         { Class = MemberRefParent.TypeRef stringb
@@ -200,9 +211,6 @@ let example() =
             |> MethodBody.create locals }
         |> ConcreteClass.addStaticMethod builder myclass
 
-    // member _.
-    // TODO: Add instance method to showcase creating delegates from instance method.
-
     // static member Example1(): string
     { MethodName = Identifier.ofStr "Example1"
       ImplFlags = MethodImplFlags()
@@ -231,6 +239,41 @@ let example() =
             wr.Ret()
             MethodBody(3us, true)
         |> MethodBody.create locals }
+    |> ConcreteClass.addStaticMethod builder myclass
+    |> ignore
+
+    // System.Func<string, int32>
+    let func_2_inst = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef func_2, false, EncodedType.String, EncodedType.I4)
+    // new(_: object, _: System.IntPtr)
+    let struct(func_2_inst_ctor, _) =
+        { MemberRef.MemberName = Identifier.ofStr ".ctor"
+          Class =
+            func_2_inst
+            |> TypeSpec.genericInst
+            |> addTypeSpec builder
+            |> MemberRefParent.TypeSpec
+          Signature =
+            let parameters = Array.map ParamItem.create [| EncodedType.Object; EncodedType.I |]
+            MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
+        |> builder.MemberRef.Add
+
+    // static member Example2(str: string): System.Func<string, int32>
+    { MethodName = Identifier.ofStr "Example2"
+      ImplFlags = MethodImplFlags()
+      Flags = StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod
+      ParamList = Param { ParamName = "str"; Flags = ParamFlags() } |> ParamList.singleton
+      Signature =
+        let retn = EncodedType.GenericInst func_2_inst
+        StaticMethodSignature(ReturnType.encoded retn, ParamItem.create EncodedType.String)
+      Body =
+        fun content ->
+            let wr = MethodBodyWriter content
+            wr.Ldarg 0us
+            wr.Ldftn str_indexof
+            wr.Newobj func_2_inst_ctor
+            wr.Ret()
+            MethodBody()
+        |> MethodBody.create ValueNone }
     |> ConcreteClass.addStaticMethod builder myclass
     |> ignore
 
