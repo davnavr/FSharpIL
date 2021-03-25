@@ -9,6 +9,8 @@ open System.Reflection
 
 [<RequireQualifiedAccess>]
 module private DelegateHelpers =
+    let implFlags = MethodImplAttributes.Managed ||| MethodImplAttributes.Runtime
+
     let ctorSignature =
         let parameters =
             [|
@@ -141,16 +143,13 @@ type Unsafe private () = class
         match result with
         | Ok del' ->
             let trow = del'.ChangeTag<TypeDefRow>()
-            let iflags = MethodImplAttributes.Managed ||| MethodImplAttributes.InternalCall
-            // TODO: Figure out what flag 'strict' corresponds to.
-            let mflags = MethodAttributes.Public ||| MethodAttributes.HideBySig ||| MethodAttributes.Virtual
 
             let ctor = // TODO: Create easier way to make methods and constructors whose implementations are 'runtime'
                 let row =
                     MethodDefRow (
                         MethodBody.none,
                         // TODO: Does this correspond to 'runtime' keyword?
-                        iflags,
+                        DelegateHelpers.implFlags,
                         ConstructorFlags(Public, true).Value ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName,
                         Identifier.ofStr ".ctor",
                         DelegateHelpers.ctorSignature,
@@ -162,8 +161,8 @@ type Unsafe private () = class
                 let row =
                     MethodDefRow (
                         MethodBody.none,
-                        iflags,
-                        mflags,
+                        DelegateHelpers.implFlags,
+                        delegateDef.MethodFlags,
                         Identifier.ofStr "Invoke",
                         MethodDefSignature(true, false, Default, delegateDef.ReturnType, delegateDef.Parameters),
                         ParamList.noname
@@ -178,8 +177,8 @@ type Unsafe private () = class
                 let row =
                     MethodDefRow (
                         MethodBody.none,
-                        iflags,
-                        mflags,
+                        DelegateHelpers.implFlags,
+                        delegateDef.MethodFlags,
                         Identifier.ofStr "BeginInvoke",
                         MethodDefSignature(true, false, Default, ReturnType.encoded asyncCallback, parameters.ToImmutable()),
                         fun _ i ->
@@ -197,8 +196,8 @@ type Unsafe private () = class
                 let row =
                     MethodDefRow (
                         MethodBody.none,
-                        iflags,
-                        mflags,
+                        DelegateHelpers.implFlags,
+                        delegateDef.MethodFlags,
                         Identifier.ofStr "EndInvoke",
                         MethodDefSignature(true, false, Default, delegateDef.ReturnType, ImmutableArray.Create(ParamItem.create asyncResult)),
                         fun _ _ -> Param { ParamName = "result"; Flags = ParamFlags() }

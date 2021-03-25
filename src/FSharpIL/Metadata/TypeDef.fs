@@ -253,8 +253,9 @@ type SealedClassDef = ClassDef<SealedClassTag>
 /// Represents a sealed and abstract class, meaning that it can only contain static members.
 type StaticClassDef = ClassDef<StaticClassTag>
 
+// TODO: Allow addition of additional instance or static methods to delegates, and make beginInvoke and endInvoke methods optional (I.8.9.3)
 /// <summary>
-/// Represents a delegate type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Delegate"/> (I.8.9.3).
+/// Represents a delegate type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Delegate"/> (I.8.9.3 and II.14.6).
 /// </summary>
 type DelegateDef = struct
     val Access: TypeVisibility
@@ -263,14 +264,16 @@ type DelegateDef = struct
     val DelegateName: Identifier
     val TypeNamespace: string
     val Flags: TypeAttributes
+    val internal MethodFlags: MethodAttributes
 
-    internal new (access, returnType, parameters, name, ns, flags) =
+    internal new (access, returnType, parameters, name, ns, tflags, mflags) =
         { Access = access
           ReturnType = returnType
           Parameters = parameters
           DelegateName = name
-          Flags = flags
-          TypeNamespace = ns }
+          TypeNamespace = ns
+          Flags = tflags
+          MethodFlags = mflags }
 
     new
         (
@@ -279,11 +282,16 @@ type DelegateDef = struct
             parameters,
             name,
             [<Optional; DefaultParameterValue("")>] ns: string,
-            [<Optional; DefaultParameterValue(false)>] serializable: bool
+            [<Optional; DefaultParameterValue(false)>] serializable: bool,
+            [<Optional; DefaultParameterValue(false)>] newslot: bool,
+            [<Optional; DefaultParameterValue(false)>] strict: bool
         ) =
-        let mutable flags = TypeAttributes.AutoLayout ||| TypeAttributes.AnsiClass ||| TypeAttributes.Sealed ||| access.Tag
-        if serializable then flags <- flags ||| TypeAttributes.Serializable
-        DelegateDef(access, returnType, parameters, name, ns, flags)
+        let mutable tflags = TypeAttributes.AutoLayout ||| TypeAttributes.AnsiClass ||| TypeAttributes.Sealed ||| access.Tag
+        if serializable then tflags <- tflags ||| TypeAttributes.Serializable
+        let mutable mflags = MethodAttributes.Public ||| MethodAttributes.HideBySig ||| MethodAttributes.Virtual
+        if newslot then mflags <- mflags ||| MethodAttributes.NewSlot
+        if strict then mflags <- mflags ||| MethodAttributes.CheckAccessOnOverride
+        DelegateDef(access, returnType, parameters, name, ns, tflags, mflags)
 end
 
 /// <summary>
