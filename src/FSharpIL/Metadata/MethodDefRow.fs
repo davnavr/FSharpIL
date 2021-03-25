@@ -5,9 +5,6 @@ open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
 open System.Runtime.InteropServices
-open System.Text
-
-open Microsoft.FSharp.Core.Printf
 
 // NOTE: For methods, SpecialName has to be set if RTSpecialName is set.
 // NOTE: For methods, RTSpecialName and SpecialName is set when it is a ctor or cctor
@@ -33,10 +30,11 @@ type MethodImplFlags = struct
     interface IFlags<MethodImplAttributes> with member this.Value = this.Value
 end
 
+[<IsReadOnly; Struct>]
 type MethodCallingConventions =
     | Default
     | VarArg
-    // | Generic // of count: int
+    | Generic of count: uint32
 
 [<Flags>]
 type internal CallingConvention =
@@ -53,19 +51,13 @@ type MethodDefSignature internal
     (
         hasThis: bool,
         explicitThis: bool,
-        cconv: MethodCallingConventions,
+        cconventions: MethodCallingConventions,
         retType: ReturnTypeItem,
         parameters: ImmutableArray<ParamItem>
     ) =
-    member _.CallingConventions = cconv
-    member internal _.Flags =
-        let mutable flags =
-            match cconv with
-            | Default -> CallingConvention.Default
-            | VarArg -> CallingConvention.VarArg
-        if hasThis then flags <- flags ||| CallingConvention.HasThis
-        if explicitThis then flags <- flags ||| CallingConvention.ExplicitThis
-        flags
+    member _.HasThis = hasThis
+    member _.ExplicitThis = explicitThis
+    member _.CallingConventions = cconventions
     member _.ReturnType = retType
     member _.Parameters: ImmutableArray<ParamItem> = parameters
 

@@ -124,11 +124,21 @@ module internal Heap =
             let signature = method.Signature
             if not (blob.MethodDef.ContainsKey signature) then
                 let pos = writer.Position
-                writer.Writer.WriteU1 signature.Flags
+                let gcount, cconventions =
+                    match signature.CallingConventions with
+                    | Default -> ValueNone, CallingConvention.Default
+                    | VarArg -> ValueNone, CallingConvention.VarArg
+                    | Generic cnt -> ValueSome cnt, CallingConvention.Generic
 
-                //match signature.CallingConventions with
-                //| MethodCallingConventions.Generic count -> invalidOp "TODO: Write number of generic parameters."
-                //| _ -> ()
+                let mutable flags = cconventions
+                if signature.HasThis then flags <- flags ||| CallingConvention.HasThis
+                if signature.ExplicitThis then flags <- flags ||| CallingConvention.ExplicitThis
+                writer.Writer.WriteU1 flags
+
+                // GenParamCount
+                match gcount with
+                | ValueSome cnt -> writer.CompressedUnsigned cnt
+                | ValueNone -> ()
 
                 writer.CompressedUnsigned signature.Parameters.Length // ParamCount
                 writer.RetType signature.ReturnType

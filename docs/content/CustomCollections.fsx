@@ -220,6 +220,7 @@ let example() =
             MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
         |> builder.MemberRef.Add
 
+    // TODO: Change Cast method to have a GENERIC calling convention.
     // member this.Cast<'TOther>(): MyCollection<'TOther when 'TOther :> 'T>
     let cast =
         { Body =
@@ -279,11 +280,12 @@ let example() =
           Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
           MethodName = Identifier.ofStr "Cast"
           Signature =
-            EncodedType.MVar 0u
-            |> GenericInst.typeDef1 false (myCollection_1.AsTypeIndex())
-            |> EncodedType.GenericInst
-            |> ReturnType.encoded
-            |> InstanceMethodSignature
+            let retn =
+                EncodedType.MVar 0u
+                |> GenericInst.typeDef1 false (myCollection_1.AsTypeIndex())
+                |> EncodedType.GenericInst
+                |> ReturnType.encoded
+            InstanceMethodSignature(Generic 1u, retn, ImmutableArray.Empty)
           ParamList = ParamList.empty }
         |> ConcreteClass.addInstanceMethod builder myCollection_1
 
@@ -455,13 +457,27 @@ let example() =
 [<Tests>]
 let tests =
     let example' = lazy example()
-    let metadata = lazy PEFile.toCecilModule example'.Value
+    let metadata =
+        lazy
+            let mdle = PEFile.toCecilModule example'.Value
+            let t = mdle.GetType("Example", "MyCollection`1")
+            {| Module = mdle
+               MyCollection_1 = t
+               MyCollection_Cast = t.Methods |> Seq.find (fun mthd -> mthd.Name = "Cast") |}
 
-    afterRunTests <| fun() -> if metadata.IsValueCreated then metadata.Value.Dispose()
+    afterRunTests <| fun() -> if metadata.IsValueCreated then metadata.Value.Module.Dispose()
 
     testList "custom collection types" [
         testCase "can save to disk" <| fun() ->
             let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "CustomCollections.dll")
             WritePE.toPath path example'.Value
+
+        testCase "cast method has no parameters" <| fun() ->
+            let cast = metadata.Value.MyCollection_Cast
+            test <@ cast.Parameters.Count = 0 @>
+
+        testCase "cast method has correct return type" <| fun() ->
+            let retn = metadata.Value.MyCollection_Cast.ReturnType
+            test <@ retn.FullName = "Example.MyCollection`1<TOther>" @>
     ]
 #endif
