@@ -142,7 +142,7 @@ type Unsafe private () = class
             )
         match result with
         | Ok del' ->
-            let trow = del'.ChangeTag<TypeDefRow>()
+            let trow = del'.AsTypeIndex()
 
             let ctor = // TODO: Create easier way to make methods and constructors whose implementations are 'runtime'
                 let row =

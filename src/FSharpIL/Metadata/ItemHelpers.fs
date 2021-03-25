@@ -31,7 +31,7 @@ module ItemExtensions =
 
 namespace FSharpIL.Metadata
 
-open System
+open System.Collections.Immutable
 
 [<AutoOpen>]
 module ItemHelpers =
@@ -57,3 +57,5 @@ module LocalVariable =
         LocalVariable(LocalVariableTag.ByRef, modifiers, constraints, ltype)
     let TypedByRef modifiers constraints (ltype: EncodedType) =
         LocalVariable(LocalVariableTag.TypedByRef, modifiers, constraints, ltype)
+
+    let encoded (etype: EncodedType) = Type ImmutableArray.Empty ImmutableArray.Empty etype

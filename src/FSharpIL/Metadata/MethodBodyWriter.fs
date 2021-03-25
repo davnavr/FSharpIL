@@ -39,6 +39,8 @@ type BranchTarget = struct
         then writer.SkipBytes 1u
         else writer.SkipBytes 4u
 
+    // TODO: Make this method internal so users won't have to deal with raw offsets.
+    // TODO: If this method is kept public, consider adding additional methods to MethodBodyWriter for users that need to avoid using methods that automatically generate the short form of opcodes.
     /// <summary>Sets the target of a branch instruction.</summary>
     /// <param name="offset">
     /// A byte offset from the branch instruction, where a value of <c>0</c> targets the next instruction.
@@ -62,7 +64,7 @@ end
 
 [<RequireQualifiedAccess>]
 module private LocalVarIndex =
-    let (|Simple|Short|Long|) (index: uint16) =
+    let inline (|Simple|Short|Long|) (index: uint16) =
         if index <= 0xFFus then
             if index <= 3us then Simple else Short
         elif index < 0xFFFFus then Long
@@ -94,7 +96,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0x02 to 0x05, 0x0E, 0xFE 0x09) Writes an instruction that loads an argument onto the stack (III.3.38).
     /// </summary>
     /// <remarks>
-    /// For argument numbers 0 through 3, and for argument numbers less than 255, the short forms of the opcodes are used.
+    /// For argument numbers <c>0</c> through <c>3</c>, and for argument numbers less than <c>256</c>, the corresponding short forms of theinstruction is used.
     /// </remarks>
     member this.Ldarg(num: uint16) =
         if num <= 255us then
@@ -124,7 +126,21 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
             content.Writer.WriteU2 index
 
     /// <summary>
-    /// (0x0A to 0x0D, 0x13, 0xFE 0x0E) Writes an instruction that pops a value from the stack and stores in into a local
+    /// (0x10, 0xFE 0x0B) Writes an instruction that pops a value from the stack and stores it into the specified argument slot
+    /// (III.3.61).
+    /// </summary>
+    /// <remarks>For argument numbers less than <c>256</c> the short form of the instruction is used.</remarks>
+    member this.Starg(num: uint16) =
+        if num <= 255us then
+            this.WriteU1 0x10uy
+            this.WriteU1(uint8 num)
+        else
+            this.WriteU1 0xFEuy
+            this.WriteU1 0x0Buy
+            content.Writer.WriteU2 num
+
+    /// <summary>
+    /// (0x0A to 0x0D, 0x13, 0xFE 0x0E) Writes an instruction that pops a value from the stack and stores it into a local
     /// variable (III.3.43).
     /// </summary>
     /// <exception cref="T:System.ArgumentOutOfRangeException">
@@ -407,6 +423,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     // member this.Conv_ovf__un
 
     member private this.CallvirtMethodRef method = this.Call(0x6Fuy, method, 0xAuy)
+    member private this.CallvirtMethodDef method = this.Call(0x6Fuy, method, 0x6uy)
 
     /// <summary>
     /// (0x6F) Writes an instruction that calls a late-bound method specified by a <c>MethodRef</c> with a <c>DEFAULT</c>
@@ -425,6 +442,9 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// calling convention (III.4.2).
     /// </summary>
     member this.Callvirt(method: RawIndex<MethodRefVarArg>) = this.CallvirtMethodRef method
+
+    /// <summary>(0x6F) Writes an instruction that calls a late-bound method specified by an instance method (III.4.2).</summary>
+    member this.Callvirt(method: RawIndex<InstanceMethod>) = this.CallvirtMethodDef method
 
     /// <summary>
     /// (0x72) Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
@@ -549,6 +569,20 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0xA5) Writes an instruction that "extracts a value-type" as a type specified by a <c>TypeSpec</c> token (III.4.33).
     /// </summary>
     member this.Unbox_any(tspec: RawIndex<TypeSpecRow>) = this.Unbox_any(tspec, 0x1Buy)
+
+    member private this.Ldftn(method: RawIndex<_>, table) =
+        this.WriteU1 0xFEuy
+        this.WriteU1 0x06uy
+        this.WriteMetadataToken(uint32 method, table)
+
+    /// <summary>
+    /// (0xFE 0x06) Writes an instruction that pushes "a pointer to a method" specified by a <c>MethodDef</c> onto the stack
+    /// (III.3.41)
+    /// </summary>
+    member this.Ldftn(method: RawIndex<MethodDefRow>) = this.Ldftn(method, 0x6uy)
+
+    /// <summary>(0xFE 0x06) Writes an instruction that pushes a pointer to a static method onto the stack (III.3.41)</summary>
+    member this.Ldftn(method: RawIndex<StaticMethod>) = this.Ldftn(method.AsMethodIndex())
 
     // TODO: Add checks to ensure that the next written instruction after tail. is ret
     member private this.Tail() = this.WriteU1 0xFEuy; this.WriteU1 0x14uy

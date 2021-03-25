@@ -35,6 +35,7 @@ end
 module ConcreteClass =
     let addTypeDef builder classDef = Unchecked.ConcreteClass.addTypeDef builder classDef |> throwOnError
     let addInstanceMethod builder owner method = Unchecked.ConcreteClass.addInstanceMethod builder owner method |> throwOnError
+    let addStaticMethod builder owner method = Unchecked.ConcreteClass.addStaticMethod builder owner method |> throwOnError
     let addConstructor builder owner method = Unchecked.ConcreteClass.addConstructor builder owner method |> throwOnError
     let addInstanceField builder owner field = Unchecked.ConcreteClass.addInstanceField builder owner field |> throwOnError
 

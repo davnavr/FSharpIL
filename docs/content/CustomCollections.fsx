@@ -170,7 +170,7 @@ let example() =
     let ctor =
         let body content =
             let wr = MethodBodyWriter content
-            // = MyCollection(Array.zeroCreate<'T> capacity, 0)
+            // = new Example.MyCollection(Array.zeroCreate<'T> capacity, 0)
             wr.Ldarg 0us
             wr.Ldarg 1us
             wr.Newarr tparam
@@ -198,7 +198,7 @@ let example() =
             EncodedType.SZArray(ImmutableArray.Empty, EncodedType.MVar 0u) // other: 'TOther[]
             EncodedType.I4 // i: int32
         ]
-        |> List.map (LocalVariable.Type ImmutableArray.Empty ImmutableArray.Empty)
+        |> List.map LocalVariable.encoded
         |> ImmutableArray.CreateRange
         |> builder.StandAloneSig.AddLocals
         |> ValueSome
@@ -220,8 +220,7 @@ let example() =
             MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
         |> builder.MemberRef.Add
 
-    // TODO: Change Cast method to have a GENERIC calling convention.
-    // member this.Cast<'TOther>(): MyCollection<'TOther when 'TOther :> 'T>
+    // member this.Cast<'TOther>(): Example.MyCollection<'TOther when 'TOther :> 'T>
     let cast =
         { Body =
             fun content ->
@@ -306,7 +305,7 @@ let example() =
                 EncodedType.I4 // len: int32
                 tarray // replacement: 'T[]
             ]
-            |> List.map (LocalVariable.Type ImmutableArray.Empty ImmutableArray.Empty)
+            |> List.map LocalVariable.encoded
             |> ImmutableArray.CreateRange
             |> builder.StandAloneSig.AddLocals
             |> ValueSome
@@ -401,7 +400,7 @@ let example() =
     { Body =
         let locals =
             // result: 'T[]
-            LocalVariable.Type ImmutableArray.Empty ImmutableArray.Empty tarray
+            LocalVariable.encoded tarray
             |> ImmutableArray.Create
             |> builder.StandAloneSig.AddLocals
             |> ValueSome

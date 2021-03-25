@@ -9,6 +9,7 @@ open FSharpIL.Metadata
 type IndexConversions =
     [<Extension>] static member inline private ToTypeIndex(index: RawIndex<_>) = RawIndex<TypeDefRow> index.Value
     [<Extension>] static member AsTypeIndex(index: RawIndex<ClassDef<_>>) = index.ToTypeIndex()
+    [<Extension>] static member AsTypeIndex(index: RawIndex<DelegateDef>) = index.ToTypeIndex()
     [<Extension>] static member AsTypeIndex(index: RawIndex<StructDef>) = index.ToTypeIndex()
     [<Extension>] static member AsMethodIndex(index: RawIndex<Method<_, _, _>>) = RawIndex<MethodDefRow> index.Value
     [<Extension>] static member AsMethodIndex(index: RawIndex<Constructor<_, _>>) = RawIndex<MethodDefRow> index.Value
