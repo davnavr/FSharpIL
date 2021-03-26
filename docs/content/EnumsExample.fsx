@@ -5,10 +5,11 @@
 module FSharpIL.EnumsExample
 
 open Expecto
-
 open Swensen.Unquote
 
 open System.IO
+
+open Mono.Cecil
 
 open FSharpIL
 #endif
@@ -76,6 +77,13 @@ let example() =
     // | D = -3
     myenum_values.TryAdd(Identifier.ofStr "D", IntegerConstant -3) |> ignore
 
+    // | E = -512
+    myenum_values.TryAdd(Identifier.ofStr "E", IntegerConstant -512) |> ignore
+
+    // | F = 12345678
+    myenum_values.TryAdd(Identifier.ofStr "F", IntegerConstant 12345678) |> ignore
+
+    // type MyEnum
     let myenum =
         Unsafe.AddEnum (
             builder,
@@ -98,10 +106,22 @@ let example() =
 [<Tests>]
 let tests =
     let example' = lazy example()
+    let metadata = lazy PEFile.toCecilModule example'.Value
+
+    afterRunTests <| fun() -> if metadata.IsValueCreated then metadata.Value.Dispose()
 
     testList "enums example" [
         testCase "can save to disk" <| fun() ->
             let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "EnumsExample.dll")
             WritePE.toPath path example'.Value
+
+        testCase "enum has correct field values" <| fun() ->
+            let expected = List.map Some [ 0; 1; 256; -3; -512; 12345678 ]
+            let actual =
+                metadata.Value.GetType("EnumsExample", "MyEnum").Fields
+                |> Seq.where (fun field -> field.Attributes.HasFlag FieldAttributes.Static)
+                |> Seq.map (fun field -> Option.ofObj field.Constant |> Option.map unbox<int32>)
+                |> List.ofSeq
+            expected =! actual
     ]
 #endif

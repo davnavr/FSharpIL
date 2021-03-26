@@ -20,7 +20,7 @@ type internal BlobWriter = struct
     member this.Position = this.Writer.Position
 
     /// <summary>Writes an unsigned compressed integer in big-endian order (II.23.2).</summary>
-    /// <exception cref="System.ArgumentException">
+    /// <exception cref="T:System.ArgumentOutOfRangeException">
     /// Thrown when the <paramref name="value"/> is greater than the maximum compressed unsigned integer.
     /// </exception>
     member this.CompressedUnsigned(value: uint32) =
@@ -41,7 +41,32 @@ type internal BlobWriter = struct
 
     member inline this.CompressedUnsigned value = this.CompressedUnsigned(uint32 value)
 
-    member _.CompressedSigned(value: int32) = failwith "TODO: Implement writing of compressed integers"; ()
+    /// <summary>Writes a signed compressed integer (II.23.2).</summary>
+    /// <exception cref="T:System.ArgumentOutOfRangeException">
+    /// Thrown when the <paramref name="value"/> is not in the range <c>-2^28</c> and <c>2^28 - 1</c> inclusive.
+    /// </exception>
+    member this.CompressedSigned(value: int32) =
+        // See https://docs.microsoft.com/en-us/dotnet/api/system.reflection.metadata.blobbuilder.writecompressedsignedinteger?view=net-5.0
+        if value >= -64 && value < 64 then
+            // Bit 0 contains sign bit, bit 7 remains clear
+            let mutable result = abs value |> uint8
+            result <- (result &&& 0b0011_1111uy) <<< 1
+            if value < 0 then result <- result ||| 1uy
+            this.Writer.WriteU1 value
+        elif value >= -8192 && value < 8192 then // between -2^13 and 2^13 - 1 inclusive
+            // Sets bit 15, bit 14 remains clear, and sign bit is stored in bit 0
+            let mutable result = 32768us ||| (abs value |> uint16)
+            result <- (result &&& 0b0001_1111_1111_1111us) <<< 1
+            if value < 0 then result <- result ||| 1us
+            let (U2 (msb, lsb)) = result
+            this.Writer.WriteU1 msb
+            this.Writer.WriteU1 lsb
+        elif value >= -268435456 && value < 268435456 then // between -2^28 and 2^28 - 1 inclusive
+            invalidOp "TODO: Implement writing of big compressed integers"
+        else
+            ArgumentOutOfRangeException("value", value, "Cannot compress signed integer") |> raise
+
+    member inline this.CompressedSigned value = this.CompressedSigned(int32 value)
 
     member this.ArrayShape(shape: ArrayShape) =
         this.CompressedUnsigned shape.Rank
@@ -49,8 +74,6 @@ type internal BlobWriter = struct
         for size in shape.Sizes do this.CompressedUnsigned size
         this.CompressedUnsigned shape.LowerBounds.Length // NumLoBounds
         for bound in shape.LowerBounds do this.CompressedSigned bound // LoBound
-
-    member inline this.CompressedSigned value = this.CompressedSigned(int32 value)
 
     /// <summary>Writes a compact index into the <c>TypeDef</c>, <c>TypeRef</c>, or <c>TypeSpec</c> tables (II.23.2.8)</summary>
     /// <exception cref="T:System.ArgumentOutOfRangeException">

@@ -117,7 +117,7 @@ type CliMetadata (builder: CliMetadataBuilder) =
             bits <- bits ||| (1UL <<< 0x2C)
             uint32 genericParamConstraints.Count |> counts.Add
 
-        bits, counts
+        bits, counts.ToImmutable()
 
     member val Header = builder.Header
     /// <summary>Corresponds to the <c>Flags</c> field of the CLI header (II.25.3.3).</summary>

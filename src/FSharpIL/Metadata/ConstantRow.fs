@@ -48,6 +48,11 @@ type IntegerConstant internal (tag: IntegerType, value: int64) =
     member _.I8 = value
     member _.U8 = uint64 value
 
+    override this.ToString() =
+        match tag with
+        | IntegerType.I4 -> sprintf "int32(%i)" this.I4
+        | _ -> "?"
+
 [<RequireQualifiedAccess>]
 [<IsReadOnly; Struct>]
 type ConstantValue =

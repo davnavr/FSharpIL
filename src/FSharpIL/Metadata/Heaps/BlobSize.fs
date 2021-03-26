@@ -7,11 +7,12 @@ let MaxCompressedUnsigned = 0x1FFF_FFFFu
 /// <summary>Calculates how many bytes are needed to store the specified value in an unsigned compressed integer (II.23.2). </summary>
 let ofUnsigned (value: uint32) =
     if value > MaxCompressedUnsigned then
-        sprintf
-            "Unable to compress integer %x, the maximum value for compressed unsigned integers is %x."
-            value
-            MaxCompressedUnsigned
-        |> invalidArg (nameof value)
+        let msg =
+            sprintf
+                "Unable to compress integer %x, the maximum value for compressed unsigned integers is %x."
+                value
+                MaxCompressedUnsigned
+        System.ArgumentOutOfRangeException("value", value, msg) |> raise
     elif value > 0x3FFFu then 4u
     elif value > 0x7Fu then 2u
     else 1u

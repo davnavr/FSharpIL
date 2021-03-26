@@ -373,10 +373,9 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
     // Constant (0x0B)
     for row in tables.Constant.Rows do
-        // Type
-        match row.Value with
-        | ConstantValue.Integer value ->
-            let ctype =
+        let ctype =
+            match row.Value with
+            | ConstantValue.Integer value ->
                 match value.Tag with
                 | IntegerType.Bool -> ElementType.Boolean
                 | IntegerType.Char -> ElementType.Char
@@ -389,12 +388,11 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
                 | IntegerType.I8 -> ElementType.I8
                 | IntegerType.U8 -> ElementType.U8
                 | _ -> sprintf "Invalid constant integer type for parent %O" row.Parent |> invalidOp
-            writer.WriteU1 ctype
-        | ConstantValue.String _ -> writer.WriteU1 ElementType.String
-        | ConstantValue.Null ->
-            writer.WriteU1 ElementType.Class
-            writer.WriteU4 0u
+            | ConstantValue.String _ -> ElementType.String
+            | ConstantValue.Null -> ElementType.Class
 
+        writer.WriteU1 ctype // Type
+        writer.WriteU1 0uy // Padding
         constantParent.WriteIndex(row.Parent, writer)
         info.BlobStream.WriteIndex(row.Value, writer)
 
