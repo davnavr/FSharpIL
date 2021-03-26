@@ -257,6 +257,7 @@ type StaticClassDef = ClassDef<StaticClassTag>
 /// <summary>
 /// Represents a delegate type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Delegate"/> (I.8.9.3 and II.14.6).
 /// </summary>
+[<IsReadOnly>]
 type DelegateDef = struct
     val Access: TypeVisibility
     val ReturnType: ReturnTypeItem
@@ -294,14 +295,65 @@ type DelegateDef = struct
         DelegateDef(access, returnType, parameters, name, ns, tflags, mflags)
 end
 
+[<IsReadOnly; Struct>]
+type EnumValue internal (name: Identifier, value: IntegerConstant) =
+    member _.Name = name
+    member _.Value = value
+
+[<IsReadOnly; Struct>]
+type EnumValueList internal (utype: IntegerType, values: ImmutableArray<EnumValue>) =
+    member _.Count = values.Length
+    member _.UnderlyingType = utype
+    member _.GetEnumerator() = values.GetEnumerator()
+    member _.ToImmutableArray() = values
+
+/// <exception cref="T:System.ArgumentOutOfRangeException">Thrown when the underlying type of the enum is invalid.</exception>
+[<Sealed>]
+type EnumValueListBuilder (utype: IntegerType, capacity: int32) =
+    do if utype < IntegerType.Bool || utype > IntegerType.U8 then
+        let msg = "A valid numeric type must be specifed for the underlying type of an enumeration"
+        ArgumentOutOfRangeException("utype", utype, msg) |> raise
+
+    let lookup = Dictionary<Identifier, IntegerConstant> capacity
+    new (utype) = EnumValueListBuilder(utype, 1)
+    member _.UnderlyingType = utype
+    member _.TryAdd(name, value) = lookup.TryAdd(name, value) // TODO: Check that types match.
+    member _.ToImmutable() =
+        let values = ImmutableArray.CreateBuilder<EnumValue> lookup.Count
+        for KeyValue(name, value) in lookup do values.Add(EnumValue(name, value))
+        EnumValueList(utype, values.ToImmutable())
+
+// TODO: Figure out how to avoid addition of methods to Enum type. Maybe prevent conversion of EnumDef index to TypeDefRow index?
 /// <summary>
-/// Represents an enumeration type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Enum"/>.
+/// Represents an enumeration type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Enum"/> (II.14.3).
 /// </summary>
-type EnumDef =
-  { Access: TypeVisibility
-    EnumName: Identifier
-    TypeNamespace: string
-    Values: unit }
+[<IsReadOnly>]
+type EnumDef = struct
+    val Access: TypeVisibility
+    val EnumName: Identifier
+    val TypeNamespace: string
+    val Values: EnumValueList
+    val Flags: TypeAttributes
+
+    internal new (access, values, flags, name, ns) =
+        { Access = access
+          Flags = flags
+          EnumName = name
+          TypeNamespace = ns
+          Values = values }
+
+    new
+        (
+            access: TypeVisibility,
+            values,
+            name,
+            [<Optional; DefaultParameterValue("")>] ns: string,
+            [<Optional; DefaultParameterValue(true)>] serializable: bool
+        ) =
+        let mutable flags = access.Tag ||| TypeAttributes.Sealed ||| TypeAttributes.AutoLayout
+        if serializable then flags <- flags ||| TypeAttributes.Serializable
+        EnumDef(access, values, flags, name, ns)
+end
 
 type InterfaceDef =
     { Access: TypeVisibility

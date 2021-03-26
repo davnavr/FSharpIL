@@ -130,7 +130,14 @@ type Unsafe private () = class
     /// <param name="asyncResult">A <c>Type</c> corresponding to the <see cref="T:System.IAsyncResult"/> type.</param>
     /// <param name="asyncCallback">A <c>Type</c> corresponding to the <see cref="T:System.AsyncCallback"/> type.</param>
     /// <param name="delegateDef"/>
-    static member private AddDelegate(builder, del, asyncResult, asyncCallback, delegateDef: DelegateDef): Result<DelegateInfo, _> =
+    static member private AddDelegate
+        (
+            builder,
+            del,
+            asyncResult,
+            asyncCallback,
+            delegateDef: inref<DelegateDef>
+        ): Result<DelegateInfo, _> =
         let result =
             Unsafe.AddTypeDef<DelegateDef> (
                 builder,
@@ -170,7 +177,8 @@ type Unsafe private () = class
                 builder.Method.TryAdd(trow, row).Value.ChangeTag<InstanceMethod>()
 
             let beginInvoke =
-                let parameters = ImmutableArray.CreateBuilder(delegateDef.Parameters.Length + 2)
+                let pcount = delegateDef.Parameters.Length
+                let parameters = ImmutableArray.CreateBuilder(pcount + 2)
                 parameters.AddRange delegateDef.Parameters
                 parameters.Add(ParamItem.create asyncResult) // callback
                 parameters.Add(ParamItem.create EncodedType.Object) // objects
@@ -183,9 +191,9 @@ type Unsafe private () = class
                         MethodDefSignature(true, false, Default, ReturnType.encoded asyncCallback, parameters.ToImmutable()),
                         fun _ i ->
                             let name =
-                                if i = delegateDef.Parameters.Length
+                                if i = pcount
                                 then "callback"
-                                elif i = delegateDef.Parameters.Length + 1
+                                elif i = pcount + 1
                                 then "objects"
                                 else ""
                             Param { ParamName = name; Flags = ParamFlags() }
@@ -208,7 +216,7 @@ type Unsafe private () = class
         | Error err -> Error err
 
     static member AddDelegate(builder, del, asyncResult, asyncCallback, delegateDef) =
-        Unsafe.AddDelegate(builder, Extends.TypeRef del, asyncResult, asyncCallback, delegateDef)
+        Unsafe.AddDelegate(builder, Extends.TypeRef del, asyncResult, asyncCallback, &delegateDef)
 
     static member AddDelegate(builder, lookup: TypeLookupCache, delegateDef) =
         // TODO: Cleanup these local variables
@@ -226,10 +234,69 @@ type Unsafe private () = class
                 // NOTE: This currently assumes System.Delegate is an abstract class, maybe make a special unsafe Extends case for TypeDefRow?
                 | TypeLookupResult.TypeDef tdef -> tdef.ChangeTag() |> Extends.AbstractClass
                 | TypeLookupResult.TypeRef tref -> Extends.TypeRef tref
-            Unsafe.AddDelegate(builder, del'', asyncResult', asyncCallback', delegateDef)
+            Unsafe.AddDelegate(builder, del'', asyncResult', asyncCallback', &delegateDef)
         | ValueNone, _, _ -> MissingTypeError(system, delName).ToResult()
         | _, ValueNone, _ -> MissingTypeError(system, asyncResultName).ToResult()
         | _, _, ValueNone -> MissingTypeError(system, asyncCallbackName).ToResult()
+
+    static member private AddEnum(builder, enum, enumDef: inref<EnumDef>): Result<EnumInfo, _> =
+        let result =
+            Unsafe.AddTypeDef<EnumDef> (
+                builder,
+                enumDef.Flags,
+                enumDef.EnumName,
+                enumDef.TypeNamespace,
+                enum,
+                TypeVisibility.enclosingClass enumDef.Access
+            )
+        match result with
+        | Ok enum' ->
+            let trow = enum'.ChangeTag<TypeDefRow>()
+            let values = ImmutableArray.CreateBuilder enumDef.Values.Count
+
+            let ivalue =
+                let vtype =
+                    match enumDef.Values.UnderlyingType with
+                    | IntegerType.Bool -> EncodedType.Boolean
+                    | IntegerType.Char -> EncodedType.Char
+                    | IntegerType.I1 -> EncodedType.I1
+                    | IntegerType.U1 -> EncodedType.U1
+                    | IntegerType.I2 -> EncodedType.I2
+                    | IntegerType.U2 -> EncodedType.U2
+                    | IntegerType.I4 -> EncodedType.I4
+                    | IntegerType.U4 -> EncodedType.U4
+                    | IntegerType.I8 -> EncodedType.I8
+                    | IntegerType.U8 -> EncodedType.U8
+                    | _ -> sprintf "Invalid underlying type for enumeration \"%O\"" enumDef.EnumName |> invalidArg "enumDef"
+                let row =
+                    FieldRow (
+                        FieldAttributes.RTSpecialName ||| FieldAttributes.SpecialName ||| FieldAttributes.Public,
+                        Identifier.ofStr "value__",
+                        FieldSignature(ImmutableArray.Empty, vtype)
+                    )
+                builder.Field.TryAdd(trow, row).Value.ChangeTag<InstanceField>()
+
+            for value in enumDef.Values do
+                let vtype = TypeDefOrRefOrSpecEncoded.TypeDef trow |> EncodedType.ValueType
+                let field =
+                    FieldRow (
+                        FieldAttributes.HasDefault ||| FieldAttributes.Static ||| FieldAttributes.Literal,
+                        value.Name,
+                        FieldSignature(ImmutableArray.Empty, vtype)
+                    )
+                let fieldi = builder.Field.TryAdd(trow, field).Value.ChangeTag<StaticField>()
+
+                let cvalue = Unchecked.defaultof<_> // TODO: Add enum values to constant table.
+
+                values.Add(EnumValueRow(fieldi, cvalue))
+
+            // TODO: Add enum values to constant table.
+            EnumInfo(enum', ivalue, values.ToImmutable()) |> Ok
+        | Error err -> Error err
+
+    static member AddEnum(builder, enum: RawIndex<TypeRef>, enumDef) = Unsafe.AddEnum(builder, Extends.TypeRef enum, &enumDef)
+
+    //static member AddEnum(builder, lookup: TypeLookupCache, enumDef)
 
     static member private AddStruct(builder, valueType, structDef: StructDef) =
         Unsafe.AddTypeDef<StructDef>(

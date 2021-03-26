@@ -12,12 +12,6 @@ let private throwOnError: Result<_, ValidationError> -> _ =
 
 [<AbstractClass; Sealed>]
 type Unsafe = class
-    static member AddStruct(builder, valueType: RawIndex<TypeRef>, structDef): RawIndex<_> =
-        Unchecked.Unsafe.AddStruct(builder, valueType, structDef) |> throwOnError
-
-    static member AddDelegate(builder, del, asyncResult, asyncCallback, delegateDef) =
-        Unchecked.Unsafe.AddDelegate(builder, del, asyncResult, asyncCallback, delegateDef) |> throwOnError
-
     static member AddDelegate(builder, lookup: TypeLookupCache, delegateDef) =
         Unchecked.Unsafe.AddDelegate(builder, lookup, delegateDef) |> throwOnError
 
@@ -26,6 +20,15 @@ type Unsafe = class
 
     static member AddTypeDef<'Tag>(builder, flags, typeName, extends): RawIndex<_> =
         Unsafe.AddTypeDef<'Tag>(builder, flags, typeName, String.Empty, extends, ValueNone)
+
+    static member AddDelegate(builder, del, asyncResult, asyncCallback, delegateDef) =
+        Unchecked.Unsafe.AddDelegate(builder, del, asyncResult, asyncCallback, delegateDef) |> throwOnError
+
+    static member AddEnum(builder, enum: RawIndex<TypeRef>, enumDef) =
+        Unchecked.Unsafe.AddEnum(builder, enum, enumDef) |> throwOnError
+
+    static member AddStruct(builder, valueType: RawIndex<TypeRef>, structDef): RawIndex<_> =
+        Unchecked.Unsafe.AddStruct(builder, valueType, structDef) |> throwOnError
 
     static member AddInstanceProperty(builder, parent, property, getter, setter) =
         Unchecked.Unsafe.AddInstanceProperty(builder, parent, property, getter = getter, setter = setter) |> throwOnError

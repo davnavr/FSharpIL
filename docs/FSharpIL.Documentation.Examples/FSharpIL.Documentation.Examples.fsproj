@@ -9,10 +9,11 @@
   <ItemGroup>
     <Compile Include="ExampleHelpers.fs" />
     <Compile Include="..\content\HelloWorld.fsx" />
+    <Compile Include="..\content\DelegatesExample.fsx" />
+    <Compile Include="..\content\EnumsExample.fsx" />
     <Compile Include="..\content\Factorial.fsx" />
     <Compile Include="..\content\CustomNumericTypes.fsx" />
     <Compile Include="..\content\CustomCollections.fsx" />
-    <Compile Include="..\content\DelegatesExample.fsx" />
     <Compile Include="$(RootDirectory)\test\FSharpIL.Tests\Test.fs" />
 
     <PackageReference Include="Expecto" Version="9.0.2" />
