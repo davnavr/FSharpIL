@@ -178,19 +178,17 @@ module internal Heap =
                 let pos = writer.Position
                 match row.Value with
                 | ConstantValue.Integer value ->
-                    // TODO: Figure out if these integers need to be compressed.
                     match value.Tag with
-                    | IntegerType.Bool -> invalidOp "TODO: Should booleans be a compressed signed or compressed unsigned integer?"
-                    | IntegerType.Char -> invalidOp "TODO: Should char be a compressed unsigned integer?"
-                    | IntegerType.I4 -> writer.Writer.WriteU4 value.U4 // TODO: Should this be little endian?
-                    //| IntegerType.I1
-                    //| IntegerType.I2
-                    //| IntegerType.I4
-                    //| IntegerType.I8 -> writer.CompressedSigned value.U1
-                    //| IntegerType.U1
-                    //| IntegerType.U2
-                    //| IntegerType.U4
-                    //| IntegerType.U8 -> writer.CompressedUnsigned value.U1
+                    | IntegerType.Bool
+                    | IntegerType.I1
+                    | IntegerType.U1 -> writer.Writer.WriteU1 value.U1
+                    | IntegerType.Char
+                    | IntegerType.I2
+                    | IntegerType.U2 -> writer.Writer.WriteU2 value.U2
+                    | IntegerType.I4
+                    | IntegerType.U4 -> writer.Writer.WriteU4 value.U4
+                    | IntegerType.I8
+                    | IntegerType.U8 -> writer.Writer.WriteU4 value.U4
                     | _ -> invalidOp "Cannot write integer constant blob for unknown integer type"
                 | ConstantValue.String value -> failwith "TODO: String constant values are not supported at this time"
                 | ConstantValue.Null -> writer.Writer.WriteU4 0u
