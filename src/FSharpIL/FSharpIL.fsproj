@@ -31,7 +31,7 @@
     <Compile Include="Metadata\MethodBody.fs" />
     <Compile Include="Metadata\MethodDefRow.fs" />
     <Compile Include="Metadata\TypeSpec.fs" />
-    <Compile Include="Metadata\Constant.fs" />
+    <Compile Include="Metadata\ConstantRow.fs" />
     <Compile Include="Metadata\TypeDef.fs" />
     <Compile Include="Metadata\GenericParam.fs" />
     <Compile Include="Metadata\InterfaceImpl.fs" />
@@ -43,7 +43,7 @@
     <Compile Include="Metadata\Items.fs" />
     <Compile Include="Metadata\ItemHelpers.fs" />
     <Compile Include="Metadata\Property.fs" />
-    <Compile Include="Metadata\ConstantParent.fs" />
+    <Compile Include="Metadata\ConstantTable.fs" />
     <Compile Include="Metadata\MethodSemantics.fs" />
     <Compile Include="Metadata\CustomAttribute.fs" />
     <Compile Include="Metadata\StandAloneSig.fs" />

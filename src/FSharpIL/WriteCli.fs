@@ -227,6 +227,10 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             + tables.TypeSpec.Count
         CodedIndex(total, 3, fun (index: MemberRefParent) -> uint32 index.Value, uint32 index.Tag)
 
+    let constantParent = // HasConstant
+        let total = tables.Field.Count + tables.Param.Length + tables.Property.Count
+        CodedIndex(total, 2, fun (index: ConstantParent) -> uint32 index.Value, uint32 index.Tag)
+
     let customAttriuteParent = // HasCustomAttribute
         let total =
             tables.MethodDef.Count
@@ -350,10 +354,6 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         writer.WriteU2(sequence + 1)
         info.StringsStream.WriteIndex(row.ParamName, writer)
 
-
-
-
-
     // InterfaceImpl (0x09)
     for row in tables.InterfaceImpl.Rows do
         tables.TypeDef.WriteSimpleIndex(row.Class, writer)
@@ -371,8 +371,32 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
         info.BlobStream.WriteIndex(row, writer) // Signature
 
+    // Constant (0x0B)
+    for row in tables.Constant.Rows do
+        // Type
+        match row.Value with
+        | ConstantValue.Integer value ->
+            let ctype =
+                match value.Tag with
+                | IntegerType.Bool -> ElementType.Boolean
+                | IntegerType.Char -> ElementType.Char
+                | IntegerType.I1 -> ElementType.I1
+                | IntegerType.U1 -> ElementType.U1
+                | IntegerType.I2 -> ElementType.I2
+                | IntegerType.U2 -> ElementType.U2
+                | IntegerType.I4 -> ElementType.I4
+                | IntegerType.U4 -> ElementType.U4
+                | IntegerType.I8 -> ElementType.I8
+                | IntegerType.U8 -> ElementType.U8
+                | _ -> sprintf "Invalid constant integer type for parent %O" row.Parent |> invalidOp
+            writer.WriteU1 ctype
+        | ConstantValue.String _ -> writer.WriteU1 ElementType.String
+        | ConstantValue.Null ->
+            writer.WriteU1 ElementType.Class
+            writer.WriteU4 0u
 
-
+        constantParent.WriteIndex(row.Parent, writer)
+        info.BlobStream.WriteIndex(row.Value, writer)
 
     // CustomAttribute (0x0C)
     for row in tables.CustomAttribute do

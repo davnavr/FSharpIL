@@ -94,7 +94,7 @@ module internal Heap =
             { Field = Dictionary metadata.Field.Count
               MethodDef = Dictionary metadata.MethodDef.Count
               MemberRef = Dictionary metadata.MemberRef.Count
-
+              Constant = Dictionary metadata.Constant.Count
               CustomAttribute = Dictionary metadata.CustomAttribute.Length
 
               Property = Dictionary metadata.Property.Count
@@ -172,6 +172,27 @@ module internal Heap =
                 | FieldRef { Signature = signature } -> writer.FieldSig signature
 
                 blobIndex pos memberRef blob.MemberRef
+
+        for row in metadata.Constant.Rows do
+            if not (blob.Constant.ContainsKey row.Value) then
+                let pos = writer.Position
+                match row.Value with
+                | ConstantValue.Integer value ->
+                    match value.Tag with
+                    | IntegerType.Bool -> invalidOp "TODO: Should booleans be a compressed signed or compressed unsigned integer?"
+                    | IntegerType.Char -> invalidOp "TODO: Should char be a compressed unsigned integer?"
+                    | IntegerType.I1
+                    | IntegerType.I2
+                    | IntegerType.I4
+                    | IntegerType.I8 -> writer.CompressedSigned value.U1
+                    | IntegerType.U1
+                    | IntegerType.U2
+                    | IntegerType.U4
+                    | IntegerType.U8 -> writer.CompressedUnsigned value.U1
+                    | _ -> invalidOp "Cannot write integer constant blob for unknown integer type"
+                | ConstantValue.String value -> failwith "TODO: String constant values are not supported at this time"
+                | ConstantValue.Null -> failwith "TODO: Implement writing of null constant, maybe point to the empty blob? (can just write 0 in WriteCli module)"
+                blobIndex pos row.Value blob.Constant
 
         for { Value = value } in metadata.CustomAttribute do
             match value with
@@ -295,6 +316,7 @@ module internal Heap =
         writeAll blobs.Field
         writeAll blobs.MethodDef
         writeAll blobs.MemberRef
+        writeAll blobs.Constant
         writeAll blobs.CustomAttribute
         writeAll blobs.Property
         writeAll blobs.TypeSpec

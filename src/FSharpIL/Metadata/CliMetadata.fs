@@ -43,18 +43,15 @@ type CliMetadata (builder: CliMetadataBuilder) =
         if not parameters.IsEmpty then
             bits <- bits ||| (1UL <<< 8)
             uint32 parameters.Length |> counts.Add
-
-
-
         if builder.InterfaceImpl.Count > 0 then
             bits <- bits ||| (1UL <<< 0x9)
             uint32 builder.InterfaceImpl.Count |> counts.Add
         if builder.MemberRef.Count > 0 then
             bits <- bits ||| (1UL <<< 0xA)
             uint32 builder.MemberRef.Count |> counts.Add
-
-
-
+        if builder.Constant.Count > 0 then
+            bits <- bits ||| (1UL <<< 0xB)
+            uint32 builder.Constant.Count |> counts.Add
         if builder.CustomAttribute.Count > 0 then
             bits <- bits ||| (1UL <<< 0xC)
             uint32 builder.CustomAttribute.Count |> counts.Add
@@ -142,10 +139,9 @@ type CliMetadata (builder: CliMetadataBuilder) =
     member val Field = builder.Field.ToImmutable()
     member _.MethodDef = methodDef
     member _.Param = parameters
-
     member val InterfaceImpl = builder.InterfaceImpl.ToImmutable()
     member val MemberRef = builder.MemberRef.ToImmutable()
-
+    member val Constant = builder.Constant.ToImmutable()
     member val CustomAttribute = builder.CustomAttribute.ToImmutableArray()
 
     member _.StandAloneSig = standAloneSig

@@ -13,13 +13,14 @@ type internal BlobIndex =
       /// The size of the contents of the blob pointed to by this index.
       Size: uint32 }
 
+// TODO: Figure out how to allow easy lookup of blob indices while avoiding copying of large structs.
 /// <summary>Represents the <c>#Blob</c> metadata stream (II.24.2.4).</summary>
 [<ReferenceEquality; NoComparison>]
 type internal BlobHeap =
     { Field: Dictionary<FieldSignature , BlobIndex>
       MethodDef: Dictionary<MethodDefSignature, BlobIndex>
       MemberRef: Dictionary<MemberRefRow, BlobIndex>
-
+      Constant: Dictionary<ConstantValue, BlobIndex>
       CustomAttribute: Dictionary<CustomAttributeSignature, BlobIndex>
 
       Property: Dictionary<PropertySignature, BlobIndex>
@@ -38,7 +39,7 @@ type internal BlobHeap =
         this.Field.Count
         + this.MethodDef.Count
         + this.MemberRef.Count
-
+        + this.Constant.Count
         + this.CustomAttribute.Count
 
         + this.Property.Count
@@ -61,6 +62,7 @@ type internal BlobHeap =
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.Field.Item signature, writer)
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.MethodDef.Item signature, writer)
     member this.WriteIndex(signature, writer) = this.WriteRawIndex(this.MemberRef.Item signature, writer)
+    member this.WriteIndex(value, writer) = this.WriteRawIndex(this.Constant.Item value, writer)
     member this.WriteIndex(signature, writer) =
         match signature with
         | Some signature' -> this.WriteRawIndex(this.CustomAttribute.Item signature', writer)

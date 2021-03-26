@@ -100,8 +100,8 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     member val InterfaceImpl = InterfaceImplTableBuilder()
     /// (0x0A)
     member val MemberRef: MemberRefTableBuilder = MemberRefTableBuilder()
-    // (0x0B)
-    // member Constant
+    /// (0x0B)
+    member val Constant = ConstantTableBuilder()
     /// (0x0C)
     member val CustomAttribute: CustomAttributeTable = CustomAttributeTable()
     // (0x0D)

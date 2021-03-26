@@ -21,6 +21,7 @@ type IntegerType =
     | I8 = 8uy
     | U8 = 9uy
 
+/// <summary>Represents an integer value in the <c>#Blob</c> heap that is referenced by the <c>Constant</c> table.</summary>
 [<IsReadOnly; Struct>]
 type IntegerConstant internal (tag: IntegerType, value: int64) =
     internal new (tag, value: uint64) = IntegerConstant(tag, int64 value)
@@ -47,8 +48,16 @@ type IntegerConstant internal (tag: IntegerType, value: int64) =
     member _.I8 = value
     member _.U8 = uint64 value
 
+[<RequireQualifiedAccess>]
 [<IsReadOnly; Struct>]
-type ConstantRow internal (ctype: ElementType, parent: ConstantParent) =
-    member internal _.Type = ctype
+type ConstantValue =
+    | Null
+    | Integer of int: IntegerConstant
+    //| Real of flt: RealConstant
+    | String of str: string
+
+/// <summary>Represents a row in the <c>Constant</c> table (II.22.9).</summary>
+[<IsReadOnly; Struct>]
+type ConstantRow internal (parent: ConstantParent, value: ConstantValue) =
     member _.Parent = parent
-    //member _.Value
+    member _.Value = value

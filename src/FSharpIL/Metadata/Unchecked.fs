@@ -284,11 +284,9 @@ type Unsafe private () = class
                         value.Name,
                         FieldSignature(ImmutableArray.Empty, vtype)
                     )
-                let fieldi = builder.Field.TryAdd(trow, field).Value.ChangeTag<StaticField>()
-
-                let cvalue = Unchecked.defaultof<_> // TODO: Add enum values to constant table.
-
-                values.Add(EnumValueRow(fieldi, cvalue))
+                let field' = builder.Field.TryAdd(trow, field).Value
+                let cvalue = builder.Constant.TryAdd(field', ConstantValue.Integer value.Value).Value
+                values.Add(EnumValueRow(field'.ChangeTag<StaticField>(), cvalue))
 
             // TODO: Add enum values to constant table.
             EnumInfo(enum', ivalue, values.ToImmutable()) |> Ok

@@ -315,9 +315,14 @@ type EnumValueListBuilder (utype: IntegerType, capacity: int32) =
         ArgumentOutOfRangeException("utype", utype, msg) |> raise
 
     let lookup = Dictionary<Identifier, IntegerConstant> capacity
+
     new (utype) = EnumValueListBuilder(utype, 1)
+
     member _.UnderlyingType = utype
-    member _.TryAdd(name, value) = lookup.TryAdd(name, value) // TODO: Check that types match.
+
+    member _.TryAdd(name, value: IntegerConstant) =
+        value.Tag = utype && lookup.TryAdd(name, value)
+
     member _.ToImmutable() =
         let values = ImmutableArray.CreateBuilder<EnumValue> lookup.Count
         for KeyValue(name, value) in lookup do values.Add(EnumValue(name, value))
