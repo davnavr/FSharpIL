@@ -513,6 +513,11 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// </summary>
     member this.Box(tspec: RawIndex<TypeSpecRow>) = this.Box(tspec, 0x1Buy)
 
+    /// <summary>
+    /// (0x8C) Writes an instruction that converts the integer value on the stack to an enumeration type (III.4.1).
+    /// </summary>
+    member this.Box(tspec: RawIndex<EnumDef>) = this.Box(tspec.ChangeTag<TypeSpecRow>())
+
     member private this.Newarr(index: RawIndex<_>, table) =
         this.WriteU1 0x8Duy
         this.WriteMetadataToken(uint32 index, table)

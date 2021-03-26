@@ -98,6 +98,39 @@ let example() =
         )
 
     (* Using Enumeration Types *)
+    // [<AbstractClass; Sealed>] type MyEnumShowcase
+    let examples =
+        { ClassName = Identifier.ofStr "MyEnumShowcase"
+          TypeNamespace = "EnumsExample"
+          Access = TypeVisibility.Public
+          Flags = ClassFlags() |> Flags.staticClass
+          Extends = Extends.TypeRef object }
+        |> StaticClass.addTypeDef builder
+
+    // static member Example(): unit
+    { MethodName = Identifier.ofStr "Example"
+      ImplFlags = MethodImplFlags()
+      Flags = StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod
+      ParamList = ParamList.empty
+      Signature = StaticMethodSignature ReturnType.itemVoid
+      Body =
+        let locals =
+            // value: EnumsExample.MyEnum
+            EncodedType.enumDef myenum.Row
+            |> LocalVariable.encoded
+            |> ImmutableArray.Create
+            |> builder.StandAloneSig.AddLocals
+            |> ValueSome
+        fun content ->
+            let wr = MethodBodyWriter content
+            // let mutable value = EnumsExample.MyEnum.B
+            wr.Ldc_i4 1
+            wr.Stloc 0us
+            wr.Ret()
+            MethodBody.Default
+        |> MethodBody.create locals }
+    |> StaticClass.addStaticMethod builder examples
+    |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

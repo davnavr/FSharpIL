@@ -164,6 +164,8 @@ type MethodSpec (garguments: ImmutableArray<EncodedType>) =
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EncodedType =
+    let enumDef (enumDef: RawIndex<EnumDef>) = enumDef.ChangeTag() |> TypeDefOrRefOrSpecEncoded.TypeDef |> EncodedType.ValueType
+
     let typeDefStruct typeDef = TypeDefOrRefOrSpecEncoded.TypeDef typeDef |> EncodedType.ValueType
     let typeRefClass typeRef = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.Class
     let typeRefStruct typeRef = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.ValueType
