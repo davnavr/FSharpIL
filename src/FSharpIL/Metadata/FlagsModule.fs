@@ -1,4 +1,5 @@
-﻿[<RequireQualifiedAccess>]
+﻿// TODO: Replace ValidFlags type, since it is annoying to call these functions even though most classes, fields, and methods only use one flag type anyway.
+[<RequireQualifiedAccess>]
 module FSharpIL.Metadata.Flags
 
 open System.Reflection

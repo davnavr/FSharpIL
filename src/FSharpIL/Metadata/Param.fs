@@ -66,4 +66,4 @@ module ParamList =
     /// <exception cref="T:System.InvalidOperationException">Thrown when this function is called.</exception>
     let empty (_: ParamItem) (_: int32) = invalidOp "The parameter list was expected to be empty."
     let singleton (param: ParamRow) = fun (_: ParamItem) (_: int32)-> param
-    let noname (_: ParamItem) (_: int32) = Param { Flags = ParamFlags(); ParamName = "" }
+    let noname = fun (_: ParamItem) (_: int32) -> Param { Flags = ParamFlags(); ParamName = "" }

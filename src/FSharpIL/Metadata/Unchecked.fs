@@ -471,7 +471,21 @@ module StaticClass =
 
 //module Delegate =
 //module Enum =
-//module Interface =
+
+[<RequireQualifiedAccess>]
+module Interface =
+    let addTypeDef builder (intfDef: InterfaceDef) =
+        Unsafe.AddTypeDef<InterfaceDef>(
+            builder,
+            intfDef.Access.Tag ||| TypeAttributes.Interface ||| TypeAttributes.Abstract,
+            intfDef.InterfaceName,
+            intfDef.TypeNamespace,
+            Extends.Null,
+            TypeVisibility.enclosingClass intfDef.Access
+        )
+
+    let addAbstractMethod builder (owner: RawIndex<InterfaceDef>) (method: AbstractMethod) =
+        Unsafe.AddMethod(builder, owner.ChangeTag(), method): Result<RawIndex<AbstractMethod>, _>
 
 [<RequireQualifiedAccess>]
 module Struct =

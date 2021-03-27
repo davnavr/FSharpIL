@@ -27,6 +27,7 @@ module TypeDefOrRefOrSpecEncoded =
         | _ -> TypeDef(RawIndex<TypeDefRow> encoded.Value)
 
     let TypeDef (index: RawIndex<TypeDefRow>) = TypeDefOrRefOrSpecEncoded(TypeDefOrRefOrSpecTag.Def, index.Value)
+    let InterfaceDef (index: RawIndex<InterfaceDef>) = index.ChangeTag() |> TypeDef
     let TypeRef (index: RawIndex<TypeRef>) = TypeDefOrRefOrSpecEncoded(TypeDefOrRefOrSpecTag.Ref, index.Value)
     let TypeSpec (index: RawIndex<TypeSpecRow>) = TypeDefOrRefOrSpecEncoded(TypeDefOrRefOrSpecTag.Spec, index.Value)
 

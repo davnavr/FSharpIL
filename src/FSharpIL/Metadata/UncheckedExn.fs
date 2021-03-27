@@ -43,6 +43,11 @@ module ConcreteClass =
     let addInstanceField builder owner field = Unchecked.ConcreteClass.addInstanceField builder owner field |> throwOnError
 
 [<RequireQualifiedAccess>]
+module Interface =
+    let addTypeDef builder intfDef = Unchecked.Interface.addTypeDef builder intfDef |> throwOnError
+    let addAbstractMethod builder owner method = Unchecked.Interface.addAbstractMethod builder owner method |> throwOnError
+
+[<RequireQualifiedAccess>]
 module StaticClass =
     let addTypeDef builder classDef = Unchecked.StaticClass.addTypeDef builder classDef |> throwOnError
     let addEntryPoint builder owner method = Unchecked.StaticClass.addEntryPoint builder owner method |> throwOnError

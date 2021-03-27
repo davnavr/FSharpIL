@@ -103,19 +103,19 @@ type HelloWorld () =
 
         // Create the entrypoint method of the current assembly.
         let main =
-            { Body =
-                fun content ->
-                    let writer = MethodBodyWriter content
-                    writer.Ldstr "Hello World!"
-                    writer.Call writeLine
-                    writer.Ret()
-                    MethodBody()
-                |> MethodBody.create ValueNone
-              ImplFlags = MethodImplFlags()
-              MethodName = Identifier.ofStr "Main"
-              Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))
-              Signature = EntryPointSignature.voidWithArgs
-              ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "args" } }
+            let body content =
+                let writer = MethodBodyWriter content
+                writer.Ldstr "Hello World!"
+                writer.Call writeLine
+                writer.Ret()
+                MethodBody(maxStack = 1us)
+            EntryPointMethod (
+                MethodBody.create ValueNone body,
+                Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
+                Identifier.ofStr "Main",
+                EntryPointSignature.voidWithArgs,
+                Param { Flags = ParamFlags(); ParamName = "args" } |> ParamList.singleton
+            )
             |> StaticClass.addEntryPoint builder program
 
         setEntryPoint builder main

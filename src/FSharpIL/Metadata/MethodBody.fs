@@ -62,7 +62,8 @@ type IMethodBody =
 
 /// <summary>Represents a method whose <c>RVA</c> column has a value of zero, indicating that it does not have a body.</summary>
 [<Sealed>]
-type NullMethodBody internal () =
+type NullMethodBody private () =
+    static member val Instance = NullMethodBody()
     interface IMethodBody with
         member _.Exists = false
         member _.LocalVariables = ValueNone

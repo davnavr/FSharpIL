@@ -141,38 +141,37 @@ let example() =
           Signature = FieldSignature.create EncodedType.I4 }
         |> Struct.addInstanceField builder fraction
     // TODO: Add properties to access values in numbers example.
+    let getter_flags = InstanceMethodFlags(Public, SpecialName, VTableLayout.ReuseSlot, true)
     // member this.get_Numerator(): int32
     let get_numerator =
-        { Body =
-            fun content ->
-                let wr = MethodBodyWriter content
-                // this.numerator
-                wr.Ldarg 0us
-                wr.Ldfld numerator
-                wr.Ret()
-                MethodBody.Default
-            |> MethodBody.create ValueNone
-          ImplFlags = MethodImplFlags()
-          Flags = InstanceMethodFlags(Public, SpecialName, VTableLayout.ReuseSlot, true) |> Flags.instanceMethod
-          MethodName = Identifier.ofStr "get_Numerator"
-          Signature = InstanceMethodSignature ReturnType.itemI4
-          ParamList = ParamList.empty }
+        let body content =
+            let wr = MethodBodyWriter content
+            // this.numerator
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Ret()
+            MethodBody.Default
+        InstanceMethod (
+            MethodBody.create ValueNone body,
+            Flags.instanceMethod getter_flags,
+            Identifier.ofStr "get_Numerator",
+            InstanceMethodSignature ReturnType.itemI4
+        )
         |> Struct.addInstanceMethod builder fraction
     let get_denominator =
-        { Body =
-            fun content ->
-                let wr = MethodBodyWriter content
-                // this.denominator
-                wr.Ldarg 0us
-                wr.Ldfld denominator
-                wr.Ret()
-                MethodBody.Default
-            |> MethodBody.create ValueNone
-          ImplFlags = MethodImplFlags()
-          Flags = InstanceMethodFlags(Public, SpecialName, VTableLayout.ReuseSlot, true) |> Flags.instanceMethod
-          MethodName = Identifier.ofStr "get_Denominator"
-          Signature = InstanceMethodSignature ReturnType.itemI4
-          ParamList = ParamList.empty }
+        let body content =
+            let wr = MethodBodyWriter content
+            // this.denominator
+            wr.Ldarg 0us
+            wr.Ldfld denominator
+            wr.Ret()
+            MethodBody.Default
+        InstanceMethod (
+            MethodBody.create ValueNone body,
+            Flags.instanceMethod getter_flags,
+            Identifier.ofStr "get_Denominator",
+            InstanceMethodSignature ReturnType.itemI4
+        )
         |> Struct.addInstanceMethod builder fraction
     // member this.Numerator: int32 with get
     // TODO: Use helper functions for adding properties instead.
@@ -227,87 +226,88 @@ let example() =
         |> Struct.addConstructor builder fraction
 
     // static member op_Multiply(a: Fraction, b: Fraction): Fraction
-    { Body =
-        fun content ->
-            let wr = MethodBodyWriter content
-            // new Fraction(a.numerator * b.numerator, a.denominator * b.denominator)
-            wr.Ldarg 0us
-            wr.Ldfld numerator
-            wr.Ldarg 1us
-            wr.Ldfld numerator
-            wr.Mul()
-            wr.Ldarg 0us
-            wr.Ldfld denominator
-            wr.Ldarg 1us
-            wr.Ldfld denominator
-            wr.Mul()
-            wr.Newobj ctor
-            wr.Ret()
-            MethodBody.Default
-        |> MethodBody.create ValueNone
-      ImplFlags = MethodImplFlags()
-      Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
-      MethodName = Identifier.ofStr "op_Multiply"
-      Signature =
+    let multiply_body content =
+        let wr = MethodBodyWriter content
+        // new Fraction(a.numerator * b.numerator, a.denominator * b.denominator)
+        wr.Ldarg 0us
+        wr.Ldfld numerator
+        wr.Ldarg 1us
+        wr.Ldfld numerator
+        wr.Mul()
+        wr.Ldarg 0us
+        wr.Ldfld denominator
+        wr.Ldarg 1us
+        wr.Ldfld denominator
+        wr.Mul()
+        wr.Newobj ctor
+        wr.Ret()
+        MethodBody.Default
+    let multiply_sig =
         let parameters =
             ImmutableArray.Create (
                 ParamItem.create fractionEncoded,
                 ParamItem.create fractionEncoded
             )
         StaticMethodSignature(MethodCallingConventions.Default, ReturnType.encoded fractionEncoded, parameters)
-      ParamList =
+
+    StaticMethod (
+        MethodBody.create ValueNone multiply_body,
+        Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
+        Identifier.ofStr "op_Multiply",
+        multiply_sig,
         fun _ i ->
             { Flags = ParamFlags()
               ParamName =
                 match i with
                 | 0 -> "a"
                 | _ -> "b" }
-            |> Param }
+            |> Param
+    )
     |> Struct.addStaticMethod builder fraction
     |> ignore
 
     // static member op_Explicit(fraction: Fraction): System.Single
-    { Body =
-        fun content ->
-            let wr = MethodBodyWriter content
-            // (float32 this.numerator) / (float32 this.denominator)
-            wr.Ldarg 0us
-            wr.Ldfld numerator
-            wr.Conv_r4()
-            wr.Ldarg 0us
-            wr.Ldfld denominator
-            wr.Conv_r4()
-            wr.Div()
-            wr.Ret()
-            MethodBody.Default
-        |> MethodBody.create ValueNone
-      ImplFlags = MethodImplFlags()
-      Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
-      MethodName = Identifier.ofStr "op_Explicit"
-      Signature = StaticMethodSignature(ReturnType.encoded EncodedType.R4, ParamItem.create fractionEncoded)
-      ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" } }
+    let conv_single_body content =
+        let wr = MethodBodyWriter content
+        // (float32 this.numerator) / (float32 this.denominator)
+        wr.Ldarg 0us
+        wr.Ldfld numerator
+        wr.Conv_r4()
+        wr.Ldarg 0us
+        wr.Ldfld denominator
+        wr.Conv_r4()
+        wr.Div()
+        wr.Ret()
+        MethodBody.Default
+    StaticMethod (
+        MethodBody.create ValueNone conv_single_body,
+        Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
+        Identifier.ofStr "op_Explicit",
+        StaticMethodSignature(ReturnType.encoded EncodedType.R4, ParamItem.create fractionEncoded),
+        fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" }
+    )
     |> Struct.addStaticMethod builder fraction
     |> ignore
     // static member op_Explicit(fraction: Fraction): System.Double
-    { Body =
-        fun content ->
-            let wr = MethodBodyWriter content
-            // (float this.numerator) / (float this.denominator)
-            wr.Ldarg 0us
-            wr.Ldfld numerator
-            wr.Conv_r8()
-            wr.Ldarg 0us
-            wr.Ldfld denominator
-            wr.Conv_r8()
-            wr.Div()
-            wr.Ret()
-            MethodBody.Default
-        |> MethodBody.create ValueNone
-      ImplFlags = MethodImplFlags()
-      Flags = Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true))
-      MethodName = Identifier.ofStr "op_Explicit"
-      Signature = StaticMethodSignature(ReturnType.encoded EncodedType.R8, ParamItem.create fractionEncoded)
-      ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" } }
+    let conv_double_body content =
+        let wr = MethodBodyWriter content
+        // (float this.numerator) / (float this.denominator)
+        wr.Ldarg 0us
+        wr.Ldfld numerator
+        wr.Conv_r8()
+        wr.Ldarg 0us
+        wr.Ldfld denominator
+        wr.Conv_r8()
+        wr.Div()
+        wr.Ret()
+        MethodBody.Default
+    StaticMethod (
+        MethodBody.create ValueNone conv_double_body,
+        Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
+        Identifier.ofStr "op_Explicit",
+        StaticMethodSignature(ReturnType.encoded EncodedType.R8, ParamItem.create fractionEncoded),
+        fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" }
+    )
     |> Struct.addStaticMethod builder fraction
     |> ignore
 
@@ -315,82 +315,80 @@ let example() =
     Struct.implementSpec builder fraction icomparable_fraction |> ignore
 
     // member this.CompareTo(other: Fraction): Fraction
-    { Body =
-        fun content ->
-            let wr = MethodBodyWriter content
-            wr.Ldarg 0us
-            wr.Ldfld denominator // this.denominator
-            wr.Ldarg 1us
-            wr.Ldfld denominator // other.denominator
-            let ne = wr.Bne_un_s()
-            let ne_pos = wr.ByteCount
+    let compare_body content =
+        let wr = MethodBodyWriter content
+        wr.Ldarg 0us
+        wr.Ldfld denominator // this.denominator
+        wr.Ldarg 1us
+        wr.Ldfld denominator // other.denominator
+        let ne = wr.Bne_un_s()
+        let ne_pos = wr.ByteCount
 
-            // Both denominators are equal here
-            // this.numerator - other.numerator
-            wr.Ldarg 0us
-            wr.Ldfld numerator
-            wr.Ldarg 1us
-            wr.Ldfld numerator
-            wr.Sub()
-            wr.Ret()
+        // Both denominators are equal here
+        // this.numerator - other.numerator
+        wr.Ldarg 0us
+        wr.Ldfld numerator
+        wr.Ldarg 1us
+        wr.Ldfld numerator
+        wr.Sub()
+        wr.Ret()
 
-            ne.SetTarget(int32 (wr.ByteCount - ne_pos))
+        ne.SetTarget(int32 (wr.ByteCount - ne_pos))
 
-            // Both denominators are not equal here
-            // TODO: Account for fact that denominators might be negative when comparing fractions.
-            // (this.numerator * other.denominator) - (other.numerator * this.denominator)
-            wr.Ldarg 0us
-            wr.Ldfld numerator
-            wr.Ldarg 1us
-            wr.Ldfld denominator
-            wr.Mul()
-            wr.Ldarg 1us
-            wr.Ldfld numerator
-            wr.Ldarg 0us
-            wr.Ldfld denominator
-            wr.Mul()
-            wr.Sub()
-            wr.Ret()
-            MethodBody.Default
-        |> MethodBody.create ValueNone
-      ImplFlags = MethodImplFlags()
-      Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, true, true) |> Flags.instanceMethod
-      MethodName = Identifier.ofStr "CompareTo"
-      Signature = InstanceMethodSignature(ReturnType.itemI4, ParamItem.create fractionEncoded)
-      ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "other" } }
+        // Both denominators are not equal here
+        // TODO: Account for fact that denominators might be negative when comparing fractions.
+        // (this.numerator * other.denominator) - (other.numerator * this.denominator)
+        wr.Ldarg 0us
+        wr.Ldfld numerator
+        wr.Ldarg 1us
+        wr.Ldfld denominator
+        wr.Mul()
+        wr.Ldarg 1us
+        wr.Ldfld numerator
+        wr.Ldarg 0us
+        wr.Ldfld denominator
+        wr.Mul()
+        wr.Sub()
+        wr.Ret()
+        MethodBody.Default
+    InstanceMethod (
+        MethodBody.create ValueNone compare_body,
+        InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, true, true) |> Flags.instanceMethod,
+        Identifier.ofStr "CompareTo",
+        InstanceMethodSignature(ReturnType.itemI4, ParamItem.create fractionEncoded),
+        fun _ _ -> Param { Flags = ParamFlags(); ParamName = "other" }
+    )
     |> Struct.addInstanceMethod builder fraction
     |> ignore
 
     // override this.ToString(): string
-    { Body =
-        fun content ->
-            let wr = MethodBodyWriter content
-            // new System.Text.StringBuilder().Append(this.numerator).Append('/').Append(this.denominator).ToString()
-            wr.Newobj stringBuilder_ctor
-            wr.Ldarg 0us
-            wr.Ldfld numerator
-            wr.Call stringBuilder_Append_I4
-            wr.Ldc_i4 '/'
-            wr.Call stringBuilder_Append_Char
-            wr.Ldarg 0us
-            wr.Ldfld denominator
-            wr.Call stringBuilder_Append_I4
-            wr.Callvirt stringBuilder_ToString
-            wr.Ret()
-            MethodBody.Default
-        |> MethodBody.create ValueNone
-      ImplFlags = MethodImplFlags()
-      Flags =
+    let tostring_body content =
+        let wr = MethodBodyWriter content
+        // new System.Text.StringBuilder().Append(this.numerator).Append('/').Append(this.denominator).ToString()
+        wr.Newobj stringBuilder_ctor
+        wr.Ldarg 0us
+        wr.Ldfld numerator
+        wr.Call stringBuilder_Append_I4
+        wr.Ldc_i4 '/'
+        wr.Call stringBuilder_Append_Char
+        wr.Ldarg 0us
+        wr.Ldfld denominator
+        wr.Call stringBuilder_Append_I4
+        wr.Callvirt stringBuilder_ToString
+        wr.Ret()
+        MethodBody.Default
+    InstanceMethod (
+        MethodBody.create ValueNone tostring_body,
         InstanceMethodFlags(
             Public,
             NoSpecialName,
             ReuseSlot,
             hideBySig = true,
             isVirtual = true
-        ) |> Flags.instanceMethod
-      MethodName = Identifier.ofStr "ToString"
-      Signature = InstanceMethodSignature(ReturnType.encoded EncodedType.String)
-      ParamList = ParamList.empty }
+        ) |> Flags.instanceMethod,
+        Identifier.ofStr "ToString",
+        InstanceMethodSignature(ReturnType.encoded EncodedType.String)
+    )
     |> Struct.addInstanceMethod builder fraction
     |> ignore
 

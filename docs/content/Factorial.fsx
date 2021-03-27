@@ -117,60 +117,59 @@ let example() =
         let calculateBody, setCalculateBody = MethodBody.mutableBody()
 
         let! helper =
-            { MethodName = Identifier.ofStr "CalculateHelper"
-              ImplFlags = MethodImplFlags()
-              Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))
-              ParamList =
-                fun _ i ->
-                    { Flags = ParamFlags()
-                      ParamName =
-                        match i with
-                        | 0 -> "num"
-                        | _ -> "accumulator" }
-                    |> Param
-              Signature =
+            let parameters _ i =
+                { Flags = ParamFlags()
+                  ParamName =
+                    match i with
+                    | 0 -> "num"
+                    | _ -> "accumulator" }
+                |> Param
+            StaticMethod (
+                calculateBody,
+                Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
+                Identifier.ofStr "CalculateHelper",
                 StaticMethodSignature(
                     Default,
                     ReturnType.itemU4,
                     ImmutableArray.Create(ParamItem.create EncodedType.U4, ParamItem.create EncodedType.U4)
-                )
-              Body = calculateBody }
+                ),
+                parameters
+            )
             |> StaticClass.addStaticMethod builder factorial
 
         let! _ =
-            { MethodName = Identifier.ofStr "Calculate"
-              ImplFlags = MethodImplFlags()
-              Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))
-              ParamList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "num" }
-              Signature =
+            let body content =
+                let writer = MethodBodyWriter content
+                writer.Ldsfld cache
+                writer.Ldarg 0us
+                writer.Callvirt containsKey // TODO: Figure out if callvirt is needed for ContainsKey and Add methods
+                let target = writer.Brfalse_s()
+                let pos = writer.ByteCount
+
+                // Get the existing value from the cache.
+                writer.Ldsfld cache
+                writer.Ldarg 0us
+                writer.Callvirt get_Item
+                writer.Ret()
+
+                target.SetTarget(int32 (writer.ByteCount - pos))
+
+                writer.Ldarg 0us
+                writer.Ldarg 0us
+                writer.Call helper
+                writer.Ret()
+                MethodBody.Default
+            StaticMethod (
+                MethodBody.create ValueNone body,
+                Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
+                Identifier.ofStr "Calculate",
                 StaticMethodSignature(
                     Default,
                     ReturnType.itemU4,
                     ParamItem.create EncodedType.U4 |> ImmutableArray.Create
-                )
-              Body =
-                fun content ->
-                    let writer = MethodBodyWriter content
-                    writer.Ldsfld cache
-                    writer.Ldarg 0us
-                    writer.Callvirt containsKey // TODO: Figure out if callvirt is needed for ContainsKey and Add methods
-                    let target = writer.Brfalse_s()
-                    let pos = writer.ByteCount
-
-                    // Get the existing value from the cache.
-                    writer.Ldsfld cache
-                    writer.Ldarg 0us
-                    writer.Callvirt get_Item
-                    writer.Ret()
-
-                    target.SetTarget(int32 (writer.ByteCount - pos))
-
-                    writer.Ldarg 0us
-                    writer.Ldarg 0us
-                    writer.Call helper
-                    writer.Ret()
-                    MethodBody.Default
-                |> MethodBody.create ValueNone }
+                ),
+                fun _ _ -> Param { Flags = ParamFlags(); ParamName = "num" }
+            )
             |> StaticClass.addStaticMethod builder factorial
 
         // Class constructor to initialize cache

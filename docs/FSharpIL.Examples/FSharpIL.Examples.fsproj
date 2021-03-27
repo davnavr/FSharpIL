@@ -11,6 +11,7 @@
     <Compile Include="..\content\HelloWorld.fsx" />
     <Compile Include="..\content\DelegatesExample.fsx" />
     <Compile Include="..\content\EnumsExample.fsx" />
+    <Compile Include="..\content\InterfacesExample.fsx" />
     <Compile Include="..\content\Factorial.fsx" />
     <Compile Include="..\content\CustomNumericTypes.fsx" />
     <Compile Include="..\content\CustomCollections.fsx" />

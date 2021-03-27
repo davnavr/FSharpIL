@@ -158,21 +158,14 @@ let example() =
 
     // static member DuplicateString(str: string, times: int32): string
     let dupstr =
-        let locals =
-            // sb: System.StringBuilder
-            EncodedType.typeRefClass stringb
-            |> LocalVariable.encoded
-            |> ImmutableArray.Create
-            |> builder.StandAloneSig.AddLocals
-            |> ValueSome
-        { MethodName = Identifier.ofStr "DuplicateString"
-          ImplFlags = MethodImplFlags()
-          Flags = StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod
-          ParamList = fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "str" else "times" }
-          Signature =
-            let parameters = Array.map ParamItem.create [| EncodedType.String; EncodedType.I4 |]
-            StaticMethodSignature(ReturnType.encoded EncodedType.String, parameters)
-          Body =
+        let body =
+            let locals =
+                // sb: System.StringBuilder
+                EncodedType.typeRefClass stringb
+                |> LocalVariable.encoded
+                |> ImmutableArray.Create
+                |> builder.StandAloneSig.AddLocals
+                |> ValueSome
             fun content ->
                 let wr = MethodBodyWriter content
                 // let sb: System.StringBuilder = new System.StringBuilder(str.Length * times)
@@ -208,16 +201,21 @@ let example() =
                 wr.Callvirt stringb_tostring
                 wr.Ret()
                 MethodBody(2us, true)
-            |> MethodBody.create locals }
+            |> MethodBody.create locals
+        let signature =
+            let parameters = Array.map ParamItem.create [| EncodedType.String; EncodedType.I4 |]
+            StaticMethodSignature(ReturnType.encoded EncodedType.String, parameters)
+        StaticMethod (
+            body,
+            StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
+            Identifier.ofStr "DuplicateString",
+            signature,
+            fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "str" else "times" }
+        )
         |> ConcreteClass.addStaticMethod builder myclass
 
     // static member Example1(): string
-    { MethodName = Identifier.ofStr "Example1"
-      ImplFlags = MethodImplFlags()
-      Flags = StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod
-      ParamList = ParamList.empty
-      Signature = ReturnType.encoded EncodedType.String |> StaticMethodSignature
-      Body =
+    let example1_body =
         let locals =
             LocalVariable.encoded mydel_encoded
             |> ImmutableArray.Create
@@ -238,7 +236,13 @@ let example() =
             wr.Callvirt mydel.Invoke
             wr.Ret()
             MethodBody(3us, true)
-        |> MethodBody.create locals }
+        |> MethodBody.create locals
+    StaticMethod (
+        example1_body,
+        StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
+        name = Identifier.ofStr "Example1",
+        signature = StaticMethodSignature(ReturnType.encoded EncodedType.String)
+    )
     |> ConcreteClass.addStaticMethod builder myclass
     |> ignore
 
@@ -258,22 +262,20 @@ let example() =
         |> builder.MemberRef.Add
 
     // static member Example2(str: string): System.Func<string, int32>
-    { MethodName = Identifier.ofStr "Example2"
-      ImplFlags = MethodImplFlags()
-      Flags = StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod
-      ParamList = Param { ParamName = "str"; Flags = ParamFlags() } |> ParamList.singleton
-      Signature =
-        let retn = EncodedType.GenericInst func_2_inst
-        StaticMethodSignature(ReturnType.encoded retn, ParamItem.create EncodedType.String)
-      Body =
-        fun content ->
-            let wr = MethodBodyWriter content
-            wr.Ldarg 0us
-            wr.Ldftn str_indexof
-            wr.Newobj func_2_inst_ctor
-            wr.Ret()
-            MethodBody()
-        |> MethodBody.create ValueNone }
+    let example2_body content =
+        let wr = MethodBodyWriter content
+        wr.Ldarg 0us
+        wr.Ldftn str_indexof
+        wr.Newobj func_2_inst_ctor
+        wr.Ret()
+        MethodBody()
+    StaticMethod (
+        MethodBody.create ValueNone example2_body,
+        StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
+        Identifier.ofStr "Example2",
+        StaticMethodSignature(EncodedType.GenericInst func_2_inst |> ReturnType.encoded, ParamItem.create EncodedType.String),
+        Param { ParamName = "str"; Flags = ParamFlags() } |> ParamList.singleton
+    )
     |> ConcreteClass.addStaticMethod builder myclass
     |> ignore
 

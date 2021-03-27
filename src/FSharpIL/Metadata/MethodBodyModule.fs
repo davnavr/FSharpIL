@@ -6,7 +6,7 @@ let create localVarSig (writer: MethodBodyContent -> MethodBody) =
     { new ConcreteMethodBody(localVarSig) with member _.WriteBody content = writer content }
 
 /// Represents a method body that does not exist, used for abstract methods.
-let none = NullMethodBody()
+let none = NullMethodBody.Instance
 
 /// <summary>A method body containing a single <c>ret</c> instruction.</summary>
 let empty localVarSig =

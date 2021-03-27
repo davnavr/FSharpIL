@@ -14,6 +14,7 @@ type [<AbstractClass; Sealed>] ObjectConstructorTag = class end
 type [<AbstractClass; Sealed>] ClassConstructorTag = class end
 
 type VTableLayout =
+    /// Default value used by most methods.
     | ReuseSlot
     | NewSlot
 
@@ -67,15 +68,23 @@ type StaticMethodFlags<'Visibility when 'Visibility :> IFlags<MethodAttributes>>
 end
 
 [<IsReadOnly; Struct>]
-type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :> IMethodDefSignature> =
-    { Body: 'Body
-      ImplFlags: MethodImplFlags
-      Flags: ValidFlags<'Flags, MethodAttributes>
-      MethodName: Identifier
-      Signature: 'Signature
-      // TODO: Add ParamRow to represent method return type, allowing custom attributes to be applied to the return type.
-      ParamList: ParamItem -> int -> ParamRow }
-
+type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :> IMethodDefSignature>
+    (
+        body: 'Body,
+        flags: ValidFlags<'Flags, MethodAttributes>,
+        name: Identifier,
+        signature: 'Signature,
+        parameters: ParamItem -> int -> ParamRow,
+        implFlags: MethodImplFlags
+    ) =
+    new (body, flags, name, signature, parameters) = Method(body, flags, name, signature, parameters, MethodImplFlags())
+    new (body, flags, name, signature) = Method(body, flags, name, signature, ParamList.noname)
+    member _.Body = body
+    member _.ImplFlags = implFlags
+    member _.Flags = flags
+    member _.MethodName = name
+    member _.Signature = signature
+    member _.ParamList = parameters
     member internal this.Definition() =
         MethodDefRow (
             this.Body,

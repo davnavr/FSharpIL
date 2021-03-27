@@ -108,12 +108,7 @@ let example() =
         |> StaticClass.addTypeDef builder
 
     // static member Example(): unit
-    { MethodName = Identifier.ofStr "Example"
-      ImplFlags = MethodImplFlags()
-      Flags = StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod
-      ParamList = ParamList.empty
-      Signature = StaticMethodSignature ReturnType.itemVoid
-      Body =
+    let example_body =
         let locals =
             // value: EnumsExample.MyEnum
             EncodedType.enumDef myenum.Row
@@ -128,7 +123,13 @@ let example() =
             wr.Stloc 0us
             wr.Ret()
             MethodBody.Default
-        |> MethodBody.create locals }
+        |> MethodBody.create locals
+    StaticMethod (
+        example_body,
+        StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
+        name = Identifier.ofStr "Example",
+        signature = StaticMethodSignature ReturnType.itemVoid
+    )
     |> StaticClass.addStaticMethod builder examples
     |> ignore
 

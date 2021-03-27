@@ -222,70 +222,70 @@ let example() =
 
     // member this.Cast<'TOther>(): Example.MyCollection<'TOther when 'TOther :> 'T>
     let cast =
-        { Body =
-            fun content ->
-                let wr = MethodBodyWriter content
-                // let other: 'TOther[] = Array.zeroCreate<'TOther> this.index
-                wr.Ldarg 0us
-                wr.Ldfld index'
-                wr.Newarr tother_spec
-                wr.Stloc 0us
+        let body content =
+            let wr = MethodBodyWriter content
+            // let other: 'TOther[] = Array.zeroCreate<'TOther> this.index
+            wr.Ldarg 0us
+            wr.Ldfld index'
+            wr.Newarr tother_spec
+            wr.Stloc 0us
 
-                // let mutable i: int32 = 0
-                wr.Ldc_i4 0
-                wr.Stloc 1us
+            // let mutable i: int32 = 0
+            wr.Ldc_i4 0
+            wr.Stloc 1us
 
-                (*go to condition of loop*)
-                let start = wr.Br_s()
-                let start_offset = wr.ByteCount
+            (*go to condition of loop*)
+            let start = wr.Br_s()
+            let start_offset = wr.ByteCount
 
-                (*body of the loop*)
-                let lbody = Label wr
-                // other.[i] <- this.items.[i] :?> 'TOther
-                wr.Ldloc 0us
-                wr.Ldloc 1us
-                wr.Ldarg 0us
-                wr.Ldfld items'
-                wr.Ldloc 1us
-                wr.Ldelem tparam
-                wr.Box tparam
-                wr.Unbox_any tother_spec
-                wr.Stelem tother_spec
+            (*body of the loop*)
+            let lbody = Label wr
+            // other.[i] <- this.items.[i] :?> 'TOther
+            wr.Ldloc 0us
+            wr.Ldloc 1us
+            wr.Ldarg 0us
+            wr.Ldfld items'
+            wr.Ldloc 1us
+            wr.Ldelem tparam
+            wr.Box tparam
+            wr.Unbox_any tother_spec
+            wr.Stelem tother_spec
 
-                // i <- i + 1
-                wr.Ldloc 1us
-                wr.Ldc_i4 1
-                wr.Add()
-                wr.Stloc 1us
+            // i <- i + 1
+            wr.Ldloc 1us
+            wr.Ldc_i4 1
+            wr.Add()
+            wr.Stloc 1us
 
-                start.SetTarget(int32 (wr.ByteCount - start_offset))
-                // i < this.index
-                wr.Ldloc 1us
-                wr.Ldarg 0us
-                wr.Ldfld index'
-                (*go to start if true*)
-                let go = wr.Blt_s()
-                lbody.SetTarget go
+            start.SetTarget(int32 (wr.ByteCount - start_offset))
+            // i < this.index
+            wr.Ldloc 1us
+            wr.Ldarg 0us
+            wr.Ldfld index'
+            (*go to start if true*)
+            let go = wr.Blt_s()
+            lbody.SetTarget go
 
-                // new MyCollection<TOther>(other, this.index)
-                wr.Ldloc 0us
-                wr.Ldarg 0us
-                wr.Ldfld index'
-                wr.Newobj ctor_p_other
-                wr.Ret()
-                MethodBody(0x4us, true)
-            |> MethodBody.create cast_locals
-          ImplFlags = MethodImplFlags()
-          Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
-          MethodName = Identifier.ofStr "Cast"
-          Signature =
+            // new MyCollection<TOther>(other, this.index)
+            wr.Ldloc 0us
+            wr.Ldarg 0us
+            wr.Ldfld index'
+            wr.Newobj ctor_p_other
+            wr.Ret()
+            MethodBody(0x4us, true)
+        let signature =
             let retn =
                 EncodedType.MVar 0u
                 |> GenericInst.typeDef1 false (myCollection_1.AsTypeIndex())
                 |> EncodedType.GenericInst
                 |> ReturnType.encoded
             InstanceMethodSignature(Generic 1u, retn, ImmutableArray.Empty)
-          ParamList = ParamList.empty }
+        InstanceMethod (
+            MethodBody.create cast_locals body,
+            InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod,
+            Identifier.ofStr "Cast",
+            signature
+        )
         |> ConcreteClass.addInstanceMethod builder myCollection_1
 
     // 'TOther when 'TOther :> 'T
@@ -299,7 +299,7 @@ let example() =
     |> ignore
 
     // member this.Add(item: 'T)
-    { Body =
+    let add_body =
         let locals =
             [
                 EncodedType.I4 // len: int32
@@ -388,16 +388,18 @@ let example() =
             wr.Ret()
             MethodBody(0x3us, true)
         |> MethodBody.create locals
-      ImplFlags = MethodImplFlags()
-      Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
-      MethodName = Identifier.ofStr "Add"
-      Signature = InstanceMethodSignature(ReturnType.itemVoid, ParamItem.var 0u)
-      ParamList = fun _ _ -> Param { ParamName = "item"; Flags = ParamFlags() } }
+    InstanceMethod (
+        add_body,
+        InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod,
+        Identifier.ofStr "Add",
+        InstanceMethodSignature(ReturnType.itemVoid, ParamItem.var 0u),
+        fun _ _ -> Param { ParamName = "item"; Flags = ParamFlags() }
+    )
     |> ConcreteClass.addInstanceMethod builder myCollection_1
     |> ignore
 
     // member this.ToArray()
-    { Body =
+    let toarray_body =
         let locals =
             // result: 'T[]
             LocalVariable.encoded tarray
@@ -425,11 +427,12 @@ let example() =
             wr.Ret()
             MethodBody(3us, true) // NOTE: Check maxstack
         |> MethodBody.create locals
-      ImplFlags = MethodImplFlags()
-      Flags = InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod
-      MethodName = Identifier.ofStr "ToArray"
-      Signature = ReturnType.encoded tarray |> InstanceMethodSignature
-      ParamList = ParamList.empty }
+    InstanceMethod (
+        toarray_body,
+        InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod,
+        Identifier.ofStr "ToArray",
+        ReturnType.encoded tarray |> InstanceMethodSignature
+    )
     |> ConcreteClass.addInstanceMethod builder myCollection_1
     |> ignore
 

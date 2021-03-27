@@ -72,20 +72,6 @@ end
 [<AbstractClass; Sealed>] type AbstractClassTag = class end
 [<AbstractClass; Sealed>] type SealedClassTag = class end
 [<AbstractClass; Sealed>] type StaticClassTag = class end
-
-// TODO: Make these other TypeDef flag types normal structs.
-[<Struct; IsReadOnly>]
-[<RequireQualifiedAccess>]
-type InterfaceFlags =
-    { Import: bool }
-
-    member this.Value =
-        let mutable flags = TypeAttributes.Abstract ||| TypeAttributes.Interface
-        if this.Import then flags <- flags ||| TypeAttributes.Import
-        flags
-
-    interface IFlags<TypeAttributes> with member this.Value = this.Value
-
 [<AbstractClass; Sealed>] type StructFlags = class end
 
 type TypeFlags<'Tag> = ValidFlags<'Tag, TypeAttributes>
@@ -360,11 +346,15 @@ type EnumDef = struct
         EnumDef(access, values, flags, name, ns)
 end
 
-type InterfaceDef =
-    { Access: TypeVisibility
-      Flags: InterfaceFlags
-      InterfaceName: Identifier
-      TypeNamespace: string }
+// TODO: Prevent interfaces from having instance fields.
+/// <summary>
+/// Represents an interface type, which is a <c>TypeDef</c> that is abstract and does not derive from any other class (II.12).
+/// </summary>
+[<IsReadOnly; Struct>]
+type InterfaceDef (access: TypeVisibility, name: Identifier, [<Optional; DefaultParameterValue("")>] ns: string) =
+    member _.Access = access
+    member _.InterfaceName = name
+    member _.TypeNamespace = ns
 
 /// <summary>
 /// Represents a user-defined value type, which is a <c>TypeDef</c> that derives from <see cref="T:System.ValueType"/>.
