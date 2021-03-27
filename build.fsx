@@ -4,6 +4,8 @@ nuget Fake.DotNet.Cli
 nuget Fake.IO.FileSystem //"
 #load "./.fake/build.fsx/intellisense.fsx"
 
+open System.IO
+
 open Fake.Core
 open Fake.Core.TargetOperators
 open Fake.DotNet
@@ -29,16 +31,27 @@ let handleErr msg: ProcessResult -> _ =
 
 Target.create "Clean" <| fun _ ->
     [
+        // All example outputs
         !!(docsDir </> "content" </> "exout" </> "*.dll")
-        !!(outDir </> "*.nupkg")
-        !!(outDir </> "docs" </> "**" </> "*.*")
+
+        // All outputs from previous build
+        !!(outDir </> "**" </> "*") -- (outDir </> ".gitignore")
     ]
     |> List.iter File.deleteAll
 
-    // TODO Clean bin and obj folders instead of calling "dotnet clean", since it doesn't clear out outputs for netstandard2.1 folders.
-    DotNet.exec id "clean" slnFile |> handleErr "Error occured while cleaning project output"
+    !!(rootDir </> "**" </> "*.fsproj")
+    |> Seq.collect
+        (fun proj ->
+            let proj' = FileInfo proj
+            proj'.Directory.GetDirectories())
+    |> Seq.iter
+        (fun dir ->
+            match dir.Name with
+            | "bin"
+            | "obj" -> dir.Delete()
+            | _ -> ())
 
-Target.create "Build" <| fun _ ->
+Target.create "BuildAll" <| fun _ ->
     DotNet.build
         (fun opt ->
             { opt with
@@ -46,13 +59,13 @@ Target.create "Build" <| fun _ ->
                 NoRestore = true })
         slnFile
 
-Target.create "Generate Examples" <| fun _ ->
-    docsDir </> "FSharpIL.Documentation.Examples" </> "FSharpIL.Documentation.Examples.fsproj"
+Target.create "GenerateExamples" <| fun _ ->
+    docsDir </> "FSharpIL.Examples" </> "FSharpIL.Examples.fsproj"
     |> sprintf "-p %s -c Release --no-build --no-restore"
     |> DotNet.exec id "run"
     |> handleErr "One or more examples is invalid"
 
-Target.create "Build Documentation" <| fun _ ->
+Target.create "BuildDocumentation" <| fun _ ->
     sprintf
         "-p %s -c Release --no-build --no-restore -- --content-directory %s --style-directory %s --output-directory %s"
         (docsDir </> "FSharpIL.Documentation" </> "FSharpIL.Documentation.fsproj")
@@ -62,34 +75,27 @@ Target.create "Build Documentation" <| fun _ ->
     |> DotNet.exec id "run"
     |> handleErr "Error occured while generating documentation"
 
-Target.create "Test" <| fun _ ->
-    let proj = testDir </> "FSharpIL.Tests" </> "FSharpIL.Tests.fsproj"
-    for tfm in [ "netcoreapp3.1"; "net5.0" ] do
-        sprintf
-            "-p %s -c Release -f %s --no-build --no-restore"
-            proj
-            tfm
-        |> DotNet.exec id "run"
-        |> handleErr "One or more tests failed"
+Target.create "CheckProperties" <| fun _ ->
+    testDir </> "FSharpIL.Properties" </> "FSharpIL.Properties.fsproj" |> DotNet.test id
 
-Target.create "Test Examples" <| fun _ ->
-    testDir </> "FSharpIL.Tests.Examples" </> "FSharpIL.Tests.Examples.fsproj"
+Target.create "TestExamples" <| fun _ ->
+    testDir </> "FSharpIL.Examples.Tests" </> "FSharpIL.Examples.Tests.fsproj"
     |> sprintf "-p %s -c Release --no-build --no-restore"
     |> DotNet.exec id "run"
     |> handleErr "One or more tests failed"
 
-Target.create "Publish" <| fun _ ->
-    Trace.trace "Publishing..."
+Target.create "Pack" <| fun _ ->
+    Trace.trace "Packing..."
 
 "Clean"
-==> "Build"
-==> "Test"
+==> "BuildAll"
+==> "CheckProperties"
 ==> "Publish"
 
-"Build"
-==> "Generate Examples"
-==> "Test Examples"
-==> "Build Documentation"
-==> "Publish"
+"BuildAll"
+==> "GenerateExamples"
+==> "TestExamples"
+==> "BuildDocumentation"
+==> "Pack"
 
-Target.runOrDefault "Publish"
+Target.runOrDefault "Pack"

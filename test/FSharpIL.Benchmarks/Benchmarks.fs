@@ -9,13 +9,13 @@ open System.Collections.Immutable
 open FSharpIL
 open FSharpIL.PortableExecutable
 
+open Mono.Cecil
+open Mono.Cecil.Cil
+
 open FSharpIL.Metadata
 open FSharpIL.Metadata.CliMetadata
 open FSharpIL.Metadata.Unchecked
 open FSharpIL.Metadata.UncheckedExn
-
-open Mono.Cecil
-open Mono.Cecil.Cil
 
 [<StatisticalTestColumn>]
 [<MemoryDiagnoser>]
@@ -109,8 +109,8 @@ type HelloWorld () =
                     writer.Ldstr "Hello World!"
                     writer.Call writeLine
                     writer.Ret()
-                    { MaxStack = 8us; InitLocals = false }
-                |> MethodBody.create
+                    MethodBody()
+                |> MethodBody.create ValueNone
               ImplFlags = MethodImplFlags()
               MethodName = Identifier.ofStr "Main"
               Flags = Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true))

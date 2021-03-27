@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <AssemblyName>FSharpIL.Documentation.Examples</AssemblyName>
+    <AssemblyName>FSharpIL.Examples</AssemblyName>
     <OutputType>Exe</OutputType>
     <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
@@ -14,7 +14,7 @@
     <Compile Include="..\content\Factorial.fsx" />
     <Compile Include="..\content\CustomNumericTypes.fsx" />
     <Compile Include="..\content\CustomCollections.fsx" />
-    <Compile Include="$(RootDirectory)\test\FSharpIL.Tests\Test.fs" />
+    <Compile Include="$(RootDirectory)\test\ExpectoEntryPoint.fs" />
 
     <PackageReference Include="Expecto" Version="9.0.2" />
     <PackageReference Include="Mono.Cecil" Version="0.11.3" />
