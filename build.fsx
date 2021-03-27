@@ -48,8 +48,11 @@ Target.create "Clean" <| fun _ ->
         (fun dir ->
             match dir.Name with
             | "bin"
-            | "obj" -> dir.Delete()
+            | "obj" -> dir.Delete true
             | _ -> ())
+
+Target.create "Restore" <| fun _ ->
+    DotNet.restore id slnFile
 
 Target.create "BuildAll" <| fun _ ->
     DotNet.build
@@ -76,11 +79,23 @@ Target.create "BuildDocumentation" <| fun _ ->
     |> handleErr "Error occured while generating documentation"
 
 Target.create "CheckProperties" <| fun _ ->
-    testDir </> "FSharpIL.Properties" </> "FSharpIL.Properties.fsproj" |> DotNet.test id
+    let proj = testDir </> "FSharpIL.Properties" </> "FSharpIL.Properties.fsproj"
+    for tfm in [ "netcoreapp3.1"; "net5.0" ] do
+        sprintf
+            "-p %s -c Release -f %s --no-build --no-restore"
+            proj
+            tfm
+        |> DotNet.exec id "run"
+        |> handleErr "One or more tests failed"
 
 Target.create "TestExamples" <| fun _ ->
-    testDir </> "FSharpIL.Examples.Tests" </> "FSharpIL.Examples.Tests.fsproj"
-    |> sprintf "-p %s -c Release --no-build --no-restore"
+    let proj = testDir </> "FSharpIL.Examples.Tests" </> "FSharpIL.Examples.Tests.fsproj"
+
+    DotNet.build
+        (fun opt -> { opt with Configuration = DotNet.Release })
+        proj
+
+    sprintf "-p %s -c Release --no-build --no-restore" proj
     |> DotNet.exec id "run"
     |> handleErr "One or more tests failed"
 
@@ -88,9 +103,10 @@ Target.create "Pack" <| fun _ ->
     Trace.trace "Packing..."
 
 "Clean"
+==> "Restore"
 ==> "BuildAll"
 ==> "CheckProperties"
-==> "Publish"
+==> "Pack"
 
 "BuildAll"
 ==> "GenerateExamples"
