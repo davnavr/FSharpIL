@@ -14,12 +14,6 @@ module ItemExtensions =
             | :? ReturnTypeVoid -> ReturnType.Void
             | unknown -> failwithf "Unknown return type %A" unknown
 
-    type TypeSpecRow with
-        member this.Signature = this.Type :?> TypeSpec
-
-    type MethodSpecRow with
-        member this.Instantiation = this.Item :?> MethodSpec
-
     type ParamItem with
         member this.ParamType = this.Type :?> EncodedType
 

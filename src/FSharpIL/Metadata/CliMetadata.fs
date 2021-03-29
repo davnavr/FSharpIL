@@ -7,11 +7,13 @@ open System.Collections.Immutable
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
 [<Sealed>]
 type CliMetadata (builder: CliMetadataBuilder) =
+    let blobs = builder.Blobs.ToImmutable()
+
     // TODO: Determine if readOnlyDict or ImmutableDictionary has faster lookup times.
     let methodDef = builder.Method.ToImmutable()
     let parameters =
         methodDef.Rows
-        |> Seq.collect(fun method -> Seq.indexed method.ParamList)
+        |> Seq.collect (fun method -> method.GetParameters blobs.MethodDefSig.[method.Signature])
         |> ImmutableArray.CreateRange
 
     let standAloneSig = builder.StandAloneSig.ToImmutable()
@@ -127,6 +129,8 @@ type CliMetadata (builder: CliMetadataBuilder) =
 
     /// <summary>Corresponds to the <c>Version</c> field of the metadata root (II.24.2.1)</summary>
     member val MetadataVersion = builder.MetadataVersion
+
+    member _.Blobs = blobs
 
     /// <summary>Corresponds to the <c>MajorVersion</c> field of the <c>#~</c> stream header.</summary>
     member val MajorVersion = builder.MajorVersion

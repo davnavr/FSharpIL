@@ -3,6 +3,7 @@
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 open System.Text
 
 open Microsoft.FSharp.Core.Operators.Checked
@@ -10,7 +11,7 @@ open Microsoft.FSharp.Core.Operators.Checked
 open FSharpIL.Bytes
 open FSharpIL.Metadata
 
-[<System.Runtime.CompilerServices.IsByRefLike>]
+[<IsByRefLike; IsReadOnly>]
 type internal BlobWriter = struct
     val Metadata: CliMetadata
     val Writer: FSharpIL.Writing.ChunkWriter

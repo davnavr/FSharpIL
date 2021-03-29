@@ -11,19 +11,21 @@ open System.Runtime.InteropServices
 /// </summary>
 [<IsReadOnly>]
 [<NoComparison; StructuralEquality>]
-type FieldSignature = struct
+type FieldSignature = struct // TODO: Move to Items.fs, because of Blob`1
     val CustomMod: ImmutableArray<CustomModifier>
     val internal Type: IEncodedType // FieldType
     internal new (modifiers, fieldType) = { CustomMod = modifiers; Type = fieldType }
     override this.ToString() = this.Type.ToString()
 end
 
+//type FieldSig = class end
+
 /// <summary>Represents a row in the <c>Field</c> table (II.22.15).</summary>
 [<Sealed>]
 type FieldRow internal (flags, name, signature) =
     member _.Flags: FieldAttributes = flags
     member _.Name: Identifier = name
-    member _.Signature: FieldSignature = signature
+    member _.Signature: Blob<FieldSignature> = signature
 
     member internal _.SkipDuplicateChecking = flags &&& FieldAttributes.FieldAccessMask = FieldAttributes.PrivateScope
 

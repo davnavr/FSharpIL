@@ -76,6 +76,8 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     /// The metadata version, contained in the metadata root (II.24.2.1).
     member val MetadataVersion = MetadataVersion.ofStr "v4.0.30319" with get, set
 
+    member val Blobs = BlobHeapBuilder()
+
     // Reserved: uint32
     member val MajorVersion: byte = 2uy
     member val MinorVersion: byte = 0uy

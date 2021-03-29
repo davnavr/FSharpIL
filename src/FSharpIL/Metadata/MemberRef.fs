@@ -32,10 +32,10 @@ module MemberRefParent =
     let ModuleRef (index: RawIndex<ModuleRef>) = index.ToTaggedIndex MemberRefParentTag.ModuleRef
 
 [<NoComparison; StructuralEquality>]
-type MemberRef<'Signature when 'Signature : equality and 'Signature : struct> =
+type MemberRef<'Signature> =
     { Class: MemberRefParent
       MemberName: Identifier
-      Signature: 'Signature }
+      Signature: Blob<'Signature> }
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -126,17 +126,73 @@ type MethodRefGeneric = MemberRef<MethodRefGenericSignature>
 type MethodRefVarArg = MemberRef<MethodRefVarArgSignature>
 type FieldRef = MemberRef<FieldSignature>
 
+type internal MemberRefSignatureTag =
+    | MethodDefault = 1uy
+    | MethodGeneric = 2uy
+    | MethodVarArg = 3uy
+    | Field = 4uy
+
+// TODO: Rename to MethodRefSignatureBlob?
+[<IsReadOnly; Struct>]
+type MethodRefSignature internal (tag: MemberRefSignatureTag, index: int32) =
+    member internal _.Tag = tag
+    member internal _.Index = index
+    new (blob: Blob<MethodRefDefaultSignature>) = MethodRefSignature(MemberRefSignatureTag.MethodDefault, blob.Index)
+    new (blob: Blob<MethodRefGenericSignature>) = MethodRefSignature(MemberRefSignatureTag.MethodGeneric, blob.Index)
+    new (blob: Blob<MethodRefVarArgSignature>) = MethodRefSignature(MemberRefSignatureTag.MethodVarArg, blob.Index)
+    member internal this.AsBlob<'Item>() = Blob<'Item> this.Index
+
+// TODO: Rename to MemberRefSignatureBlob?
+/// <summary>Represents the signature of a <c>MethodRef</c> or <c>FieldRef</c> (II.23.2.2).</summary>
+[<IsReadOnly>]
+type MemberRefSignature = struct
+    val internal Tag: MemberRefSignatureTag
+    val internal Index: int32
+    internal new (tag, index) = { Tag = tag; Index = index }
+    new (blob: MethodRefSignature) = MemberRefSignature(blob.Tag, blob.Index)
+    new (blob: Blob<FieldSignature>) = MemberRefSignature(MemberRefSignatureTag.Field, blob.Index)
+    member internal this.AsBlob<'Item>() = Blob<'Item> this.Index
+end
+
+[<RequireQualifiedAccess>]
+module MethodRefSignature =
+    let (|MethodDefault|MethodGeneric|MethodVarArg|) (signature: MethodRefSignature) =
+        match signature.Tag with
+        | MemberRefSignatureTag.MethodDefault -> MethodDefault(signature.AsBlob<MethodRefDefaultSignature>())
+        | MemberRefSignatureTag.MethodGeneric -> MethodGeneric(signature.AsBlob<MethodRefGenericSignature>())
+        | MemberRefSignatureTag.MethodVarArg -> MethodVarArg(signature.AsBlob<MethodRefVarArgSignature>())
+        | _ -> invalidArg "signature" "Invalid method reference signature kind"
+
+[<RequireQualifiedAccess>]
+module MemberRefSignature =
+    let (|MethodRef|FieldRef|) (signature: MemberRefSignature) =
+        match signature.Tag with
+        | MemberRefSignatureTag.MethodDefault
+        | MemberRefSignatureTag.MethodGeneric
+        | MemberRefSignatureTag.MethodVarArg -> MethodRef(MethodRefSignature(signature.Tag, signature.Index))
+        | MemberRefSignatureTag.Field -> FieldRef(signature.AsBlob<FieldSignature>())
+        | _ -> invalidArg "signature" "Invalid member reference signature kind"
+
+    let (|MethodDefault|MethodGeneric|MethodVarArg|Field|) (signature: MemberRefSignature) =
+        match signature with
+        | MethodRef method ->
+            match method with
+            | MethodRefSignature.MethodDefault signature -> MethodDefault signature
+            | MethodRefSignature.MethodGeneric signature -> MethodGeneric signature
+            | MethodRefSignature.MethodVarArg signature -> MethodVarArg signature
+        | FieldRef field -> Field field
+
+// TODO: Figure out if MemberRefRow constructor should be public.
 /// <summary>
 /// Represents a row in the <c>MemberRef</c> table, which contains references to the methods and fields of a class (II.22.25).
 /// </summary>
 /// <seealso cref="T:FSharpIL.Metadata.MethodRef"/>
 /// <seealso cref="T:FSharpIL.Metadata.FieldRef"/>
-[<NoComparison; StructuralEquality>]
-type MemberRefRow =
-    | MethodRefDefault of MethodRefDefault
-    | MethodRefGeneric of MethodRefGeneric
-    | MethodRefVarArg of MethodRefVarArg
-    | FieldRef of FieldRef
+[<IsReadOnly; Struct>]
+type MemberRefRow internal (parent: MemberRefParent, name: Identifier, signature: MemberRefSignature) =
+    member _.Class = parent
+    member _.Name = name
+    member _.Signature = signature
 
 /// <summary>
 /// Error used when there is a duplicate row in the <c>MemberRef</c> table (6).
@@ -158,14 +214,17 @@ type MemberRefTableBuilder internal () =
     member _.Count = members.Count
 
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member internal _.Add<'MemberRef>(row: MemberRefRow) =
+    member internal _.Add<'Tag>(row: MemberRefRow) =
         let i, duplicate = members.Add row
-        struct(RawIndex<'MemberRef> i.Value, duplicate)
+        struct(RawIndex<'Tag> i.Value, duplicate)
 
-    member this.Add(method: MethodRefDefault) = this.Add<MethodRefDefault>(MethodRefDefault method)
-    member this.Add(method: MethodRefGeneric) = this.Add<MethodRefGeneric>(MethodRefGeneric method)
-    member this.Add(method: MethodRefVarArg) = this.Add<MethodRefVarArg>(MethodRefVarArg method)
-    member this.Add(field: FieldRef) = this.Add<FieldRef>(FieldRef field)
+    member internal this.Add<'Sig, 'Tag>(tag, { Class = parent; MemberName = name; Signature = signature: Blob<'Sig> }) =
+        this.Add<'Tag>(MemberRefRow(parent, name, MemberRefSignature(tag, signature.Index)))
+
+    member this.Add(method: MethodRefDefault) = this.Add<_, MethodRefDefault>(MemberRefSignatureTag.MethodDefault, method)
+    member this.Add(method: MethodRefGeneric) = this.Add<_, MethodRefGeneric>(MemberRefSignatureTag.MethodGeneric, method)
+    member this.Add(method: MethodRefVarArg) = this.Add<_, MethodRefVarArg>(MemberRefSignatureTag.MethodVarArg, method)
+    member this.Add(field: FieldRef) = this.Add<_, FieldRef>(MemberRefSignatureTag.Field, field)
 
     member internal _.ToImmutable() = members.ToImmutable()
 
@@ -173,3 +232,45 @@ type MemberRefTableBuilder internal () =
         member _.Count = members.Count
         member _.GetEnumerator() = members.GetEnumerator() :> IEnumerator<_>
         member _.GetEnumerator() = members.GetEnumerator() :> System.Collections.IEnumerator
+
+[<Sealed>]
+type MethodRefSigBlobLookup internal
+    (
+        rdefault: MethodRefDefaultSignature[],
+        rgeneric: MethodRefGenericSignature[],
+        rvararg: MethodRefVarArgSignature[]
+    ) =
+    member _.Count = rdefault.Length + rgeneric.Length + rvararg.Length
+    member _.ItemRef(i: Blob<MethodRefDefaultSignature>): inref<_> = &rdefault.[i.Index]
+    member _.ItemRef(i: Blob<MethodRefGenericSignature>): inref<_> = &rgeneric.[i.Index]
+    member _.ItemRef(i: Blob<MethodRefVarArgSignature>): inref<_> = &rvararg.[i.Index]
+    member this.Item with get (i: Blob<MethodRefDefaultSignature>) = this.ItemRef i
+    member this.Item with get (i: Blob<MethodRefGenericSignature>) = this.ItemRef i
+    member this.Item with get (i: Blob<MethodRefVarArgSignature>) = this.ItemRef i
+
+[<Sealed>]
+type MethodRefSigBlobLookupBuilder internal () =
+    let rdefault = Dictionary<MethodRefDefaultSignature, int32>()
+    let rgeneric = Dictionary<MethodRefGenericSignature, int32>()
+    let rvararg = Dictionary<MethodRefVarArgSignature, int32>()
+
+    member _.Count = rdefault.Count + rgeneric.Count + rvararg.Count
+    member _.TryAdd signature = Blob.tryAddTo rdefault signature
+    member _.TryAdd signature = Blob.tryAddTo rgeneric signature
+    member _.TryAdd signature = Blob.tryAddTo rvararg signature
+    member internal _.ToImmutable() =
+        let rdefault' = Array.zeroCreate rdefault.Count
+        for KeyValue(signature, i) in rdefault do
+            rdefault'.[i] <- signature
+
+        let rgeneric' = Array.zeroCreate rgeneric.Count
+        for KeyValue(signature, i) in rgeneric do
+            rgeneric'.[i] <- signature
+
+        let rvararg' = Array.zeroCreate rvararg.Count
+        for KeyValue(signature, i) in rvararg do
+            rvararg'.[i] <- signature
+
+        MethodRefSigBlobLookup(rdefault', rgeneric', rvararg')
+
+//TODO: Figure out how to allow creation of Blob<MethodRefDefaultSignature>, etc.

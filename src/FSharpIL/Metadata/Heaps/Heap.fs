@@ -7,7 +7,6 @@ open System.Text
 open Microsoft.FSharp.Core.Operators.Checked
 
 open FSharpIL.Metadata
-
 open FSharpIL.Writing
 
 [<RequireQualifiedAccess>]
@@ -87,43 +86,24 @@ module internal Heap =
 
         Lookup<_>(guids, uint32 guids.Count * 16u, indexOf)
 
+    let inline private fieldSignature (blob: SerializedBlobHeap) (writer: inref<BlobWriter>) signature =
+        if not (blob.FieldSig.ContainsKey signature) then
+            writer.FieldSig(blob.Blobs.FieldSig.ItemRef signature)
+            blob.CreateIndex(signature, blob.FieldSig)
+
     /// <summary>Creates the <c>#Blob</c> metadata stream, which contains signatures (II.24.2.4).</summary>
     let blob (metadata: CliMetadata) size =
-        let mutable offset = 1u
-        let blob =
-            { Field = Dictionary metadata.Field.Count
-              MethodDef = Dictionary metadata.MethodDef.Count
-              MemberRef = Dictionary metadata.MemberRef.Count
-              Constant = Dictionary metadata.Constant.Count
-              CustomAttribute = Dictionary metadata.CustomAttribute.Length
-
-              Property = Dictionary metadata.Property.Count
-
-              TypeSpec = Dictionary metadata.TypeSpec.Count
-
-              MethodSpec = Dictionary metadata.MethodSpec.Count
-
-              PublicKeyTokens = Dictionary metadata.AssemblyRef.Count
-              LocalVariables = Dictionary metadata.MethodDef.Count
-              ByteBlobs = Dictionary metadata.File.Count
-              Content = ChunkWriter(LinkedList<_>().AddFirst(Array.zeroCreate size)) }
+        let blob = SerializedBlobHeap(metadata.Blobs, size)
         let writer = BlobWriter(metadata, blob.Content)
-        let inline blobIndex pos item (dict: Dictionary<_, BlobIndex>) =
-            let size = uint32(blob.Content.Position - pos)
-            dict.Item <- item, { BlobIndex.Index = offset; BlobIndex.Size = size }
-            offset <- offset + size + BlobSize.ofUnsigned size
 
-        for field in metadata.Field.Rows do
-            let signature = field.Signature
-            if not (blob.Field.ContainsKey signature) then
-                let pos = writer.Position
-                writer.FieldSig signature
-                blobIndex pos signature blob.Field
+        // TODO: Verify that the blob's size is automatically reset for each blob
+
+        for field in metadata.Field.Rows do fieldSignature blob &writer field.Signature
 
         for method in metadata.MethodDef.Rows do
-            let signature = method.Signature
-            if not (blob.MethodDef.ContainsKey signature) then
-                let pos = writer.Position
+            let i = method.Signature
+            if not (blob.MethodDefSig.ContainsKey i) then
+                let signature = metadata.Blobs.MethodDefSig.ItemRef i
                 let gcount, cconventions =
                     match signature.CallingConventions with
                     | Default -> ValueNone, CallingConvention.Default
@@ -143,41 +123,42 @@ module internal Heap =
                 writer.CompressedUnsigned signature.Parameters.Length // ParamCount
                 writer.RetType signature.ReturnType
                 writer.Parameters signature.Parameters
-                blobIndex pos signature blob.MethodDef
+                blob.CreateIndex(i, blob.MethodDefSig)
 
         for memberRef in metadata.MemberRef.Rows do
-            if not (blob.MemberRef.ContainsKey memberRef) then
-                let pos = writer.Position
-
-                match memberRef with
-                | MethodRefDefault { Signature = signature } ->
-                    writer.Writer.WriteU1 signature.CallingConventions
-                    writer.CompressedUnsigned signature.Parameters.Length // ParamCount
-                    writer.RetType signature.ReturnType
-                    writer.Parameters signature.Parameters
-                | MethodRefGeneric { Signature = signature } ->
-                    writer.Writer.WriteU1 signature.CallingConventions
-                    writer.CompressedUnsigned signature.GenParamCount
-                    writer.CompressedUnsigned signature.Parameters.Length // ParamCount
-                    writer.RetType signature.ReturnType
-                    writer.Parameters signature.Parameters
-                | MethodRefVarArg { Signature = signature } ->
-                    writer.Writer.WriteU1 signature.CallingConventions
-                    writer.CompressedUnsigned signature.ParamCount
-                    writer.RetType signature.ReturnType
-                    writer.Parameters signature.Parameters
-                    if not signature.VarArgParameters.IsEmpty then
-                        writer.Writer.WriteU1 ElementType.Sentinel
-                        writer.Parameters signature.VarArgParameters
-                | FieldRef { Signature = signature } -> writer.FieldSig signature
-
-                blobIndex pos memberRef blob.MemberRef
+            match memberRef.Signature with
+            | MemberRefSignature.MethodDefault method ->
+                let signature = metadata.Blobs.MethodRefSig.ItemRef method
+                writer.Writer.WriteU1 signature.CallingConventions
+                writer.CompressedUnsigned signature.Parameters.Length // ParamCount
+                writer.RetType signature.ReturnType
+                writer.Parameters signature.Parameters
+            | MemberRefSignature.MethodGeneric method ->
+                let signature = metadata.Blobs.MethodRefSig.ItemRef method
+                writer.Writer.WriteU1 signature.CallingConventions
+                writer.CompressedUnsigned signature.GenParamCount
+                writer.CompressedUnsigned signature.Parameters.Length // ParamCount
+                writer.RetType signature.ReturnType
+                writer.Parameters signature.Parameters
+            | MemberRefSignature.MethodVarArg method ->
+                let signature = metadata.Blobs.MethodRefSig.ItemRef method
+                writer.Writer.WriteU1 signature.CallingConventions
+                writer.CompressedUnsigned signature.ParamCount
+                writer.RetType signature.ReturnType
+                writer.Parameters signature.Parameters
+                if not signature.VarArgParameters.IsEmpty then
+                    writer.Writer.WriteU1 ElementType.Sentinel
+                    writer.Parameters signature.VarArgParameters
+            | MemberRefSignature.Field field ->
+                fieldSignature blob &writer field
+            failwith "TODO: Write MethodRef"
 
         for row in metadata.Constant.Rows do
-            if not (blob.Constant.ContainsKey row.Value) then
-                let pos = writer.Position
-                match row.Value with
-                | ConstantValue.Integer value ->
+            let i = row.Value
+            if not (blob.Constant.ContainsKey i) then
+                match i with
+                | ConstantBlob.Integer i' ->
+                    let value = metadata.Blobs.Constant.ItemRef i'
                     match value.Tag with
                     | IntegerType.Bool
                     | IntegerType.I1
@@ -190,39 +171,40 @@ module internal Heap =
                     | IntegerType.I8
                     | IntegerType.U8 -> writer.Writer.WriteU4 value.U4
                     | _ -> invalidOp "Cannot write integer constant blob for unknown integer type"
-                | ConstantValue.String value -> failwith "TODO: String constant values are not supported at this time"
-                | ConstantValue.Null -> writer.Writer.WriteU4 0u
-                blobIndex pos row.Value blob.Constant
+                | ConstantBlob.String i' -> failwith "TODO: String constant values are not supported at this time"
+                | ConstantBlob.Null -> writer.Writer.WriteU4 0u
+
+                blob.CreateIndex(i, blob.Constant)
 
         for { Value = value } in metadata.CustomAttribute do
             match value with
-            | Some signature when not (blob.CustomAttribute.ContainsKey signature) ->
-                let pos = writer.Position
+            | ValueSome i when not (blob.CustomAttribute.ContainsKey i) ->
+                let signature = metadata.Blobs.CustomAttribue.ItemRef i
                 writer.Writer.WriteU2 1us // Prolog
                 for arg in signature.FixedArg do
                     writer.FixedArg arg
                 writer.Writer.WriteU2 signature.NamedArg.Length // NumNamed
                 for arg in signature.NamedArg do
                     failwithf "TODO: Implement writing of named arguments for custom attributes"
-                blobIndex pos signature blob.CustomAttribute
+                blob.CreateIndex(i, blob.CustomAttribute)
             | _ -> ()
 
         for row in metadata.Property.Rows do
-            let signature = row.Type
-            if not (blob.Property.ContainsKey signature) then
-                let pos = writer.Position
+            let i = row.Type
+            if not (blob.PropertySig.ContainsKey i) then
+                let signature = metadata.Blobs.PropertySig.ItemRef i
                 let property = if signature.HasThis then 0x28uy else 0x8uy
                 writer.Writer.WriteU1 property
                 writer.CompressedUnsigned signature.Parameters.Length // ParamCount
                 writer.CustomMod signature.CustomMod
                 writer.EncodedType signature.Type
                 writer.Parameters signature.Parameters
-                blobIndex pos signature blob.Property
+                blob.CreateIndex(i, blob.PropertySig)
 
         for typeSpec in metadata.TypeSpec.Rows do
-            let signature = typeSpec.Signature
-            if not (blob.TypeSpec.ContainsKey signature) then
-                let pos = writer.Position
+            let i = typeSpec.Signature
+            if not (blob.TypeSpec.ContainsKey i) then
+                let signature = metadata.Blobs.TypeSpec.ItemRef i
 
                 match signature with
                 | TypeSpec.GenericInst inst -> writer.GenericInst inst
@@ -234,39 +216,31 @@ module internal Heap =
                     writer.Writer.WriteU1 ElementType.Var
                     writer.CompressedUnsigned num
 
-                blobIndex pos signature blob.TypeSpec
+                blob.CreateIndex(i, blob.TypeSpec)
 
         for methodSpec in metadata.MethodSpec.Rows do
-            let inst = methodSpec.Instantiation
-            if not (blob.MethodSpec.ContainsKey inst) then
-                let pos = writer.Position
+            let i = methodSpec.Instantiation
+            if not (blob.MethodSpec.ContainsKey i) then
+                let inst = metadata.Blobs.MethodSpec.ItemRef i
                 writer.Writer.WriteU1 0xAuy // GENERICINST
                 writer.CompressedUnsigned inst.Count
-                for gparam in inst.ToImmutableArray() do writer.EncodedType gparam
-                blobIndex pos inst blob.MethodSpec
+                for gparam in inst.GenericArguments do writer.EncodedType gparam
+                blob.CreateIndex(i, blob.MethodSpec)
 
         for { PublicKeyOrToken = token } in metadata.AssemblyRef.Rows do
-            if not (blob.PublicKeyTokens.ContainsKey token) then
-                let pos = writer.Position
-                match token with
-                | PublicKeyToken(b1, b2, b3, b4, b5, b6, b7, b8) ->
-                    writer.Writer.WriteU1 b1
-                    writer.Writer.WriteU1 b2
-                    writer.Writer.WriteU1 b3
-                    writer.Writer.WriteU1 b4
-                    writer.Writer.WriteU1 b5
-                    writer.Writer.WriteU1 b6
-                    writer.Writer.WriteU1 b7
-                    writer.Writer.WriteU1 b8
-                | _ -> failwithf "Unable to write unsupported public key token %A" token
-                blobIndex pos token blob.PublicKeyTokens
+            match token.AsByteBlob() with
+            | ValueSome i ->
+                let token = metadata.Blobs.MiscBytes.ItemRef i
+                writer.Writer.WriteBytes token
+                blob.CreateIndex(i, blob.MiscBytes)
+            | ValueNone -> ()
 
         for locals in metadata.StandAloneSig.LocalVariables do
-            if not (locals.IsEmpty || blob.LocalVariables.ContainsKey locals) then
-                let pos = writer.Position
+            if not (blob.LocalVarSig.ContainsKey locals) then
+                let signature = metadata.Blobs.LocalVarSig.ItemRef locals
                 writer.Writer.WriteU1 0x7uy // LOCAL_SIG
-                writer.CompressedUnsigned locals.Length // Count
-                for local in locals do
+                writer.CompressedUnsigned signature.Length // Count
+                for local in signature do
                     match local with
                     | LocalVariable.TypedByRef -> writer.Writer.WriteU1 ElementType.TypedByRef
                     | _ ->
@@ -277,11 +251,13 @@ module internal Heap =
                         if local.Tag = LocalVariableTag.ByRef then
                             writer.Writer.WriteU1 ElementType.ByRef
                         writer.EncodedType local.LocalType
-                blobIndex pos locals blob.LocalVariables
+                blob.CreateIndex(locals, blob.LocalVarSig)
 
-        for { File.HashValue = hashValue } in metadata.File.Rows do 
-            if not (blob.ByteBlobs.ContainsKey hashValue) then
-                writer.Writer.WriteBytes hashValue
+        for { File.HashValue = i } in metadata.File.Rows do
+            if not (blob.MiscBytes.ContainsKey i) then
+                let hash = metadata.Blobs.MiscBytes.ItemRef i
+                writer.Writer.WriteBytes hash
+                blob.CreateIndex(i, blob.MiscBytes)
 
         blob
 
@@ -301,7 +277,7 @@ module internal Heap =
     let writeGuid (metadata: CliMetadata) (writer: ChunkWriter) =
         metadata.Module.Mvid.ToByteArray() |> writer.WriteBytes
 
-    let writeBlob (blobs: BlobHeap) metadata (writer: ChunkWriter) =
+    let writeBlob (blobs: SerializedBlobHeap) metadata (writer: ChunkWriter) =
         writer.WriteU1 0uy
 
         let mutable chunk, i = blobs.Content.Chunk.List.First, 0
@@ -313,17 +289,16 @@ module internal Heap =
                 chunk <- chunk'
                 i <- i'
 
-        writeAll blobs.Field
-        writeAll blobs.MethodDef
-        writeAll blobs.MemberRef
+        writeAll blobs.FieldSig
+        writeAll blobs.MethodDefSig
+        writeAll blobs.MethodRefSig
         writeAll blobs.Constant
         writeAll blobs.CustomAttribute
-        writeAll blobs.Property
+        writeAll blobs.PropertySig
         writeAll blobs.TypeSpec
         writeAll blobs.MethodSpec
-        writeAll blobs.PublicKeyTokens
-        writeAll blobs.LocalVariables
-        writeAll blobs.ByteBlobs
+        writeAll blobs.LocalVarSig
+        writeAll blobs.MiscBytes
 
     let writeUS (us: UserStringHeap) metadata (writer: ChunkWriter) =
         let writer' = BlobWriter(metadata, writer)

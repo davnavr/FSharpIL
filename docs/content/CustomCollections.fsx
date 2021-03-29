@@ -3,7 +3,7 @@
 #r "../Dependencies.fsx"
 #else
 module FSharpIL.CustomCollections
-
+#if !BENCHMARK
 open Expecto
 
 open Swensen.Unquote
@@ -11,6 +11,7 @@ open Swensen.Unquote
 open System.IO
 
 open FSharpIL
+#endif
 #endif
 (**
 # Custom Collections
@@ -455,7 +456,7 @@ let example() =
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 
 (*** hide ***)
-#if COMPILED
+#if COMPILED && !BENCHMARK
 [<Tests>]
 let tests =
     let example' = lazy example()

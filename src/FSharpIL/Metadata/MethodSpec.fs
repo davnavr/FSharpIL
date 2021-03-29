@@ -1,41 +1,48 @@
 ﻿namespace FSharpIL.Metadata
 
-type internal IMethodSpec = interface end
+open System.Collections.Generic
+open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
-type MethodDefOrRefTag =
-    | Def = 0uy
-    | RefDefault = 1uy
-    | RefGeneric = 2uy
-    | RefVarArg = 3uy
+/// <summary>Represents a <c>MethodSpec</c> item in the <c>#Blob</c> heap (II.23.2.15).</summary>
+[<IsReadOnly>]
+type MethodSpec = struct
+    val GenericArguments: ImmutableArray<EncodedType>
 
-type MethodDefOrRef = TaggedIndex<MethodDefOrRefTag>
+    /// <exception cref="T:System.ArgumentException">Thrown when the generic argument list is empty.</exception>
+    new (args: ImmutableArray<_>) =
+        if args.Length <= 0 then invalidArg "garguments" "The generic argument list cannot be empty."
+        { GenericArguments = args }
 
-[<RequireQualifiedAccess>]
-module MethodDefOrRef =
-    let (|Def|RefDefault|RefGeneric|RefVarArg|) (index: MethodDefOrRef) =
-        match index.Tag with
-        | MethodDefOrRefTag.Def -> Def(index.ToRawIndex<MethodDefRow>())
-        | MethodDefOrRefTag.RefGeneric -> RefGeneric(index.ToRawIndex<MethodRefGeneric>())
-        | MethodDefOrRefTag.RefVarArg -> RefVarArg(index.ToRawIndex<MethodRefVarArg>())
-        | MethodDefOrRefTag.RefDefault
-        | _ -> RefDefault(index.ToRawIndex<MethodRefDefault>())
+    new (args: seq<_>) = MethodSpec(args.ToImmutableArray())
 
-    let Def (index: RawIndex<MethodDefRow>) = index.ToTaggedIndex MethodDefOrRefTag.Def
-    let RefDefault (index: RawIndex<MethodRefDefault>) = index.ToTaggedIndex MethodDefOrRefTag.RefDefault
-    let RefGeneric (index: RawIndex<MethodRefGeneric>) = index.ToTaggedIndex MethodDefOrRefTag.RefGeneric
-    let RefVarArg (index: RawIndex<MethodRefVarArg>) = index.ToTaggedIndex MethodDefOrRefTag.RefVarArg
-
-/// <summary>Represents a row in the <c>MethodSpec</c> table (II.22.29).</summary>
-[<System.Runtime.CompilerServices.IsReadOnly>]
-[<NoComparison; StructuralEquality>]
-type MethodSpecRow = struct
-    val Method: MethodDefOrRef
-    val internal Item: IMethodSpec // Instantiation
-    internal new (method, instantiation) = { Method = method; Item = instantiation }
+    member this.Count = this.GenericArguments.Length
 end
 
-/// <category>Errors</category>
+// TODO: Reduce code duplication with TypeSpecBlobLookup.
+[<IsReadOnly; Struct>]
+type MethodSpecBlobLookup internal (blobs: MethodSpec[]) =
+    member _.Count = blobs.Length
+    member _.Item with get (i: MethodSpecBlob) = blobs.[i.Index]
+    member _.ItemRef(i: MethodSpecBlob): inref<MethodSpec> = &blobs.[i.Index]
+
 [<Sealed>]
-type DuplicateMethodSpecError (methodSpec: MethodSpecRow) =
-    inherit ValidationError()
-    member _.MethodSpec = methodSpec
+type MethodSpecBlobLookupBuilder internal () =
+    let blobs = Dictionary<MethodSpec, int32>()
+    member _.Count = blobs.Count
+    member _.Add(spec, duplicate: outref<bool>) =
+        let count = blobs.Count
+        let i =
+            let (duplicate', existing) = blobs.TryGetValue spec
+            duplicate <- duplicate'
+            if duplicate'
+            then existing
+            else
+                blobs.[spec] <- count
+                count
+        MethodSpecBlob i
+    member internal _.ToImmutable() =
+        let blobs' = Array.zeroCreate blobs.Count
+        for KeyValue(item, i) in blobs do
+            blobs'.[i] <- item
+        MethodSpecBlobLookup blobs'

@@ -285,7 +285,7 @@ type Unsafe private () = class
                         FieldSignature(ImmutableArray.Empty, vtype)
                     )
                 let field' = builder.Field.TryAdd(trow, field).Value
-                let cvalue = builder.Constant.TryAdd(field', ConstantValue.Integer value.Value).Value
+                let cvalue = builder.Constant.TryAdd(field', ConstantBlob.Integer value.Value).Value
                 values.Add(EnumValueRow(field'.ChangeTag<StaticField>(), cvalue))
 
             // TODO: Add enum values to constant table.
@@ -336,7 +336,7 @@ type Unsafe private () = class
             else ExistingPropertyMethodsError index :> ValidationError |> Error
         | ValueNone -> DuplicatePropertyError row :> ValidationError |> Error
 
-    static member AddProperty<'Tag, 'Signature, 'Method when 'Signature :> IPropertySignature>
+    static member AddProperty<'Tag, 'Signature, 'Method>
         (
             builder,
             parent,

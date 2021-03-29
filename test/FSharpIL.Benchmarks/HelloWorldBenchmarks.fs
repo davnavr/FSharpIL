@@ -1,7 +1,6 @@
-﻿module FSharpIL.Benchmarks
+﻿namespace FSharpIL
 
 open BenchmarkDotNet.Attributes
-open BenchmarkDotNet.Running
 
 open System
 open System.Collections.Immutable
@@ -19,7 +18,7 @@ open FSharpIL.Metadata.UncheckedExn
 
 [<StatisticalTestColumn>]
 [<MemoryDiagnoser>]
-type HelloWorld () =
+type HelloWorldBenchmarks () =
     [<Benchmark>]
     member _.FSharpIL_ComputationExpression() = HelloWorld.example()
 
@@ -169,12 +168,3 @@ type HelloWorld () =
         assembly.CustomAttributes.Add tfm
 
         assembly
-
-[<EntryPoint>]
-let main argv =
-    let assm = System.Reflection.Assembly.GetExecutingAssembly()
-    BenchmarkSwitcher
-        .FromAssembly(assm)
-        .Run(args = argv)
-    |> ignore
-    0

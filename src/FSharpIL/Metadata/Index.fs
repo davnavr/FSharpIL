@@ -11,7 +11,7 @@ type RawIndex<'Tag> internal (value: int32) =
     member _.Value = value
     member internal _.ToTaggedIndex(tag) = TaggedIndex(tag, value)
     member internal _.ChangeTag<'To>() = RawIndex<'To> value
-    override _.ToString() = sprintf "%s (0x%x)" typeof<'Tag>.Name value
+    override _.ToString() = sprintf "%s(0x%x)" typeof<'Tag>.Name value
     static member op_Implicit(index: RawIndex<'Tag>) = index.Value
     static member op_Implicit(index: RawIndex<'Tag>) = uint32 index.Value
     static member op_Implicit(index: RawIndex<'Tag>) = uint16 index.Value
@@ -24,7 +24,7 @@ type TaggedIndex<'Tag when 'Tag : struct> internal (tag: 'Tag, value: int32) =
     member _.Tag = tag
     member _.Value = value
     member internal _.ToRawIndex() = RawIndex value
-    override _.ToString() = sprintf "%O (0x%x)" tag value
+    override _.ToString() = sprintf "%O(0x%x)" tag value
 
 [<AutoOpen>]
 module internal IndexHelpers =

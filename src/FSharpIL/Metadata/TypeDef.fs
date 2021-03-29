@@ -281,8 +281,9 @@ type DelegateDef = struct
         DelegateDef(access, returnType, parameters, name, ns, tflags, mflags)
 end
 
+// TODO: Figure out how to use Blob`1 here.
 [<IsReadOnly; Struct>]
-type EnumValue internal (name: Identifier, value: IntegerConstant) =
+type EnumValue internal (name: Identifier, value: IntegerConstantBlob) =
     member _.Name = name
     member _.Value = value
 
@@ -300,13 +301,13 @@ type EnumValueListBuilder (utype: IntegerType, capacity: int32) =
         let msg = "A valid numeric type must be specifed for the underlying type of an enumeration"
         ArgumentOutOfRangeException("utype", utype, msg) |> raise
 
-    let lookup = Dictionary<Identifier, IntegerConstant> capacity
+    let lookup = Dictionary<Identifier, IntegerConstantBlob> capacity
 
     new (utype) = EnumValueListBuilder(utype, 1)
 
     member _.UnderlyingType = utype
 
-    member _.TryAdd(name, value: IntegerConstant) =
+    member _.TryAdd(name, value: IntegerConstantBlob) =
         value.Tag = utype && lookup.TryAdd(name, value)
 
     member _.ToImmutable() =

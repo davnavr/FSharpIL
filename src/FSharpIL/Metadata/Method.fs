@@ -68,12 +68,12 @@ type StaticMethodFlags<'Visibility when 'Visibility :> IFlags<MethodAttributes>>
 end
 
 [<IsReadOnly; Struct>]
-type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :> IMethodDefSignature>
+type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody>
     (
         body: 'Body,
         flags: ValidFlags<'Flags, MethodAttributes>,
         name: Identifier,
-        signature: 'Signature,
+        signature: Blob<'Signature>,
         parameters: ParamItem -> int -> ParamRow,
         implFlags: MethodImplFlags
     ) =
@@ -91,7 +91,7 @@ type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :
             this.ImplFlags.Value,
             this.Flags.Value,
             this.MethodName,
-            this.Signature.Signature(),
+            this.Signature.ChangeTag(),
             this.ParamList
         )
 
@@ -108,8 +108,6 @@ type InstanceMethodSignature = struct
 
     member internal this.Signature() =
         MethodDefSignature(true, false, this.CallingConventions, this.ReturnType, this.Parameters)
-
-    interface IMethodDefSignature with member this.Signature() = this.Signature()
 end
 
 type InstanceMethod = Method<ConcreteMethodBody, InstanceMethodTag, InstanceMethodSignature>
@@ -141,8 +139,6 @@ type ObjectConstructorSignature = struct
 
     member internal this.Signature() =
         MethodDefSignature(true, false, MethodCallingConventions.Default, ReturnTypeItem ReturnTypeVoid.Item, this.Parameters)
-
-    interface IMethodDefSignature with  member this.Signature() = this.Signature()
 end
 
 [<IsReadOnly>]
@@ -164,7 +160,7 @@ end
 // TODO: Prevent constructors from having generic parameters (an entry in the GenericParam table).
 // NOTE: Constructors and Class Constructors cannot be marked CompilerControlled.
 /// <summary>Represents a method named <c>.ctor</c>, which is an object constructor method.</summary>
-type ObjectConstructor = Constructor<ObjectConstructorTag, ObjectConstructorSignature>
+type ObjectConstructor = Constructor<ObjectConstructorTag, Blob<ObjectConstructorSignature>>
 /// <summary>Represents a method named <c>.cctor</c>, which is a class constructor method.</summary>
 type ClassConstructor = Constructor<ClassConstructorTag, unit>
 
@@ -183,8 +179,6 @@ type StaticMethodSignature = struct
 
     member internal this.Signature() =
         MethodDefSignature(false, false, this.CallingConventions, this.ReturnType, this.Parameters)
-
-    interface IMethodDefSignature with member this.Signature() = this.Signature()
 end
 
 type StaticMethod = Method<ConcreteMethodBody, StaticMethodTag, StaticMethodSignature>
@@ -192,7 +186,6 @@ type StaticMethod = Method<ConcreteMethodBody, StaticMethodTag, StaticMethodSign
 [<AbstractClass>]
 type EntryPointSignature internal () =
     abstract Signature: unit -> MethodDefSignature
-    interface IMethodDefSignature with member this.Signature() = this.Signature()
 
 type EntryPointMethod = Method<ConcreteMethodBody, StaticMethodTag, EntryPointSignature>
 
@@ -222,3 +215,26 @@ module EntryPointToken =
     let CustomEntryPoint (index: RawIndex<StaticMethod>) = index.ToTaggedIndex EntryPointTokenTag.Custom // TODO: See if this option is needed to allow usage of Task or Task<int> in signature.
     /// Indicates that the entrypoint is defined in another module.
     let EntryPointFile (index: RawIndex<ModuleRef>) = index.ToTaggedIndex EntryPointTokenTag.File
+
+[<Sealed>]
+type MethodDefSigBlobLookup internal (lookup: BlobLookup<MethodDefSignature>) =
+    member _.Count = lookup.Count
+    member _.Item with get i = lookup.[i]
+    member _.ItemRef i: inref<_> = &lookup.ItemRef(i)
+    member private _.GetSignature<'Tag>(index: Blob<'Tag>) = lookup.[index.ChangeTag()]
+    member this.Item with get i = this.GetSignature<InstanceMethodSignature> i
+    member this.Item with get i = this.GetSignature<ObjectConstructorSignature> i
+    member this.Item with get i = this.GetSignature<StaticMethodSignature> i
+    member this.Item with get i = this.GetSignature<EntryPointSignature> i
+
+[<Sealed>]
+type MethodDefSigBlobLookupBuilder internal () =
+    let lookup = BlobLookupBuilder<MethodDefSignature>()
+    member _.Count = lookup.Count
+    member private _.TryAdd<'Tag> signature = lookup.TryAdd signature |> ValueOption.map (fun i -> i.ChangeTag<'Tag>())
+    member _.TryAdd signature = lookup.TryAdd signature
+    member this.TryAdd(signature: InstanceMethodSignature) = signature.Signature() |> this.TryAdd<InstanceMethodSignature>
+    member this.TryAdd(signature: ObjectConstructorSignature) = signature.Signature() |> this.TryAdd<ObjectConstructorSignature>
+    member this.TryAdd(signature: StaticMethodSignature) = signature.Signature() |> this.TryAdd<StaticMethodSignature>
+    member this.TryAdd(signature: EntryPointSignature) = signature.Signature() |> this.TryAdd<EntryPointSignature>
+    member internal _.ToImmutable() = MethodDefSigBlobLookup(lookup.ToImmutable())

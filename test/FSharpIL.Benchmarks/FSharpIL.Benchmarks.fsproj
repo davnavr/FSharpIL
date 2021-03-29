@@ -9,7 +9,10 @@
 
   <ItemGroup>
     <Compile Include="$(RootDirectory)\docs\content\HelloWorld.fsx" />
-    <Compile Include="Benchmarks.fs" />
+    <Compile Include="$(RootDirectory)\docs\content\CustomCollections.fsx" />
+    <Compile Include="ToArrayBenchmarks.fs" />
+    <Compile Include="HelloWorldBenchmarks.fs" />
+    <Compile Include="Benchmark.fs" />
 
     <PackageReference Include="BenchmarkDotNet" Version="0.12.1" />
     <PackageReference Include="Mono.Cecil" Version="0.11.3" />

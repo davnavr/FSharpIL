@@ -5,8 +5,7 @@
 /// </summary>
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
-type Identifier internal (identifier: string) =
-    override _.ToString() = identifier
+type Identifier internal (identifier: string) = override _.ToString() = identifier
 
 [<RequireQualifiedAccess>]
 module Identifier =
