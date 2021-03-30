@@ -30,17 +30,13 @@ type MethodSpecBlobLookup internal (blobs: MethodSpec[]) =
 type MethodSpecBlobLookupBuilder internal () =
     let blobs = Dictionary<MethodSpec, int32>()
     member _.Count = blobs.Count
-    member _.Add(spec, duplicate: outref<bool>) =
+    member _.TryAdd spec =
         let count = blobs.Count
-        let i =
-            let (duplicate', existing) = blobs.TryGetValue spec
-            duplicate <- duplicate'
-            if duplicate'
-            then existing
-            else
-                blobs.[spec] <- count
-                count
-        MethodSpecBlob i
+        match blobs.TryGetValue spec with
+        | true, existing -> Error(MethodSpecBlob existing)
+        | false, _ ->
+            blobs.[spec] <- count
+            Ok(MethodSpecBlob count)
     member internal _.ToImmutable() =
         let blobs' = Array.zeroCreate blobs.Count
         for KeyValue(item, i) in blobs do

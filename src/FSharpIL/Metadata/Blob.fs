@@ -22,9 +22,11 @@ type Blob<'Item> internal (index: int32) =
 module internal Blob =
     let tryAddTo (lookup: Dictionary<'Item, int32>) item =
         let i = lookup.Count
-        if lookup.TryAdd(item, i)
-        then Blob<'Item> i |> ValueSome
-        else ValueNone
+        match lookup.TryGetValue item with
+        | true, existing -> Error(Blob<'Item> existing)
+        | false, _ ->
+            lookup.[item] <- i
+            Ok(Blob<'Item> i)
 
 [<IsReadOnly; Struct>]
 type BlobLookup<'Item> internal (blobs: 'Item[]) =
@@ -38,7 +40,6 @@ type BlobLookupBuilder<'Item when 'Item : equality> internal () =
 
     member _.Count = lookup.Count
 
-    // TODO: Rename to Add and set a bool is duplicate detected.
     member _.TryAdd(item: 'Item) = Blob.tryAddTo lookup item
 
     member internal _.ToImmutable() =

@@ -4,6 +4,8 @@ module FSharpIL.Metadata.CliMetadata
 open System
 open System.Collections.Immutable
 
+open FSharpIL
+
 /// Contains static methods for modifying the CLI metadata without regard for generation of correct metadata.
 [<AbstractClass; Sealed>]
 type Unsafe = class
@@ -59,12 +61,16 @@ let setEntryPoint builder main = setEntryPointToken builder (EntryPointToken.Val
 /// <param name="assembly">Dummy object used to guarantee that the CLI metadata is an assembly.</param>
 /// <param name="ctor">The constructor for a <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/>.</param>
 /// <param name="tfm">The target framework moniker. For .NET 5, the value is <c>.NETCoreApp,Version=v5.0</c>.</param>
-let setTargetFramework builder (assembly: RawIndex<Assembly>) (ctor: RawIndex<_>) tfm =
+let setTargetFramework (builder: CliMetadataBuilder) (assembly: RawIndex<Assembly>) (ctor: RawIndex<_>) tfm =
     let tfm' = FixedArg.Elem (SerString tfm)
     // TODO: Check that the constructor is correct.
     { Parent = CustomAttributeParent.Assembly assembly
       Type = CustomAttributeType.MethodRefDefault ctor
-      Value = Some { FixedArg = ImmutableArray.Create tfm'; NamedArg = ImmutableArray.Empty } }
+      Value =
+        { FixedArg = ImmutableArray.Create tfm'; NamedArg = ImmutableArray.Empty }
+        |> builder.Blobs.CustomAttribute.TryAdd
+        |> Result.any
+        |> ValueSome }
     |> addCustomAttribute builder
 
 /// <summary>
@@ -94,12 +100,7 @@ let inline internal iterStrings action (metadata: CliMetadata) =
 
 
     for mref in metadata.MemberRef.Rows do
-        match mref with
-        | MethodRefDefault { MemberName = name }
-        | MethodRefGeneric { MemberName = name }
-        | MethodRefVarArg { MemberName = name }
-        | FieldRef { MemberName = name } ->
-            name.ToString() |> action
+        mref.Name.ToString() |> action
 
     for property in metadata.Property.Rows do
         property.Name.ToString() |> action

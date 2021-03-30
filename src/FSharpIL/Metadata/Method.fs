@@ -231,7 +231,8 @@ type MethodDefSigBlobLookup internal (lookup: BlobLookup<MethodDefSignature>) =
 type MethodDefSigBlobLookupBuilder internal () =
     let lookup = BlobLookupBuilder<MethodDefSignature>()
     member _.Count = lookup.Count
-    member private _.TryAdd<'Tag> signature = lookup.TryAdd signature |> ValueOption.map (fun i -> i.ChangeTag<'Tag>())
+    member private _.TryAdd<'Tag> signature = lookup.TryAdd signature |> Result.map (fun i -> i.ChangeTag<'Tag>())
+
     member _.TryAdd signature = lookup.TryAdd signature
     member this.TryAdd(signature: InstanceMethodSignature) = signature.Signature() |> this.TryAdd<InstanceMethodSignature>
     member this.TryAdd(signature: ObjectConstructorSignature) = signature.Signature() |> this.TryAdd<ObjectConstructorSignature>

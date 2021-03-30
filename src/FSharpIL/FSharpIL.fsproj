@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Result.fs" />
     <Compile Include="Bytes.fs" />
     <Compile Include="InternalException.fs" />
     <Compile Include="Magic.fs" />

@@ -1,23 +1,6 @@
 ﻿/// Contains functions for modifying the CLI metadata with CLS checks and warnings.
 module FSharpIL.Metadata.Checked
 
-let private referenceMethod (builder: CliMetadataBuilder) (row: MemberRefRow) (warnings: WarningsBuilder) =
-    let struct(i, duplicate) = Unchecked.referenceMethod builder row
-    if duplicate then warnings.Add(DuplicateMemberRefWarning row)
-    i
-
-/// <summary>Adds a reference to a method with the <c>DEFAULT</c> calling convention.</summary>
-let referenceDefaultMethod builder method warnings: RawIndex<MethodRefDefault> =
-    referenceMethod builder (MethodRefDefault method) warnings
-
-/// <summary>Adds a reference to a method with the <c>GENERIC</c> calling convention.</summary>
-let referenceGenericMethod builder method warnings: RawIndex<MethodRefGeneric> =
-    referenceMethod builder (MethodRefGeneric method) warnings
-
-/// <summary>Adds a reference to a method with the <c>VARARG</c> calling convention.</summary>
-let referenceVarArgMethod builder method warnings: RawIndex<MethodRefVarArg> =
-    referenceMethod builder (MethodRefVarArg method) warnings
-
 let referenceModule (builder: CliMetadataBuilder) moduleRef (warnings: WarningsBuilder) =
     let i, dup = Unchecked.referenceModule builder moduleRef
     if dup then warnings.Add(DuplicateModuleRefWarning moduleRef)

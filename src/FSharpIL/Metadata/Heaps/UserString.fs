@@ -3,6 +3,8 @@
 open System.Collections.Generic
 open System.Text
 
+open FSharpIL.Metadata
+
 /// <summary>
 /// Represents the <c>#US</c> heap, which stores string literals (II.24.2.4).
 /// </summary>

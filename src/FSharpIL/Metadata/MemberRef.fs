@@ -218,13 +218,17 @@ type MemberRefTableBuilder internal () =
         let i, duplicate = members.Add row
         struct(RawIndex<'Tag> i.Value, duplicate)
 
-    member internal this.Add<'Sig, 'Tag>(tag, { Class = parent; MemberName = name; Signature = signature: Blob<'Sig> }) =
+    member internal this.Add<'Sig, 'Tag>
+        (
+            tag: MemberRefSignatureTag,
+            { Class = parent; MemberName = name; Signature = signature: Blob<'Sig> }: inref<_>
+        ) =
         this.Add<'Tag>(MemberRefRow(parent, name, MemberRefSignature(tag, signature.Index)))
 
-    member this.Add(method: MethodRefDefault) = this.Add<_, MethodRefDefault>(MemberRefSignatureTag.MethodDefault, method)
-    member this.Add(method: MethodRefGeneric) = this.Add<_, MethodRefGeneric>(MemberRefSignatureTag.MethodGeneric, method)
-    member this.Add(method: MethodRefVarArg) = this.Add<_, MethodRefVarArg>(MemberRefSignatureTag.MethodVarArg, method)
-    member this.Add(field: FieldRef) = this.Add<_, FieldRef>(MemberRefSignatureTag.Field, field)
+    member this.Add(method: MethodRefDefault) = this.Add<_, MethodRefDefault>(MemberRefSignatureTag.MethodDefault, &method)
+    member this.Add(method: MethodRefGeneric) = this.Add<_, MethodRefGeneric>(MemberRefSignatureTag.MethodGeneric, &method)
+    member this.Add(method: MethodRefVarArg) = this.Add<_, MethodRefVarArg>(MemberRefSignatureTag.MethodVarArg, &method)
+    member this.Add(field: FieldRef) = this.Add<_, FieldRef>(MemberRefSignatureTag.Field, &field)
 
     member internal _.ToImmutable() = members.ToImmutable()
 

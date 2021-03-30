@@ -1,4 +1,4 @@
-﻿/// Contains various magic numbers and bytes used throught a PE file.
+﻿/// Contains various magic numbers and bytes used throughout a PE file.
 [<RequireQualifiedAccess>]
 module internal FSharpIL.Magic
 

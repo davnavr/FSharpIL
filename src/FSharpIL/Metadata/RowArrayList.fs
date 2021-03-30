@@ -14,7 +14,7 @@ type RowArrayList<'Row when 'Row : equality> private (items: ImmutableArray<'Row
     /// When this method returns, contains <see langword="true"/> if the item added was a duplicate; otherwise, contains
     /// <see langword="false"/>.
     /// </param>
-    member _.Add(item, duplicate: outref<bool>) =
+    member _.Add(item, duplicate: outref<bool>) = // TODO: Rename to TryAdd and return a Result<RawIndex<'Row>, RawIndex<'Row>> instead.
         items.Add item
         duplicate <- lookup.Add item |> not
         RawIndex<'Row> items.Count

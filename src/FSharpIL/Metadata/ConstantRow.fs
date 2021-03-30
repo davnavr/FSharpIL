@@ -151,10 +151,12 @@ type ConstantBlobLookupBuilder internal () =
     //let strings = Dictionary<ConstantString, int32>()
 
     member _.TryAdd(int: IntegerConstant) =
-        let i = integers.Count
-        if integers.TryAdd(int, i)
-        then IntegerConstantBlob(int.Tag, i) |> ValueSome
-        else ValueNone
+        let tag, i = int.Tag, integers.Count
+        match integers.TryGetValue int with
+        | true, existing -> Error(IntegerConstantBlob(tag, existing))
+        | false, _ ->
+            integers.[int] <- i
+            Ok(IntegerConstantBlob(tag, i))
 
     member _.Count = integers.Count // +
 

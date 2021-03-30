@@ -58,7 +58,9 @@ type MiscBlobLookupBuilder internal () =
 
     member this.TryAdd(publicKeyToken: PublicKeyToken) =
         let bytes = publicKeyToken.ToArray().ToImmutableArray()
-        this.TryAdd bytes |> ValueOption.map (fun i -> i.ChangeTag<PublicKeyToken>())
+        match this.TryAdd bytes with
+        | Ok i -> Ok(i.ChangeTag<PublicKeyToken>())
+        | Error err -> Error(err.ChangeTag<PublicKeyToken>())
 
     member internal _.ToImmutable() = lookup.ToImmutable()
 

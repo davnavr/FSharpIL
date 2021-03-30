@@ -4,7 +4,7 @@ open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
-/// (II.6.3)
+/// Stores the lower 8 bytes of the SHA-1 hash of the originator's public key (II.6.3).
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
 type PublicKeyToken (b1: uint8, b2: uint8, b3: uint8, b4: uint8, b5: uint8, b6: uint8, b7: uint8, b8: uint8) =
@@ -37,10 +37,6 @@ module PublicKeyOrToken =
         | _ -> invalidArg "blob" "Invalid public key or token"
 
     let NoPublicKey = PublicKeyOrToken(PublicKeyOrTokenTag.NoPublicKey, Blob 0)
-    /// Stores the full public key.
-    let PublicKey (blob: Blob<ImmutableArray<byte>>) = PublicKeyOrToken blob
-    /// Stores the lower 8 bytes of the SHA-1 hash of the originator's public key
-    let PublicKeyToken (blob: Blob<PublicKeyToken>) = PublicKeyOrToken blob
 
 /// <summary>(0x23) Represents a row in the <c>AssemblyRef</c> table (II.22.5)</summary>
 [<NoComparison; CustomEquality>]
