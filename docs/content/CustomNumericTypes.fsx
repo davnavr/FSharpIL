@@ -46,52 +46,58 @@ let example() =
         |> setAssembly builder
 
     let struct (mscorlib, _) =
-        { Version = Version(5, 0, 0, 0)
-          PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-          Name = AssemblyName.ofStr "System.Runtime"
-          Culture = NullCulture
-          HashValue = None }
-        |> referenceAssembly builder
+        let token =
+            PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+            |> builder.Blobs.MiscBytes.GetOrAdd
+            |> PublicKeyOrToken
+        AssemblyRef (
+            Version(5, 0, 0, 0),
+            AssemblyName.ofStr "System.Runtime",
+            token
+        ) |> referenceAssembly builder
     let valueType =
-        { TypeName = Identifier.ofStr "ValueType"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "ValueType", "System")
         |> referenceType builder
     let icomparable_1 =
-        { TypeName = Identifier.ofStr "IComparable`1"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "IComparable`1", "System")
         |> referenceType builder
     let stringBuilder =
-        { TypeName = Identifier.ofStr "StringBuilder"
-          TypeNamespace = "System.Text"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "StringBuilder", "System.Text")
         |> referenceType builder
 
+    // new()
     let struct (stringBuilder_ctor, _) =
         { Class = MemberRefParent.TypeRef stringBuilder
           MemberName = Identifier.ofStr ".ctor"
-          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid) }
+          Signature =
+            MethodRefDefaultSignature(true, false, ReturnType.itemVoid)
+            |> builder.Blobs.MethodRefSig.GetOrAdd }
         |> referenceDefaultMethod builder
+    // member _.ToString(): string
     let struct (stringBuilder_ToString, _) =
         { Class = MemberRefParent.TypeRef stringBuilder
           MemberName = Identifier.ofStr "ToString"
-          Signature = MethodRefDefaultSignature(true, false, ReturnType.encoded EncodedType.String) }
+          Signature =
+            MethodRefDefaultSignature(true, false, ReturnType.encoded EncodedType.String)
+            |> builder.Blobs.MethodRefSig.GetOrAdd }
         |> referenceDefaultMethod builder
     let stringBuilder_Append item =
+        let signature =
+            MethodRefDefaultSignature (
+                true,
+                false,
+                EncodedType.typeRefClass stringBuilder |> ReturnType.encoded,
+                ParamItem.create item
+            )
         let struct (append, _) =
             { Class = MemberRefParent.TypeRef stringBuilder
               MemberName = Identifier.ofStr "Append"
-              Signature =
-                MethodRefDefaultSignature (
-                    true,
-                    false,
-                    EncodedType.typeRefClass stringBuilder |> ReturnType.encoded,
-                    ParamItem.create item
-                ) }
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
             |> referenceDefaultMethod builder
         append
+    // member _.Append(_: int32): System.Text.StringBuilder
     let stringBuilder_Append_I4 = stringBuilder_Append EncodedType.I4
+    // member _.Append(_: char): System.Text.StringBuilder
     let stringBuilder_Append_Char = stringBuilder_Append EncodedType.Char
 
     // TODO: In the future, this would be a good example to showcase functions to generate XML documentation.
@@ -108,40 +114,48 @@ let example() =
 
     let icomparable_fraction =
         GenericInst.typeRef1 false icomparable_1 fractionEncoded
-        |> TypeSpec.genericInst
+        |> TypeSpec.GenericInst
+        |> builder.Blobs.TypeSpec.GetOrAdd
         |> addTypeSpec builder
 
     let readonly =
-        { TypeName = Identifier.ofStr "IsReadOnlyAttribute"
-          TypeNamespace = "System.Runtime.CompilerServices"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        TypeRef (
+            ResolutionScope.AssemblyRef mscorlib,
+            Identifier.ofStr "IsReadOnlyAttribute",
+            "System.Runtime.CompilerServices"
+        )
         |> referenceType builder
+    // new()
     let struct (readonly_ctor, _) =
         { Class = MemberRefParent.TypeRef readonly
           MemberName = Identifier.ofStr ".ctor"
-          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid) }
+          Signature =
+            MethodRefDefaultSignature(true, false, ReturnType.itemVoid)
+            |> builder.Blobs.MethodRefSig.GetOrAdd }
         |> referenceDefaultMethod builder
 
-    // [<System.Runtime.CompilerServices.IsReadOnly>]
+    // [<type: System.Runtime.CompilerServices.IsReadOnly>]
     { Parent = CustomAttributeParent.TypeDef(fraction.AsTypeIndex())
       Type = CustomAttributeType.MethodRefDefault readonly_ctor
-      Value = None }
+      Value = ValueNone }
     |> addCustomAttribute builder
 
+    let intfield = FieldSignature.create EncodedType.I4 |> builder.Blobs.FieldSig.GetOrAdd
     // val private (*initonly*) numerator: int32
     let numerator =
         { Flags = FieldFlags(Private, initOnly = true) |> Flags.instanceField
           FieldName = Identifier.ofStr "numerator"
-          Signature = FieldSignature.create EncodedType.I4 }
+          Signature = intfield }
         |> Struct.addInstanceField builder fraction
     // val private (*initonly*) denominator: int32
     let denominator =
         { Flags = FieldFlags(Private, initOnly = true) |> Flags.instanceField
           FieldName = Identifier.ofStr "denominator"
-          Signature = FieldSignature.create EncodedType.I4 }
+          Signature = intfield }
         |> Struct.addInstanceField builder fraction
     // TODO: Add properties to access values in numbers example.
     let getter_flags = InstanceMethodFlags(Public, SpecialName, VTableLayout.ReuseSlot, true)
+    let intreturn = InstanceMethodSignature ReturnType.itemI4 |> builder.Blobs.MethodDefSig.GetOrAdd
     // member this.get_Numerator(): int32
     let get_numerator =
         let body content =
@@ -155,7 +169,7 @@ let example() =
             MethodBody.create ValueNone body,
             Flags.instanceMethod getter_flags,
             Identifier.ofStr "get_Numerator",
-            InstanceMethodSignature ReturnType.itemI4
+            intreturn
         )
         |> Struct.addInstanceMethod builder fraction
     let get_denominator =
@@ -170,9 +184,10 @@ let example() =
             MethodBody.create ValueNone body,
             Flags.instanceMethod getter_flags,
             Identifier.ofStr "get_Denominator",
-            InstanceMethodSignature ReturnType.itemI4
+            intreturn
         )
         |> Struct.addInstanceMethod builder fraction
+    let intprop = InstancePropertySignature EncodedType.I4 |> builder.Blobs.PropertySig.GetOrAdd
     // member this.Numerator: int32 with get
     // TODO: Use helper functions for adding properties instead.
     Unsafe.AddInstanceProperty (
@@ -180,7 +195,7 @@ let example() =
         fraction.AsTypeIndex(),
         { PropertyName = Identifier.ofStr "Numerator"
           Flags = Unsafe.CreateFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
-          Type = InstancePropertySignature EncodedType.I4 },
+          Type = intprop },
         getter = ValueSome get_numerator,
         setter = ValueNone
     )
@@ -191,13 +206,13 @@ let example() =
         fraction.AsTypeIndex(),
         { PropertyName = Identifier.ofStr "Denominator"
           Flags = Unsafe.CreateFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
-          Type = InstancePropertySignature EncodedType.I4 },
+          Type = intprop },
         getter = ValueSome get_denominator,
         setter = ValueNone
     )
     |> ignore
 
-    // new (numerator: int32, denominator: int32)
+    // new(numerator: int32, denominator: int32)
     let ctor =
         let body content =
             let wr = MethodBodyWriter content
@@ -209,11 +224,12 @@ let example() =
             wr.Stfld denominator
             wr.Ret()
             MethodBody.Default
-        Constructor (
+        let signature = ObjectConstructorSignature(ParamItem.create EncodedType.I4, ParamItem.create EncodedType.I4)
+        ObjectConstructor (
             body = MethodBody.create ValueNone body,
             implFlags = MethodImplFlags(),
             flags = (ConstructorFlags(Public, true) |> Flags.constructor),
-            signature = ObjectConstructorSignature(ParamItem.create EncodedType.I4, ParamItem.create EncodedType.I4),
+            signature = builder.Blobs.MethodDefSig.GetOrAdd signature,
             paramList =
                 fun _ i ->
                     { Flags = ParamFlags()
@@ -248,7 +264,8 @@ let example() =
                 ParamItem.create fractionEncoded,
                 ParamItem.create fractionEncoded
             )
-        StaticMethodSignature(MethodCallingConventions.Default, ReturnType.encoded fractionEncoded, parameters)
+        let signature = StaticMethodSignature(MethodCallingConventions.Default, ReturnType.encoded fractionEncoded, parameters)
+        builder.Blobs.MethodDefSig.GetOrAdd signature
 
     StaticMethod (
         MethodBody.create ValueNone multiply_body,
@@ -283,7 +300,7 @@ let example() =
         MethodBody.create ValueNone conv_single_body,
         Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
         Identifier.ofStr "op_Explicit",
-        StaticMethodSignature(ReturnType.encoded EncodedType.R4, ParamItem.create fractionEncoded),
+        StaticMethodSignature(ReturnType.encoded EncodedType.R4, ParamItem.create fractionEncoded) |> builder.Blobs.MethodDefSig.GetOrAdd,
         fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" }
     )
     |> Struct.addStaticMethod builder fraction
@@ -305,16 +322,16 @@ let example() =
         MethodBody.create ValueNone conv_double_body,
         Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
         Identifier.ofStr "op_Explicit",
-        StaticMethodSignature(ReturnType.encoded EncodedType.R8, ParamItem.create fractionEncoded),
+        StaticMethodSignature(ReturnType.encoded EncodedType.R8, ParamItem.create fractionEncoded) |> builder.Blobs.MethodDefSig.GetOrAdd,
         fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" }
     )
     |> Struct.addStaticMethod builder fraction
     |> ignore
 
-    // Implement System.IComparable`1
+    // interface System.IComparable<Fraction>
     Struct.implementSpec builder fraction icomparable_fraction |> ignore
 
-    // member this.CompareTo(other: Fraction): Fraction
+    // member (*virtual*) this.CompareTo(other: Fraction): Fraction
     let compare_body content =
         let wr = MethodBodyWriter content
         wr.Ldarg 0us
@@ -355,7 +372,7 @@ let example() =
         MethodBody.create ValueNone compare_body,
         InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, true, true) |> Flags.instanceMethod,
         Identifier.ofStr "CompareTo",
-        InstanceMethodSignature(ReturnType.itemI4, ParamItem.create fractionEncoded),
+        InstanceMethodSignature(ReturnType.itemI4, ParamItem.create fractionEncoded) |> builder.Blobs.MethodDefSig.GetOrAdd,
         fun _ _ -> Param { Flags = ParamFlags(); ParamName = "other" }
     )
     |> Struct.addInstanceMethod builder fraction
@@ -387,24 +404,27 @@ let example() =
             isVirtual = true
         ) |> Flags.instanceMethod,
         Identifier.ofStr "ToString",
-        InstanceMethodSignature(ReturnType.encoded EncodedType.String)
+        InstanceMethodSignature(ReturnType.encoded EncodedType.String) |> builder.Blobs.MethodDefSig.GetOrAdd
     )
     |> Struct.addInstanceMethod builder fraction
     |> ignore
 
     // TODO: Figure out how to avoid duplicating code for setting target framework.
     let tfm =
-        { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
-          TypeNamespace = "System.Runtime.Versioning"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        TypeRef (
+            ResolutionScope.AssemblyRef mscorlib,
+            Identifier.ofStr "TargetFrameworkAttribute",
+            "System.Runtime.Versioning"
+        )
         |> referenceType builder
-
+    // new(_: string)
     let struct(tfm_ctor, _) =
         { Class = MemberRefParent.TypeRef tfm
           MemberName = Identifier.ofStr ".ctor"
           Signature =
             let parameters = ImmutableArray.Create(ParamItem.create EncodedType.String)
-            MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
+            let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
+            builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> referenceDefaultMethod builder
 
     setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"

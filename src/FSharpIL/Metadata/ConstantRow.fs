@@ -3,6 +3,8 @@
 open System.Collections.Generic
 open System.Runtime.CompilerServices
 
+open FSharpIL
+
 type ConstantParentTag =
     | Field = 0uy
     | Param = 1uy
@@ -157,6 +159,8 @@ type ConstantBlobLookupBuilder internal () =
         | false, _ ->
             integers.[int] <- i
             Ok(IntegerConstantBlob(tag, i))
+
+    member this.GetOrAdd(int: IntegerConstant) = this.TryAdd int |> Result.any
 
     member _.Count = integers.Count // +
 

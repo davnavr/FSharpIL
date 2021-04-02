@@ -45,27 +45,26 @@ let example() =
         |> setAssembly builder
 
     let struct (mscorlib, _) =
-        { Version = Version(5, 0, 0, 0)
-          PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-          Name = AssemblyName.ofStr "System.Runtime"
-          Culture = NullCulture
-          HashValue = None }
-        |> referenceAssembly builder
-    let object =
-        { TypeName = Identifier.ofStr "Object"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
+        let token =
+            PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+            |> builder.Blobs.MiscBytes.GetOrAdd
+            |> PublicKeyOrToken
+        AssemblyRef (
+            Version(5, 0, 0, 0),
+            AssemblyName.ofStr "System.Runtime",
+            token
+        ) |> referenceAssembly builder
+
+    let object = TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Object", "System") |> referenceType builder
+    // new()
     let struct (object_ctor, _) =
         { Class = MemberRefParent.TypeRef object
           MemberName = Identifier.ofStr ".ctor"
-          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid) }
+          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid) |> builder.Blobs.MethodRefSig.GetOrAdd }
         |> referenceDefaultMethod builder
-    let array =
-        { TypeName = Identifier.ofStr "Array"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
+
+    let array = TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Array", "System") |> referenceType builder
+    // static member Copy(_: System.Array, _: System.Array, _: int32): System.Void
     let struct (array_copy, _) =
         let array_encoded =
             TypeDefOrRefOrSpecEncoded.TypeRef array
@@ -75,7 +74,8 @@ let example() =
           MemberName = Identifier.ofStr "Copy"
           Signature =
             let parameters = [| array_encoded; array_encoded; ParamItem.create EncodedType.I4 |]
-            MethodRefDefaultSignature (false, false, ReturnType.itemVoid, parameters) }
+            MethodRefDefaultSignature(false, false, ReturnType.itemVoid, parameters)
+            |> builder.Blobs.MethodRefSig.GetOrAdd }
         |> referenceDefaultMethod builder
 
     // type MyCollection
@@ -97,26 +97,27 @@ let example() =
         ConstraintSet.empty
     |> ignore
 
-    let tparam = TypeSpec.Var 0u |> TypeSpec.create |> addTypeSpec builder
+    let tparam = TypeSpec.Var 0u |> builder.Blobs.TypeSpec.GetOrAdd |> addTypeSpec builder
     let tencoded = EncodedType.Var 0u
     let tarray = EncodedType.SZArray(ImmutableArray.Empty, tencoded)
 
     // val mutable private items: 'T[]
     { Flags = Flags.instanceField(FieldFlags Private)
       FieldName = Identifier.ofStr "items"
-      Signature = FieldSignature.create tarray }
+      Signature = FieldSignature.create tarray |> builder.Blobs.FieldSig.GetOrAdd }
     |> ConcreteClass.addInstanceField builder myCollection_1
     |> ignore
     // val mutable private index: int32
     { Flags = Flags.instanceField(FieldFlags Private)
       FieldName = Identifier.ofStr "index"
-      Signature = FieldSignature.create EncodedType.I4 }
+      Signature = FieldSignature.create EncodedType.I4 |> builder.Blobs.FieldSig.GetOrAdd }
     |> ConcreteClass.addInstanceField builder myCollection_1
     |> ignore
 
     let myCollection_1_spec =
         GenericInst.typeDef1 false (myCollection_1.AsTypeIndex()) tencoded
-        |> TypeSpec.genericInst
+        |> TypeSpec.GenericInst
+        |> builder.Blobs.TypeSpec.GetOrAdd
         |> addTypeSpec builder
 
     let ctor_p_params =
@@ -128,12 +129,12 @@ let example() =
     let struct (items', _) =
         { MemberRef.MemberName = Identifier.ofStr "items"
           Class = MemberRefParent.TypeSpec myCollection_1_spec
-          Signature = FieldSignature.create tarray }
+          Signature = FieldSignature.create tarray |> builder.Blobs.FieldSig.GetOrAdd }
         |> builder.MemberRef.Add
     let struct (index', _) =
         { MemberRef.MemberName = Identifier.ofStr "index"
           Class = MemberRefParent.TypeSpec myCollection_1_spec
-          Signature = FieldSignature.create EncodedType.I4 }
+          Signature = FieldSignature.create EncodedType.I4 |> builder.Blobs.FieldSig.GetOrAdd }
         |> builder.MemberRef.Add
 
     // private new (items: 'T[], index: int32)
@@ -152,22 +153,23 @@ let example() =
             wr.Stfld index'
             wr.Ret()
             MethodBody.Default
-        Constructor (
+        ObjectConstructor (
             body = MethodBody.create ValueNone body,
             implFlags = MethodImplFlags(),
             flags = (ConstructorFlags(Private, true) |> Flags.constructor),
-            signature = ObjectConstructorSignature(parameters = ctor_p_params),
+            signature = builder.Blobs.MethodDefSig.GetOrAdd(ObjectConstructorSignature ctor_p_params),
             paramList = fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "items" else "index" }
         )
         |> ConcreteClass.addConstructor builder myCollection_1
 
     let struct(ctor_p', _) =
+        let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ctor_p_params)
         { MemberRef.MemberName = Identifier.ofStr ".ctor"
           Class = MemberRefParent.TypeSpec myCollection_1_spec
-          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ctor_p_params) }
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> builder.MemberRef.Add
 
-    // new (capacity: int32)
+    // new(capacity: int32)
     let ctor =
         let body content =
             let wr = MethodBodyWriter content
@@ -179,11 +181,12 @@ let example() =
             wr.Call ctor_p'
             wr.Ret()
             MethodBody.Default
-        Constructor (
+        let signature = ObjectConstructorSignature(ParamItem.create EncodedType.I4)
+        ObjectConstructor (
             body = MethodBody.create ValueNone body,
             implFlags = MethodImplFlags(),
             flags = (ConstructorFlags(Public, true) |> Flags.constructor),
-            signature = ObjectConstructorSignature(ParamItem.create EncodedType.I4),
+            signature = builder.Blobs.MethodDefSig.GetOrAdd signature,
             paramList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "capacity" }
         )
         |> ConcreteClass.addConstructor builder myCollection_1
@@ -191,7 +194,7 @@ let example() =
     // 'TOther
     let tother_spec =
         TypeSpec.MVar 0u
-        |> TypeSpec.create
+        |> builder.Blobs.TypeSpec.GetOrAdd
         |> addTypeSpec builder
 
     let cast_locals =
@@ -201,6 +204,7 @@ let example() =
         ]
         |> List.map LocalVariable.encoded
         |> ImmutableArray.CreateRange
+        |> builder.Blobs.LocalVarSig.GetOrAdd
         |> builder.StandAloneSig.AddLocals
         |> ValueSome
 
@@ -209,7 +213,8 @@ let example() =
           Class =
             EncodedType.MVar 0u
             |> GenericInst.typeDef1 false (myCollection_1.AsTypeIndex())
-            |> TypeSpec.genericInst
+            |> TypeSpec.GenericInst
+            |> builder.Blobs.TypeSpec.GetOrAdd
             |> addTypeSpec builder
             |> MemberRefParent.TypeSpec
           Signature =
@@ -218,7 +223,8 @@ let example() =
                     ParamItem.create tarray
                     ParamItem.create EncodedType.I4
                 |]
-            MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
+            MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
+            |> builder.Blobs.MethodRefSig.GetOrAdd }
         |> builder.MemberRef.Add
 
     // member this.Cast<'TOther>(): Example.MyCollection<'TOther when 'TOther :> 'T>
@@ -285,7 +291,7 @@ let example() =
             MethodBody.create cast_locals body,
             InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod,
             Identifier.ofStr "Cast",
-            signature
+            builder.Blobs.MethodDefSig.GetOrAdd signature
         )
         |> ConcreteClass.addInstanceMethod builder myCollection_1
 
@@ -308,6 +314,7 @@ let example() =
             ]
             |> List.map LocalVariable.encoded
             |> ImmutableArray.CreateRange
+            |> builder.Blobs.LocalVarSig.GetOrAdd
             |> builder.StandAloneSig.AddLocals
             |> ValueSome
         fun content ->
@@ -389,11 +396,12 @@ let example() =
             wr.Ret()
             MethodBody(0x3us, true)
         |> MethodBody.create locals
+    let signature = InstanceMethodSignature(ReturnType.itemVoid, ParamItem.var 0u)
     InstanceMethod (
         add_body,
         InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod,
         Identifier.ofStr "Add",
-        InstanceMethodSignature(ReturnType.itemVoid, ParamItem.var 0u),
+        builder.Blobs.MethodDefSig.GetOrAdd signature,
         fun _ _ -> Param { ParamName = "item"; Flags = ParamFlags() }
     )
     |> ConcreteClass.addInstanceMethod builder myCollection_1
@@ -405,6 +413,7 @@ let example() =
             // result: 'T[]
             LocalVariable.encoded tarray
             |> ImmutableArray.Create
+            |> builder.Blobs.LocalVarSig.GetOrAdd
             |> builder.StandAloneSig.AddLocals
             |> ValueSome
         fun content ->
@@ -432,23 +441,27 @@ let example() =
         toarray_body,
         InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod,
         Identifier.ofStr "ToArray",
-        ReturnType.encoded tarray |> InstanceMethodSignature
+        ReturnType.encoded tarray |> InstanceMethodSignature |> builder.Blobs.MethodDefSig.GetOrAdd
     )
     |> ConcreteClass.addInstanceMethod builder myCollection_1
     |> ignore
 
     let tfm =
-        { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
-          TypeNamespace = "System.Runtime.Versioning"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        TypeRef (
+            ResolutionScope.AssemblyRef mscorlib,
+            Identifier.ofStr "TargetFrameworkAttribute",
+            "System.Runtime.Versioning"
+        )
         |> referenceType builder
 
+    // new(_: string)
     let struct(tfm_ctor, _) =
         { Class = MemberRefParent.TypeRef tfm
           MemberName = Identifier.ofStr ".ctor"
           Signature =
             let parameters = ImmutableArray.Create(ParamItem.create EncodedType.String)
-            MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
+            MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
+            |> builder.Blobs.MethodRefSig.GetOrAdd }
         |> referenceDefaultMethod builder
 
     setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"

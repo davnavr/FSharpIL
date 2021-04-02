@@ -2,6 +2,8 @@
 
 open System.Collections.Immutable
 
+open FSharpIL
+
 /// <summary>Represents the <c>#Blob</c> metadata stream (II.24.2.4).</summary>
 [<Sealed>]
 type BlobHeap internal
@@ -61,6 +63,8 @@ type MiscBlobLookupBuilder internal () =
         match this.TryAdd bytes with
         | Ok i -> Ok(i.ChangeTag<PublicKeyToken>())
         | Error err -> Error(err.ChangeTag<PublicKeyToken>())
+
+    member this.GetOrAdd(publicKeyToken: PublicKeyToken) = this.TryAdd publicKeyToken |> Result.any
 
     member internal _.ToImmutable() = lookup.ToImmutable()
 

@@ -234,8 +234,17 @@ type MethodDefSigBlobLookupBuilder internal () =
     member private _.TryAdd<'Tag> signature = lookup.TryAdd signature |> Result.map (fun i -> i.ChangeTag<'Tag>())
 
     member _.TryAdd signature = lookup.TryAdd signature
+    member _.GetOrAdd signature = lookup.GetOrAdd signature
     member this.TryAdd(signature: InstanceMethodSignature) = signature.Signature() |> this.TryAdd<InstanceMethodSignature>
     member this.TryAdd(signature: ObjectConstructorSignature) = signature.Signature() |> this.TryAdd<ObjectConstructorSignature>
     member this.TryAdd(signature: StaticMethodSignature) = signature.Signature() |> this.TryAdd<StaticMethodSignature>
     member this.TryAdd(signature: EntryPointSignature) = signature.Signature() |> this.TryAdd<EntryPointSignature>
+    member private _.GetExisting (result: Result<Blob<'Method>, Blob<MethodDefSignature>>) =
+        match result with
+        | Ok signature -> signature
+        | Error existing -> existing.ChangeTag()
+    member this.GetOrAdd(signature: InstanceMethodSignature) = this.GetExisting(this.TryAdd signature)
+    member this.GetOrAdd(signature: ObjectConstructorSignature) = this.GetExisting(this.TryAdd signature)
+    member this.GetOrAdd(signature: StaticMethodSignature) = this.GetExisting(this.TryAdd signature)
+    member this.GetOrAdd(signature: EntryPointSignature) = this.GetExisting(this.TryAdd signature)
     member internal _.ToImmutable() = MethodDefSigBlobLookup(lookup.ToImmutable())

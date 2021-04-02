@@ -22,7 +22,7 @@ module private DelegateHelpers =
             |> Array.map ParamItem.create
             |> ImmutableArray.CreateRange
         let signature = MethodDefSignature(true, false, MethodCallingConventions.Default, ReturnType.itemVoid, parameters)
-        builder.Blobs.MethodDefSig.TryAdd signature |> Result.any
+        builder.Blobs.MethodDefSig.GetOrAdd signature
 
     let ctorParameters (_: ParamItem) (i: int32) =
         { ParamName = if i = 0 then "object" else "method"
@@ -31,7 +31,7 @@ module private DelegateHelpers =
 
     let invokeSignature (builder: CliMetadataBuilder) (delegateDef: inref<DelegateDef>) =
         let signature = MethodDefSignature(true, false, Default, delegateDef.ReturnType, delegateDef.Parameters)
-        builder.Blobs.MethodDefSig.TryAdd signature |> Result.any
+        builder.Blobs.MethodDefSig.GetOrAdd signature
 
 // TODO: Figure out if using inref with static methods in Unsafe is a performance improvement.
 /// Contains static methods for modifying the CLI metadata without regard for generation of correct metadata.
@@ -96,11 +96,7 @@ type Unsafe private () = class
         )
 
     static member AddConstructor(builder: CliMetadataBuilder, owner, method: ClassConstructor) =
-        let signature =
-            Unsafe.ClassConstructorSignature
-            |> builder.Blobs.MethodDefSig.TryAdd
-            |> Result.any
-
+        let signature = builder.Blobs.MethodDefSig.GetOrAdd Unsafe.ClassConstructorSignature
         Unsafe.AddConstructor<ClassConstructor, ClassConstructorTag, _> (
             builder,
             owner,
@@ -590,9 +586,10 @@ let referenceAssembly (builder: CliMetadataBuilder) assembly =
     struct(i, dup)
 
 let addTypeSpec (builder: CliMetadataBuilder) typeSpec =
-    match builder.TypeSpec.TryAdd typeSpec with
+    let row = TypeSpecRow typeSpec
+    match builder.TypeSpec.TryAdd row with
     | ValueSome index -> Ok index
-    | ValueNone -> DuplicateTypeSpecError(typeSpec).ToResult()
+    | ValueNone -> DuplicateTypeSpecError(row).ToResult()
 
 let addMethodSpec (builder: CliMetadataBuilder) method (garguments: seq<_>) =
     let inst =

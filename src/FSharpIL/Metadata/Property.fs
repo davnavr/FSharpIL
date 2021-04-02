@@ -5,6 +5,8 @@ open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
 
+open FSharpIL
+
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
 type PropertySignature internal
@@ -103,7 +105,15 @@ type PropertySigBlobLookup internal (lookup: BlobLookup<PropertySignature>) =
 type PropertySigBlobLookupBuilder internal () =
     let lookup = BlobLookupBuilder<PropertySignature>()
     member _.Count = lookup.Count
-    member private _.TryAdd<'Tag>(signature) = lookup.TryAdd signature |> Result.map (fun i -> i.ChangeTag<'Tag>())
+    member private _.TryAdd<'Tag>(signature) =
+        let error, i =
+            match lookup.TryAdd signature with
+            | Ok i -> false, i
+            | Error i -> true, i
+        let i' = i.ChangeTag<'Tag>()
+        if error then Error i' else Ok i'
     member this.TryAdd(signature: InstancePropertySignature) = this.TryAdd<InstancePropertySignature>(signature.Signature())
     member this.TryAdd(signature: StaticPropertySignature) = this.TryAdd<StaticPropertySignature>(signature.Signature())
+    member this.GetOrAdd(signature: InstancePropertySignature) = this.TryAdd signature |> Result.any
+    member this.GetOrAdd(signature: StaticPropertySignature) = this.TryAdd signature |> Result.any
     member internal _.ToImmutable() = PropertySigBlobLookup(lookup.ToImmutable())

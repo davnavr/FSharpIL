@@ -2,6 +2,8 @@
 
 open System.Collections.Generic
 
+open FSharpIL
+
 /// <summary>Represents a <c>TypeSpec</c> item in the <c>#Blob</c> heap (II.23.2.14).</summary>
 [<RequireQualifiedAccess>]
 type TypeSpec =
@@ -22,17 +24,14 @@ type TypeSpecBlobLookup internal (blobs: TypeSpec[]) =
 type TypeSpecBlobLookupBuilder internal () =
     let blobs = Dictionary<TypeSpec, int32>()
     member _.Count = blobs.Count
-    member _.Add(spec, duplicate: outref<bool>) =
+    member _.TryAdd spec =
         let count = blobs.Count
-        let i =
-            let (duplicate', existing) = blobs.TryGetValue spec
-            duplicate <- duplicate'
-            if duplicate'
-            then existing
-            else
-                blobs.[spec] <- count
-                count
-        TypeSpecBlob i
+        match blobs.TryGetValue spec with
+        | true, existing -> Error(TypeSpecBlob existing)
+        | false, _ ->
+            blobs.[spec] <- count
+            Ok(TypeSpecBlob count)
+    member this.GetOrAdd spec = this.TryAdd spec |> Result.any
     member internal _.ToImmutable() =
         let blobs' = Array.zeroCreate blobs.Count
         for KeyValue(item, i) in blobs do

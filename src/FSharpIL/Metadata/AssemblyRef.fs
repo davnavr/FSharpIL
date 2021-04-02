@@ -39,18 +39,27 @@ module PublicKeyOrToken =
     let NoPublicKey = PublicKeyOrToken(PublicKeyOrTokenTag.NoPublicKey, Blob 0)
 
 /// <summary>(0x23) Represents a row in the <c>AssemblyRef</c> table (II.22.5)</summary>
-[<NoComparison; CustomEquality>]
-type AssemblyRef =
-    { Version: Version
-      PublicKeyOrToken: PublicKeyOrToken
-      Name: AssemblyName
-      Culture: AssemblyCulture
-      HashValue: unit option }
+type AssemblyRef
+    (
+        version: Version,
+        name: AssemblyName,
+        publicKeyOrToken: PublicKeyOrToken,
+        culture: AssemblyCulture,
+        hashValue: unit voption
+    ) =
+    new (version, name, publicKeyOrToken, culture) = AssemblyRef(version, name, publicKeyOrToken, culture, ValueNone)
+    new (version, name, publicKeyOrToken) = AssemblyRef(version, name, publicKeyOrToken, NullCulture)
+    new (version, name) = AssemblyRef(version, name, PublicKeyOrToken.NoPublicKey)
 
-    member this.Flags =
+    member _.Version = version
+    member internal this.Flags =
         match this.PublicKeyOrToken with
         | PublicKey _ -> 1u
         | _ -> 0u
+    member _.PublicKeyOrToken = publicKeyOrToken
+    member _.Name = name
+    member _.Culture = culture
+    member _.HashValue = hashValue //: Blob<ImmutableArray<byte>> // TODO: Implement generation of hash value blob.
 
     override this.ToString() =
         let culture =

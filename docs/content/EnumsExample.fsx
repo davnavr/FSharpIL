@@ -45,45 +45,44 @@ let example() =
     |> ignore
 
     let struct (mscorlib, _) =
-        { Version = Version(5, 0, 0, 0)
-          PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-          Name = AssemblyName.ofStr "System.Runtime"
-          Culture = NullCulture
-          HashValue = None }
+        let token =
+            PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+            |> builder.Blobs.MiscBytes.GetOrAdd
+            |> PublicKeyOrToken
+        AssemblyRef (
+            Version(5, 0, 0, 0),
+            AssemblyName.ofStr "System.Runtime",
+            token
+        )
         |> referenceAssembly builder
-    let object =
-        { TypeName = Identifier.ofStr "Object"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
-    let enum =
-        { TypeName = Identifier.ofStr "Enum"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
+
+    let object = TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Object", "System") |> referenceType builder
+    let enum = TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Enum", "System") |> referenceType builder
 
     (* Generating Enumeration Types *)
     let myenum_values = EnumValueListBuilder(IntegerType.I4, 4)
 
-    // | A = 0
-    myenum_values.TryAdd(Identifier.ofStr "A", IntegerConstant 0) |> ignore
+    List.iter
+        (fun (name, value: int32) ->
+            let name' = Identifier.ofStr name
+            let value' = builder.Blobs.Constant.GetOrAdd(IntegerConstant value)
+            myenum_values.TryAdd(name', value') |> ignore)
+        [
+            "A", 0
+            "B", 1
+            "C", 256
+            "D", -3
+            "E", -512
+            "F", 12345678
+        ]
 
-    // | B = 1
-    myenum_values.TryAdd(Identifier.ofStr "B", IntegerConstant 1) |> ignore
-
-    // | C = 256
-    myenum_values.TryAdd(Identifier.ofStr "C", IntegerConstant 256) |> ignore
-
-    // | D = -3
-    myenum_values.TryAdd(Identifier.ofStr "D", IntegerConstant -3) |> ignore
-
-    // | E = -512
-    myenum_values.TryAdd(Identifier.ofStr "E", IntegerConstant -512) |> ignore
-
-    // | F = 12345678
-    myenum_values.TryAdd(Identifier.ofStr "F", IntegerConstant 12345678) |> ignore
-
-    // type MyEnum
+    // type MyEnum =
+    //     | A = 0
+    //     | B = 1
+    //     | C = 256
+    //     | D = -3
+    //     | E = -512
+    //     | F = 12345678
     let myenum =
         Unsafe.AddEnum (
             builder,
@@ -107,13 +106,14 @@ let example() =
           Extends = Extends.TypeRef object }
         |> StaticClass.addTypeDef builder
 
-    // static member Example(): unit
+    // static member Example(): System.Void
     let example_body =
         let locals =
             // value: EnumsExample.MyEnum
             EncodedType.enumDef myenum.Row
             |> LocalVariable.encoded
             |> ImmutableArray.Create
+            |> builder.Blobs.LocalVarSig.GetOrAdd
             |> builder.StandAloneSig.AddLocals
             |> ValueSome
         fun content ->
@@ -128,7 +128,7 @@ let example() =
         example_body,
         StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
         name = Identifier.ofStr "Example",
-        signature = StaticMethodSignature ReturnType.itemVoid
+        signature = builder.Blobs.MethodDefSig.GetOrAdd(StaticMethodSignature ReturnType.itemVoid)
     )
     |> StaticClass.addStaticMethod builder examples
     |> ignore

@@ -3,6 +3,8 @@
 open System.Collections.Generic
 open System.Runtime.CompilerServices
 
+open FSharpIL
+
 [<IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]
 type internal BlobIndex =
@@ -41,6 +43,7 @@ type BlobLookupBuilder<'Item when 'Item : equality> internal () =
     member _.Count = lookup.Count
 
     member _.TryAdd(item: 'Item) = Blob.tryAddTo lookup item
+    member this.GetOrAdd item = this.TryAdd item |> Result.any
 
     member internal _.ToImmutable() =
         let blobs = Array.zeroCreate lookup.Count

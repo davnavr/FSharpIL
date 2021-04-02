@@ -151,7 +151,6 @@ module internal Heap =
                     writer.Parameters signature.VarArgParameters
             | MemberRefSignature.Field field ->
                 fieldSignature blob &writer field
-            failwith "TODO: Write MethodRef"
 
         for row in metadata.Constant.Rows do
             let i = row.Value
@@ -227,8 +226,8 @@ module internal Heap =
                 for gparam in inst.GenericArguments do writer.EncodedType gparam
                 blob.CreateIndex(i, blob.MethodSpec)
 
-        for { PublicKeyOrToken = token } in metadata.AssemblyRef.Rows do
-            match token.AsByteBlob() with
+        for row in metadata.AssemblyRef.Rows do
+            match row.PublicKeyOrToken.AsByteBlob() with
             | ValueSome i ->
                 let token = metadata.Blobs.MiscBytes.ItemRef i
                 writer.Writer.WriteBytes token

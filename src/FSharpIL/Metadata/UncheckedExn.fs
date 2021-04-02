@@ -5,8 +5,9 @@ module FSharpIL.Metadata.UncheckedExn
 
 open System
 
-let private throwOnError: Result<_, ValidationError> -> _ =
-    function
+/// Helper function for throwing exceptions when validation fails.
+let inline throwOnError (result: Result<_, ValidationError>) =
+    match result with
     | Ok item -> item
     | Error err -> raise(ValidationErrorException err)
 

@@ -44,86 +44,67 @@ let example() =
     |> ignore
 
     let struct (mscorlib, _) =
-        { Version = Version(5, 0, 0, 0)
-          PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-          Name = AssemblyName.ofStr "System.Runtime"
-          Culture = NullCulture
-          HashValue = None }
+        let token = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+        AssemblyRef (
+            Version(5, 0, 0, 0),
+            AssemblyName.ofStr "System.Runtime",
+            PublicKeyOrToken(builder.Blobs.MiscBytes.GetOrAdd token)
+        )
         |> referenceAssembly builder
-    let object =
-        { TypeName = Identifier.ofStr "Object"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
-    let str =
-        { TypeName = Identifier.ofStr "String"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
-    let stringb =
-        { TypeName = Identifier.ofStr "StringBuilder"
-          TypeNamespace = "System.Text"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
-    let mcdelegate =
-        { TypeName = Identifier.ofStr "MulticastDelegate"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
-    let aresult =
-        { TypeName = Identifier.ofStr "IAsyncResult"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
-    let acallback =
-        { TypeName = Identifier.ofStr "AsyncCallback"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
-    let func_2 =
-        { TypeName = Identifier.ofStr "Func`2"
-          TypeNamespace = "System"
-          ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-        |> referenceType builder
 
+    let object = SystemType.Object builder mscorlib |> UncheckedExn.throwOnError
+    let str = SystemType.String builder mscorlib |> UncheckedExn.throwOnError
+    let mcdelegate = SystemType.MulticastDelegate builder mscorlib |> UncheckedExn.throwOnError
+    let aresult = SystemType.IAsyncResult builder mscorlib |> UncheckedExn.throwOnError
+    let acallback = SystemType.AsyncCallback builder mscorlib |> UncheckedExn.throwOnError
+    let stringb =
+        TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "StringBuilder", "System.Text") |> referenceType builder
+    let func_2 =
+        TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Func`2", "System") |> referenceType builder
+
+    // member _.get_Length(): string
     let struct (str_length, _) =
+        let signature = MethodRefDefaultSignature(true, false, ReturnType.itemI4)
         { Class = MemberRefParent.TypeRef str
           MemberName = Identifier.ofStr "get_Length"
-          // member _.get_Length(): string
-          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemI4) }
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> referenceDefaultMethod builder
+    // member _.IndexOf(_: string): int
     let struct (str_indexof, _) =
+        let signature = MethodRefDefaultSignature(true, false, ReturnType.itemI4, ParamItem.create EncodedType.String)
         { Class = MemberRefParent.TypeRef str
           MemberName = Identifier.ofStr "IndexOf"
-          // member _.IndexOf(value: string): int
-          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemI4, ParamItem.create EncodedType.String) }
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> referenceDefaultMethod builder
+    // new(_: int32)
     let struct (stringb_ctor, _) =
+        let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ParamItem.create EncodedType.I4)
         { Class = MemberRefParent.TypeRef stringb
           MemberName = Identifier.ofStr ".ctor"
-          // new (capacity: int32)
-          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ParamItem.create EncodedType.I4) }
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> referenceDefaultMethod builder
+    // override _.ToString(): string
     let struct (stringb_tostring, _) =
+        let signature = MethodRefDefaultSignature(true, false, ReturnType.encoded EncodedType.String)
         { Class = MemberRefParent.TypeRef stringb
           MemberName = Identifier.ofStr "ToString"
-          // override _.ToString(): string
-          Signature = MethodRefDefaultSignature(true, false, ReturnType.encoded EncodedType.String) }
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> referenceDefaultMethod builder
+    // member _.Append(_: string): System.StringBuilder
     let struct (stringb_append, _) =
-        { Class = MemberRefParent.TypeRef stringb
-          MemberName = Identifier.ofStr "Append"
-          Signature =
-            // member _.Append(value: string): System.StringBuilder
+        let signature =
             MethodRefDefaultSignature (
                 true,
                 false,
                 EncodedType.typeRefClass stringb |> ReturnType.encoded,
                 ParamItem.create EncodedType.String
-            ) }
+            )
+        { Class = MemberRefParent.TypeRef stringb
+          MemberName = Identifier.ofStr "Append"
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> referenceDefaultMethod builder
 
-    (*Generating Delegate Types*)
+    (* Generating Delegate Types *)
 
     // type MyDelegate = delegate of (string * int32) -> string
     let mydel =
@@ -145,7 +126,7 @@ let example() =
         |> TypeDefOrRefOrSpecEncoded.TypeDef
         |> EncodedType.Class
  
-    (*Using Delegate Types*)
+    (* Using Delegate Types *)
 
     // type MyClass
     let myclass =
@@ -164,6 +145,7 @@ let example() =
                 EncodedType.typeRefClass stringb
                 |> LocalVariable.encoded
                 |> ImmutableArray.Create
+                |> builder.Blobs.LocalVarSig.GetOrAdd
                 |> builder.StandAloneSig.AddLocals
                 |> ValueSome
             fun content ->
@@ -209,7 +191,7 @@ let example() =
             body,
             StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
             Identifier.ofStr "DuplicateString",
-            signature,
+            builder.Blobs.MethodDefSig.GetOrAdd signature,
             fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "str" else "times" }
         )
         |> ConcreteClass.addStaticMethod builder myclass
@@ -219,6 +201,7 @@ let example() =
         let locals =
             LocalVariable.encoded mydel_encoded
             |> ImmutableArray.Create
+            |> builder.Blobs.LocalVarSig.GetOrAdd
             |> builder.StandAloneSig.AddLocals
             |> ValueSome
         fun content ->
@@ -241,24 +224,25 @@ let example() =
         example1_body,
         StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
         name = Identifier.ofStr "Example1",
-        signature = StaticMethodSignature(ReturnType.encoded EncodedType.String)
+        signature = builder.Blobs.MethodDefSig.GetOrAdd(StaticMethodSignature(ReturnType.encoded EncodedType.String))
     )
     |> ConcreteClass.addStaticMethod builder myclass
     |> ignore
 
     // System.Func<string, int32>
     let func_2_inst = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef func_2, false, EncodedType.String, EncodedType.I4)
-    // new(_: object, _: System.IntPtr)
+    // new (_: object, _: System.IntPtr)
     let struct(func_2_inst_ctor, _) =
         { MemberRef.MemberName = Identifier.ofStr ".ctor"
           Class =
-            func_2_inst
-            |> TypeSpec.genericInst
+            TypeSpec.GenericInst func_2_inst
+            |> builder.Blobs.TypeSpec.GetOrAdd
             |> addTypeSpec builder
             |> MemberRefParent.TypeSpec
           Signature =
             let parameters = Array.map ParamItem.create [| EncodedType.Object; EncodedType.I |]
-            MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
+            let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
+            builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> builder.MemberRef.Add
 
     // static member Example2(str: string): System.Func<string, int32>
@@ -269,11 +253,13 @@ let example() =
         wr.Newobj func_2_inst_ctor
         wr.Ret()
         MethodBody()
+    let example2_signature =
+        StaticMethodSignature(EncodedType.GenericInst func_2_inst |> ReturnType.encoded, ParamItem.create EncodedType.String)
     StaticMethod (
         MethodBody.create ValueNone example2_body,
         StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
         Identifier.ofStr "Example2",
-        StaticMethodSignature(EncodedType.GenericInst func_2_inst |> ReturnType.encoded, ParamItem.create EncodedType.String),
+        builder.Blobs.MethodDefSig.GetOrAdd example2_signature,
         Param { ParamName = "str"; Flags = ParamFlags() } |> ParamList.singleton
     )
     |> ConcreteClass.addStaticMethod builder myclass

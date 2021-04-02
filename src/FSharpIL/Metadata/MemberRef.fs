@@ -6,6 +6,8 @@ open System.Runtime.CompilerServices
 
 open Microsoft.FSharp.Core.Printf
 
+open FSharpIL
+
 type MemberRefParentTag =
     | TypeDef = 0uy
     | TypeRef = 1uy
@@ -199,13 +201,14 @@ type MemberRefRow internal (parent: MemberRefParent, name: Identifier, signature
 /// </summary>
 /// <category>Warnings</category>
 [<Sealed>]
-type DuplicateMemberRefWarning (row: MemberRefRow) =
+type DuplicateMemberRefWarning (parent: MemberRefParent, name: Identifier) =
     inherit ValidationWarning()
-    member _.Member = row
-    override this.ToString() =
+    member _.Class = parent
+    member _.Name = name
+    override _.ToString() =
         sprintf
-            "A duplicate member reference \"%O\" was added when an existing row with the same class, name, and signature already exists"
-            this.Member
+            "A duplicate member reference \"%A\" was added when an existing row with the same class, name, and signature already exists"
+            name
 
 [<Sealed>]
 type MemberRefTableBuilder internal () =
@@ -262,6 +265,9 @@ type MethodRefSigBlobLookupBuilder internal () =
     member _.TryAdd signature = Blob.tryAddTo rdefault signature
     member _.TryAdd signature = Blob.tryAddTo rgeneric signature
     member _.TryAdd signature = Blob.tryAddTo rvararg signature
+    member this.GetOrAdd(signature: MethodRefDefaultSignature) = this.TryAdd signature |> Result.any
+    member this.GetOrAdd(signature: MethodRefGenericSignature) = this.TryAdd signature |> Result.any
+    member this.GetOrAdd(signature: MethodRefVarArgSignature) = this.TryAdd signature |> Result.any
     member internal _.ToImmutable() =
         let rdefault' = Array.zeroCreate rdefault.Count
         for KeyValue(signature, i) in rdefault do
