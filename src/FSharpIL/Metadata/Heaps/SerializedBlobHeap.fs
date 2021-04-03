@@ -13,7 +13,7 @@ type internal SerializedBlobHeap (blobs: BlobHeap, size) =
     let writer =
         let content = LinkedList<byte[]>()
         ChunkWriter(content.AddFirst(Array.zeroCreate size))
-    let mutable offset, pos = 1u, writer.Position
+    let mutable offset, size = 1u, writer.Size
 
     member val FieldSig = BlobIndexLookup<FieldSignature> blobs.FieldSig.Count
     member val MethodDefSig = BlobIndexLookup<MethodDefSignature> blobs.MethodDefSig.Count
@@ -49,10 +49,10 @@ type internal SerializedBlobHeap (blobs: BlobHeap, size) =
         + this.MiscBytes.Count
 
     member _.CreateIndex(blob: 'Item, lookup: Dictionary<'Item, BlobIndex>) =
-        let size = uint32 (writer.Position - pos)
-        pos <- writer.Position
-        lookup.Item <- blob, { BlobIndex.Index = offset; BlobIndex.Size = size }
-        offset <- offset + size + BlobSize.ofUnsigned size
+        let size' = writer.Size - size
+        size <- writer.Size
+        lookup.Item <- blob, { BlobIndex.Index = offset; BlobIndex.Size = size' }
+        offset <- offset + size' + BlobSize.ofUnsigned size'
 
     member private this.WriteRawIndex(i, writer: ChunkWriter) =
         match this with

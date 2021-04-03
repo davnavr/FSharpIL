@@ -230,14 +230,6 @@ module internal Heap =
                 for gparam in inst.GenericArguments do writer.EncodedType gparam
                 blob.CreateIndex(i, blob.MethodSpec)
 
-        for row in metadata.AssemblyRef.Rows do
-            match row.PublicKeyOrToken.AsByteBlob() with
-            | ValueSome i ->
-                let token = metadata.Blobs.MiscBytes.ItemRef i
-                writer.Writer.WriteBytes token
-                blob.CreateIndex(i, blob.MiscBytes)
-            | ValueNone -> ()
-
         for locals in metadata.StandAloneSig.LocalVariables do
             if not (blob.LocalVarSig.ContainsKey locals) then
                 let signature = metadata.Blobs.LocalVarSig.ItemRef locals
@@ -255,6 +247,14 @@ module internal Heap =
                             writer.Writer.WriteU1 ElementType.ByRef
                         writer.EncodedType local.LocalType
                 blob.CreateIndex(locals, blob.LocalVarSig)
+
+        for row in metadata.AssemblyRef.Rows do
+            match row.PublicKeyOrToken.AsByteBlob() with
+            | ValueSome i ->
+                let token = metadata.Blobs.MiscBytes.ItemRef i
+                writer.Writer.WriteBytes token // TODO: Fix, something is wrong with length of public key tokens.
+                blob.CreateIndex(i, blob.MiscBytes)
+            | ValueNone -> ()
 
         for { File.HashValue = i } in metadata.File.Rows do
             if not (blob.MiscBytes.ContainsKey i) then
