@@ -127,30 +127,34 @@ module internal Heap =
 
         for memberRef in metadata.MemberRef.Rows do
             match memberRef.Signature with
-            | MemberRefSignature.MethodDefault method ->
-                let signature = metadata.Blobs.MethodRefSig.ItemRef method
-                writer.Writer.WriteU1 signature.CallingConventions
-                writer.CompressedUnsigned signature.Parameters.Length // ParamCount
-                writer.RetType signature.ReturnType
-                writer.Parameters signature.Parameters
-            | MemberRefSignature.MethodGeneric method ->
-                let signature = metadata.Blobs.MethodRefSig.ItemRef method
-                writer.Writer.WriteU1 signature.CallingConventions
-                writer.CompressedUnsigned signature.GenParamCount
-                writer.CompressedUnsigned signature.Parameters.Length // ParamCount
-                writer.RetType signature.ReturnType
-                writer.Parameters signature.Parameters
-            | MemberRefSignature.MethodVarArg method ->
-                let signature = metadata.Blobs.MethodRefSig.ItemRef method
-                writer.Writer.WriteU1 signature.CallingConventions
-                writer.CompressedUnsigned signature.ParamCount
-                writer.RetType signature.ReturnType
-                writer.Parameters signature.Parameters
-                if not signature.VarArgParameters.IsEmpty then
-                    writer.Writer.WriteU1 ElementType.Sentinel
-                    writer.Parameters signature.VarArgParameters
-            | MemberRefSignature.Field field ->
+            | MemberRefSignature.MethodRef method when not (blob.MethodRefSig.ContainsKey method) ->
+                match method with
+                | MethodRefSignature.Default method ->
+                    let signature = metadata.Blobs.MethodRefSig.ItemRef method
+                    writer.Writer.WriteU1 signature.CallingConventions
+                    writer.CompressedUnsigned signature.Parameters.Length // ParamCount
+                    writer.RetType signature.ReturnType
+                    writer.Parameters signature.Parameters
+                | MethodRefSignature.Generic method ->
+                    let signature = metadata.Blobs.MethodRefSig.ItemRef method
+                    writer.Writer.WriteU1 signature.CallingConventions
+                    writer.CompressedUnsigned signature.GenParamCount
+                    writer.CompressedUnsigned signature.Parameters.Length // ParamCount
+                    writer.RetType signature.ReturnType
+                    writer.Parameters signature.Parameters
+                | MethodRefSignature.VarArg method ->
+                    let signature = metadata.Blobs.MethodRefSig.ItemRef method
+                    writer.Writer.WriteU1 signature.CallingConventions
+                    writer.CompressedUnsigned signature.ParamCount
+                    writer.RetType signature.ReturnType
+                    writer.Parameters signature.Parameters
+                    if not signature.VarArgParameters.IsEmpty then
+                        writer.Writer.WriteU1 ElementType.Sentinel
+                        writer.Parameters signature.VarArgParameters
+                blob.CreateIndex(method, blob.MethodRefSig)
+            | MemberRefSignature.FieldRef field ->
                 fieldSignature blob &writer field
+            | MemberRefSignature.MethodRef _ -> ()
 
         for row in metadata.Constant.Rows do
             let i = row.Value

@@ -158,11 +158,11 @@ end
 
 [<RequireQualifiedAccess>]
 module MethodRefSignature =
-    let (|MethodDefault|MethodGeneric|MethodVarArg|) (signature: MethodRefSignature) =
+    let (|Default|Generic|VarArg|) (signature: MethodRefSignature) =
         match signature.Tag with
-        | MemberRefSignatureTag.MethodDefault -> MethodDefault(signature.AsBlob<MethodRefDefaultSignature>())
-        | MemberRefSignatureTag.MethodGeneric -> MethodGeneric(signature.AsBlob<MethodRefGenericSignature>())
-        | MemberRefSignatureTag.MethodVarArg -> MethodVarArg(signature.AsBlob<MethodRefVarArgSignature>())
+        | MemberRefSignatureTag.MethodDefault -> Default(signature.AsBlob<MethodRefDefaultSignature>())
+        | MemberRefSignatureTag.MethodGeneric -> Generic(signature.AsBlob<MethodRefGenericSignature>())
+        | MemberRefSignatureTag.MethodVarArg -> VarArg(signature.AsBlob<MethodRefVarArgSignature>())
         | _ -> invalidArg "signature" "Invalid method reference signature kind"
 
 [<RequireQualifiedAccess>]
@@ -179,9 +179,9 @@ module MemberRefSignature =
         match signature with
         | MethodRef method ->
             match method with
-            | MethodRefSignature.MethodDefault signature -> MethodDefault signature
-            | MethodRefSignature.MethodGeneric signature -> MethodGeneric signature
-            | MethodRefSignature.MethodVarArg signature -> MethodVarArg signature
+            | MethodRefSignature.Default signature -> MethodDefault signature
+            | MethodRefSignature.Generic signature -> MethodGeneric signature
+            | MethodRefSignature.VarArg signature -> MethodVarArg signature
         | FieldRef field -> Field field
 
 // TODO: Figure out if MemberRefRow constructor should be public.
