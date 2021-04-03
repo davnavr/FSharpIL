@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <AssemblyName>FSharpIL.Benchmarks</AssemblyName>
+    <AssemblyName>FSharpIL.Benchmarks.Memory</AssemblyName>
     <OutputType>Exe</OutputType>
     <TargetFramework>net5.0</TargetFramework>
     <DefineConstants>BENCHMARK</DefineConstants>
@@ -10,12 +10,7 @@
   <ItemGroup>
     <Compile Include="$(RootDirectory)\docs\content\HelloWorld.fsx" />
     <Compile Include="$(RootDirectory)\docs\content\CustomCollections.fsx" />
-    <Compile Include="ToArrayBenchmarks.fs" />
-    <Compile Include="HelloWorldBenchmarks.fs" />
-    <Compile Include="Benchmark.fs" />
-
-    <PackageReference Include="BenchmarkDotNet" Version="0.12.1" />
-    <PackageReference Include="Mono.Cecil" Version="0.11.3" />
+    <Compile Include="Test.fs" />
 
     <ProjectReference Include="$(RootDirectory)\src\FSharpIL\FSharpIL.fsproj" />
   </ItemGroup>

@@ -56,7 +56,7 @@ type CliInfo =
       StringsStream: Heap<string>
       UserStringStream: UserStringHeap
       GuidStream: Heap<Guid>
-      BlobStream: BlobHeap }
+      BlobStream: SerializedBlobHeap }
 
 /// Writes the CLI header (II.25.3.3).
 let header info (writer: ChunkWriter) =
@@ -127,7 +127,10 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
             // TODO: Add checks for no exceptions and extra data sections to generate Tiny format.
             let locals, localsi =
                 match method.Body.LocalVariables with
-                | ValueSome i -> info.Cli.StandAloneSig.GetSignature(i).Length, uint32 i
+                | ValueSome i ->
+                    let row = info.Cli.StandAloneSig.GetSignature i
+                    let signature = info.Cli.Blobs.LocalVarSig.ItemRef row
+                    signature.Length, uint32 i
                 | ValueNone -> 0, 0u
             let tiny = size < 64u && body.MaxStack <= 8us && locals <= 0 // &&
             let pos = uint32 writer.Position
@@ -334,6 +337,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         let mutable param = 1u
 
         for method in tables.MethodDef.Rows do
+            let signature = tables.Blobs.MethodDefSig.ItemRef method.Signature
             writer.WriteU4 info.MethodBodies.[method.Body] // Rva
             writer.WriteU2 method.ImplFlags
             writer.WriteU2 method.Flags
@@ -346,7 +350,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             then writer.WriteU2 param
             else writer.WriteU4 param
 
-            param <- param + uint32 method.ParamList.Length
+            param <- param + uint32 signature.Parameters.Length
 
     // Param (0x08)
     for sequence, row in tables.Param do
@@ -361,21 +365,19 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
     // MemberRef (0x0A)
     for row in tables.MemberRef.Rows do
-        match row with
-        | MethodRefDefault { Class = mclass; MemberName = name }
-        | MethodRefGeneric { Class = mclass; MemberName = name }
-        | MethodRefVarArg { Class = mclass; MemberName = name }
-        | FieldRef { Class = mclass; MemberName = name } ->
-            memberRefParent.WriteIndex(mclass, writer)
-            info.StringsStream.WriteStringIndex(name, writer)
+        memberRefParent.WriteIndex(row.Class, writer)
+        info.StringsStream.WriteStringIndex(row.Name, writer)
 
-        info.BlobStream.WriteIndex(row, writer) // Signature
+        // Signature
+        match row.Signature with
+        | MemberRefSignature.MethodRef method -> info.BlobStream.WriteIndex(method, writer)
+        | MemberRefSignature.FieldRef field -> info.BlobStream.WriteIndex(field, writer)
 
     // Constant (0x0B)
     for row in tables.Constant.Rows do
         let ctype =
             match row.Value with
-            | ConstantValue.Integer value ->
+            | ConstantBlob.Integer value ->
                 match value.Tag with
                 | IntegerType.Bool -> ElementType.Boolean
                 | IntegerType.Char -> ElementType.Char
@@ -388,8 +390,8 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
                 | IntegerType.I8 -> ElementType.I8
                 | IntegerType.U8 -> ElementType.U8
                 | _ -> sprintf "Invalid constant integer type for parent %O" row.Parent |> invalidOp
-            | ConstantValue.String _ -> ElementType.String
-            | ConstantValue.Null -> ElementType.Class
+            | ConstantBlob.String _ -> ElementType.String
+            | ConstantBlob.Null -> ElementType.Class
 
         writer.WriteU1 ctype // Type
         writer.WriteU1 0uy // Padding
@@ -467,7 +469,11 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         writer.WriteU2 row.Version.Build
         writer.WriteU2 row.Version.Revision
         writer.WriteU4 row.Flags
-        info.BlobStream.WriteIndex(row.PublicKeyOrToken, writer)
+
+        match row.PublicKeyOrToken.AsByteBlob() with
+        | ValueSome i -> info.BlobStream.WriteIndex(i, writer)
+        | ValueNone -> info.BlobStream.WriteEmpty writer
+
         info.StringsStream.WriteStringIndex(row.Name, writer)
         info.StringsStream.WriteStringIndex(row.Culture, writer)
         info.BlobStream.WriteEmpty writer // HashValue // TODO: Figure out how to write the HashValue into a blob.

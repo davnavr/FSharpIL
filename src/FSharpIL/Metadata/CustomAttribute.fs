@@ -103,7 +103,7 @@ type CustomAttribute =
     { Parent: CustomAttributeParent
       /// Specifies the constructor method used to create the custom attribute.
       Type: CustomAttributeType // TODO: How to ensure that the MethodRef points to a .ctor?
-      Value: CustomAttributeSignature option }
+      Value: Blob<CustomAttributeSignature> voption }
       // TODO: How to validate signature to ensure types of fixed arguments match method signature? Maybe have FixedArgs field of signature type be ParamItem -> int -> FixedArg?
 
 [<Sealed>]

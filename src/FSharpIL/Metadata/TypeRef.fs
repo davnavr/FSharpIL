@@ -1,6 +1,7 @@
 ﻿namespace rec FSharpIL.Metadata
 
 open System.Runtime.CompilerServices
+open System.Runtime.InteropServices
 
 type ResolutionScopeTag =
     | Module = 0uy
@@ -38,11 +39,15 @@ module ResolutionScope =
 /// (0x01) Represents a row in the <c>TypeRef</c> table (II.22.38).
 /// </summary>
 [<IsReadOnly; Struct>]
-[<StructuralComparison; StructuralEquality>]
-type TypeRef =
-    { ResolutionScope: ResolutionScope
-      TypeName: Identifier
-      TypeNamespace: string }
+type TypeRef
+    (
+        resolutionScope: ResolutionScope,
+        typeName: Identifier,
+        [<Optional; DefaultParameterValue("")>] typeNamespace: string
+    ) =
+    member _.ResolutionScope = resolutionScope
+    member _.TypeName = typeName
+    member _.TypeNamespace = typeNamespace
 
 /// (1d)
 [<Sealed>]

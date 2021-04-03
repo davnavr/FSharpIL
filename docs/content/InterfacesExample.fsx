@@ -22,7 +22,6 @@ The following example showcases the generation of interface types.
 ## Example
 *)
 open System
-open System.Collections.Immutable
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Unchecked
@@ -46,11 +45,15 @@ let example() =
     |> ignore
 
     let struct (mscorlib, _) =
-        { Version = Version(5, 0, 0, 0)
-          PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-          Name = AssemblyName.ofStr "System.Runtime"
-          Culture = NullCulture
-          HashValue = None }
+        let token =
+            PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+            |> builder.Blobs.MiscBytes.GetOrAdd
+            |> PublicKeyOrToken
+        AssemblyRef (
+            Version(5, 0, 0, 0),
+            AssemblyName.ofStr "System.Runtime",
+            token
+        )
         |> referenceAssembly builder
 
     // [<Interface>] type INumber
@@ -68,12 +71,13 @@ let example() =
             TypeDefOrRefOrSpecEncoded.InterfaceDef inumber
             |> EncodedType.Class
             |> ReturnType.encoded
+        let signature = InstanceMethodSignature(rtype, ParamItem.create EncodedType.I4)
         AbstractMethod (
             MethodBody.none,
             // TODO: Figure out how to stop users from saying isVirtual = false, note that Flags.abstractMethod ensures abstract methods are virtual anyway
             InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, isVirtual = true) |> Flags.abstractMethod,
             Identifier.ofStr "Add",
-            InstanceMethodSignature(rtype, ParamItem.create EncodedType.I4),
+            builder.Blobs.MethodDefSig.GetOrAdd signature,
             Param { Flags = ParamFlags(); ParamName = "num" } |> ParamList.singleton
         )
         |> Interface.addAbstractMethod builder inumber

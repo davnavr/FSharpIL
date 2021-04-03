@@ -49,6 +49,11 @@ type MethodBodyContent internal (writer: FSharpIL.Writing.ChunkWriter) =
     member internal _.Writer = writer
 
 type IMethodBody =
+    //abstract ImplFlags: MethodImplFlags
+
+    /// <summary>
+    /// Gets a value indicating whether or not the method body RVA is <c>0</c>, indicating a value of <see langword="null"/>.
+    /// </summary>
     abstract Exists: bool
     /// <summary>
     /// Corresponds to the <c>LocalVarSigTok</c> field, which describes "the layout of the local variables for the method"

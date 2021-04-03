@@ -50,50 +50,71 @@ let example() =
     validated {
         // Add references to other assemblies.
         let! mscorlib =
-            { Version = Version(5, 0, 0, 0)
-              PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
-              Name = AssemblyName.ofStr "System.Private.CoreLib"
-              Culture = NullCulture
-              HashValue = None }
+            let token =
+                PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
+                |> builder.Blobs.MiscBytes.GetOrAdd
+                |> PublicKeyOrToken
+            AssemblyRef (
+                Version(5, 0, 0, 0),
+                AssemblyName.ofStr "System.Private.CoreLib",
+                token
+            )
             |> referenceAssembly builder
 
         let! consolelib =
-            // Helper functions to add predefined assembly references are available in the SystemAssembly module
-            SystemAssembly.Net5_0.console builder
+            let token =
+                PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+                |> builder.Blobs.MiscBytes.GetOrAdd
+                |> PublicKeyOrToken
+            AssemblyRef (
+                Version(5, 0, 0, 0),
+                AssemblyName.ofStr "System.Console",
+                token
+            )
+            |> referenceAssembly builder
 
-        // Add references to types defined in referenced assemblies.
-        let! console = SystemType.console builder consolelib
-        let! object = SystemType.object builder mscorlib
-        let! tfmAttr =
-            { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
-              TypeNamespace = "System.Runtime.Versioning"
-              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        (* Add references to types defined in referenced assemblies. *)
+        let! console = SystemType.Console builder consolelib
+        let! object = SystemType.Object builder mscorlib
+        let! tfmattr =
+            TypeRef (
+                ResolutionScope.AssemblyRef mscorlib,
+                Identifier.ofStr "TargetFrameworkAttribute",
+                "System.Runtime.Versioning"
+            )
             |> referenceType builder
 
-        // Add references to methods defined in the types of referenced assemblies.
+        (* Add references to methods defined in the types of referenced assemblies. *)
         let string = ParamItem.create EncodedType.String
 
+        // static member WriteLine(_: string): System.Void
         let! writeLine =
+            let signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string)
             { Class = MemberRefParent.TypeRef console
               MemberName = Identifier.ofStr "WriteLine"
-              Signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string) }
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
             |> referenceDefaultMethod builder
-        let! tfmAttrCtor =
-            { Class = MemberRefParent.TypeRef tfmAttr
+        // new(_: string)
+        let! tfmctor =
+            let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string)
+            { Class = MemberRefParent.TypeRef tfmattr
               MemberName = Identifier.ofStr ".ctor"
-              Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string) }
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
             |> referenceDefaultMethod builder
 
-        // Defines a custom attribute on the current assembly specifying the target framework.
+        (* Defines a custom attribute on the current assembly specifying the target framework. *)
+        // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
         { Parent = CustomAttributeParent.Assembly assem
-          Type = CustomAttributeType.MethodRefDefault tfmAttrCtor
+          Type = CustomAttributeType.MethodRefDefault tfmctor
           Value =
-          { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
-            NamedArg = ImmutableArray.Empty }
-          |> Some }
+            { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
+              NamedArg = ImmutableArray.Empty }
+            |> builder.Blobs.CustomAttribute.GetOrAdd
+            |> ValueSome }
         |> addCustomAttribute builder
 
-        // Create the class that will contain the entrypoint method.
+        (* Create the class that will contain the entrypoint method. *)
+        // [<AbstractClass; Sealed>] type Program
         let! program =
             { Access = TypeVisibility.Public
               ClassName = Identifier.ofStr "Program"
@@ -102,7 +123,8 @@ let example() =
               TypeNamespace = "HelloWorld" }
             |> StaticClass.addTypeDef builder
 
-        // Create the entrypoint method of the current assembly.
+        (* Create the entrypoint method of the current assembly. *)
+        // [<EntryPoint>] static member Main(args: string[]): System.Void
         let! main =
             let body content =
                 let writer = MethodBodyWriter content
@@ -114,7 +136,7 @@ let example() =
                 MethodBody.create ValueNone body,
                 Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
                 Identifier.ofStr "Main",
-                EntryPointSignature.voidWithArgs,
+                builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs,
                 Param { Flags = ParamFlags(); ParamName = "args" } |> ParamList.singleton
             )
             |> StaticClass.addEntryPoint builder program

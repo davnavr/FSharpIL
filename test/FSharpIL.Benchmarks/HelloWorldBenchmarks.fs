@@ -1,7 +1,6 @@
-﻿module FSharpIL.Benchmarks
+﻿namespace FSharpIL
 
 open BenchmarkDotNet.Attributes
-open BenchmarkDotNet.Running
 
 open System
 open System.Collections.Immutable
@@ -19,7 +18,7 @@ open FSharpIL.Metadata.UncheckedExn
 
 [<StatisticalTestColumn>]
 [<MemoryDiagnoser>]
-type HelloWorld () =
+type HelloWorldBenchmarks () =
     [<Benchmark>]
     member _.FSharpIL_ComputationExpression() = HelloWorld.example()
 
@@ -39,60 +38,69 @@ type HelloWorld () =
               Culture = NullCulture }
             |> setAssembly builder
 
+        let lversion = Version(5, 0, 0, 0)
+
         let struct (mscorlib, _) =
-            { Version = Version(5, 0, 0, 0)
-              PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
-              Name = AssemblyName.ofStr "System.Private.CoreLib"
-              Culture = NullCulture
-              HashValue = None }
+            let token =
+                PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
+                |> builder.Blobs.MiscBytes.GetOrAdd
+                |> PublicKeyOrToken
+            AssemblyRef (
+                lversion,
+                AssemblyName.ofStr "System.Private.CoreLib",
+                token
+            )
             |> referenceAssembly builder
 
         let struct (consolelib, _) =
-            { Version = Version(5, 0, 0, 0)
-              PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-              Name = AssemblyName.ofStr "System.Console"
-              Culture = NullCulture
-              HashValue = None }
+            let token =
+                PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+                |> builder.Blobs.MiscBytes.GetOrAdd
+                |> PublicKeyOrToken
+            AssemblyRef (
+                lversion,
+                AssemblyName.ofStr "System.Console",
+                token
+            )
             |> referenceAssembly builder
 
         let console =
-            { TypeName = Identifier.ofStr "Console"
-              TypeNamespace = "System"
-              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-            |> referenceType builder
+            TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Console", "System") |> referenceType builder
         let object =
-            { TypeName = Identifier.ofStr "Object"
-              TypeNamespace = "System"
-              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
-            |> referenceType builder
+            TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Object", "System") |> referenceType builder
         let tfmAttr =
-            { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
-              TypeNamespace = "System.Runtime.Versioning"
-              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+            TypeRef (
+                ResolutionScope.AssemblyRef mscorlib,
+                Identifier.ofStr "TargetFrameworkAttribute",
+                "System.Runtime.Versioning"
+            )
             |> referenceType builder
         let string = ParamItem.create EncodedType.String
 
         let struct (writeLine, _) =
             { Class = MemberRefParent.TypeRef console
               MemberName = Identifier.ofStr "WriteLine"
-              Signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string) }
+              Signature =
+                MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string)
+                |> builder.Blobs.MethodRefSig.GetOrAdd }
             |> referenceDefaultMethod builder
         let struct (tfmAttrCtor, _) =
             { Class = MemberRefParent.TypeRef tfmAttr
               MemberName = Identifier.ofStr ".ctor"
-              Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string) }
+              Signature =
+                MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string)
+                |> builder.Blobs.MethodRefSig.GetOrAdd }
             |> referenceDefaultMethod builder
 
-        // Defines a custom attribute on the current assembly specifying the target framework.
         { Parent = CustomAttributeParent.Assembly assem
           Type = CustomAttributeType.MethodRefDefault tfmAttrCtor
           Value =
-          { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
-            NamedArg = ImmutableArray.Empty }
-          |> Some }
+            { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
+              NamedArg = ImmutableArray.Empty }
+            |> builder.Blobs.CustomAttribute.GetOrAdd
+            |> ValueSome }
         |> addCustomAttribute builder
 
-        // Create the class that will contain the entrypoint method.
         let program =
             { Access = TypeVisibility.Public
               ClassName = Identifier.ofStr "Program"
@@ -101,7 +109,6 @@ type HelloWorld () =
               TypeNamespace = "HelloWorld" }
             |> StaticClass.addTypeDef builder
 
-        // Create the entrypoint method of the current assembly.
         let main =
             let body content =
                 let writer = MethodBodyWriter content
@@ -113,7 +120,7 @@ type HelloWorld () =
                 MethodBody.create ValueNone body,
                 Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
                 Identifier.ofStr "Main",
-                EntryPointSignature.voidWithArgs,
+                builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs,
                 Param { Flags = ParamFlags(); ParamName = "args" } |> ParamList.singleton
             )
             |> StaticClass.addEntryPoint builder program
@@ -169,12 +176,3 @@ type HelloWorld () =
         assembly.CustomAttributes.Add tfm
 
         assembly
-
-[<EntryPoint>]
-let main argv =
-    let assm = System.Reflection.Assembly.GetExecutingAssembly()
-    BenchmarkSwitcher
-        .FromAssembly(assm)
-        .Run(args = argv)
-    |> ignore
-    0

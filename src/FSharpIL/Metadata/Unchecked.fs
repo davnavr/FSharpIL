@@ -7,11 +7,13 @@ open System
 open System.Collections.Immutable
 open System.Reflection
 
+open FSharpIL
+
 [<RequireQualifiedAccess>]
 module private DelegateHelpers =
     let implFlags = MethodImplAttributes.Managed ||| MethodImplAttributes.Runtime
 
-    let ctorSignature =
+    let ctorSignature (builder: CliMetadataBuilder) =
         let parameters =
             [|
                 EncodedType.Object
@@ -19,12 +21,17 @@ module private DelegateHelpers =
             |]
             |> Array.map ParamItem.create
             |> ImmutableArray.CreateRange
-        MethodDefSignature(true, false, MethodCallingConventions.Default, ReturnType.itemVoid, parameters)
+        let signature = MethodDefSignature(true, false, MethodCallingConventions.Default, ReturnType.itemVoid, parameters)
+        builder.Blobs.MethodDefSig.GetOrAdd signature
 
     let ctorParameters (_: ParamItem) (i: int32) =
         { ParamName = if i = 0 then "object" else "method"
           Flags = ParamFlags() }
         |> Param
+
+    let invokeSignature (builder: CliMetadataBuilder) (delegateDef: inref<DelegateDef>) =
+        let signature = MethodDefSignature(true, false, Default, delegateDef.ReturnType, delegateDef.Parameters)
+        builder.Blobs.MethodDefSig.GetOrAdd signature
 
 // TODO: Figure out if using inref with static methods in Unsafe is a performance improvement.
 /// Contains static methods for modifying the CLI metadata without regard for generation of correct metadata.
@@ -52,7 +59,7 @@ type Unsafe private () = class
         | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
         | ValueNone -> DuplicateMethodError method :> ValidationError |> Error
 
-    static member AddMethod<'Body, 'Flags, 'Signature when 'Body :> IMethodBody and 'Signature :> IMethodDefSignature>
+    static member AddMethod<'Body, 'Flags, 'Signature when 'Body :> IMethodBody>
         (
             builder: CliMetadataBuilder,
             owner,
@@ -85,16 +92,17 @@ type Unsafe private () = class
             owner,
             method,
             ".ctor",
-            method.Signature.Signature()
+            method.Signature.ChangeTag()
         )
 
     static member AddConstructor(builder: CliMetadataBuilder, owner, method: ClassConstructor) =
+        let signature = builder.Blobs.MethodDefSig.GetOrAdd Unsafe.ClassConstructorSignature
         Unsafe.AddConstructor<ClassConstructor, ClassConstructorTag, _> (
             builder,
             owner,
             method,
             ".cctor",
-            Unsafe.ClassConstructorSignature
+            signature
         )
 
     static member AddTypeDef<'Tag>
@@ -159,7 +167,7 @@ type Unsafe private () = class
                         DelegateHelpers.implFlags,
                         ConstructorFlags(Public, true).Value ||| MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName,
                         Identifier.ofStr ".ctor",
-                        DelegateHelpers.ctorSignature,
+                        DelegateHelpers.ctorSignature builder,
                         DelegateHelpers.ctorParameters
                     )
                 builder.Method.TryAdd(trow, row).Value.ChangeTag<ObjectConstructor>()
@@ -171,24 +179,30 @@ type Unsafe private () = class
                         DelegateHelpers.implFlags,
                         delegateDef.MethodFlags,
                         Identifier.ofStr "Invoke",
-                        MethodDefSignature(true, false, Default, delegateDef.ReturnType, delegateDef.Parameters),
+                        DelegateHelpers.invokeSignature builder &delegateDef,
                         ParamList.noname
                     )
                 builder.Method.TryAdd(trow, row).Value.ChangeTag<InstanceMethod>()
 
             let beginInvoke =
                 let pcount = delegateDef.Parameters.Length
-                let parameters = ImmutableArray.CreateBuilder(pcount + 2)
-                parameters.AddRange delegateDef.Parameters
-                parameters.Add(ParamItem.create asyncResult) // callback
-                parameters.Add(ParamItem.create EncodedType.Object) // objects
+
+                let parameters =
+                    let builder = ImmutableArray.CreateBuilder(pcount + 2)
+                    builder.AddRange delegateDef.Parameters
+                    builder.Add(ParamItem.create asyncResult) // callback
+                    builder.Add(ParamItem.create EncodedType.Object) // objects
+                    builder.ToImmutable()
+
+                let signature = MethodDefSignature(true, false, Default, ReturnType.encoded asyncCallback, parameters)
+
                 let row =
                     MethodDefRow (
                         MethodBody.none,
                         DelegateHelpers.implFlags,
                         delegateDef.MethodFlags,
                         Identifier.ofStr "BeginInvoke",
-                        MethodDefSignature(true, false, Default, ReturnType.encoded asyncCallback, parameters.ToImmutable()),
+                        builder.Blobs.MethodDefSig.TryAdd signature |> Result.any,
                         fun _ i ->
                             let name =
                                 if i = pcount
@@ -201,13 +215,21 @@ type Unsafe private () = class
                 builder.Method.TryAdd(trow, row).Value.ChangeTag<InstanceMethod>()
 
             let endInvoke =
+                let signature =
+                    MethodDefSignature (
+                        true,
+                        false,
+                        Default,
+                        delegateDef.ReturnType,
+                        ImmutableArray.Create(ParamItem.create asyncResult)
+                    )
                 let row =
                     MethodDefRow (
                         MethodBody.none,
                         DelegateHelpers.implFlags,
                         delegateDef.MethodFlags,
                         Identifier.ofStr "EndInvoke",
-                        MethodDefSignature(true, false, Default, delegateDef.ReturnType, ImmutableArray.Create(ParamItem.create asyncResult)),
+                        builder.Blobs.MethodDefSig.TryAdd signature |> Result.any,
                         fun _ _ -> Param { ParamName = "result"; Flags = ParamFlags() }
                     )
                 builder.Method.TryAdd(trow, row).Value.ChangeTag<InstanceMethod>()
@@ -268,24 +290,32 @@ type Unsafe private () = class
                     | IntegerType.I8 -> EncodedType.I8
                     | IntegerType.U8 -> EncodedType.U8
                     | _ -> sprintf "Invalid underlying type for enumeration \"%O\"" enumDef.EnumName |> invalidArg "enumDef"
+                let signature =
+                    FieldSignature(ImmutableArray.Empty, vtype)
+                    |> builder.Blobs.FieldSig.TryAdd
+                    |> Result.any
                 let row =
                     FieldRow (
                         FieldAttributes.RTSpecialName ||| FieldAttributes.SpecialName ||| FieldAttributes.Public,
                         Identifier.ofStr "value__",
-                        FieldSignature(ImmutableArray.Empty, vtype)
+                        signature
                     )
                 builder.Field.TryAdd(trow, row).Value.ChangeTag<InstanceField>()
 
             for value in enumDef.Values do
                 let vtype = TypeDefOrRefOrSpecEncoded.TypeDef trow |> EncodedType.ValueType
+                let signature =
+                    FieldSignature(ImmutableArray.Empty, vtype)
+                    |> builder.Blobs.FieldSig.TryAdd
+                    |> Result.any
                 let field =
                     FieldRow (
                         FieldAttributes.HasDefault ||| FieldAttributes.Static ||| FieldAttributes.Literal,
                         value.Name,
-                        FieldSignature(ImmutableArray.Empty, vtype)
+                        signature
                     )
                 let field' = builder.Field.TryAdd(trow, field).Value
-                let cvalue = builder.Constant.TryAdd(field', ConstantValue.Integer value.Value).Value
+                let cvalue = builder.Constant.TryAdd(field', ConstantBlob.Integer value.Value).Value
                 values.Add(EnumValueRow(field'.ChangeTag<StaticField>(), cvalue))
 
             // TODO: Add enum values to constant table.
@@ -336,7 +366,7 @@ type Unsafe private () = class
             else ExistingPropertyMethodsError index :> ValidationError |> Error
         | ValueNone -> DuplicatePropertyError row :> ValidationError |> Error
 
-    static member AddProperty<'Tag, 'Signature, 'Method when 'Signature :> IPropertySignature>
+    static member AddProperty<'Tag, 'Signature, 'Method>
         (
             builder,
             parent,
@@ -535,20 +565,17 @@ let referenceType (builder: CliMetadataBuilder) typeRef =
 
 // TODO: Figure out how to remove warning checks while still having easy way to check if duplicate value was added.
 
-let internal referenceMethod (builder: CliMetadataBuilder) (row: MemberRefRow) =
-    builder.MemberRef.Add row
-
 /// <summary>Adds a reference to a method with the <c>DEFAULT</c> calling convention.</summary>
-let referenceDefaultMethod builder method: struct(RawIndex<MethodRefDefault> * bool) =
-    referenceMethod builder (MethodRefDefault method)
+let referenceDefaultMethod (builder: CliMetadataBuilder) (method: MethodRefDefault) =
+    builder.MemberRef.Add method
 
 /// <summary>Adds a reference to a method with the <c>GENERIC</c> calling convention.</summary>
-let referenceGenericMethod builder method: struct(RawIndex<MethodRefGeneric> * _) =
-    referenceMethod builder (MethodRefGeneric method)
+let referenceGenericMethod (builder: CliMetadataBuilder) (method: MethodRefGeneric): struct(RawIndex<MethodRefGeneric> * _) =
+    builder.MemberRef.Add method
 
 /// <summary>Adds a reference to a method with the <c>VARARG</c> calling convention.</summary>
-let referenceVarArgMethod builder method: struct(RawIndex<MethodRefVarArg> * _) =
-    referenceMethod builder (MethodRefVarArg method)
+let referenceVarArgMethod (builder: CliMetadataBuilder) (method: MethodRefVarArg): struct(RawIndex<MethodRefVarArg> * _) =
+    builder.MemberRef.Add method
 
 let referenceModule (builder: CliMetadataBuilder) moduleRef = builder.ModuleRef.Add moduleRef
 
@@ -559,12 +586,17 @@ let referenceAssembly (builder: CliMetadataBuilder) assembly =
     struct(i, dup)
 
 let addTypeSpec (builder: CliMetadataBuilder) typeSpec =
-    match builder.TypeSpec.TryAdd typeSpec with
+    let row = TypeSpecRow typeSpec
+    match builder.TypeSpec.TryAdd row with
     | ValueSome index -> Ok index
-    | ValueNone -> DuplicateTypeSpecError(typeSpec).ToResult()
+    | ValueNone -> DuplicateTypeSpecError(row).ToResult()
 
 let addMethodSpec (builder: CliMetadataBuilder) method (garguments: seq<_>) =
-    let spec' = MethodSpecRow(method, MethodSpec garguments)
+    let inst =
+        MethodSpec garguments
+        |> builder.Blobs.MethodSpec.TryAdd
+        |> Result.any
+    let spec' = MethodSpecRow(method, inst)
     match builder.MethodSpec.TryAdd spec' with
     | ValueSome index -> Ok index
     | ValueNone -> DuplicateMethodSpecError(spec').ToResult()

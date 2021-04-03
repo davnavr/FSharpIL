@@ -5,6 +5,8 @@ open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
 
+open FSharpIL
+
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
 type PropertySignature internal
@@ -19,13 +21,10 @@ type PropertySignature internal
     member _.Type = propertyType
     member _.Parameters = parameters
 
-type IPropertySignature =
-    abstract Signature: unit -> PropertySignature
-
 /// <summary>(0x17) Represents a row in the <c>Property</c> table (II.22.34).</summary>
 [<IsReadOnly; Struct>]
 [<NoComparison; CustomEquality>]
-type PropertyRow internal (flags: PropertyAttributes, name: Identifier, signature: PropertySignature) =
+type PropertyRow internal (flags: PropertyAttributes, name: Identifier, signature: Blob<PropertySignature>) =
     member _.Flags = flags
     member _.Name = name
     member _.Type = signature
@@ -34,13 +33,13 @@ type PropertyRow internal (flags: PropertyAttributes, name: Identifier, signatur
         member _.Equals other = name = other.Name && signature = other.Type
 
 [<IsReadOnly; Struct>]
-type Property<'Tag, 'Signature when 'Signature :> IPropertySignature> =
+type Property<'Tag, 'Signature> =
     { Flags: ValidFlags<'Tag, PropertyAttributes>
       /// <summary>Corresponds to the <c>Name</c> column of the <c>Property</c> table (II.22.34).</summary>
       PropertyName: Identifier
-      Type: 'Signature }
+      Type: Blob<'Signature> }
 
-    member internal this.Definition() = PropertyRow(this.Flags.Value, this.PropertyName, this.Type.Signature())
+    member internal this.Definition() = PropertyRow(this.Flags.Value, this.PropertyName, this.Type.ChangeTag())
 
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
@@ -60,8 +59,7 @@ type InstancePropertySignature
     new (propertyType, [<ParamArray>] parameters: ParamItem[]) =
         InstancePropertySignature(ImmutableArray.Empty, propertyType, parameters)
 
-    interface IPropertySignature with
-        member _.Signature() = PropertySignature(true, modifiers, propertyType, parameters)
+    member internal _.Signature() = PropertySignature(true, modifiers, propertyType, parameters)
 
 type InstanceProperty = Property<InstanceMethodTag, InstancePropertySignature>
 
@@ -78,8 +76,7 @@ type StaticPropertySignature internal (signature: InstancePropertySignature) =
     new (propertyType, [<ParamArray>] parameters: ParamItem[]) =
         StaticPropertySignature(ImmutableArray.Empty, propertyType, parameters)
 
-    interface IPropertySignature with
-        member _.Signature() = PropertySignature(false, signature.CustomMod, signature.Type, signature.Parameters)
+    member internal _.Signature() = PropertySignature(false, signature.CustomMod, signature.Type, signature.Parameters)
 
 type StaticProperty = Property<StaticMethodTag, StaticPropertySignature>
 
@@ -94,3 +91,29 @@ type DuplicatePropertyError (property: PropertyRow) =
         sprintf
             "Unable to add property \"%O\", a property with the same name and signature already exists"
             property
+
+[<Sealed>]
+type PropertySigBlobLookup internal (lookup: BlobLookup<PropertySignature>) =
+    member _.Count = lookup.Count
+    member private _.GetSignature(i: Blob<_>) = lookup.[i.ChangeTag()]
+    member _.ItemRef i: inref<_> = &lookup.ItemRef i
+    member _.Item with get i = lookup.[i]
+    member this.Item with get (i: Blob<InstancePropertySignature>) = this.GetSignature i
+    member this.Item with get (i: Blob<StaticPropertySignature>) = this.GetSignature i
+
+[<Sealed>]
+type PropertySigBlobLookupBuilder internal () =
+    let lookup = BlobLookupBuilder<PropertySignature>()
+    member _.Count = lookup.Count
+    member private _.TryAdd<'Tag>(signature) =
+        let error, i =
+            match lookup.TryAdd signature with
+            | Ok i -> false, i
+            | Error i -> true, i
+        let i' = i.ChangeTag<'Tag>()
+        if error then Error i' else Ok i'
+    member this.TryAdd(signature: InstancePropertySignature) = this.TryAdd<InstancePropertySignature>(signature.Signature())
+    member this.TryAdd(signature: StaticPropertySignature) = this.TryAdd<StaticPropertySignature>(signature.Signature())
+    member this.GetOrAdd(signature: InstancePropertySignature) = this.TryAdd signature |> Result.any
+    member this.GetOrAdd(signature: StaticPropertySignature) = this.TryAdd signature |> Result.any
+    member internal _.ToImmutable() = PropertySigBlobLookup(lookup.ToImmutable())

@@ -132,36 +132,6 @@ type ReturnType =
 
     interface IReturnType
 
-/// <summary>Represents a <c>TypeSpec</c> item in the <c>#Blob</c> heap (II.23.2.14).</summary>
-[<RequireQualifiedAccess>]
-type TypeSpec =
-    // NOTE: According to ECMA-336 augmentations, TypeSpec blob format extends the Type blob format.
-    /// <summary>Represents a <c>GENERICINST</c> followed by a <c>TypeRef</c>.</summary>
-    | GenericInst of GenericInst
-    | MVar of number: uint32
-    | Var of number: uint32
-
-    interface ITypeSpec
-
-/// <summary>Represents a <c>MethodSpec</c> item in the <c>#Blob</c> heap (II.23.2.15).</summary>
-/// <exception cref="T:System.ArgumentException">Thrown when the generic argument list is empty.</exception>
-type MethodSpec (garguments: ImmutableArray<EncodedType>) =
-    do if garguments.Length <= 0 then invalidArg "garguments" "The generic argument list cannot be empty."
-
-    new (garguments: seq<_>) = MethodSpec(garguments.ToImmutableArray())
-
-    member _.Count = garguments.Length
-
-    override this.Equals obj = (this :> IEquatable<MethodSpec>).Equals(obj :?> MethodSpec)
-    override _.GetHashCode() = garguments.GetHashCode()
-
-    member _.ToImmutableArray() = garguments
-
-    interface IEquatable<MethodSpec> with
-        member this.Equals other = this.ToImmutableArray() = other.ToImmutableArray()
-
-    interface IMethodSpec
-
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EncodedType =
@@ -194,12 +164,6 @@ module GenericInst =
 
     let typeDef1 valueType typeDef gargument =
         inst1 valueType (TypeDefOrRefOrSpecEncoded.TypeDef typeDef) gargument
-
-[<RequireQualifiedAccess>]
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module TypeSpec =
-    let create (typeSpec: TypeSpec) = TypeSpecRow typeSpec
-    let genericInst (inst: GenericInst) = TypeSpec.GenericInst inst |> create
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

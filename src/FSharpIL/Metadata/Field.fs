@@ -11,7 +11,7 @@ type [<AbstractClass; Sealed>] StaticFieldTag = class end
 type Field<'Flags> =
     { Flags: ValidFlags<'Flags, FieldAttributes> 
       FieldName: Identifier
-      Signature: FieldSignature }
+      Signature: Blob<FieldSignature> }
 
     member internal this.Row() = FieldRow(this.Flags.Value, this.FieldName, this.Signature)
 

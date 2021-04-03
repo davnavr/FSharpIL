@@ -1,20 +1,39 @@
 ﻿namespace FSharpIL.Metadata
 
-type internal ITypeSpec = interface end
+open System.Collections.Generic
 
-/// <summary>Represents a row in the <c>TypeSpec</c> table (II.22.39)</summary>
-[<System.Runtime.CompilerServices.IsReadOnly>]
-[<NoComparison; StructuralEquality>]
-type TypeSpecRow = struct
-    val internal Type: ITypeSpec // Signature
+open FSharpIL
 
-    internal new (typeSpec: ITypeSpec) = { Type = typeSpec }
+/// <summary>Represents a <c>TypeSpec</c> item in the <c>#Blob</c> heap (II.23.2.14).</summary>
+[<RequireQualifiedAccess>]
+type TypeSpec =
+    // NOTE: According to ECMA-336 augmentations, TypeSpec blob format extends the Type blob format.
+    // TODO: Figure out how to just use existing EncodedType union here, instead of copying and pasting.
+    /// <summary>Represents a <c>GENERICINST</c> followed by a <c>TypeRef</c>.</summary>
+    | GenericInst of GenericInst
+    | MVar of number: uint32
+    | Var of number: uint32
 
-    override this.ToString() = this.Type.ToString()
-end
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type TypeSpecBlobLookup internal (blobs: TypeSpec[]) =
+    member _.Count = blobs.Length
+    member _.Item with get (i: TypeSpecBlob) = blobs.[i.Index]
+    member _.ItemRef(i: TypeSpecBlob): inref<TypeSpec> = &blobs.[i.Index]
 
-/// <category>Errors</category>
 [<Sealed>]
-type DuplicateTypeSpecError (typeSpec: TypeSpecRow) =
-    inherit ValidationError()
-    member _.TypeSpec = typeSpec
+type TypeSpecBlobLookupBuilder internal () =
+    let blobs = Dictionary<TypeSpec, int32>()
+    member _.Count = blobs.Count
+    member _.TryAdd spec =
+        let count = blobs.Count
+        match blobs.TryGetValue spec with
+        | true, existing -> Error(TypeSpecBlob existing)
+        | false, _ ->
+            blobs.[spec] <- count
+            Ok(TypeSpecBlob count)
+    member this.GetOrAdd spec = this.TryAdd spec |> Result.any
+    member internal _.ToImmutable() =
+        let blobs' = Array.zeroCreate blobs.Count
+        for KeyValue(item, i) in blobs do
+            blobs'.[i] <- item
+        TypeSpecBlobLookup blobs'

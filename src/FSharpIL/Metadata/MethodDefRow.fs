@@ -61,23 +61,21 @@ type MethodDefSignature internal
     member _.ReturnType = retType
     member _.Parameters: ImmutableArray<ParamItem> = parameters
 
-type IMethodDefSignature =
-    abstract Signature: unit -> MethodDefSignature
-
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
-type MethodDefRow internal (body, iflags, attr, name, signature: MethodDefSignature, paramList) =
+type MethodDefRow internal (body, iflags, attr, name, signature, paramList: ParamItem -> int -> ParamRow) =
     member _.Body: IMethodBody = body
     member _.ImplFlags: MethodImplAttributes = iflags
     member _.Flags: MethodAttributes = attr
     member _.Name: Identifier = name
-    member _.Signature: MethodDefSignature = signature
-    member val ParamList =
-        let len = signature.Parameters.Length
-        let parameters = ImmutableArray.CreateBuilder<ParamRow> len
+    member _.Signature: Blob<MethodDefSignature> = signature
+
+    member internal _.GetParameters(msig: MethodDefSignature) =
+        let len = msig.Parameters.Length
+        let parameters = ImmutableArray.CreateBuilder<struct(int32 * ParamRow)> len
         for i = 0 to len - 1 do
-            let item = signature.Parameters.Item i
-            paramList item i |> parameters.Add
+            let item = msig.Parameters.ItemRef i
+            parameters.Add struct(i, paramList item i)
         parameters.ToImmutable()
 
     member internal _.SkipDuplicateChecking = attr &&& MethodAttributes.MemberAccessMask = MethodAttributes.PrivateScope
@@ -96,8 +94,3 @@ type MethodDefRow internal (body, iflags, attr, name, signature: MethodDefSignat
 type DuplicateMethodError (method: MethodDefRow) =
     inherit ValidationError()
     member _.Method = method
-
-[<RequireQualifiedAccess>]
-type MethodSignatureThatIsAVeryTemporaryValueToGetThingsToCompile private () =
-    interface IMethodDefSignature with
-        member _.Signature() = failwith "uh oh signature"

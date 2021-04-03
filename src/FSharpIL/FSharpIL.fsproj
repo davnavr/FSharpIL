@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Result.fs" />
     <Compile Include="Bytes.fs" />
     <Compile Include="InternalException.fs" />
     <Compile Include="Magic.fs" />
@@ -15,6 +16,7 @@
     <Compile Include="Writing\ChunkWriter.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\Index.fs" />
+    <Compile Include="Metadata\Blob.fs" />
     <Compile Include="Metadata\MetadataTable.fs" />
     <Compile Include="Metadata\RowArrayList.fs" />
     <Compile Include="Metadata\RowHashSet.fs" />
@@ -30,7 +32,7 @@
     <Compile Include="Metadata\Param.fs" />
     <Compile Include="Metadata\MethodBody.fs" />
     <Compile Include="Metadata\MethodDefRow.fs" />
-    <Compile Include="Metadata\TypeSpec.fs" />
+    <Compile Include="Metadata\TypeSpecRow.fs" />
     <Compile Include="Metadata\ConstantRow.fs" />
     <Compile Include="Metadata\TypeDef.fs" />
     <Compile Include="Metadata\GenericParam.fs" />
@@ -39,8 +41,10 @@
     <Compile Include="Metadata\Field.fs" />
     <Compile Include="Metadata\Method.fs" />
     <Compile Include="Metadata\MemberRef.fs" />
-    <Compile Include="Metadata\MethodSpec.fs" />
+    <Compile Include="Metadata\MethodSpecRow.fs" />
     <Compile Include="Metadata\Items.fs" />
+    <Compile Include="Metadata\TypeSpec.fs" />
+    <Compile Include="Metadata\MethodSpec.fs" />
     <Compile Include="Metadata\ItemHelpers.fs" />
     <Compile Include="Metadata\Property.fs" />
     <Compile Include="Metadata\ConstantTable.fs" />
@@ -49,6 +53,7 @@
     <Compile Include="Metadata\StandAloneSig.fs" />
     <Compile Include="Metadata\FlagsModule.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
+    <Compile Include="Metadata\BlobHeap.fs" />
     <Compile Include="Metadata\CliMetadataBuilder.fs" />
     <Compile Include="Metadata\EntryPointSignature.fs" />
     <Compile Include="Metadata\TypeLookupCache.fs" />
@@ -58,7 +63,7 @@
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\BlobWriter.fs" />
     <Compile Include="Metadata\Heaps\HeapExtensions.fs" />
-    <Compile Include="Metadata\Heaps\BlobHeap.fs" />
+    <Compile Include="Metadata\Heaps\SerializedBlobHeap.fs" />
     <Compile Include="Metadata\Heaps\UserString.fs" />
     <Compile Include="Metadata\Heaps\Heap.fs" />
     <Compile Include="Metadata\MetadataToken.fs" />

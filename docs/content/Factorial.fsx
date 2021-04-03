@@ -43,60 +43,73 @@ let example() =
           Culture = NullCulture }
         |> setAssembly builder
 
-    // TODO: Add target framework attribute to Factorial example.
     validated {
-        let! mscorlib =
-            { Version = Version(5, 0, 0, 0)
-              PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-              Name = AssemblyName.ofStr "System.Runtime"
-              Culture = NullCulture
-              HashValue = None }
-            |> referenceAssembly builder
-        let! object = SystemType.object builder mscorlib
-        let! tfmAttr =
-            { TypeName = Identifier.ofStr "TargetFrameworkAttribute"
-              TypeNamespace = "System.Runtime.Versioning"
-              ResolutionScope = ResolutionScope.AssemblyRef mscorlib }
+        let corver = Version(5, 0, 0, 0)
+        let ptoken =
+            PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+            |> builder.Blobs.MiscBytes.GetOrAdd
+            |> PublicKeyOrToken
+
+        let! mscorlib = AssemblyRef(corver, AssemblyName.ofStr "System.Runtime", ptoken) |> referenceAssembly builder
+        let! object = SystemType.Object builder mscorlib
+        let! tfmattr =
+            TypeRef (
+                ResolutionScope.AssemblyRef mscorlib,
+                Identifier.ofStr "TargetFrameworkAttribute",
+                "System.Runtime.Versioning"
+            )
             |> referenceType builder
 
         let! collections =
-            { Version = Version(5, 0, 0, 0)
-              PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-              Name = AssemblyName.ofStr "System.Collections"
-              Culture = NullCulture
-              HashValue = None }
+            AssemblyRef (
+                corver,
+                AssemblyName.ofStr "System.Collections",
+                ptoken
+            )
             |> referenceAssembly builder
         let! dictionary =
-            { ResolutionScope = ResolutionScope.AssemblyRef collections
-              TypeName = Identifier.ofStr "Dictionary`2"
-              TypeNamespace = "System.Collections.Generic" }
+            TypeRef (
+                ResolutionScope.AssemblyRef collections,
+                Identifier.ofStr "Dictionary`2",
+                "System.Collections.Generic"
+            )
             |> referenceType builder
 
+        // System.Collections.Generic.Dictionary<uint32, uint32>
         let dictionary_u4_u4 =
             GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef dictionary, false, EncodedType.U4, EncodedType.U4)
-        let! dictionary_u4_u4_spec = TypeSpec.genericInst dictionary_u4_u4 |> addTypeSpec builder
+        let! dictionary_u4_u4_spec =
+            TypeSpec.GenericInst dictionary_u4_u4
+            |> builder.Blobs.TypeSpec.GetOrAdd
+            |> addTypeSpec builder
 
+        // member _.ContainsKey(_: 'TKey): bool
         let! containsKey =
-            // A default method reference is used here, since the generic parameters are declared in the dictionary type.
+            (* A default method reference is used here, since the generic parameters are declared in the dictionary type. *)
             { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
               MemberName = Identifier.ofStr "ContainsKey"
               Signature =
-                let parameters =
-                    // Note how a generic parameter is used here instead of using U4.
-                    ImmutableArray.CreateRange [ ParamItem.var 0u; ]
-                MethodRefDefaultSignature(true, false, ReturnType.itemBool, parameters) }
+                (* Note how a generic parameter is used here instead of using U4. *)
+                let parameters = ImmutableArray.CreateRange [ ParamItem.var 0u; ]
+                let signature = MethodRefDefaultSignature(true, false, ReturnType.itemBool, parameters)
+                builder.Blobs.MethodRefSig.GetOrAdd signature }
             |> referenceDefaultMethod builder
+        // member (*specialname*) _.get_Item(_: 'TKey): 'TValue
         let! get_Item =
             { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
               MemberName = Identifier.ofStr "get_Item"
               Signature =
                 let parameters = ImmutableArray.CreateRange [ ParamItem.var 0u ]
-                MethodRefDefaultSignature(true, false, ReturnType.itemVar 1u, parameters) }
+                let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVar 1u, parameters)
+                builder.Blobs.MethodRefSig.GetOrAdd signature }
             |> referenceDefaultMethod builder
+        // new()
         let! dictionary_u4_u4_ctor =
             { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
               MemberName = Identifier.ofStr ".ctor"
-              Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Empty) }
+              Signature =
+                let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Empty)
+                builder.Blobs.MethodRefSig.GetOrAdd signature }
             |> referenceDefaultMethod builder
 
         // [<AbstractClass; Sealed>] type CachedFactorial
@@ -108,14 +121,19 @@ let example() =
               Extends = Extends.TypeRef object }
             |> StaticClass.addTypeDef builder
 
+        // static member val private cache: System.Collections.Generic.Dictionary<uint32, uint32>
         let! cache =
             { FieldName = Identifier.ofStr "cache"
               Flags = Flags.staticField(FieldFlags Private)
-              Signature = EncodedType.GenericInst dictionary_u4_u4 |> FieldSignature.create }
+              Signature =
+                EncodedType.GenericInst dictionary_u4_u4
+                |> FieldSignature.create
+                |> builder.Blobs.FieldSig.GetOrAdd }
             |> StaticClass.addStaticField builder factorial
 
         let calculateBody, setCalculateBody = MethodBody.mutableBody()
 
+        // static member private CalculateHelper(num: uint32, accumulator: uint32): uint32
         let! helper =
             let parameters _ i =
                 { Flags = ParamFlags()
@@ -124,29 +142,34 @@ let example() =
                     | 0 -> "num"
                     | _ -> "accumulator" }
                 |> Param
-            StaticMethod (
-                calculateBody,
-                Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
-                Identifier.ofStr "CalculateHelper",
+            let signature =
                 StaticMethodSignature(
                     Default,
                     ReturnType.itemU4,
                     ImmutableArray.Create(ParamItem.create EncodedType.U4, ParamItem.create EncodedType.U4)
-                ),
+                )
+            StaticMethod (
+                calculateBody,
+                Flags.staticMethod(StaticMethodFlags(Private, NoSpecialName, true)),
+                Identifier.ofStr "CalculateHelper",
+                builder.Blobs.MethodDefSig.GetOrAdd signature,
                 parameters
             )
             |> StaticClass.addStaticMethod builder factorial
 
+        // static member Calculate(num: uint32): uint32
         let! _ =
             let body content =
                 let writer = MethodBodyWriter content
+                // CachedFactorial.cache.ContainsKey(num)
                 writer.Ldsfld cache
                 writer.Ldarg 0us
                 writer.Callvirt containsKey // TODO: Figure out if callvirt is needed for ContainsKey and Add methods
                 let target = writer.Brfalse_s()
                 let pos = writer.ByteCount
 
-                // Get the existing value from the cache.
+                (* Get the existing value from the cache. *)
+                // CachedFactorial.cache.[num]
                 writer.Ldsfld cache
                 writer.Ldarg 0us
                 writer.Callvirt get_Item
@@ -154,28 +177,33 @@ let example() =
 
                 target.SetTarget(int32 (writer.ByteCount - pos))
 
+                // CachedFactorial.CacheHelper(num, num)
                 writer.Ldarg 0us
                 writer.Ldarg 0us
                 writer.Call helper
                 writer.Ret()
                 MethodBody.Default
-            StaticMethod (
-                MethodBody.create ValueNone body,
-                Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
-                Identifier.ofStr "Calculate",
+            let signature =
                 StaticMethodSignature(
                     Default,
                     ReturnType.itemU4,
                     ParamItem.create EncodedType.U4 |> ImmutableArray.Create
-                ),
+                )
+            StaticMethod (
+                MethodBody.create ValueNone body,
+                Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
+                Identifier.ofStr "Calculate",
+                builder.Blobs.MethodDefSig.GetOrAdd signature,
                 fun _ _ -> Param { Flags = ParamFlags(); ParamName = "num" }
             )
             |> StaticClass.addStaticMethod builder factorial
 
-        // Class constructor to initialize cache
+        (* Class constructor to initialize cache *)
+        // static member (*specialname rtspecialname*) ``.cctor``(): System.Void
         let! _ =
             let body content =
                 let writer = MethodBodyWriter content
+                // CachedFactorial.cache <- new System.Collections.Generic.Dictionary<uint32, uint32>()
                 writer.Newobj dictionary_u4_u4_ctor
                 writer.Stsfld cache
                 writer.Ret()
@@ -190,11 +218,12 @@ let example() =
             |> StaticClass.addClassConstructor builder factorial
 
         let! tfm_ctor =
-            { Class = MemberRefParent.TypeRef tfmAttr
+            { Class = MemberRefParent.TypeRef tfmattr
               MemberName = Identifier.ofStr ".ctor"
               Signature =
                 let parameters = ImmutableArray.Create(ParamItem.create EncodedType.String)
-                MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters) }
+                let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
+                builder.Blobs.MethodRefSig.GetOrAdd signature }
             |> referenceDefaultMethod builder
 
         setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
