@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>FSharpIL.Benchmarks.Memory</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+    <DefineConstants>BENCHMARK</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(RootDirectory)\docs\content\HelloWorld.fsx" />
+    <Compile Include="$(RootDirectory)\docs\content\CustomCollections.fsx" />
+    <Compile Include="Test.fs" />
+
+    <ProjectReference Include="$(RootDirectory)\src\FSharpIL\FSharpIL.fsproj" />
+  </ItemGroup>
+
+</Project>
