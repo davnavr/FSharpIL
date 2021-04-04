@@ -557,7 +557,7 @@ module Struct =
 
 // TODO: Add functions for adding global fields and global methods.
 
-/// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
+[<Obsolete>]
 let referenceType (builder: CliMetadataBuilder) typeRef =
     match builder.TypeRef.TryAdd typeRef with
     | ValueSome i -> Ok i
@@ -565,14 +565,17 @@ let referenceType (builder: CliMetadataBuilder) typeRef =
 
 // TODO: Figure out how to remove warning checks while still having easy way to check if duplicate value was added.
 
+[<Obsolete>]
 /// <summary>Adds a reference to a method with the <c>DEFAULT</c> calling convention.</summary>
 let referenceDefaultMethod (builder: CliMetadataBuilder) (method: MethodRefDefault) =
     builder.MemberRef.Add method
 
+[<Obsolete>]
 /// <summary>Adds a reference to a method with the <c>GENERIC</c> calling convention.</summary>
 let referenceGenericMethod (builder: CliMetadataBuilder) (method: MethodRefGeneric): struct(RawIndex<MethodRefGeneric> * _) =
     builder.MemberRef.Add method
 
+[<Obsolete>]
 /// <summary>Adds a reference to a method with the <c>VARARG</c> calling convention.</summary>
 let referenceVarArgMethod (builder: CliMetadataBuilder) (method: MethodRefVarArg): struct(RawIndex<MethodRefVarArg> * _) =
     builder.MemberRef.Add method

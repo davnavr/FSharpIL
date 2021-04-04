@@ -1,4 +1,4 @@
-﻿[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+﻿[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module FSharpIL.Metadata.EntryPointSignature
 
 open System.Collections.Immutable

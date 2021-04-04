@@ -132,8 +132,7 @@ type ReturnType =
 
     interface IReturnType
 
-[<RequireQualifiedAccess>]
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module EncodedType =
     let enumDef (enumDef: RawIndex<EnumDef>) = enumDef.ChangeTag() |> TypeDefOrRefOrSpecEncoded.TypeDef |> EncodedType.ValueType
 
@@ -141,8 +140,7 @@ module EncodedType =
     let typeRefClass typeRef = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.Class
     let typeRefStruct typeRef = TypeDefOrRefOrSpecEncoded.TypeRef typeRef |> EncodedType.ValueType
 
-[<RequireQualifiedAccess>]
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module ReturnType =
     let item (returnType: ReturnType) = ReturnTypeItem returnType
     let encoded encodedType = ReturnTypeItem(ReturnType.Type encodedType)
@@ -153,8 +151,7 @@ module ReturnType =
     let itemU4 = encoded EncodedType.U4
     let itemVar number = EncodedType.Var number |> encoded
 
-[<RequireQualifiedAccess>]
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module GenericInst =
     let private inst1 valueType t (gargument: EncodedType) =
         GenericInst(t, valueType, gargument)
@@ -165,16 +162,14 @@ module GenericInst =
     let typeDef1 valueType typeDef gargument =
         inst1 valueType (TypeDefOrRefOrSpecEncoded.TypeDef typeDef) gargument
 
-[<RequireQualifiedAccess>]
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module ParamItem =
     let modified modifiers (paramType: EncodedType) = ParamItem(modifiers, paramType)
     let create paramType = modified ImmutableArray.Empty paramType
     let mvar num = EncodedType.MVar num |> create
     let var num = EncodedType.Var num |> create
 
-[<RequireQualifiedAccess>]
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module FieldSignature =
     let modified modifiers (fieldType: EncodedType) = FieldSignature(modifiers, fieldType)
     let create fieldType = modified ImmutableArray.Empty fieldType

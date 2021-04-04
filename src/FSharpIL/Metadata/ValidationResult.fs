@@ -33,6 +33,16 @@ type ValidationError internal () =
 
 exception ValidationErrorException of ValidationError
 
+[<RequireQualifiedAccess>]
+module ValidationError =
+    /// <exception cref="T:FSharpIL.Metadata.ValidationErrorException">
+    /// Thrown when the <paramref name="result"/> is an error.
+    /// </exception>
+    let check result =
+        match result with
+        | Ok success -> success
+        | Error (err: ValidationError) -> raise (ValidationErrorException err)
+
 /// II.22.1
 [<IsReadOnly; Struct>]
 type ValidationResult<'Result> =

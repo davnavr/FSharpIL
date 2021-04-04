@@ -8,6 +8,7 @@ open FSharpIL
 
 /// Contains static methods for modifying the CLI metadata without regard for generation of correct metadata.
 [<AbstractClass; Sealed>]
+[<Obsolete>]
 type Unsafe = class
     static member AddTypeDef<'Tag>
         (
@@ -36,31 +37,31 @@ type Unsafe = class
     // ChangeTag
 end
 
-// TODO: Figure out where to put all of these miscellaneous helper functions.
-
-// TODO: Better way of adding custom attributes, have a function: CustomAttribute -> target: _ -> MetadataBuilderState -> _
-let addCustomAttribute (builder: CliMetadataBuilder) attr = builder.CustomAttribute.Add attr
+[<Obsolete>]
+let addCustomAttribute (builder: CliMetadataBuilder) (attr: CustomAttribute) = builder.CustomAttribute.Add &attr
 
 /// <summary>
 /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET
 /// assembly.
 /// </summary>
+[<Obsolete>]
 let setAssembly (builder: CliMetadataBuilder) assembly = builder.SetAssembly assembly
 
+[<Obsolete>]
 /// <summary>Sets the entrypoint of the assembly.</summary>
-/// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
 let setEntryPointToken (builder: CliMetadataBuilder) entryPoint = builder.SetEntryPointToken entryPoint
 
+[<Obsolete>]
 /// <summary>Sets the entrypoint of the assembly to a static method defined in the assembly.</summary>
-/// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
 let setEntryPoint builder main = setEntryPointToken builder (EntryPointToken.ValidEntryPoint main)
 
-// TODO: Check to ensure that tfm referes to System.Runtime.Versioning.TargetFrameworkAttribute
+// TODO: Check to ensure that tfm refers to System.Runtime.Versioning.TargetFrameworkAttribute
 /// <summary>Adds a <c>TargetFrameworkAttribute</c> to the current assembly specifying the target framework.</summary>
 /// <param name="builder" />
-/// <param name="assembly">Dummy object used to guarantee that the CLI metadata is an assembly.</param>
+/// <param name="assembly">The single row in the <c>Assembly</c> table of the CLI metadata.</param>
 /// <param name="ctor">The constructor for a <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/>.</param>
 /// <param name="tfm">The target framework moniker. For .NET 5, the value is <c>.NETCoreApp,Version=v5.0</c>.</param>
+[<Obsolete>]
 let setTargetFramework (builder: CliMetadataBuilder) (assembly: RawIndex<Assembly>) (ctor: RawIndex<_>) tfm =
     let tfm' = FixedArg.Elem (SerString tfm)
     // TODO: Check that the constructor is correct.

@@ -60,6 +60,11 @@
     <Compile Include="Metadata\CliMetadata.fs" />
     <Compile Include="Metadata\IndexConversions.fs" />
     <Compile Include="Metadata\CliMetadataModule.fs" />
+    <Compile Include="Metadata\CustomAttributeModule.fs" />
+    <Compile Include="Metadata\AssemblyModule.fs" />
+    <Compile Include="Metadata\EntryPoint.fs" />
+    <Compile Include="Metadata\TypeRefModule.fs" />
+    <Compile Include="Metadata\MethodRefModule.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\BlobWriter.fs" />
     <Compile Include="Metadata\Heaps\HeapExtensions.fs" />

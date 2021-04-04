@@ -112,7 +112,8 @@ type CustomAttributeTable internal () =
 
     member _.Count = attrs.Count
 
-    member _.Add(attr: CustomAttribute) = attrs.Add attr
+    // TODO: Return indices pointing to CustomAttribute table.
+    member _.Add(attr: inref<CustomAttribute>) = attrs.Add attr
 
     interface IReadOnlyCollection<CustomAttribute> with
         member _.Count = attrs.Count

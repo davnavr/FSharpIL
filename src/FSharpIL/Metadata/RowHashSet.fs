@@ -8,10 +8,12 @@ type RowHashSet<'Row when 'Row : equality> private (items: RowArrayList<'Row>) =
     member _.Count = items.Count
     member _.Item with get index = items.[index]
 
-    member _.TryAdd item =
+    member _.TryAdd(item: inref<'Row>) =
         let mutable duplicate = false
         let i = items.Add(item, &duplicate)
         if duplicate then ValueNone else ValueSome i
+    [<System.Obsolete>]
+    member this.TryAdd(item: 'Row) = this.TryAdd &item
 
     member _.GetEnumerator() = items.GetEnumerator()
 
