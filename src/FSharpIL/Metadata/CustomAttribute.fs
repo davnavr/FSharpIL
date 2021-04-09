@@ -107,13 +107,15 @@ type CustomAttribute =
       // TODO: How to validate signature to ensure types of fixed arguments match method signature? Maybe have FixedArgs field of signature type be ParamItem -> int -> FixedArg?
 
 [<Sealed>]
-type CustomAttributeTable internal () =
-    let attrs = List<CustomAttribute>()
+type CustomAttributeTableBuilder internal () =
+    let attrs = ImmutableArray.CreateBuilder<CustomAttribute>()
 
     member _.Count = attrs.Count
 
     // TODO: Return indices pointing to CustomAttribute table.
     member _.Add(attr: inref<CustomAttribute>) = attrs.Add attr
+
+    member _.ToImmutable() = attrs.ToImmutable()
 
     interface IReadOnlyCollection<CustomAttribute> with
         member _.Count = attrs.Count

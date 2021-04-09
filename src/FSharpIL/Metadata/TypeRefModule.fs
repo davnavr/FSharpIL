@@ -1,16 +1,17 @@
 ﻿[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module FSharpIL.Metadata.TypeRef
 
-let tryAddRef (builder: CliMetadataBuilder) (typeRef: inref<_>) =
+let tryAddRowChecked (builder: CliMetadataBuilder) warnings (typeRef: inref<TypeRef>) =
     match builder.TypeRef.TryAdd &typeRef with
-    | ValueSome i -> Ok i
+    | ValueSome i ->
+        match warnings with
+        | ValueSome(warnings': WarningsBuilder) ->
+            if typeRef.ResolutionScope.Tag = ResolutionScopeTag.Module then
+                warnings'.Add(TypeRefUsesModuleResolutionScope typeRef)
+        | ValueNone -> ()
+        Ok i
     | ValueNone -> DuplicateTypeRefError(typeRef).ToResult()
 
-let addRef builder (typeRef: inref<TypeRef>) = tryAddRef builder &typeRef |> ValidationError.check
+let inline tryAddRow builder (typeRef: inref<TypeRef>) = tryAddRowChecked builder ValueNone &typeRef
 
-// TODO: Add variant of TypeRef.add with warning/cls checks.
-//let tryAddChecked
-
-let tryAdd builder (typeRef: TypeRef) = tryAddRef builder &typeRef
-
-let add builder (typeRef: TypeRef) = addRef builder &typeRef
+let inline addRef builder (typeRef: inref<TypeRef>) = tryAddRow builder &typeRef |> ValidationError.check

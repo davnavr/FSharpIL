@@ -1,9 +1,9 @@
 ﻿[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module FSharpIL.Metadata.CustomAttribute
 
-let addRef (builder: CliMetadataBuilder) (attribute: inref<_>) = builder.CustomAttribute.Add &attribute
-let add builder (attribute: CustomAttribute) = addRef builder &attribute
+/// <summary>Adds a row to the <c>CustomAttribute</c> table (II.22.10).</summary>
+let inline addRow (builder: CliMetadataBuilder) (attribute: inref<_>) = builder.CustomAttribute.Add &attribute
 
-let addTo builder parent ctor value =
+let inline createRow builder parent ctor value =
     let attribute = { Parent = parent; Type = ctor; Value = value }
-    addRef builder &attribute
+    addRow builder &attribute

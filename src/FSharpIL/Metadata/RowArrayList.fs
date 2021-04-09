@@ -7,7 +7,7 @@ open System.Collections.Immutable
 [<System.Runtime.CompilerServices.IsReadOnly>]
 type RowArrayList<'Row when 'Row : equality> private (items: ImmutableArray<'Row>.Builder, lookup: HashSet<'Row>) = struct
     member _.Count = items.Count
-    member _.Item with get (index: RawIndex<'Row>) = items.[index.Value - 1]
+    member _.Item with get (index: RawIndex<'Row>) = &items.ItemRef(index.Value - 1)
 
     /// <param name="item">The element to add to this list.</param>
     /// <param name="duplicate">
@@ -32,5 +32,5 @@ type RowArrayList<'Row when 'Row : equality> private (items: ImmutableArray<'Row
 
     interface IMetadataTable<'Row> with
         member this.Count = this.Count
-        member this.Item with get index = this.[index]
+        member this.Item with get index = &this.[index]
 end

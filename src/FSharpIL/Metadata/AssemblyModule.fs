@@ -9,7 +9,7 @@ open FSharpIL
 /// Sets the assembly information of the metadata, which specifies the version, name, and other information concerning the .NET
 /// assembly.
 /// </summary>
-let setAssembly (builder: CliMetadataBuilder) assembly = builder.SetAssembly assembly
+let setRow (builder: CliMetadataBuilder) assembly = builder.SetAssembly assembly
 
 // TODO: Check to ensure that tfm refers to System.Runtime.Versioning.TargetFrameworkAttribute
 /// <summary>Adds a <c>TargetFrameworkAttribute</c> to the current assembly specifying the target framework.</summary>
@@ -25,4 +25,4 @@ let setTargetFramework (builder: CliMetadataBuilder) (assembly: RawIndex<Assembl
         |> Result.any
         |> ValueSome
     // TODO: Check that the constructor is correct: has correct name, has this, has string parameter, etc.
-    CustomAttribute.addTo builder (CustomAttributeParent.Assembly assembly) (CustomAttributeType.MethodRefDefault ctor) value
+    CustomAttribute.createRow builder (CustomAttributeParent.Assembly assembly) (CustomAttributeType.MethodRefDefault ctor) value

@@ -217,7 +217,7 @@ type MemberRefTableBuilder internal () =
     member _.Count = members.Count
 
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member internal _.Add<'Tag>(row: MemberRefRow) =
+    member internal _.Add<'Tag>(row: MemberRefRow) = // TODO: Should inref<MemberRefrow> be used for Add?
         let i, duplicate = members.Add row
         struct(RawIndex<'Tag> i.Value, duplicate)
 
@@ -228,10 +228,13 @@ type MemberRefTableBuilder internal () =
         ) =
         this.Add<'Tag>(MemberRefRow(parent, name, MemberRefSignature(tag, signature.Index)))
 
-    member this.Add(method: MethodRefDefault) = this.Add<_, MethodRefDefault>(MemberRefSignatureTag.MethodDefault, &method)
-    member this.Add(method: MethodRefGeneric) = this.Add<_, MethodRefGeneric>(MemberRefSignatureTag.MethodGeneric, &method)
-    member this.Add(method: MethodRefVarArg) = this.Add<_, MethodRefVarArg>(MemberRefSignatureTag.MethodVarArg, &method)
-    member this.Add(field: FieldRef) = this.Add<_, FieldRef>(MemberRefSignatureTag.Field, &field)
+    member this.Add(method: inref<MethodRefDefault>) =
+        this.Add<_, MethodRefDefault>(MemberRefSignatureTag.MethodDefault, &method)
+    member this.Add(method: inref<MethodRefGeneric>) =
+        this.Add<_, MethodRefGeneric>(MemberRefSignatureTag.MethodGeneric, &method)
+    member this.Add(method: inref<MethodRefVarArg>) =
+        this.Add<_, MethodRefVarArg>(MemberRefSignatureTag.MethodVarArg, &method)
+    member this.Add(field: inref<FieldRef>) = this.Add<_, FieldRef>(MemberRefSignatureTag.Field, &field)
 
     member internal _.ToImmutable() = members.ToImmutable()
 

@@ -105,7 +105,7 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     /// (0x0B)
     member val Constant = ConstantTableBuilder()
     /// (0x0C)
-    member val CustomAttribute: CustomAttributeTable = CustomAttributeTable()
+    member val CustomAttribute = CustomAttributeTableBuilder()
     // (0x0D)
     // member FieldMarshal
     // (0x0E)

@@ -51,7 +51,7 @@ type TypeRef
 
 /// (1d)
 [<Sealed>]
-type TypeRefUsesModuleResolutionScope (typeRef) =
+type TypeRefUsesModuleResolutionScope (typeRef: TypeRef) =
     inherit ValidationWarning()
     member _.Type = typeRef
 

@@ -580,6 +580,7 @@ let referenceGenericMethod (builder: CliMetadataBuilder) (method: MethodRefGener
 let referenceVarArgMethod (builder: CliMetadataBuilder) (method: MethodRefVarArg): struct(RawIndex<MethodRefVarArg> * _) =
     builder.MemberRef.Add method
 
+[<Obsolete>]
 let referenceModule (builder: CliMetadataBuilder) moduleRef = builder.ModuleRef.Add moduleRef
 
 /// Adds a reference to an assembly.

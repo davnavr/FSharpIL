@@ -65,6 +65,8 @@
     <Compile Include="Metadata\EntryPoint.fs" />
     <Compile Include="Metadata\TypeRefModule.fs" />
     <Compile Include="Metadata\MethodRefModule.fs" />
+    <Compile Include="Metadata\FileModule.fs" />
+    <Compile Include="Metadata\ModuleRefModule.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\BlobWriter.fs" />
     <Compile Include="Metadata\Heaps\HeapExtensions.fs" />

@@ -6,7 +6,7 @@ open System.Collections.Generic
 [<System.Runtime.CompilerServices.IsReadOnly>]
 type RowHashSet<'Row when 'Row : equality> private (items: RowArrayList<'Row>) = struct
     member _.Count = items.Count
-    member _.Item with get index = items.[index]
+    member _.Item with get index = &items.[index]
 
     member _.TryAdd(item: inref<'Row>) =
         let mutable duplicate = false
@@ -28,5 +28,5 @@ type RowHashSet<'Row when 'Row : equality> private (items: RowArrayList<'Row>) =
 
     interface IMetadataTable<'Row> with
         member this.Count = this.Count
-        member this.Item with get index = this.[index]
+        member this.Item with get index = &this.[index]
 end

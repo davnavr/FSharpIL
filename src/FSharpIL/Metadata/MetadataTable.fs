@@ -5,17 +5,17 @@ open System.Collections.Immutable
 [<Interface>]
 type IMetadataTable<'Row> =
     abstract Count: int32
-    abstract Item: RawIndex<'Row> -> 'Row with get
+    abstract Item: RawIndex<'Row> -> inref<'Row> with get
 
 [<Sealed>]
 type MetadataTable<'Row> internal (items: ImmutableArray<'Row>) =
     member _.Count = items.Length
     member _.Rows = items
-    member _.Item with get (index: RawIndex<'Row>) = items.[index.Value - 1]
+    member _.Item with get (index: RawIndex<'Row>): inref<'Row> = &items.ItemRef(index.Value - 1)
 
     interface IMetadataTable<'Row> with
         member this.Count = this.Count
-        member this.Item with get index = this.[index]
+        member this.Item with get index = &this.[index]
 
 namespace global
 

@@ -146,7 +146,7 @@ type CliMetadata (builder: CliMetadataBuilder) =
     member val InterfaceImpl = builder.InterfaceImpl.ToImmutable()
     member val MemberRef = builder.MemberRef.ToImmutable()
     member val Constant = builder.Constant.ToImmutable()
-    member val CustomAttribute = builder.CustomAttribute.ToImmutableArray()
+    member val CustomAttribute = builder.CustomAttribute.ToImmutable()
 
     member _.StandAloneSig = standAloneSig
 
