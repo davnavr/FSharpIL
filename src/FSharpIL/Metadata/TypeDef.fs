@@ -132,6 +132,7 @@ type TypeDefRow internal (flags, name, ns, extends, parent) =
 
     override _.GetHashCode() = hash(name, ns)
 
+    [<System.ObsoleteAttribute("This doesn't account for enclosing class", true)>]
     member internal _.GetFullName() =
         if ns.Length > 0
         then sprintf "'%s.%O'" ns name

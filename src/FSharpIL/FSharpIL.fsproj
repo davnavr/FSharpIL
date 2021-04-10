@@ -82,7 +82,9 @@
     <Compile Include="Metadata\UncheckedExn.fs" />
     <Compile Include="Metadata\SystemAssembly.fs" />
     <Compile Include="Metadata\SystemType.fs" />
-    <Compile Include="XmlDoc\Documentation.fs" />
+    <Compile Include="XmlDoc\DocMember.fs" />
+    <Compile Include="XmlDoc\Name.fs" />
+    <Compile Include="XmlDoc\Doc.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />
