@@ -1,5 +1,7 @@
 ﻿namespace global
 
+open System.Runtime.CompilerServices
+
 open FSharpIL.Metadata
 
 [<AutoOpen>]
@@ -15,13 +17,13 @@ module ItemExtensions =
             | unknown -> failwithf "Unknown return type %A" unknown
 
     type ParamItem with
-        member this.ParamType = this.Type :?> EncodedType
+        member this.ParamType = Unsafe.As<EncodedType> this.Type
 
     type FieldSignature with
-        member this.FieldType = this.Type :?> EncodedType
+        member this.FieldType = Unsafe.As<EncodedType> this.Type
 
     type LocalVariable with
-        member this.LocalType = this.Type :?> EncodedType
+        member this.LocalType = Unsafe.As<EncodedType> this.Type
 
 namespace FSharpIL.Metadata
 

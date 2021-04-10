@@ -10,7 +10,7 @@ type RowHashSet<'Row when 'Row : equality> private (items: RowArrayList<'Row>) =
 
     member _.TryAdd(item: inref<'Row>) =
         let mutable duplicate = false
-        let i = items.Add(item, &duplicate)
+        let i = items.Add(&item, &duplicate)
         if duplicate then ValueNone else ValueSome i
     [<System.Obsolete>]
     member this.TryAdd(item: 'Row) = this.TryAdd &item

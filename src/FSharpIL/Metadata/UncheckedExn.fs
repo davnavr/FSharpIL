@@ -1,6 +1,7 @@
 ﻿/// <summary>
 /// Contains functions for modifying the CLI metadata without CLS checks and warnings, throwing an exception on any errors.
 /// </summary>
+[<RequireQualifiedAccess; System.Obsolete>]
 module FSharpIL.Metadata.UncheckedExn
 
 open System

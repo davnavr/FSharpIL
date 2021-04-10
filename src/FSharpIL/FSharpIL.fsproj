@@ -20,9 +20,9 @@
     <Compile Include="Metadata\MetadataTable.fs" />
     <Compile Include="Metadata\RowArrayList.fs" />
     <Compile Include="Metadata\RowHashSet.fs" />
+    <Compile Include="Metadata\Identifier.fs" />
     <Compile Include="Metadata\Assembly.fs" />
     <Compile Include="Metadata\AssemblyRef.fs" />
-    <Compile Include="Metadata\Identifier.fs" />
     <Compile Include="Metadata\File.fs" />
     <Compile Include="Metadata\ModuleRef.fs" />
     <Compile Include="Metadata\TypeRef.fs" />
@@ -62,11 +62,13 @@
     <Compile Include="Metadata\CliMetadataModule.fs" />
     <Compile Include="Metadata\CustomAttributeModule.fs" />
     <Compile Include="Metadata\AssemblyModule.fs" />
+    <Compile Include="Metadata\AssemblyRefModule.fs" />
     <Compile Include="Metadata\EntryPoint.fs" />
     <Compile Include="Metadata\TypeRefModule.fs" />
     <Compile Include="Metadata\MethodRefModule.fs" />
     <Compile Include="Metadata\FileModule.fs" />
     <Compile Include="Metadata\ModuleRefModule.fs" />
+    <Compile Include="Metadata\MethodSpecModule.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\BlobWriter.fs" />
     <Compile Include="Metadata\Heaps\HeapExtensions.fs" />

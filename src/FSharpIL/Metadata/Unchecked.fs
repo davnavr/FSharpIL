@@ -1,6 +1,7 @@
 ﻿/// <summary>
 /// Contains functions for modifying the CLI metadata without CLS checks and warnings.
 /// </summary>
+[<RequireQualifiedAccess>]
 module FSharpIL.Metadata.Unchecked
 
 open System
@@ -35,6 +36,7 @@ module private DelegateHelpers =
 
 // TODO: Figure out if using inref with static methods in Unsafe is a performance improvement.
 /// Contains static methods for modifying the CLI metadata without regard for generation of correct metadata.
+[<Obsolete>]
 [<AbstractClass; Sealed>]
 type Unsafe private () = class
     static member val internal ClassConstructorSignature =
@@ -393,6 +395,7 @@ let private addClassDef (builder: CliMetadataBuilder) (def: ClassDef<'Flags>) =
         TypeVisibility.enclosingClass def.Access
     )
 
+[<Obsolete>]
 [<RequireQualifiedAccess>]
 module ConcreteClass =
     let addTypeDef builder (classDef: ConcreteClassDef): Result<RawIndex<ConcreteClassDef>, _> = addClassDef builder classDef
@@ -421,6 +424,7 @@ module ConcreteClass =
     let addStaticField builder (owner: RawIndex<ConcreteClassDef>) (field: StaticField) =
         Unsafe.AddField<_>(builder, owner.AsTypeIndex(), field): Result<RawIndex<StaticField>, _>
 
+[<Obsolete>]
 [<RequireQualifiedAccess>]
 module AbstractClass =
     let addTypeDef builder (classDef: AbstractClassDef): Result<RawIndex<AbstractClassDef>, _> = addClassDef builder classDef
@@ -452,6 +456,7 @@ module AbstractClass =
     let addStaticField builder (owner: RawIndex<AbstractClassDef>) (field: StaticField) =
         Unsafe.AddField<_>(builder, owner.AsTypeIndex(), field): Result<RawIndex<StaticField>, _>
 
+[<Obsolete>]
 [<RequireQualifiedAccess>]
 module SealedClass =
     let addTypeDef builder (classDef: SealedClassDef): Result<RawIndex<SealedClassDef>, _> = addClassDef builder classDef
@@ -480,6 +485,7 @@ module SealedClass =
     let addStaticField builder (owner: RawIndex<SealedClassDef>) (field: StaticField) =
         Unsafe.AddField<_>(builder, owner.AsTypeIndex(), field): Result<RawIndex<StaticField>, _>
 
+[<Obsolete>]
 [<RequireQualifiedAccess>]
 module StaticClass =
     let addTypeDef builder (classDef: StaticClassDef): Result<RawIndex<StaticClassDef>, _> = addClassDef builder classDef
@@ -502,6 +508,7 @@ module StaticClass =
 //module Delegate =
 //module Enum =
 
+[<Obsolete>]
 [<RequireQualifiedAccess>]
 module Interface =
     let addTypeDef builder (intfDef: InterfaceDef) =
@@ -517,6 +524,7 @@ module Interface =
     let addAbstractMethod builder (owner: RawIndex<InterfaceDef>) (method: AbstractMethod) =
         Unsafe.AddMethod(builder, owner.ChangeTag(), method): Result<RawIndex<AbstractMethod>, _>
 
+[<Obsolete>]
 [<RequireQualifiedAccess>]
 module Struct =
     let addTypeDef builder (lookup: TypeLookupCache) (structDef: StructDef) =
@@ -568,25 +576,26 @@ let referenceType (builder: CliMetadataBuilder) typeRef =
 [<Obsolete>]
 /// <summary>Adds a reference to a method with the <c>DEFAULT</c> calling convention.</summary>
 let referenceDefaultMethod (builder: CliMetadataBuilder) (method: MethodRefDefault) =
-    builder.MemberRef.Add method
+    builder.MemberRef.Add &method
 
 [<Obsolete>]
 /// <summary>Adds a reference to a method with the <c>GENERIC</c> calling convention.</summary>
 let referenceGenericMethod (builder: CliMetadataBuilder) (method: MethodRefGeneric): struct(RawIndex<MethodRefGeneric> * _) =
-    builder.MemberRef.Add method
+    builder.MemberRef.Add &method
 
 [<Obsolete>]
 /// <summary>Adds a reference to a method with the <c>VARARG</c> calling convention.</summary>
 let referenceVarArgMethod (builder: CliMetadataBuilder) (method: MethodRefVarArg): struct(RawIndex<MethodRefVarArg> * _) =
-    builder.MemberRef.Add method
+    builder.MemberRef.Add &method
 
 [<Obsolete>]
-let referenceModule (builder: CliMetadataBuilder) moduleRef = builder.ModuleRef.Add moduleRef
+let referenceModule (builder: CliMetadataBuilder) moduleRef = builder.ModuleRef.Add &moduleRef
 
+[<Obsolete>]
 /// Adds a reference to an assembly.
 let referenceAssembly (builder: CliMetadataBuilder) assembly =
     let mutable dup = false
-    let i = builder.AssemblyRef.Add(assembly, &dup)
+    let i = builder.AssemblyRef.Add(&assembly, &dup)
     struct(i, dup)
 
 let addTypeSpec (builder: CliMetadataBuilder) typeSpec =
@@ -595,6 +604,7 @@ let addTypeSpec (builder: CliMetadataBuilder) typeSpec =
     | ValueSome index -> Ok index
     | ValueNone -> DuplicateTypeSpecError(row).ToResult()
 
+[<Obsolete>]
 let addMethodSpec (builder: CliMetadataBuilder) method (garguments: seq<_>) =
     let inst =
         MethodSpec garguments

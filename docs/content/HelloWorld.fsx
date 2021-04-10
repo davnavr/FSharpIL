@@ -44,7 +44,7 @@ let example() =
           Flags = ()
           PublicKey = None
           Culture = NullCulture }
-        |> setAssembly builder
+        |> Assembly.setRow builder
 
     // This computation keeps track of warnings, CLS violations, and errors
     validated {
@@ -59,7 +59,7 @@ let example() =
                 AssemblyName.ofStr "System.Private.CoreLib",
                 token
             )
-            |> referenceAssembly builder
+            |> AssemblyRef.addRowChecked builder
 
         let! consolelib =
             let token =
@@ -71,18 +71,24 @@ let example() =
                 AssemblyName.ofStr "System.Console",
                 token
             )
-            |> referenceAssembly builder
+            |> AssemblyRef.addRowChecked builder
 
         (* Add references to types defined in referenced assemblies. *)
-        let! console = SystemType.Console builder consolelib
-        let! object = SystemType.Object builder mscorlib
+        let! console =
+            typeof<Console>
+            |> TypeRef.ofReflectedType (ResolutionScope.AssemblyRef consolelib)
+            |> TypeRef.tryAddRowChecked builder
+        let! object =
+            typeof<Object>
+            |> TypeRef.ofReflectedType (ResolutionScope.AssemblyRef mscorlib)
+            |> TypeRef.tryAddRowChecked builder
         let! tfmattr =
             TypeRef (
                 ResolutionScope.AssemblyRef mscorlib,
                 Identifier.ofStr "TargetFrameworkAttribute",
                 "System.Runtime.Versioning"
             )
-            |> referenceType builder
+            |> TypeRef.tryAddRowChecked builder
 
         (* Add references to methods defined in the types of referenced assemblies. *)
         let string = ParamItem.create EncodedType.String
@@ -90,28 +96,30 @@ let example() =
         // static member WriteLine(_: string): System.Void
         let! writeLine =
             let signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string)
-            { Class = MemberRefParent.TypeRef console
-              MemberName = Identifier.ofStr "WriteLine"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> referenceDefaultMethod builder
+            let row =
+                { Class = MemberRefParent.TypeRef console
+                  MemberName = Identifier.ofStr "WriteLine"
+                  Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+            MethodRef.addRowDefaultChecked builder &row
         // new(_: string)
         let! tfmctor =
             let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string)
-            { Class = MemberRefParent.TypeRef tfmattr
-              MemberName = Identifier.ofStr ".ctor"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> referenceDefaultMethod builder
+            let row =
+                { Class = MemberRefParent.TypeRef tfmattr
+                  MemberName = Identifier.ofStr ".ctor"
+                  Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+            MethodRef.addRowDefaultChecked builder &row
 
         (* Defines a custom attribute on the current assembly specifying the target framework. *)
         // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
-        { Parent = CustomAttributeParent.Assembly assem
-          Type = CustomAttributeType.MethodRefDefault tfmctor
-          Value =
-            { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
-              NamedArg = ImmutableArray.Empty }
-            |> builder.Blobs.CustomAttribute.GetOrAdd
-            |> ValueSome }
-        |> addCustomAttribute builder
+        { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
+          NamedArg = ImmutableArray.Empty }
+        |> builder.Blobs.CustomAttribute.GetOrAdd
+        |> ValueSome
+        |> CustomAttribute.createRow
+            builder
+            (CustomAttributeParent.Assembly assem)
+            (CustomAttributeType.MethodRefDefault tfmctor)
 
         (* Create the class that will contain the entrypoint method. *)
         // [<AbstractClass; Sealed>] type Program
@@ -141,7 +149,7 @@ let example() =
             )
             |> StaticClass.addEntryPoint builder program
 
-        setEntryPoint builder main
+        EntryPoint.set builder main
 
         return CliMetadata builder
     }

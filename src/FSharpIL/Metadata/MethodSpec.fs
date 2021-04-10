@@ -30,7 +30,7 @@ type MethodSpecBlobLookup internal (blobs: MethodSpec[]) =
 type MethodSpecBlobLookupBuilder internal () =
     let blobs = Dictionary<MethodSpec, int32>()
     member _.Count = blobs.Count
-    member _.TryAdd spec =
+    member _.TryAdd(spec: inref<MethodSpec>) =
         let count = blobs.Count
         match blobs.TryGetValue spec with
         | true, existing -> Error(MethodSpecBlob existing)

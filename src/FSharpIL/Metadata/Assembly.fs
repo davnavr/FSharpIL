@@ -11,6 +11,7 @@ type AssemblyName internal (name: string) =
 /// (II.23.1.3)
 type AssemblyCulture = // TODO: Add more cultures
     | NullCulture
+    | CustomCulture of Identifier
     | Ar_SA
     | En_US
     | Div_MV
@@ -21,6 +22,7 @@ type AssemblyCulture = // TODO: Add more cultures
         | Ar_SA -> "ar-SA"
         | En_US -> "en-US"
         | Div_MV -> "div-MV"
+        | CustomCulture name -> name.ToString()
 
 /// (II.23.1.1)
 type HashAlgorithmId =
