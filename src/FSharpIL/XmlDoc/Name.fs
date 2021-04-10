@@ -48,7 +48,26 @@ let rec encodedType (metadata: CliMetadata) (writer: XmlWriter) =
     | EncodedType.R8 -> writer.WriteRaw "System.Double"
     | EncodedType.I -> writer.WriteRaw "System.IntPtr"
     | EncodedType.U -> writer.WriteRaw "System.UIntPtr"
-    //| EncodedType.Array(
+    | EncodedType.Array(elem, shape) ->
+        encodedType metadata writer elem
+        writer.WriteRaw "["
+        let mutable rank = 0u
+        while rank < shape.Rank do
+            let rank' = int32 rank
+            let mutable sep = false
+            rank <- rank + 1u
+
+            if rank' < shape.LowerBounds.Length then
+                writer.WriteRaw(string shape.LowerBounds.[rank'])
+                sep <- true
+                writer.WriteRaw ":"
+
+            if rank' < shape.Sizes.Length then
+                writer.WriteRaw(string shape.Sizes.[rank'])
+                if not sep then writer.WriteRaw ":"
+
+            if rank < shape.Rank then writer.WriteRaw ","
+        writer.WriteRaw "]"
     | EncodedType.Class t
     | EncodedType.ValueType t -> regularType metadata writer t
     //| EncodedType.FunctionPointer(
@@ -102,5 +121,6 @@ let write index (metadata: CliMetadata) (writer: XmlWriter) =
             writer.WriteRaw "~"
             match signature.ReturnType.ReturnType with
             | ReturnType.Type t -> encodedType metadata writer t
+            | ReturnType.TypedByRef -> writer.WriteRaw "System.TypedByRef"
             | bad -> failwithf "Cannot write unsupported method return type %A for signature in XML documentation" bad
     //| DocMember.Event index' ->
