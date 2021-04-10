@@ -445,7 +445,7 @@ let example() =
                 xml.WriteStartElement "remarks"
                 xml.WriteRaw "The "
                 Doc.see i metadata xml
-                xml.WriteRaw "supports conversions to 4-byte and 8-byte floating point numbers."
+                xml.WriteRaw "type supports conversions to 4-byte and 8-byte floating point numbers."
                 xml.WriteEndElement()
             | _ -> ())
         metadata

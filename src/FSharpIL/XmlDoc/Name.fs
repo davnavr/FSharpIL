@@ -8,12 +8,31 @@ open FSharpIL.Metadata
 
 let identifier (Identifier name) (writer: XmlWriter) = writer.WriteRaw(name.Replace('.', '#'))
 
-let private cmodifiers (modifiers: ImmutableArray<CustomModifier>) (writer: XmlWriter) =
+let rec typeDef tdef (metadata: CliMetadata) (writer: XmlWriter): inref<_> =
+    let tdef' = &metadata.TypeDef.[tdef]
+
+    match tdef'.EnclosingClass with
+    | ValueSome parent -> typeDef parent metadata writer |> ignore
+    | ValueNone ->
+        if tdef'.TypeNamespace.Length > 0 then
+            writer.WriteRaw tdef'.TypeNamespace
+            writer.WriteRaw "."
+
+    identifier tdef'.TypeName writer
+    &tdef'
+
+let private regularType (metadata: CliMetadata) (writer: XmlWriter) =
+    function
+    | TypeDefOrRefOrSpecEncoded.TypeDef tdef ->
+        typeDef tdef metadata writer |> ignore
+        ()
+
+let private cmodifiers (modifiers: ImmutableArray<CustomModifier>) metadata (writer: XmlWriter) =
     for cmod in modifiers do
         writer.WriteRaw(if cmod.Required then "|" else "!")
-        cmod.ModifierType |> invalidOp "TODO: Write fully qualified name of modifier type"
+        regularType metadata writer cmod.ModifierType
 
-let rec encodedType (writer: XmlWriter) =
+let rec encodedType (metadata: CliMetadata) (writer: XmlWriter) =
     function
     | EncodedType.Boolean -> writer.WriteRaw "System.Boolean"
     | EncodedType.Char -> writer.WriteRaw "System.Char"
@@ -29,23 +48,21 @@ let rec encodedType (writer: XmlWriter) =
     | EncodedType.R8 -> writer.WriteRaw "System.Double"
     | EncodedType.I -> writer.WriteRaw "System.IntPtr"
     | EncodedType.U -> writer.WriteRaw "System.UIntPtr"
+    //| EncodedType.Array(
+    | EncodedType.Class t
+    | EncodedType.ValueType t -> regularType metadata writer t
+    //| EncodedType.FunctionPointer(
+
+    | EncodedType.MVar i -> writer.WriteRaw(sprintf "`%i" i)
+    | EncodedType.Object -> writer.WriteRaw "System.Object"
+
     | EncodedType.String -> writer.WriteRaw "System.String"
     | EncodedType.SZArray(modifiers, elem) ->
-        encodedType writer elem
-        cmodifiers modifiers writer
-
-let rec typeDef tdef (metadata: CliMetadata) (writer: XmlWriter): inref<_> =
-    let tdef' = &metadata.TypeDef.[tdef]
-
-    match tdef'.EnclosingClass with
-    | ValueSome parent -> typeDef parent metadata writer |> ignore
-    | ValueNone ->
-        if tdef'.TypeNamespace.Length > 0 then
-            writer.WriteRaw tdef'.TypeNamespace
-            writer.WriteRaw "."
-
-    identifier tdef'.TypeName writer
-    &tdef'
+        encodedType metadata writer elem
+        cmodifiers modifiers metadata writer
+        writer.WriteRaw "[]"
+    //| EncodedType.Var i ->
+    // TODO: Figure out how Var is used.
 
 let write index (metadata: CliMetadata) (writer: XmlWriter) =
     match index with
@@ -66,13 +83,24 @@ let write index (metadata: CliMetadata) (writer: XmlWriter) =
         writer.WriteRaw "M:"
         typeDef (metadata.MethodDef.GetOwner index') metadata writer |> ignore
         writer.WriteRaw "."
+
         let method = &metadata.MethodDef.[index']
         identifier method.Name writer
-        let parameters = metadata.Blobs.MethodDefSig.ItemRef(method.Signature).Parameters
+
+        let signature = &metadata.Blobs.MethodDefSig.ItemRef method.Signature
+        let parameters = signature.Parameters
+
         for i = 1 to parameters.Length do
             if i = 1 then writer.WriteRaw "("
-            encodedType writer parameters.[i - 1].ParamType
+            encodedType metadata writer parameters.[i - 1].ParamType
             if i < parameters.Length
             then writer.WriteRaw ","
             else writer.WriteRaw ")"
+
+        // TODO: Check if method is an operator.
+        if false then
+            writer.WriteRaw "~"
+            match signature.ReturnType.ReturnType with
+            | ReturnType.Type t -> encodedType metadata writer t
+            | bad -> failwithf "Cannot write unsupported method return type %A for signature in XML documentation" bad
     //| DocMember.Event index' ->
