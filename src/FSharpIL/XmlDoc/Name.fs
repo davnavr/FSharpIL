@@ -72,7 +72,7 @@ let rec encodedType (metadata: CliMetadata) (writer: XmlWriter) =
     | EncodedType.ValueType t -> regularType metadata writer t
     //| EncodedType.FunctionPointer(
 
-    | EncodedType.MVar i -> writer.WriteRaw(sprintf "`%i" i)
+    | EncodedType.MVar i -> writer.WriteRaw(sprintf "``%i" i) // NOTE: For id strings and cref, `` refers to a generic parameter owned by a method
     | EncodedType.Object -> writer.WriteRaw "System.Object"
 
     | EncodedType.String -> writer.WriteRaw "System.String"
@@ -105,6 +105,9 @@ let write index (metadata: CliMetadata) (writer: XmlWriter) =
 
         let method = &metadata.MethodDef.[index']
         identifier method.Name writer
+        
+        // NOTE: For id strings and cref, `` number of generic parameters is included.
+        writer.WriteRaw(metadata.GenericParam.GetRows(GenericParamOwner.MethodDef index').Length |> string)
 
         let signature = &metadata.Blobs.MethodDefSig.ItemRef method.Signature
         let parameters = signature.Parameters
