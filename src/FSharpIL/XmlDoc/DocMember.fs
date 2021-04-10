@@ -29,3 +29,12 @@ module DocMember =
     let Property (property: RawIndex<PropertyRow>) = property.ToTaggedIndex DocMemberTag.Property
     let Method (method: RawIndex<MethodDefRow>) = method.ToTaggedIndex DocMemberTag.Method
     //let Event (event: RawIndex<EventRow>) = event.ToTaggedIndex DocMemberTag.Event
+
+    let allMembers (metadata: CliMetadata) =
+        seq {
+            for i = 1 to metadata.TypeDef.Count do yield Type(RawIndex i)
+            for i = 1 to metadata.Field.Count do yield Field(RawIndex i)
+            for i = 1 to metadata.Property.Count do yield Property(RawIndex i)
+            for i = 1 to metadata.MethodDef.Count do yield Method(RawIndex i)
+            //for i = 1 to metadata.Event.Count do yield Event(RawIndex i)
+        }
