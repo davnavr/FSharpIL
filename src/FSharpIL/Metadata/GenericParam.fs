@@ -163,14 +163,37 @@ type GenericParamConstraintRow internal (owner: RawIndex<GenericParamRow>, const
     member _.Constraint = constr
 
 [<Sealed>]
+type GenericParamTable internal
+    (
+        rows: ImmutableArray<GenericParamRow>,
+        ownerLookup: Dictionary<RawIndex<GenericParamRow>, GenericParamOwner>,
+        rowLookup: Dictionary<GenericParamOwner, ImmutableArray<RawIndex<GenericParamRow>>>
+    ) =
+    member _.Count = rows.Length
+    member _.Rows = rows
+    member _.Item with get (index: RawIndex<GenericParamRow>) = &rows.ItemRef(index.Value - 1)
+    member _.GetOwner index = ownerLookup.[index]
+    member _.GetRows owner = rowLookup.[owner]
+    interface IMetadataTable<GenericParamRow> with
+        member this.Count = this.Count
+        member this.Item with get index = &this.[index]
+
+[<Sealed>]
 type GenericParamTableBuilder internal () =
     let rows = ImmutableArray.CreateBuilder<GenericParamRow>()
     let constraints' = ImmutableArray.CreateBuilder<GenericParamConstraintRow>()
+    // TODO: Make TValue of this dictionary a Dictionary<RawIndex<GenericParamRow>, ImmutableArray<GenericParamConstraint>>
     let lookup = Dictionary<GenericParamOwner, Dictionary<GenericParamRow, ImmutableArray<GenericParamConstraint>>>()
 
     member _.Count = lookup.Count
 
-    member internal _.ToImmutable() = MetadataTable(rows.ToImmutable())
+    member internal _.ToImmutable() =
+        let ownerLookup = Dictionary<RawIndex<GenericParamRow>, _> rows.Count
+        let rowLookup = invalidOp "Figure out how to lookup rows"
+        for KeyValue(owner, rows) in lookup do
+            for row in rows do ownerLookup.[row] <- owner
+        GenericParamTable(rows.ToImmutable(), ownerLookup, rowLookup)
+
     member internal _.GetConstraints() = MetadataTable(constraints'.ToImmutable())
 
     // TODO: Ensure that owner of generic parameters cannot be a non-nested enum type.

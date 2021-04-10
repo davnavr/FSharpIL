@@ -23,12 +23,14 @@ checks and throw exceptions on errors instead.
 *)
 open System
 open System.Collections.Immutable
+open System.Xml
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.CliMetadata
 open FSharpIL.Metadata.Unchecked
 open FSharpIL.Metadata.UncheckedExn
 open FSharpIL.PortableExecutable
+open FSharpIL.XmlDoc
 
 let example() =
     let builder =
@@ -36,8 +38,9 @@ let example() =
           Mvid = Guid.NewGuid() }
         |> CliMetadataBuilder
 
+    let assemblyName = AssemblyName.ofStr "CustomNumbers"
     let assembly =
-        { Name = AssemblyName.ofStr "CustomNumbers"
+        { Name = assemblyName
           HashAlgId = ()
           Version = Version(3, 14, 15, 9265)
           Flags = ()
@@ -110,6 +113,7 @@ let example() =
               StructName = Identifier.ofStr "Fraction"
               TypeNamespace = "CustomNumbers" }
         Unsafe.AddStruct(builder, valueType, info)
+
     let fractionEncoded = fraction.AsTypeIndex() |> EncodedType.typeDefStruct
 
     let icomparable_fraction =
@@ -428,8 +432,31 @@ let example() =
         |> referenceDefaultMethod builder
 
     setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
+    
+    let metadata = CliMetadata builder
 
-    CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
+    use doc = new MemoryStream()
+
+    Doc.generateDoc
+        (fun i xml ->
+            match i with
+            | DocMember.Type t when t.Value = fraction.Value ->
+                xml.WriteElementString("summary", "Represents a simple fraction.")
+                xml.WriteStartElement "remarks"
+                xml.WriteRaw "The "
+                Doc.see i metadata xml
+                xml.WriteRaw "type supports conversions to 4-byte and 8-byte floating point numbers."
+                xml.WriteEndElement()
+            | _ -> ())
+        metadata
+        (XmlWriter.Create doc)
+        assemblyName
+        [
+            DocMember.Type(fraction.AsTypeIndex())
+        ]
+
+    // TODO: Return XML documentation as well.
+    PEFile.ofMetadata ImageFileFlags.dll metadata
 
 (*** hide ***)
 #if COMPILED
