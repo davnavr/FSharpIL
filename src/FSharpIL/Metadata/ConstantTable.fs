@@ -26,7 +26,7 @@ type ConstantTable internal
 
     member _.Count = rows.Length
     member _.Rows = rows
-    member _.Item with get (index: RawIndex<ConstantRow>) = rows.[index.Value - 1]
+    member _.Item with get (index: RawIndex<ConstantRow>) = &rows.ItemRef(index.Value - 1)
 
     member _.TryGetIndex parent =
         match lookup.TryGetValue parent with
@@ -37,7 +37,7 @@ type ConstantTable internal
 
     interface IMetadataTable<ConstantRow> with
         member this.Count = this.Count
-        member this.Item with get index = this.[index]
+        member this.Item with get index = &this.[index]
 
 [<Sealed>]
 type ConstantTableBuilder internal () =

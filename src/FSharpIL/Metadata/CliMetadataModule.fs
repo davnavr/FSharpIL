@@ -27,7 +27,7 @@ type Unsafe = class
                 extends,
                 parent
             )
-        match builder.TypeDef.TryAdd row with
+        match builder.TypeDef.TryAdd &row with
         | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
         | ValueNone -> DuplicateTypeDefError row :> ValidationError |> Error
 

@@ -2,7 +2,7 @@
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module StaticMethod =
-    // TODO: Prevent enums from having static methods.
-    let tryAddRow builder owner (method: inref<StaticMethod>) =
+    let tryAddRow builder (StaticMemberParent owner) (method: inref<StaticMethod>) =
         let method' = method.Definition()
         Unsafe.tryAddMethodDefRow<StaticMethod> builder owner &method'
+    let addRow builder owner (method: inref<_>) = tryAddRow builder owner &method |> ValidationError.check

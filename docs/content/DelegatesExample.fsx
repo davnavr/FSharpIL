@@ -187,47 +187,48 @@ let example() =
         let signature =
             let parameters = Array.map ParamItem.create [| EncodedType.String; EncodedType.I4 |]
             StaticMethodSignature(ReturnType.encoded EncodedType.String, parameters)
+        let method =
+            StaticMethod (
+                body,
+                StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
+                Identifier.ofStr "DuplicateString",
+                builder.Blobs.MethodDefSig.GetOrAdd signature,
+                fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "str" else "times" }
+            )
+        StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass) &method
+
+    // static member Example1(): string
+    let example1 =
+        let body =
+            let locals =
+                LocalVariable.encoded mydel_encoded
+                |> ImmutableArray.Create
+                |> builder.Blobs.LocalVarSig.GetOrAdd
+                |> builder.StandAloneSig.AddLocals
+                |> ValueSome
+            fun content ->
+                let wr = MethodBodyWriter content
+                // let del = new MyDelegate(fun arg1 arg2 -> MyClass.DuplicateString(arg1, arg2))
+                wr.Ldnull()
+                wr.Ldftn dupstr
+                wr.Newobj mydel.Constructor
+                wr.Stloc 0us
+
+                // del.Invoke("Test", 4)
+                wr.Ldloc 0us
+                wr.Ldstr "Test"
+                wr.Ldc_i4 4
+                wr.Callvirt mydel.Invoke
+                wr.Ret()
+                MethodBody(3us, true)
+            |> MethodBody.create locals
         StaticMethod (
             body,
             StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
-            Identifier.ofStr "DuplicateString",
-            builder.Blobs.MethodDefSig.GetOrAdd signature,
-            fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "str" else "times" }
+            name = Identifier.ofStr "Example1",
+            signature = builder.Blobs.MethodDefSig.GetOrAdd(StaticMethodSignature(ReturnType.encoded EncodedType.String))
         )
-        |> ConcreteClass.addStaticMethod builder myclass
-
-    // static member Example1(): string
-    let example1_body =
-        let locals =
-            LocalVariable.encoded mydel_encoded
-            |> ImmutableArray.Create
-            |> builder.Blobs.LocalVarSig.GetOrAdd
-            |> builder.StandAloneSig.AddLocals
-            |> ValueSome
-        fun content ->
-            let wr = MethodBodyWriter content
-            // let del = new MyDelegate(fun arg1 arg2 -> MyClass.DuplicateString(arg1, arg2))
-            wr.Ldnull()
-            wr.Ldftn dupstr
-            wr.Newobj mydel.Constructor
-            wr.Stloc 0us
-
-            // del.Invoke("Test", 4)
-            wr.Ldloc 0us
-            wr.Ldstr "Test"
-            wr.Ldc_i4 4
-            wr.Callvirt mydel.Invoke
-            wr.Ret()
-            MethodBody(3us, true)
-        |> MethodBody.create locals
-    StaticMethod (
-        example1_body,
-        StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
-        name = Identifier.ofStr "Example1",
-        signature = builder.Blobs.MethodDefSig.GetOrAdd(StaticMethodSignature(ReturnType.encoded EncodedType.String))
-    )
-    |> ConcreteClass.addStaticMethod builder myclass
-    |> ignore
+    StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass) &example1 |> ignore
 
     // System.Func<string, int32>
     let func_2_inst = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef func_2, false, EncodedType.String, EncodedType.I4)
@@ -246,24 +247,24 @@ let example() =
         MethodRef.addRowDefault builder &method
 
     // static member Example2(str: string): System.Func<string, int32>
-    let example2_body content =
-        let wr = MethodBodyWriter content
-        wr.Ldarg 0us
-        wr.Ldftn str_indexof
-        wr.Newobj func_2_inst_ctor
-        wr.Ret()
-        MethodBody()
-    let example2_signature =
-        StaticMethodSignature(EncodedType.GenericInst func_2_inst |> ReturnType.encoded, ParamItem.create EncodedType.String)
-    StaticMethod (
-        MethodBody.create ValueNone example2_body,
-        StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
-        Identifier.ofStr "Example2",
-        builder.Blobs.MethodDefSig.GetOrAdd example2_signature,
-        Param { ParamName = "str"; Flags = ParamFlags() } |> ParamList.singleton
-    )
-    |> ConcreteClass.addStaticMethod builder myclass // TODO: Make StaticMethod.addRow
-    |> ignore
+    let example2 =
+        let body content =
+            let wr = MethodBodyWriter content
+            wr.Ldarg 0us
+            wr.Ldftn str_indexof
+            wr.Newobj func_2_inst_ctor
+            wr.Ret()
+            MethodBody()
+        let signature =
+            StaticMethodSignature(EncodedType.GenericInst func_2_inst |> ReturnType.encoded, ParamItem.create EncodedType.String)
+        StaticMethod (
+            MethodBody.create ValueNone body,
+            StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
+            Identifier.ofStr "Example2",
+            builder.Blobs.MethodDefSig.GetOrAdd signature,
+            Param { ParamName = "str"; Flags = ParamFlags() } |> ParamList.singleton
+        )
+    StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass) &example2 |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 
