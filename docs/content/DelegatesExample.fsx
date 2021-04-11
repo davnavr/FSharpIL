@@ -106,20 +106,21 @@ let example() =
     (* Generating Delegate Types *)
 
     // type MyDelegate = delegate of (string * int32) -> string
-    let mydel =
+    let mydel = // TODO: For this example, use the safe version of function to create a delegate type thta uses type lookup.
         let parameters = Array.map ParamItem.create [| EncodedType.String; EncodedType.I4 |]
-        UncheckedExn.Unsafe.AddDelegate (
-            builder,
-            mcdelegate,
-            EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeRef aresult),
-            EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeRef acallback),
+        let def =
             DelegateDef (
                 TypeVisibility.Public,
                 ReturnType.encoded EncodedType.String,
-                ImmutableArray.CreateRange parameters,
+                ImmutableArray.Create(ParamItem.create EncodedType.String, ParamItem.create EncodedType.I4),
                 Identifier.ofStr "MyDelegate"
             )
-        )
+        Unsafe.addDelegateRow
+            builder
+            (Extends.TypeRef mcdelegate)
+            (EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeRef aresult))
+            (EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeRef acallback))
+            &def
     let mydel_encoded =
         mydel.Row.AsTypeIndex()
         |> TypeDefOrRefOrSpecEncoded.TypeDef

@@ -135,6 +135,7 @@ type Unsafe private () = class
 
     // TODO: Add methods for adding struct, delegate, and enum that accept RawIndex<TypeDefRow> if system types are in the current assembly.
 
+    [<Obsolete>]
     /// <param name="builder"/>
     /// <param name="del">
     /// A <c>TypeRef</c> corresponding to the <see cref="T:System.Delegate"/> or <see cref="T:System.MulticastDelegate"/> type.
@@ -241,9 +242,11 @@ type Unsafe private () = class
             DelegateInfo(del', ctor, invoke, beginInvoke, endInvoke) |> Ok
         | Error err -> Error err
 
+    [<Obsolete>]
     static member AddDelegate(builder, del, asyncResult, asyncCallback, delegateDef) =
         Unsafe.AddDelegate(builder, Extends.TypeRef del, asyncResult, asyncCallback, &delegateDef)
 
+    [<Obsolete>]
     static member AddDelegate(builder, lookup: TypeLookupCache, delegateDef) =
         // TODO: Cleanup these local variables
         let system = "System"

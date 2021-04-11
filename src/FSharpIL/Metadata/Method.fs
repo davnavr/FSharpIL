@@ -233,6 +233,7 @@ type MethodDefSigBlobLookupBuilder internal () =
     member _.Count = lookup.Count
     member private _.TryAdd<'Tag> signature = lookup.TryAdd signature |> Result.map (fun i -> i.ChangeTag<'Tag>())
 
+    // TODO: Use inref for methodDefSig
     member _.TryAdd signature = lookup.TryAdd signature
     member _.GetOrAdd signature = lookup.GetOrAdd signature
     member this.TryAdd(signature: InstanceMethodSignature) = signature.Signature() |> this.TryAdd<InstanceMethodSignature>

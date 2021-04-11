@@ -61,6 +61,7 @@ type MethodDefSignature internal
     member _.ReturnType = retType
     member _.Parameters: ImmutableArray<ParamItem> = parameters
 
+// TODO: For paramList function, add additional information such as number of total arguments.
 /// <summary>Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<Sealed>]
 type MethodDefRow internal (body, iflags, attr, name, signature, paramList: ParamItem -> int -> ParamRow) =
