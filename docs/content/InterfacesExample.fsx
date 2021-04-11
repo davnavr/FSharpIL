@@ -41,7 +41,7 @@ let example() =
       Flags = ()
       PublicKey = None
       Culture = NullCulture }
-    |> setAssembly builder
+    |> Assembly.setRow builder
     |> ignore
 
     let struct (mscorlib, _) =
@@ -49,12 +49,13 @@ let example() =
             PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
             |> builder.Blobs.MiscBytes.GetOrAdd
             |> PublicKeyOrToken
-        AssemblyRef (
-            Version(5, 0, 0, 0),
-            AssemblyName.ofStr "System.Runtime",
-            token
-        )
-        |> referenceAssembly builder
+        let row =
+            AssemblyRef (
+                Version(5, 0, 0, 0),
+                AssemblyName.ofStr "System.Runtime",
+                token
+            )
+        AssemblyRef.addRow builder &row
 
     // [<Interface>] type INumber
     let inumber =
@@ -63,7 +64,7 @@ let example() =
             Identifier.ofStr "INumber",
             "InterfacesExample"
         )
-        |> Interface.addTypeDef builder
+        |> Interface.addRow builder
 
     // abstract Add: num: int32 -> INumber
     let inumber_add =

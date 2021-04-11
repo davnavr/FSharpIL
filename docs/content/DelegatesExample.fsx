@@ -59,35 +59,31 @@ let example() =
     // member _.get_Length(): string
     let struct (str_length, _) =
         let signature = MethodRefDefaultSignature(true, false, ReturnType.itemI4)
-        let row =
-            { Class = MemberRefParent.TypeRef str
-              MemberName = Identifier.ofStr "get_Length"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        MethodRef.addRowDefault builder &row
+        { Class = MemberRefParent.TypeRef str
+          MemberName = Identifier.ofStr "get_Length"
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        |> MethodRef.addRowDefault builder
     // member _.IndexOf(_: string): int
     let struct (str_indexof, _) =
         let signature = MethodRefDefaultSignature(true, false, ReturnType.itemI4, ParamItem.create EncodedType.String)
-        let row =
-            { Class = MemberRefParent.TypeRef str
-              MemberName = Identifier.ofStr "IndexOf"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        MethodRef.addRowDefault builder &row
+        { Class = MemberRefParent.TypeRef str
+          MemberName = Identifier.ofStr "IndexOf"
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        |> MethodRef.addRowDefault builder
     // new(_: int32)
     let struct (stringb_ctor, _) =
         let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ParamItem.create EncodedType.I4)
-        let row =
-            { Class = MemberRefParent.TypeRef stringb
-              MemberName = Identifier.ofStr ".ctor"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        MethodRef.addRowDefault builder &row
+        { Class = MemberRefParent.TypeRef stringb
+          MemberName = Identifier.ofStr ".ctor"
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        |> MethodRef.addRowDefault builder
     // override _.ToString(): string
     let struct (stringb_tostring, _) =
         let signature = MethodRefDefaultSignature(true, false, ReturnType.encoded EncodedType.String)
-        let row =
-            { Class = MemberRefParent.TypeRef stringb
-              MemberName = Identifier.ofStr "ToString"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        MethodRef.addRowDefault builder &row
+        { Class = MemberRefParent.TypeRef stringb
+          MemberName = Identifier.ofStr "ToString"
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        |> MethodRef.addRowDefault builder
     // member _.Append(_: string): System.StringBuilder
     let struct (stringb_append, _) =
         let signature =
@@ -97,11 +93,10 @@ let example() =
                 EncodedType.typeRefClass stringb |> ReturnType.encoded,
                 ParamItem.create EncodedType.String
             )
-        let row =
-            { Class = MemberRefParent.TypeRef stringb
-              MemberName = Identifier.ofStr "Append"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        MethodRef.addRowDefault builder &row
+        { Class = MemberRefParent.TypeRef stringb
+          MemberName = Identifier.ofStr "Append"
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        |> MethodRef.addRowDefault builder
 
     (* Generating Delegate Types *)
 
@@ -122,7 +117,8 @@ let example() =
             (EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeRef acallback))
             &def
     let mydel_encoded =
-        mydel.Row.AsTypeIndex()
+        mydel.Row
+        |> Delegate.typeIndex
         |> TypeDefOrRefOrSpecEncoded.TypeDef
         |> EncodedType.Class
  
@@ -187,15 +183,14 @@ let example() =
         let signature =
             let parameters = Array.map ParamItem.create [| EncodedType.String; EncodedType.I4 |]
             StaticMethodSignature(ReturnType.encoded EncodedType.String, parameters)
-        let method =
-            StaticMethod (
-                body,
-                StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
-                Identifier.ofStr "DuplicateString",
-                builder.Blobs.MethodDefSig.GetOrAdd signature,
-                fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "str" else "times" }
-            )
-        StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass) &method
+        StaticMethod (
+            body,
+            StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
+            Identifier.ofStr "DuplicateString",
+            builder.Blobs.MethodDefSig.GetOrAdd signature,
+            fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "str" else "times" }
+        )
+        |> StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass)
 
     // static member Example1(): string
     let example1 =
@@ -228,23 +223,22 @@ let example() =
             name = Identifier.ofStr "Example1",
             signature = builder.Blobs.MethodDefSig.GetOrAdd(StaticMethodSignature(ReturnType.encoded EncodedType.String))
         )
-    StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass) &example1 |> ignore
+    StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass) example1 |> ignore
 
     // System.Func<string, int32>
     let func_2_inst = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef func_2, false, EncodedType.String, EncodedType.I4)
     // new (_: object, _: System.IntPtr)
     let struct(func_2_inst_ctor, _) =
-        let method =
-            { MemberRef.MemberName = Identifier.ofStr ".ctor"
-              Class =
-                TypeSpec.GenericInst func_2_inst
-                |> TypeSpec.createRow builder
-                |> MemberRefParent.TypeSpec
-              Signature =
-                let parameters = Array.map ParamItem.create [| EncodedType.Object; EncodedType.I |]
-                let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
-                builder.Blobs.MethodRefSig.GetOrAdd signature }
-        MethodRef.addRowDefault builder &method
+        { MemberRef.MemberName = Identifier.ofStr ".ctor"
+          Class =
+            TypeSpec.GenericInst func_2_inst
+            |> TypeSpec.createRow builder
+            |> MemberRefParent.TypeSpec
+          Signature =
+            let parameters = Array.map ParamItem.create [| EncodedType.Object; EncodedType.I |]
+            let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
+            builder.Blobs.MethodRefSig.GetOrAdd signature }
+        |> MethodRef.addRowDefault builder
 
     // static member Example2(str: string): System.Func<string, int32>
     let example2 =
@@ -264,7 +258,7 @@ let example() =
             builder.Blobs.MethodDefSig.GetOrAdd signature,
             Param { ParamName = "str"; Flags = ParamFlags() } |> ParamList.singleton
         )
-    StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass) &example2 |> ignore
+    StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass) example2 |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

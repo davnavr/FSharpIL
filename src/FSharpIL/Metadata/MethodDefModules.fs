@@ -2,7 +2,9 @@
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module StaticMethod =
-    let tryAddRow builder (StaticMemberParent owner) (method: inref<StaticMethod>) =
+    let methodIndex (method: RawIndex<StaticMethod>) = method.ChangeTag<MethodDefRow>()
+    // TODO: Should inref be used for adding methods? It may not be necessary since these methods are inlined.
+    let inline tryAddRow builder (StaticMemberParent owner) (method: StaticMethod) =
         let method' = method.Definition()
         Unsafe.tryAddMethodDefRow<StaticMethod> builder owner &method'
-    let addRow builder owner (method: inref<_>) = tryAddRow builder owner &method |> ValidationError.check
+    let inline addRow builder owner method = tryAddRow builder owner method |> ValidationError.check
