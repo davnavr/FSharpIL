@@ -71,6 +71,7 @@ type Unsafe private () = class
         ) =
         Unsafe.AddMethod<Method<'Body, 'Flags, 'Signature>>(builder, owner, method.Definition())
 
+    [<Obsolete>]
     static member private AddConstructor<'Tag, 'Flags, 'Signature>
         (
             builder: CliMetadataBuilder,
@@ -99,6 +100,7 @@ type Unsafe private () = class
             method.Signature.ChangeTag()
         )
 
+    [<Obsolete>]
     static member AddConstructor(builder: CliMetadataBuilder, owner, method: ClassConstructor) =
         let signature = builder.Blobs.MethodDefSig.GetOrAdd Unsafe.ClassConstructorSignature
         Unsafe.AddConstructor<ClassConstructor, ClassConstructorTag, _> (
@@ -109,6 +111,7 @@ type Unsafe private () = class
             signature
         )
 
+    [<Obsolete>]
     static member AddTypeDef<'Tag>
         (
             builder: CliMetadataBuilder,
@@ -350,11 +353,14 @@ type Unsafe private () = class
     static member AddStruct(builder, valueType: RawIndex<TypeDefRow>, structDef) =
         Unsafe.AddStruct(builder, (invalidOp "TODO: Add Extends.TypeDef to allow addition of structs that derive from System.ValueType in the same assembly": Extends), structDef)
 
+    [<Obsolete>]
     static member ChangeFlagTag<'Flags, 'From, 'To when 'Flags :> Enum>(flags: ValidFlags<'From, 'Flags>) =
         ValidFlags<'To, 'Flags> flags.Value
 
+    [<Obsolete>]
     static member ChangeIndexTag<'From, 'To>(index: RawIndex<'From>) = index.ChangeTag<'To>()
 
+    [<Obsolete>]
     static member CreateFlags<'Tag, 'Flags when 'Flags :> Enum> flags = ValidFlags<'Tag, 'Flags> flags
 
     static member ImplementInterface(builder: CliMetadataBuilder, typeDef: RawIndex<TypeDefRow>, intf) =
@@ -547,6 +553,7 @@ module Interface =
 [<Obsolete>]
 [<RequireQualifiedAccess>]
 module Struct =
+    [<Obsolete>]
     let addTypeDef builder (lookup: TypeLookupCache) (structDef: StructDef) =
         let valueType = "System", Identifier.ofStr "ValueType"
         match lookup.TryFindType valueType with
@@ -554,15 +561,19 @@ module Struct =
         | ValueSome (TypeLookupResult.TypeDef tdef) -> Unsafe.AddStruct(builder, tdef, structDef)
         | ValueNone -> MissingTypeError(valueType).ToResult()
 
+    [<Obsolete>]
     let addInstanceMethod builder (owner: RawIndex<StructDef>) (method: InstanceMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<InstanceMethod>, _>
 
+    [<Obsolete>]
     let addStaticMethod builder (owner: RawIndex<StructDef>) (method: StaticMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<StaticMethod>, _>
 
+    [<Obsolete>]
     let addConstructor builder (owner: RawIndex<StructDef>) (method: ObjectConstructor) =
         Unsafe.AddConstructor(builder, owner.AsTypeIndex(), method)
 
+    [<Obsolete>]
     let addClassConstructor builder (owner: RawIndex<StructDef>) (method: ClassConstructor) =
         Unsafe.AddConstructor(builder, owner.AsTypeIndex(), method)
 
@@ -570,17 +581,18 @@ module Struct =
     let addEntryPoint builder (owner: RawIndex<StructDef>) (method: EntryPointMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<EntryPointMethod>, _>
 
+    [<Obsolete>]
     let addInstanceField builder (owner: RawIndex<StructDef>) (field: InstanceField) =
         Unsafe.AddField<_>(builder, owner.AsTypeIndex(), field): Result<RawIndex<InstanceField>, _>
-
+    [<Obsolete>]
     let addStaticField builder (owner: RawIndex<StructDef>) (field: StaticField) =
         Unsafe.AddField<_>(builder, owner.AsTypeIndex(), field): Result<RawIndex<StaticField>, _>
 
     // let implementDef
-
+    [<Obsolete>]
     let implementRef builder (structDef: RawIndex<StructDef>) (intf: RawIndex<TypeRef>) =
         Unsafe.ImplementInterface(builder, structDef.AsTypeIndex(), InterfaceIndex.TypeRef intf)
-
+    [<Obsolete>]
     let implementSpec builder (structDef: RawIndex<StructDef>) (spec: RawIndex<TypeSpecRow>) =
         Unsafe.ImplementInterface(builder, structDef.AsTypeIndex(), InterfaceIndex.TypeSpec spec)
 

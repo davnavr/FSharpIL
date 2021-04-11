@@ -46,7 +46,7 @@ let example() =
           Flags = ()
           PublicKey = None
           Culture = NullCulture }
-        |> setAssembly builder
+        |> Assembly.setRow builder
 
     let struct (mscorlib, _) =
         let token =
@@ -57,16 +57,12 @@ let example() =
             Version(5, 0, 0, 0),
             AssemblyName.ofStr "System.Runtime",
             token
-        ) |> referenceAssembly builder
-    let valueType =
-        TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "ValueType", "System")
-        |> referenceType builder
-    let icomparable_1 =
-        TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "IComparable`1", "System")
-        |> referenceType builder
-    let stringBuilder =
-        TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "StringBuilder", "System.Text")
-        |> referenceType builder
+        )
+        |> AssemblyRef.addRow builder
+    let mscorlib' = ResolutionScope.AssemblyRef mscorlib
+    let valueType = TypeRef.createReflectedRow builder mscorlib' typeof<ValueType>
+    let icomparable_1 = TypeRef.createReflectedRow builder mscorlib' typedefof<IComparable<_>>
+    let stringBuilder = TypeRef.createReflectedRow builder mscorlib' typeof<System.Text.StringBuilder>
 
     // new()
     let struct (stringBuilder_ctor, _) =
@@ -75,7 +71,7 @@ let example() =
           Signature =
             MethodRefDefaultSignature(true, false, ReturnType.itemVoid)
             |> builder.Blobs.MethodRefSig.GetOrAdd }
-        |> referenceDefaultMethod builder
+        |> MethodRef.addRowDefault builder
     // member _.ToString(): string
     let struct (stringBuilder_ToString, _) =
         { Class = MemberRefParent.TypeRef stringBuilder
@@ -83,7 +79,7 @@ let example() =
           Signature =
             MethodRefDefaultSignature(true, false, ReturnType.encoded EncodedType.String)
             |> builder.Blobs.MethodRefSig.GetOrAdd }
-        |> referenceDefaultMethod builder
+        |> MethodRef.addRowDefault builder
     let stringBuilder_Append item =
         let signature =
             MethodRefDefaultSignature (
@@ -96,7 +92,7 @@ let example() =
             { Class = MemberRefParent.TypeRef stringBuilder
               MemberName = Identifier.ofStr "Append"
               Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> referenceDefaultMethod builder
+            |> MethodRef.addRowDefault builder
         append
     // member _.Append(_: int32): System.Text.StringBuilder
     let stringBuilder_Append_I4 = stringBuilder_Append EncodedType.I4
@@ -106,15 +102,15 @@ let example() =
     // TODO: In the future, this would be a good example to showcase functions to generate XML documentation.
 
     // [<Struct>] type Fraction
-    let fraction = // TODO: Use helper function to define a struct instead.
-        let info =
-            { StructDef.Access = TypeVisibility.Public
-              Flags = ClassFlags() |> Flags.valueType
-              StructName = Identifier.ofStr "Fraction"
-              TypeNamespace = "CustomNumbers" }
-        Unsafe.AddStruct(builder, valueType, info)
+    let fraction = // TODO: Use safe helper function to define a struct instead.
+        { StructDef.Access = TypeVisibility.Public
+          Flags = ClassFlags() |> Flags.valueType
+          StructName = Identifier.ofStr "Fraction"
+          TypeNamespace = "CustomNumbers" }
+        |> Unsafe.addStructRow builder (Extends.TypeRef valueType)
+    let fraction' = Struct.typeIndex fraction
 
-    let fractionEncoded = fraction.AsTypeIndex() |> EncodedType.typeDefStruct
+    let fractionEncoded = EncodedType.typeDefStruct fraction'
 
     let icomparable_fraction =
         GenericInst.typeRef1 false icomparable_1 fractionEncoded
@@ -133,16 +129,14 @@ let example() =
     let struct (readonly_ctor, _) =
         { Class = MemberRefParent.TypeRef readonly
           MemberName = Identifier.ofStr ".ctor"
-          Signature =
-            MethodRefDefaultSignature(true, false, ReturnType.itemVoid)
-            |> builder.Blobs.MethodRefSig.GetOrAdd }
-        |> referenceDefaultMethod builder
+          Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid) |> builder.Blobs.MethodRefSig.GetOrAdd }
+        |> MethodRef.addRowDefault builder
 
     // [<type: System.Runtime.CompilerServices.IsReadOnly>]
-    { Parent = CustomAttributeParent.TypeDef(fraction.AsTypeIndex())
+    { Parent = CustomAttributeParent.TypeDef fraction'
       Type = CustomAttributeType.MethodRefDefault readonly_ctor
       Value = ValueNone }
-    |> addCustomAttribute builder
+    |> CustomAttribute.addRow builder
 
     let intfield = FieldSignature.create EncodedType.I4 |> builder.Blobs.FieldSig.GetOrAdd
     // val private (*initonly*) numerator: int32
@@ -196,9 +190,9 @@ let example() =
     // TODO: Use helper functions for adding properties instead.
     Unsafe.AddInstanceProperty (
         builder,
-        fraction.AsTypeIndex(),
+        fraction',
         { PropertyName = Identifier.ofStr "Numerator"
-          Flags = Unsafe.CreateFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
+          Flags = Unsafe.createFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
           Type = intprop },
         getter = ValueSome get_numerator,
         setter = ValueNone
@@ -209,7 +203,7 @@ let example() =
         builder,
         fraction.AsTypeIndex(),
         { PropertyName = Identifier.ofStr "Denominator"
-          Flags = Unsafe.CreateFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
+          Flags = Unsafe.createFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
           Type = intprop },
         getter = ValueSome get_denominator,
         setter = ValueNone
@@ -429,9 +423,9 @@ let example() =
             let parameters = ImmutableArray.Create(ParamItem.create EncodedType.String)
             let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
             builder.Blobs.MethodRefSig.GetOrAdd signature }
-        |> referenceDefaultMethod builder
+        |> MethodRef.addRowDefault builder
 
-    setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
+    Assembly.setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
     
     let metadata = CliMetadata builder
 
@@ -452,7 +446,7 @@ let example() =
         (XmlWriter.Create doc)
         assemblyName
         [
-            DocMember.Type(fraction.AsTypeIndex())
+            DocMember.Type fraction'
         ]
 
     // TODO: Return XML documentation as well.

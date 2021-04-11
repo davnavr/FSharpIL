@@ -1,5 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
+// TODO: To avoid forcing tryAddRow functions of Field and Methods to use inref, maybe make an public function in the Unsafe module that retrieves the Row objects?
+
 [<RequireQualifiedAccess>]
 module internal Field =
     let inline tryAddRow (builder: CliMetadataBuilder) owner (field: Field<'Flags>) =

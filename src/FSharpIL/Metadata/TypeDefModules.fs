@@ -5,7 +5,7 @@ open System.Reflection
 [<RequireQualifiedAccess>]
 module internal ClassDef =
     let inline tryAddRow builder (def: inref<ClassDef<_>>) =
-        Unsafe.tryAddTypeDefRow<ClassDef<'Flags>>
+        Unsafe.tryCreateTypeDefRow<ClassDef<'Flags>>
             builder
             (def.Flags.Value ||| def.Access.Tag)
             def.ClassName
@@ -38,7 +38,7 @@ module Delegate =
 module Interface =
     let typeIndex (intfDef: RawIndex<InterfaceDef>) = intfDef.ChangeTag<TypeDefRow>()
     let inline tryAddRow builder (intfDef: InterfaceDef) =
-        Unsafe.tryAddTypeDefRow<InterfaceDef>
+        Unsafe.tryCreateTypeDefRow<InterfaceDef>
             builder
             (intfDef.Access.Tag ||| TypeAttributes.Interface ||| TypeAttributes.Abstract)
             intfDef.InterfaceName
@@ -46,3 +46,8 @@ module Interface =
             Extends.Null
             (TypeVisibility.enclosingClass intfDef.Access)
     let inline addRow builder intfDef = tryAddRow builder intfDef |> ValidationError.check
+
+[<RequireQualifiedAccess>]
+module Struct =
+    let typeIndex (structDef: RawIndex<StructDef>) = structDef.ChangeTag<TypeDefRow>()
+    //tryAddRow // Make one of the arguments a TypeLookup

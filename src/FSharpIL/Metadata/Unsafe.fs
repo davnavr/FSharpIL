@@ -9,7 +9,9 @@ open FSharpIL
 
 let changeIndexTag<'From, 'To> (index: RawIndex<'From>) = index.ChangeTag<'To>()
 
-let tryAddTypeDefRow<'Tag> (builder: CliMetadataBuilder) flags typeName typeNamespace extends parent =
+let createFlags<'Tag, 'Flags when 'Flags :> System.Enum> flags = ValidFlags<'Tag, 'Flags> flags
+
+let tryCreateTypeDefRow<'Tag> (builder: CliMetadataBuilder) flags typeName typeNamespace extends parent =
     let row =
         TypeDefRow (
             flags,
@@ -55,7 +57,7 @@ let tryAddFieldRow<'Tag> (builder: CliMetadataBuilder) owner field =
 /// <param name="def"/>
 let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<DelegateDef>) =
     let result =
-        tryAddTypeDefRow<DelegateDef>
+        tryCreateTypeDefRow<DelegateDef>
             builder
             def.Flags
             def.DelegateName
@@ -149,7 +151,7 @@ let inline addDelegateRow builder del asyncResult asyncCallback (def: inref<Dele
 /// <param name="def"/>
 let tryAddEnumRow builder enum (def: inref<EnumDef>) =
     let result =
-        tryAddTypeDefRow<EnumDef>
+        tryCreateTypeDefRow<EnumDef>
             builder
             def.Flags
             def.EnumName
@@ -206,4 +208,18 @@ let tryAddEnumRow builder enum (def: inref<EnumDef>) =
         EnumInfo(enum', ivalue, values.ToImmutable()) |> Ok
     | Error err -> Error err
 
-let inline addEnumRow builder enum (def: inref<EnumDef>) = tryAddEnumRow builder enum &def |> ValidationError.check
+let inline addEnumRow builder enum (def: EnumDef) = tryAddEnumRow builder enum &def |> ValidationError.check
+
+/// <param name="builder"/>
+/// <param name="valueType">Corresponds to the <see cref="T:System.ValueType"/> type.</param>
+/// <param name="def"/>
+let inline tryAddStructRow builder valueType (def: StructDef) =
+    tryCreateTypeDefRow<StructDef>
+        builder
+        (def.Flags.Value ||| def.Access.Tag)
+        def.StructName
+        def.TypeNamespace
+        valueType
+        (TypeVisibility.enclosingClass def.Access)
+
+let inline addStructRow builder valueType def = tryAddStructRow builder valueType def |> ValidationError.check
