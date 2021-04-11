@@ -40,7 +40,7 @@ module private DelegateHelpers =
 [<AbstractClass; Sealed>]
 type Unsafe private () = class
     static member val internal ClassConstructorSignature =
-        MethodDefSignature(
+        MethodDefSignature (
             false,
             false,
             MethodCallingConventions.Default,
@@ -126,7 +126,7 @@ type Unsafe private () = class
                 extends,
                 parent
             )
-        match builder.TypeDef.TryAdd row with
+        match builder.TypeDef.TryAdd &row with
         | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
         | ValueNone -> DuplicateTypeDefError row :> ValidationError |> Error
 

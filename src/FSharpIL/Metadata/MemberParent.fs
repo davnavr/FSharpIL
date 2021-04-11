@@ -1,5 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
+// TODO: Rename Parent to Owner.
+
 type StaticMemberParentTag =
     | Unsafe = 0uy
     | ConcreteClass = 1uy
@@ -15,6 +17,7 @@ type StaticMemberParent = TaggedIndex<StaticMemberParentTag>
 
 [<RequireQualifiedAccess>]
 module StaticMemberParent =
+    let Unsafe (def: RawIndex<TypeDefRow>) = def.ToTaggedIndex StaticMemberParentTag.Unsafe
     let ConcreteClass (def: RawIndex<ConcreteClassDef>) = def.ToTaggedIndex StaticMemberParentTag.ConcreteClass
     let AbstractClass (def: RawIndex<AbstractClassDef>) = def.ToTaggedIndex StaticMemberParentTag.AbstractClass
     let SealedClass (def: RawIndex<SealedClassDef>) = def.ToTaggedIndex StaticMemberParentTag.SealedClass
@@ -23,6 +26,19 @@ module StaticMemberParent =
     let Interface (def: RawIndex<InterfaceDef>) = def.ToTaggedIndex StaticMemberParentTag.Interface
     let Struct (def: RawIndex<StructDef>) = def.ToTaggedIndex StaticMemberParentTag.Struct
 
+type AbstractMethodParentTag =
+    | Unsafe = 0uy
+    | AbstractClass = 1uy
+    | Interface = 2uy
+
+type AbstractMethodParent = TaggedIndex<AbstractMethodParentTag>
+
+module AbstractMethodParent =
+    let Unsafe (def: RawIndex<TypeDefRow>) = def.ToTaggedIndex AbstractMethodParentTag.Unsafe
+    let AbstractClass (def: RawIndex<AbstractClassDef>) = def.ToTaggedIndex AbstractMethodParentTag.AbstractClass
+    let Interface (def: RawIndex<InterfaceDef>) = def.ToTaggedIndex AbstractMethodParentTag.Interface
+
 [<AutoOpen>]
 module MemberParentPatterns =
     let (|StaticMemberParent|) (parent: StaticMemberParent) = parent.ToRawIndex<TypeDefRow>()
+    let (|AbstractMethodParent|) (parent: AbstractMethodParent) = parent.ToRawIndex<TypeDefRow>()

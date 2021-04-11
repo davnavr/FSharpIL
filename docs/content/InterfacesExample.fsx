@@ -24,9 +24,6 @@ The following example showcases the generation of interface types.
 open System
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Unchecked
-open FSharpIL.Metadata.UncheckedExn
-open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
 let example() =
@@ -49,13 +46,12 @@ let example() =
             PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
             |> builder.Blobs.MiscBytes.GetOrAdd
             |> PublicKeyOrToken
-        let row =
-            AssemblyRef (
-                Version(5, 0, 0, 0),
-                AssemblyName.ofStr "System.Runtime",
-                token
-            )
-        AssemblyRef.addRow builder &row
+        AssemblyRef (
+            Version(5, 0, 0, 0),
+            AssemblyName.ofStr "System.Runtime",
+            token
+        )
+        |> AssemblyRef.addRow builder
 
     // [<Interface>] type INumber
     let inumber =
@@ -81,7 +77,7 @@ let example() =
             builder.Blobs.MethodDefSig.GetOrAdd signature,
             Param { Flags = ParamFlags(); ParamName = "num" } |> ParamList.singleton
         )
-        |> Interface.addAbstractMethod builder inumber
+        |> AbstractMethod.addRow builder (AbstractMethodParent.Interface inumber)
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

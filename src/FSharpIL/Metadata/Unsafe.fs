@@ -22,12 +22,13 @@ let tryAddTypeDefRow<'Tag> (builder: CliMetadataBuilder) flags typeName typeName
     | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
     | ValueNone -> DuplicateTypeDefError(row).ToResult()
 
-let tryAddMethodDefRow<'Tag> (builder: CliMetadataBuilder) owner (method: inref<_>) =
+// TODO: Only use inref for MethodDefRow if it is a struct.
+let tryAddMethodDefRow<'Tag> (builder: CliMetadataBuilder) owner method =
     match builder.Method.TryAdd(owner, method) with
     | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
     | ValueNone -> DuplicateMethodError(method).ToResult()
 
-let tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList =
+let inline tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList =
     let method =
         MethodDefRow (
             body,
@@ -37,10 +38,15 @@ let tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name si
             signature,
             paramList
         )
-    tryAddMethodDefRow<'Tag> builder owner &method
+    tryAddMethodDefRow<'Tag> builder owner method
 
-let createMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList =
+let inline createMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList =
     tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList |> ValidationError.check
+
+let tryAddFieldRow<'Tag> (builder: CliMetadataBuilder) owner field =
+    match builder.Field.TryAdd(owner, field) with
+    | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
+    | ValueNone -> DuplicateFieldError(field).ToResult()
 
 /// <param name="builder">The CLI metadata with the <c>TypeDef</c> table that the delegate type will be added to.</param>
 /// <param name="del">Corresponds to the <see cref="T:System.Delegate"/> or <see cref="T:System.MulticastDelegate"/> type.</param>
@@ -58,7 +64,7 @@ let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<Delegate
             (TypeVisibility.enclosingClass def.Access)
     match result with
     | Ok del' ->
-        let trow = del'.AsTypeIndex()
+        let trow = del'.ChangeTag<TypeDefRow>()
         let asyncResult' = ParamItem.create asyncResult
 
         // TODO: Create easier way to make methods and constructors whose implementations are 'runtime'

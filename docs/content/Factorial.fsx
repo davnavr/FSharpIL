@@ -23,9 +23,6 @@ open System
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Unchecked
-open FSharpIL.Metadata.Checked
-open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
 let example() =
@@ -41,7 +38,7 @@ let example() =
           Flags = ()
           PublicKey = None
           Culture = NullCulture }
-        |> setAssembly builder
+        |> Assembly.setRow builder
 
     validated {
         let corver = Version(5, 0, 0, 0)
@@ -50,15 +47,11 @@ let example() =
             |> builder.Blobs.MiscBytes.GetOrAdd
             |> PublicKeyOrToken
 
-        let! mscorlib = AssemblyRef(corver, AssemblyName.ofStr "System.Runtime", ptoken) |> referenceAssembly builder
-        let! object = SystemType.Object builder mscorlib
-        let! tfmattr =
-            TypeRef (
-                ResolutionScope.AssemblyRef mscorlib,
-                Identifier.ofStr "TargetFrameworkAttribute",
-                "System.Runtime.Versioning"
-            )
-            |> referenceType builder
+        let! mscorlib = AssemblyRef(corver, AssemblyName.ofStr "System.Runtime", ptoken) |> AssemblyRef.addRowChecked builder
+
+        let mscorlib' = ResolutionScope.AssemblyRef mscorlib
+        let! object = TypeRef.tryCreateReflectedRow builder mscorlib' typeof<Object>
+        let! tfmattr = TypeRef.tryCreateReflectedRow builder mscorlib' typeof<System.Runtime.Versioning.TargetFrameworkAttribute>
 
         let! collections =
             AssemblyRef (
@@ -66,22 +59,16 @@ let example() =
                 AssemblyName.ofStr "System.Collections",
                 ptoken
             )
-            |> referenceAssembly builder
+            |> AssemblyRef.addRowChecked builder
         let! dictionary =
-            TypeRef (
-                ResolutionScope.AssemblyRef collections,
-                Identifier.ofStr "Dictionary`2",
-                "System.Collections.Generic"
-            )
-            |> referenceType builder
+            TypeRef.tryCreateReflectedRow
+                builder
+                (ResolutionScope.AssemblyRef collections)
+                typedefof<System.Collections.Generic.Dictionary<_, _>>
 
         // System.Collections.Generic.Dictionary<uint32, uint32>
-        let dictionary_u4_u4 =
-            GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef dictionary, false, EncodedType.U4, EncodedType.U4)
-        let! dictionary_u4_u4_spec =
-            TypeSpec.GenericInst dictionary_u4_u4
-            |> builder.Blobs.TypeSpec.GetOrAdd
-            |> addTypeSpec builder
+        let dictionary_u4_u4 = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef dictionary, false, EncodedType.U4, EncodedType.U4)
+        let! dictionary_u4_u4_spec = TypeSpec.GenericInst dictionary_u4_u4 |> TypeSpec.tryCreateRow builder
 
         // member _.ContainsKey(_: 'TKey): bool
         let! containsKey =
@@ -93,7 +80,7 @@ let example() =
                 let parameters = ImmutableArray.CreateRange [ ParamItem.var 0u; ]
                 let signature = MethodRefDefaultSignature(true, false, ReturnType.itemBool, parameters)
                 builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> referenceDefaultMethod builder
+            |> MethodRef.addRowDefaultChecked builder
         // member (*specialname*) _.get_Item(_: 'TKey): 'TValue
         let! get_Item =
             { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
@@ -102,7 +89,7 @@ let example() =
                 let parameters = ImmutableArray.CreateRange [ ParamItem.var 0u ]
                 let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVar 1u, parameters)
                 builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> referenceDefaultMethod builder
+            |> MethodRef.addRowDefaultChecked builder
         // new()
         let! dictionary_u4_u4_ctor =
             { Class = MemberRefParent.TypeSpec dictionary_u4_u4_spec
@@ -110,7 +97,7 @@ let example() =
               Signature =
                 let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Empty)
                 builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> referenceDefaultMethod builder
+            |> MethodRef.addRowDefaultChecked builder
 
         // [<AbstractClass; Sealed>] type CachedFactorial
         let! factorial =
@@ -119,17 +106,19 @@ let example() =
               Access = TypeVisibility.Public
               Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true))
               Extends = Extends.TypeRef object }
-            |> StaticClass.addTypeDef builder
+            |> StaticClass.tryAddRow builder
+        let factorial' = StaticMemberParent.StaticClass factorial
 
         // static member val private cache: System.Collections.Generic.Dictionary<uint32, uint32>
         let! cache =
-            { FieldName = Identifier.ofStr "cache"
-              Flags = Flags.staticField(FieldFlags Private)
-              Signature =
-                EncodedType.GenericInst dictionary_u4_u4
-                |> FieldSignature.create
-                |> builder.Blobs.FieldSig.GetOrAdd }
-            |> StaticClass.addStaticField builder factorial
+            let row =
+                { FieldName = Identifier.ofStr "cache"
+                  Flags = Flags.staticField(FieldFlags Private)
+                  Signature =
+                    EncodedType.GenericInst dictionary_u4_u4
+                    |> FieldSignature.create
+                    |> builder.Blobs.FieldSig.GetOrAdd }
+            StaticField.tryAddRow builder factorial' &row
 
         let calculateBody, setCalculateBody = MethodBody.mutableBody()
 
@@ -155,7 +144,7 @@ let example() =
                 builder.Blobs.MethodDefSig.GetOrAdd signature,
                 parameters
             )
-            |> StaticClass.addStaticMethod builder factorial
+            |> StaticMethod.tryAddRow builder factorial'
 
         // static member Calculate(num: uint32): uint32
         let! _ =
@@ -196,7 +185,7 @@ let example() =
                 builder.Blobs.MethodDefSig.GetOrAdd signature,
                 fun _ _ -> Param { Flags = ParamFlags(); ParamName = "num" }
             )
-            |> StaticClass.addStaticMethod builder factorial
+            |> StaticMethod.tryAddRow builder factorial'
 
         (* Class constructor to initialize cache *)
         // static member (*specialname rtspecialname*) ``.cctor``(): System.Void
@@ -215,7 +204,7 @@ let example() =
                 (),
                 ParamList.empty
             )
-            |> StaticClass.addClassConstructor builder factorial
+            |> ClassConstructor.tryAddRow builder factorial'
 
         let! tfm_ctor =
             { Class = MemberRefParent.TypeRef tfmattr
@@ -224,9 +213,9 @@ let example() =
                 let parameters = ImmutableArray.Create(ParamItem.create EncodedType.String)
                 let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
                 builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> referenceDefaultMethod builder
+            |> MethodRef.addRowDefaultChecked builder
 
-        setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
+        Assembly.setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
 
         setCalculateBody <| fun content ->
             let writer = MethodBodyWriter content
@@ -259,7 +248,7 @@ let example() =
 
         return CliMetadata builder
     }
-    |> ValidationResult.get
+    |> ValidationResult.get // TODO: Returns warnings as well.
     |> PEFile.ofMetadata ImageFileFlags.dll
 
 (*** hide ***)

@@ -14,6 +14,7 @@ module internal ClassDef =
             (TypeVisibility.enclosingClass def.Access)
 
 // TODO: Should inref be used for addRow functions for TypeDefs?
+// TODO: Add addRow variants that accept WarningsBuilder
 
 [<RequireQualifiedAccess>]
 module ConcreteClass =

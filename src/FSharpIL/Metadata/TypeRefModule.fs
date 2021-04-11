@@ -8,8 +8,8 @@ let inline tryAddRow (builder: CliMetadataBuilder) typeRef =
 
 let inline addRow builder typeRef = tryAddRow builder typeRef |> ValidationError.check
 
-let tryAddRowChecked (builder: CliMetadataBuilder) (typeRef: TypeRef) (warnings: WarningsBuilder) =
-    match tryAddRow builder &typeRef with
+let inline tryAddRowChecked (builder: CliMetadataBuilder) (typeRef: TypeRef) (warnings: WarningsBuilder) =
+    match tryAddRow builder typeRef with
     | Ok i ->
         if typeRef.ResolutionScope.Tag = ResolutionScopeTag.Module then
             warnings.Add(TypeRefUsesModuleResolutionScope typeRef)

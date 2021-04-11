@@ -40,13 +40,12 @@ let example() =
 
     let struct (mscorlib, _) =
         let token = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-        let row =
-            AssemblyRef (
-                Version(5, 0, 0, 0),
-                AssemblyName.ofStr "System.Runtime",
-                PublicKeyOrToken(builder.Blobs.MiscBytes.GetOrAdd token)
-            )
-        AssemblyRef.addRow builder &row
+        AssemblyRef (
+            Version(5, 0, 0, 0),
+            AssemblyName.ofStr "System.Runtime",
+            PublicKeyOrToken(builder.Blobs.MiscBytes.GetOrAdd token)
+        )
+        |> AssemblyRef.addRow builder
 
     let object = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<Object>
     let str = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<String>
