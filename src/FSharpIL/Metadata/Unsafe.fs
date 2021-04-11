@@ -5,6 +5,8 @@ module FSharpIL.Metadata.Unsafe
 open System.Collections.Immutable
 open System.Reflection
 
+open FSharpIL
+
 let changeIndexTag<'From, 'To> (index: RawIndex<'From>) = index.ChangeTag<'To>()
 
 let tryAddTypeDefRow<'Tag> (builder: CliMetadataBuilder) flags typeName typeNamespace extends parent =
@@ -41,9 +43,7 @@ let createMethodDefRow<'Tag> builder owner body implFlags methodFlags name signa
     tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList |> ValidationError.check
 
 /// <param name="builder">The CLI metadata with the <c>TypeDef</c> table that the delegate type will be added to.</param>
-/// <param name="del">
-/// A <c>TypeRef</c> corresponding to the <see cref="T:System.Delegate"/> or <see cref="T:System.MulticastDelegate"/> type.
-/// </param>
+/// <param name="del">Corresponds to the <see cref="T:System.Delegate"/> or <see cref="T:System.MulticastDelegate"/> type.</param>
 /// <param name="asyncResult">A <c>Type</c> corresponding to the <see cref="T:System.IAsyncResult"/> type.</param>
 /// <param name="asyncCallback">A <c>Type</c> corresponding to the <see cref="T:System.AsyncCallback"/> type.</param>
 /// <param name="def"/>
@@ -137,3 +137,67 @@ let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<Delegate
 
 let inline addDelegateRow builder del asyncResult asyncCallback (def: inref<DelegateDef>) =
     tryAddDelegateRow builder del asyncResult asyncCallback &def |> ValidationError.check
+
+/// <param name="builder"/>
+/// <param name="enum">Corresponds to the <see cref="T:System.Enum"/> type.</param>
+/// <param name="def"/>
+let tryAddEnumRow builder enum (def: inref<EnumDef>) =
+    let result =
+        tryAddTypeDefRow<EnumDef>
+            builder
+            def.Flags
+            def.EnumName
+            def.TypeNamespace
+            enum
+            (TypeVisibility.enclosingClass def.Access)
+    match result with
+    | Ok enum' ->
+        let trow = enum'.ChangeTag<TypeDefRow>()
+        let values = ImmutableArray.CreateBuilder def.Values.Count
+
+        let ivalue =
+            let vtype =
+                match def.Values.UnderlyingType with
+                | IntegerType.Bool -> EncodedType.Boolean
+                | IntegerType.Char -> EncodedType.Char
+                | IntegerType.I1 -> EncodedType.I1
+                | IntegerType.U1 -> EncodedType.U1
+                | IntegerType.I2 -> EncodedType.I2
+                | IntegerType.U2 -> EncodedType.U2
+                | IntegerType.I4 -> EncodedType.I4
+                | IntegerType.U4 -> EncodedType.U4
+                | IntegerType.I8 -> EncodedType.I8
+                | IntegerType.U8 -> EncodedType.U8
+                | _ -> sprintf "Invalid underlying type for enumeration \"%O\"" def.EnumName |> invalidArg "enumDef"
+            let signature =
+                FieldSignature(ImmutableArray.Empty, vtype)
+                |> builder.Blobs.FieldSig.TryAdd
+                |> Result.any
+            let row =
+                FieldRow (
+                    FieldAttributes.RTSpecialName ||| FieldAttributes.SpecialName ||| FieldAttributes.Public,
+                    Identifier.ofStr "value__",
+                    signature
+                )
+            builder.Field.TryAdd(trow, row).Value.ChangeTag<InstanceField>()
+
+        for value in def.Values do
+            let vtype = TypeDefOrRefOrSpecEncoded.TypeDef trow |> EncodedType.ValueType
+            let signature =
+                FieldSignature(ImmutableArray.Empty, vtype)
+                |> builder.Blobs.FieldSig.TryAdd
+                |> Result.any
+            let field =
+                FieldRow (
+                    FieldAttributes.HasDefault ||| FieldAttributes.Static ||| FieldAttributes.Literal,
+                    value.Name,
+                    signature
+                )
+            let field' = builder.Field.TryAdd(trow, field).Value
+            let cvalue = builder.Constant.TryAdd(field', ConstantBlob.Integer value.Value).Value
+            values.Add(EnumValueRow(field'.ChangeTag<StaticField>(), cvalue))
+
+        EnumInfo(enum', ivalue, values.ToImmutable()) |> Ok
+    | Error err -> Error err
+
+let inline addEnumRow builder enum (def: inref<EnumDef>) = tryAddEnumRow builder enum &def |> ValidationError.check

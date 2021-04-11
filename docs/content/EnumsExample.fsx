@@ -24,9 +24,6 @@ open System
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Unchecked
-open FSharpIL.Metadata.UncheckedExn
-open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
 let example() =
@@ -41,7 +38,7 @@ let example() =
       Flags = ()
       PublicKey = None
       Culture = NullCulture }
-    |> setAssembly builder
+    |> Assembly.setRow builder
     |> ignore
 
     let struct (mscorlib, _) =
@@ -49,15 +46,16 @@ let example() =
             PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
             |> builder.Blobs.MiscBytes.GetOrAdd
             |> PublicKeyOrToken
-        AssemblyRef (
-            Version(5, 0, 0, 0),
-            AssemblyName.ofStr "System.Runtime",
-            token
-        )
-        |> referenceAssembly builder
+        let row =
+            AssemblyRef (
+                Version(5, 0, 0, 0),
+                AssemblyName.ofStr "System.Runtime",
+                token
+            )
+        AssemblyRef.addRow builder &row
 
-    let object = TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Object", "System") |> referenceType builder
-    let enum = TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Enum", "System") |> referenceType builder
+    let object = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<Object>
+    let enum = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<Enum>
 
     (* Generating Enumeration Types *)
     let myenum_values = EnumValueListBuilder(IntegerType.I4, 4)
@@ -83,10 +81,8 @@ let example() =
     //     | D = -3
     //     | E = -512
     //     | F = 12345678
-    let myenum =
-        Unsafe.AddEnum (
-            builder,
-            enum,
+    let myenum = // TODO: Use safe version for adding enums that uses type lookup.
+        let row =
             EnumDef (
                 TypeVisibility.Public,
                 myenum_values.ToImmutable(),
@@ -94,7 +90,7 @@ let example() =
                 ns = "EnumsExample",
                 serializable = true
             )
-        )
+        Unsafe.addEnumRow builder (Extends.TypeRef enum) &row
 
     (* Using Enumeration Types *)
     // [<AbstractClass; Sealed>] type MyEnumShowcase
@@ -104,34 +100,34 @@ let example() =
           Access = TypeVisibility.Public
           Flags = ClassFlags() |> Flags.staticClass
           Extends = Extends.TypeRef object }
-        |> StaticClass.addTypeDef builder
+        |> StaticClass.addRow builder
 
     // static member Example(): System.Void
-    let example_body =
-        let locals =
-            // value: EnumsExample.MyEnum
-            EncodedType.enumDef myenum.Row
-            |> LocalVariable.encoded
-            |> ImmutableArray.Create
-            |> builder.Blobs.LocalVarSig.GetOrAdd
-            |> builder.StandAloneSig.AddLocals
-            |> ValueSome
-        fun content ->
-            let wr = MethodBodyWriter content
-            // let mutable value = EnumsExample.MyEnum.B
-            wr.Ldc_i4 1
-            wr.Stloc 0us
-            wr.Ret()
-            MethodBody.Default
-        |> MethodBody.create locals
-    StaticMethod (
-        example_body,
-        StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
-        name = Identifier.ofStr "Example",
-        signature = builder.Blobs.MethodDefSig.GetOrAdd(StaticMethodSignature ReturnType.itemVoid)
-    )
-    |> StaticClass.addStaticMethod builder examples
-    |> ignore
+    let example =
+        let body =
+            let locals =
+                // value: EnumsExample.MyEnum
+                EncodedType.enumDef myenum.Row
+                |> LocalVariable.encoded
+                |> ImmutableArray.Create
+                |> builder.Blobs.LocalVarSig.GetOrAdd
+                |> builder.StandAloneSig.AddLocals
+                |> ValueSome
+            fun content ->
+                let wr = MethodBodyWriter content
+                // let mutable value = EnumsExample.MyEnum.B
+                wr.Ldc_i4 1
+                wr.Stloc 0us
+                wr.Ret()
+                MethodBody.Default
+            |> MethodBody.create locals
+        StaticMethod (
+            body,
+            StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
+            name = Identifier.ofStr "Example",
+            signature = builder.Blobs.MethodDefSig.GetOrAdd(StaticMethodSignature ReturnType.itemVoid)
+        )
+    StaticMethod.addRow builder (StaticMemberParent.StaticClass examples) &example |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

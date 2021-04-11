@@ -268,6 +268,7 @@ type Unsafe private () = class
         | _, ValueNone, _ -> MissingTypeError(system, asyncResultName).ToResult()
         | _, _, ValueNone -> MissingTypeError(system, asyncCallbackName).ToResult()
 
+    [<Obsolete>]
     static member private AddEnum(builder, enum, enumDef: inref<EnumDef>): Result<EnumInfo, _> =
         let result =
             Unsafe.AddTypeDef<EnumDef> (
@@ -329,6 +330,7 @@ type Unsafe private () = class
             EnumInfo(enum', ivalue, values.ToImmutable()) |> Ok
         | Error err -> Error err
 
+    [<Obsolete>]
     static member AddEnum(builder, enum: RawIndex<TypeRef>, enumDef) = Unsafe.AddEnum(builder, Extends.TypeRef enum, &enumDef)
 
     //static member AddEnum(builder, lookup: TypeLookupCache, enumDef)
