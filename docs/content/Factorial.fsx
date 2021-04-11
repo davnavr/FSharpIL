@@ -107,7 +107,7 @@ let example() =
               Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true))
               Extends = Extends.TypeRef object }
             |> StaticClass.tryAddRow builder
-        let factorial' = StaticMemberParent.StaticClass factorial
+        let factorial' = StaticMemberOwner.StaticClass factorial
 
         // static member val private cache: System.Collections.Generic.Dictionary<uint32, uint32>
         let! cache =

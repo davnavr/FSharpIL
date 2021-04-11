@@ -82,7 +82,7 @@
     <Compile Include="Metadata\DelegateHelpers.fs" />
     <Compile Include="Metadata\Unsafe.fs" />
     <Compile Include="Metadata\TypeDefModules.fs" />
-    <Compile Include="Metadata\MemberParent.fs" />
+    <Compile Include="Metadata\MemberOwner.fs" />
     <Compile Include="Metadata\FieldModule.fs" />
     <Compile Include="Metadata\MethodDefModules.fs" />
     <Compile Include="Metadata\PropertyModule.fs" />

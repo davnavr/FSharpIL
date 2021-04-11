@@ -77,7 +77,7 @@ let example() =
             builder.Blobs.MethodDefSig.GetOrAdd signature,
             Param { Flags = ParamFlags(); ParamName = "num" } |> ParamList.singleton
         )
-        |> AbstractMethod.addRow builder (AbstractMethodParent.Interface inumber)
+        |> AbstractMethod.addRow builder (AbstractMethodOwner.Interface inumber)
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

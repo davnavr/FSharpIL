@@ -189,7 +189,7 @@ let example() =
             builder.Blobs.MethodDefSig.GetOrAdd signature,
             fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "str" else "times" }
         )
-        |> StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass)
+        |> StaticMethod.addRow builder (StaticMemberOwner.ConcreteClass myclass)
 
     // static member Example1(): string
     let example1 =
@@ -222,7 +222,7 @@ let example() =
             name = Identifier.ofStr "Example1",
             signature = builder.Blobs.MethodDefSig.GetOrAdd(StaticMethodSignature(ReturnType.encoded EncodedType.String))
         )
-    StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass) example1 |> ignore
+    StaticMethod.addRow builder (StaticMemberOwner.ConcreteClass myclass) example1 |> ignore
 
     // System.Func<string, int32>
     let func_2_inst = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef func_2, false, EncodedType.String, EncodedType.I4)
@@ -257,7 +257,7 @@ let example() =
             builder.Blobs.MethodDefSig.GetOrAdd signature,
             Param { ParamName = "str"; Flags = ParamFlags() } |> ParamList.singleton
         )
-    StaticMethod.addRow builder (StaticMemberParent.ConcreteClass myclass) example2 |> ignore
+    StaticMethod.addRow builder (StaticMemberOwner.ConcreteClass myclass) example2 |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

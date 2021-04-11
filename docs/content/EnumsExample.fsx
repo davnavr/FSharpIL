@@ -126,7 +126,7 @@ let example() =
             name = Identifier.ofStr "Example",
             signature = builder.Blobs.MethodDefSig.GetOrAdd(StaticMethodSignature ReturnType.itemVoid)
         )
-    StaticMethod.addRow builder (StaticMemberParent.StaticClass examples) example |> ignore
+    StaticMethod.addRow builder (StaticMemberOwner.StaticClass examples) example |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 
