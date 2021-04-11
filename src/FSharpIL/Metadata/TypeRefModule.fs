@@ -6,7 +6,7 @@ let inline tryAddRow (builder: CliMetadataBuilder) (typeRef: inref<TypeRef>) =
     | ValueSome i -> Ok i
     | ValueNone -> DuplicateTypeRefError(typeRef).ToResult()
 
-let inline addRef builder (typeRef: inref<TypeRef>) = tryAddRow builder &typeRef |> ValidationError.check
+let inline addRow builder (typeRef: inref<TypeRef>) = tryAddRow builder &typeRef |> ValidationError.check
 
 let tryAddRowChecked (builder: CliMetadataBuilder) (typeRef: TypeRef) (warnings: WarningsBuilder) =
     match tryAddRow builder &typeRef with
@@ -19,3 +19,10 @@ let tryAddRowChecked (builder: CliMetadataBuilder) (typeRef: TypeRef) (warnings:
 let inline ofReflectedType resolutionScope (typeRef: System.Type) =
     if typeRef.IsGenericTypeParameter then invalidArg "typeRef" "Cannot reference a generic type parameter"
     TypeRef(resolutionScope, Identifier.ofStr typeRef.Name, typeRef.Namespace)
+
+let inline tryCreateReflectedRow builder resolutionScope typeRef =
+    let row = ofReflectedType resolutionScope typeRef
+    tryAddRow builder &row
+
+let inline createReflectedRow builder resolutionScope typeRef =
+    tryCreateReflectedRow builder resolutionScope typeRef |> ValidationError.check

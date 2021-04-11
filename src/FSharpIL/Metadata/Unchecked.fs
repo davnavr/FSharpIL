@@ -56,11 +56,13 @@ type Unsafe private () = class
     static member internal AddField<'Flags>(builder, owner, field: Field<'Flags>) =
         Unsafe.AddField<Field<'Flags>>(builder, owner, field.Row())
 
+    [<Obsolete>]
     static member internal AddMethod<'Tag>(builder: CliMetadataBuilder, owner, method) =
         match builder.Method.TryAdd(owner, method) with
         | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
         | ValueNone -> DuplicateMethodError method :> ValidationError |> Error
 
+    [<Obsolete>]
     static member AddMethod<'Body, 'Flags, 'Signature when 'Body :> IMethodBody>
         (
             builder: CliMetadataBuilder,
@@ -385,6 +387,7 @@ type Unsafe private () = class
         Unsafe.AddProperty<_, _, InstanceMethod>(builder, parent, property, getter, setter)
 end
 
+[<Obsolete>]
 let private addClassDef (builder: CliMetadataBuilder) (def: ClassDef<'Flags>) =
     Unsafe.AddTypeDef<ClassDef<'Flags>>(
         builder,
@@ -398,29 +401,37 @@ let private addClassDef (builder: CliMetadataBuilder) (def: ClassDef<'Flags>) =
 [<Obsolete>]
 [<RequireQualifiedAccess>]
 module ConcreteClass =
+    [<Obsolete>]
     let addTypeDef builder (classDef: ConcreteClassDef): Result<RawIndex<ConcreteClassDef>, _> = addClassDef builder classDef
 
+    [<Obsolete>]
     let addInstanceMethod builder (owner: RawIndex<ConcreteClassDef>) (method: InstanceMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<InstanceMethod>, _>
 
+    [<Obsolete>]
     let addFinalMethod builder (owner: RawIndex<ConcreteClassDef>) (method: FinalMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<FinalMethod>, _>
 
+    [<Obsolete>]
     let addStaticMethod builder (owner: RawIndex<ConcreteClassDef>) (method: StaticMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<StaticMethod>, _>
 
+    [<Obsolete>]
     let addConstructor builder (owner: RawIndex<ConcreteClassDef>) (method: ObjectConstructor) =
         Unsafe.AddConstructor(builder, owner.AsTypeIndex(), method)
 
+    [<Obsolete>]
     let addClassConstructor builder (owner: RawIndex<ConcreteClassDef>) (method: ClassConstructor) =
         Unsafe.AddConstructor(builder, owner.AsTypeIndex(), method)
 
+    [<Obsolete>]
     let addEntryPoint builder (owner: RawIndex<ConcreteClassDef>) (method: EntryPointMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<EntryPointMethod>, _>
 
     let addInstanceField builder (owner: RawIndex<ConcreteClassDef>) (field: InstanceField) =
         Unsafe.AddField<_>(builder, owner.AsTypeIndex(), field): Result<RawIndex<InstanceField>, _>
 
+    [<Obsolete>]
     let addStaticField builder (owner: RawIndex<ConcreteClassDef>) (field: StaticField) =
         Unsafe.AddField<_>(builder, owner.AsTypeIndex(), field): Result<RawIndex<StaticField>, _>
 
@@ -447,6 +458,7 @@ module AbstractClass =
     let addClassConstructor builder (owner: RawIndex<AbstractClassDef>) (method: ClassConstructor) =
         Unsafe.AddConstructor(builder, owner.AsTypeIndex(), method)
 
+    [<Obsolete>]
     let addEntryPoint builder (owner: RawIndex<AbstractClassDef>) (method: EntryPointMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<EntryPointMethod>, _>
 
@@ -476,6 +488,7 @@ module SealedClass =
     let addClassConstructor builder (owner: RawIndex<SealedClassDef>) (method: ClassConstructor) =
         Unsafe.AddConstructor(builder, owner.AsTypeIndex(), method)
 
+    [<Obsolete>]
     let addEntryPoint builder (owner: RawIndex<SealedClassDef>) (method: EntryPointMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<EntryPointMethod>, _>
 
@@ -488,6 +501,7 @@ module SealedClass =
 [<Obsolete>]
 [<RequireQualifiedAccess>]
 module StaticClass =
+    [<Obsolete>]
     let addTypeDef builder (classDef: StaticClassDef): Result<RawIndex<StaticClassDef>, _> = addClassDef builder classDef
 
     let addStaticMethod builder (owner: RawIndex<StaticClassDef>) (method: StaticMethod) =
@@ -496,6 +510,7 @@ module StaticClass =
     let addClassConstructor builder (owner: RawIndex<StaticClassDef>) (method: ClassConstructor) =
         Unsafe.AddConstructor(builder, owner.AsTypeIndex(), method)
 
+    [<Obsolete>]
     let addEntryPoint builder (owner: RawIndex<StaticClassDef>) (method: EntryPointMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<EntryPointMethod>, _>
 
@@ -546,6 +561,7 @@ module Struct =
     let addClassConstructor builder (owner: RawIndex<StructDef>) (method: ClassConstructor) =
         Unsafe.AddConstructor(builder, owner.AsTypeIndex(), method)
 
+    [<Obsolete>]
     let addEntryPoint builder (owner: RawIndex<StructDef>) (method: EntryPointMethod) =
         Unsafe.AddMethod(builder, owner.AsTypeIndex(), method): Result<RawIndex<EntryPointMethod>, _>
 
@@ -598,6 +614,7 @@ let referenceAssembly (builder: CliMetadataBuilder) assembly =
     let i = builder.AssemblyRef.Add(&assembly, &dup)
     struct(i, dup)
 
+[<Obsolete>]
 let addTypeSpec (builder: CliMetadataBuilder) typeSpec =
     let row = TypeSpecRow typeSpec
     match builder.TypeSpec.TryAdd row with

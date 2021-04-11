@@ -19,6 +19,6 @@ let inline private check (row: inref<MemberRef<_>>) struct(i, duplicate) (warnin
     if duplicate then warnings.Add(DuplicateMemberRefWarning(row.Class, row.MemberName))
     i
 
-let inline addRowDefaultChecked builder (method: inref<_>) warnings = check &method (addRowDefault builder &method) warnings
-let inline addRowGenericChecked builder (method: inref<_>) warnings = check &method (addRowGeneric builder &method) warnings
-let inline addRowVarArgChecked builder (method: inref<_>) warnings = check &method (addRowVarArg builder &method) warnings
+let inline addRowDefaultChecked builder method warnings = check &method (addRowDefault builder &method) warnings
+let inline addRowGenericChecked builder method warnings = check &method (addRowGeneric builder &method) warnings
+let inline addRowVarArgChecked builder method warnings = check &method (addRowVarArg builder &method) warnings

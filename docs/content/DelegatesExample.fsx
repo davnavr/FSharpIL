@@ -6,8 +6,6 @@ module FSharpIL.DelegatesExample
 
 open Expecto
 
-open Swensen.Unquote
-
 open System.IO
 
 open FSharpIL
@@ -23,9 +21,6 @@ open System
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Unchecked
-open FSharpIL.Metadata.UncheckedExn
-open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
 let example() =
@@ -40,56 +35,59 @@ let example() =
       Flags = ()
       PublicKey = None
       Culture = NullCulture }
-    |> setAssembly builder
+    |> Assembly.setRow builder
     |> ignore
 
     let struct (mscorlib, _) =
         let token = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-        AssemblyRef (
-            Version(5, 0, 0, 0),
-            AssemblyName.ofStr "System.Runtime",
-            PublicKeyOrToken(builder.Blobs.MiscBytes.GetOrAdd token)
-        )
-        |> referenceAssembly builder
+        let row =
+            AssemblyRef (
+                Version(5, 0, 0, 0),
+                AssemblyName.ofStr "System.Runtime",
+                PublicKeyOrToken(builder.Blobs.MiscBytes.GetOrAdd token)
+            )
+        AssemblyRef.addRow builder &row
 
-    let object = SystemType.Object builder mscorlib |> UncheckedExn.throwOnError
-    let str = SystemType.String builder mscorlib |> UncheckedExn.throwOnError
-    let mcdelegate = SystemType.MulticastDelegate builder mscorlib |> UncheckedExn.throwOnError
-    let aresult = SystemType.IAsyncResult builder mscorlib |> UncheckedExn.throwOnError
-    let acallback = SystemType.AsyncCallback builder mscorlib |> UncheckedExn.throwOnError
-    let stringb =
-        TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "StringBuilder", "System.Text") |> referenceType builder
-    let func_2 =
-        TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Func`2", "System") |> referenceType builder
+    let object = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<Object>
+    let str = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<String>
+    let mcdelegate = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<MulticastDelegate>
+    let aresult = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<IAsyncResult>
+    let acallback = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<AsyncCallback>
+    let stringb = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<System.Text.StringBuilder>
+    let func_2 = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typedefof<Func<_, _>>
 
     // member _.get_Length(): string
     let struct (str_length, _) =
         let signature = MethodRefDefaultSignature(true, false, ReturnType.itemI4)
-        { Class = MemberRefParent.TypeRef str
-          MemberName = Identifier.ofStr "get_Length"
-          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        |> referenceDefaultMethod builder
+        let row =
+            { Class = MemberRefParent.TypeRef str
+              MemberName = Identifier.ofStr "get_Length"
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        MethodRef.addRowDefault builder &row
     // member _.IndexOf(_: string): int
     let struct (str_indexof, _) =
         let signature = MethodRefDefaultSignature(true, false, ReturnType.itemI4, ParamItem.create EncodedType.String)
-        { Class = MemberRefParent.TypeRef str
-          MemberName = Identifier.ofStr "IndexOf"
-          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        |> referenceDefaultMethod builder
+        let row =
+            { Class = MemberRefParent.TypeRef str
+              MemberName = Identifier.ofStr "IndexOf"
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        MethodRef.addRowDefault builder &row
     // new(_: int32)
     let struct (stringb_ctor, _) =
         let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ParamItem.create EncodedType.I4)
-        { Class = MemberRefParent.TypeRef stringb
-          MemberName = Identifier.ofStr ".ctor"
-          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        |> referenceDefaultMethod builder
+        let row =
+            { Class = MemberRefParent.TypeRef stringb
+              MemberName = Identifier.ofStr ".ctor"
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        MethodRef.addRowDefault builder &row
     // override _.ToString(): string
     let struct (stringb_tostring, _) =
         let signature = MethodRefDefaultSignature(true, false, ReturnType.encoded EncodedType.String)
-        { Class = MemberRefParent.TypeRef stringb
-          MemberName = Identifier.ofStr "ToString"
-          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        |> referenceDefaultMethod builder
+        let row =
+            { Class = MemberRefParent.TypeRef stringb
+              MemberName = Identifier.ofStr "ToString"
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        MethodRef.addRowDefault builder &row
     // member _.Append(_: string): System.StringBuilder
     let struct (stringb_append, _) =
         let signature =
@@ -99,10 +97,11 @@ let example() =
                 EncodedType.typeRefClass stringb |> ReturnType.encoded,
                 ParamItem.create EncodedType.String
             )
-        { Class = MemberRefParent.TypeRef stringb
-          MemberName = Identifier.ofStr "Append"
-          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        |> referenceDefaultMethod builder
+        let row =
+            { Class = MemberRefParent.TypeRef stringb
+              MemberName = Identifier.ofStr "Append"
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        MethodRef.addRowDefault builder &row
 
     (* Generating Delegate Types *)
 
@@ -135,7 +134,7 @@ let example() =
           ClassName = Identifier.ofStr "MyClass"
           TypeNamespace = String.Empty
           Extends = Extends.TypeRef object }
-        |> ConcreteClass.addTypeDef builder
+        |> ConcreteClass.addRow builder
 
     // static member DuplicateString(str: string, times: int32): string
     let dupstr =
@@ -233,17 +232,17 @@ let example() =
     let func_2_inst = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef func_2, false, EncodedType.String, EncodedType.I4)
     // new (_: object, _: System.IntPtr)
     let struct(func_2_inst_ctor, _) =
-        { MemberRef.MemberName = Identifier.ofStr ".ctor"
-          Class =
-            TypeSpec.GenericInst func_2_inst
-            |> builder.Blobs.TypeSpec.GetOrAdd
-            |> addTypeSpec builder
-            |> MemberRefParent.TypeSpec
-          Signature =
-            let parameters = Array.map ParamItem.create [| EncodedType.Object; EncodedType.I |]
-            let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
-            builder.Blobs.MethodRefSig.GetOrAdd signature }
-        |> builder.MemberRef.Add
+        let method =
+            { MemberRef.MemberName = Identifier.ofStr ".ctor"
+              Class =
+                TypeSpec.GenericInst func_2_inst
+                |> TypeSpec.createRow builder
+                |> MemberRefParent.TypeSpec
+              Signature =
+                let parameters = Array.map ParamItem.create [| EncodedType.Object; EncodedType.I |]
+                let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
+                builder.Blobs.MethodRefSig.GetOrAdd signature }
+        MethodRef.addRowDefault builder &method
 
     // static member Example2(str: string): System.Func<string, int32>
     let example2_body content =
@@ -262,7 +261,7 @@ let example() =
         builder.Blobs.MethodDefSig.GetOrAdd example2_signature,
         Param { ParamName = "str"; Flags = ParamFlags() } |> ParamList.singleton
     )
-    |> ConcreteClass.addStaticMethod builder myclass
+    |> ConcreteClass.addStaticMethod builder myclass // TODO: Make StaticMethod.addRow
     |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll

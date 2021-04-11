@@ -44,7 +44,7 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
     member _.Rows = items.Values
 
     /// <returns>An index to the value added to the table, or <c>ValueNone</c> if the value is a duplicate.</returns>
-    member _.TryAdd(key, value) =
+    member _.TryAdd(key, value) = // TODO: Make key and value inref.
         let lookup =
             match items.TryGetValue key with
             | (true, existing) -> existing

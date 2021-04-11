@@ -1,5 +1,5 @@
 ﻿[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
-module FSharpIL.Metadata.MethodSpecModule
+module FSharpIL.Metadata.MethodSpec
 
 open FSharpIL
 
@@ -11,7 +11,7 @@ let inline createBlob builder (garguments: seq<_>) =
     addBlob builder &spec
 
 let inline tryAddRow (builder: CliMetadataBuilder) (spec: inref<MethodSpecRow>) =
-    match builder.MethodSpec.TryAdd spec with
+    match builder.MethodSpec.TryAdd &spec with
     | ValueSome index -> Ok index
     | ValueNone -> DuplicateMethodSpecError(spec).ToResult()
 

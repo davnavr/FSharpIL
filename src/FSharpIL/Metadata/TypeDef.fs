@@ -221,7 +221,7 @@ module TypeVisibility =
 /// <seealso cref="T:FSharpIL.Metadata.AbstractClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.SealedClassDef"/>
 /// <seealso cref="T:FSharpIL.Metadata.StaticClassDef"/>
-type ClassDef<'Flags> =
+type ClassDef<'Flags> = // TODO: Make ClassDef a struct
     { /// <summary>
       /// Corresponds to the <c>VisibilityMask</c> flags of a type, as well as an entry in the <c>NestedClass</c> table if the current type is nested.
       /// </summary>
@@ -423,7 +423,7 @@ type TypeDefTableBuilder internal () =
     member _.GetEnumerator() = definitions.GetEnumerator()
 
     // TODO: Add methods for adding classes, structs, etc. that are called by the functions in the CliMetadata module.
-    member internal _.TryAdd(typeDef: TypeDefRow) = definitions.TryAdd typeDef
+    member internal _.TryAdd(typeDef: inref<TypeDefRow>) = definitions.TryAdd typeDef
 
     member internal _.ToImmutable() = definitions.ToImmutable()
 

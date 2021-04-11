@@ -63,12 +63,12 @@
     <Compile Include="Metadata\CustomAttributeModule.fs" />
     <Compile Include="Metadata\AssemblyModule.fs" />
     <Compile Include="Metadata\AssemblyRefModule.fs" />
-    <Compile Include="Metadata\EntryPoint.fs" />
     <Compile Include="Metadata\TypeRefModule.fs" />
     <Compile Include="Metadata\MethodRefModule.fs" />
     <Compile Include="Metadata\FileModule.fs" />
     <Compile Include="Metadata\ModuleRefModule.fs" />
     <Compile Include="Metadata\MethodSpecModule.fs" />
+    <Compile Include="Metadata\TypeSpecModule.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
     <Compile Include="Metadata\Heaps\BlobWriter.fs" />
     <Compile Include="Metadata\Heaps\HeapExtensions.fs" />
@@ -79,6 +79,9 @@
     <Compile Include="Metadata\MethodBodyWriter.fs" />
     <Compile Include="Metadata\MethodBodyModule.fs" />
     <Compile Include="Metadata\TypeDefInfo.fs" />
+    <Compile Include="Metadata\Unsafe.fs" />
+    <Compile Include="Metadata\TypeDefModules.fs" />
+    <Compile Include="Metadata\EntryPoint.fs" />
     <Compile Include="Metadata\Unchecked.fs" />
     <Compile Include="Metadata\Checked.fs" />
     <Compile Include="Metadata\UncheckedExn.fs" />

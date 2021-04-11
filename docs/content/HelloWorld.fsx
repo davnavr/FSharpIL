@@ -25,9 +25,6 @@ open System
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Unchecked
-open FSharpIL.Metadata.Checked
-open FSharpIL.Metadata.CliMetadata
 open FSharpIL.PortableExecutable
 
 let example() =
@@ -36,7 +33,7 @@ let example() =
           Mvid = Guid.NewGuid() }
         |> CliMetadataBuilder
 
-    // Define information for the current assembly.
+    (* Define information for the current assembly. *)
     let assem =
         { Name = AssemblyName.ofStr "HelloWorld"
           HashAlgId = ()
@@ -46,9 +43,9 @@ let example() =
           Culture = NullCulture }
         |> Assembly.setRow builder
 
-    // This computation keeps track of warnings, CLS violations, and errors
+    (* This computation keeps track of warnings, CLS violations, and errors *)
     validated {
-        // Add references to other assemblies.
+        (* Add references to other assemblies. *)
         let! mscorlib =
             let token =
                 PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
@@ -74,14 +71,8 @@ let example() =
             |> AssemblyRef.addRowChecked builder
 
         (* Add references to types defined in referenced assemblies. *)
-        let! console =
-            typeof<Console>
-            |> TypeRef.ofReflectedType (ResolutionScope.AssemblyRef consolelib)
-            |> TypeRef.tryAddRowChecked builder
-        let! object =
-            typeof<Object>
-            |> TypeRef.ofReflectedType (ResolutionScope.AssemblyRef mscorlib)
-            |> TypeRef.tryAddRowChecked builder
+        let! console = TypeRef.tryCreateReflectedRow builder (ResolutionScope.AssemblyRef consolelib) typeof<Console>
+        let! object = TypeRef.tryCreateReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<Object>
         let! tfmattr =
             TypeRef (
                 ResolutionScope.AssemblyRef mscorlib,
@@ -96,19 +87,17 @@ let example() =
         // static member WriteLine(_: string): System.Void
         let! writeLine =
             let signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string)
-            let row =
-                { Class = MemberRefParent.TypeRef console
-                  MemberName = Identifier.ofStr "WriteLine"
-                  Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-            MethodRef.addRowDefaultChecked builder &row
+            { Class = MemberRefParent.TypeRef console
+              MemberName = Identifier.ofStr "WriteLine"
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+            |> MethodRef.addRowDefaultChecked builder
         // new(_: string)
         let! tfmctor =
             let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string)
-            let row =
-                { Class = MemberRefParent.TypeRef tfmattr
-                  MemberName = Identifier.ofStr ".ctor"
-                  Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-            MethodRef.addRowDefaultChecked builder &row
+            { Class = MemberRefParent.TypeRef tfmattr
+              MemberName = Identifier.ofStr ".ctor"
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+            |> MethodRef.addRowDefaultChecked builder
 
         (* Defines a custom attribute on the current assembly specifying the target framework. *)
         // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
@@ -129,7 +118,7 @@ let example() =
               Extends = Extends.TypeRef object
               Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass))
               TypeNamespace = "HelloWorld" }
-            |> StaticClass.addTypeDef builder
+            |> StaticClass.tryAddRow builder
 
         (* Create the entrypoint method of the current assembly. *)
         // [<EntryPoint>] static member Main(args: string[]): System.Void
@@ -147,7 +136,7 @@ let example() =
                 builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs,
                 Param { Flags = ParamFlags(); ParamName = "args" } |> ParamList.singleton
             )
-            |> StaticClass.addEntryPoint builder program
+            |> EntryPoint.addRow builder (program.AsTypeIndex())
 
         EntryPoint.set builder main
 
