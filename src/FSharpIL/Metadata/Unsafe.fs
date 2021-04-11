@@ -50,6 +50,26 @@ let tryAddFieldRow<'Tag> (builder: CliMetadataBuilder) owner field =
     | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
     | ValueNone -> DuplicateFieldError(field).ToResult()
 
+let tryAddPropertyRow<'Tag>
+    (builder: CliMetadataBuilder)
+    (owner: RawIndex<TypeDefRow>)
+    (methods: inref<PropertyMethods>)
+    (property: inref<PropertyRow>)
+    =
+    match builder.PropertyMap.TryAdd(owner, property) with
+    | ValueSome index ->
+        if builder.MethodSemantics.TryAddProperty(index, methods)
+        then Ok index
+        else ExistingPropertyMethodsError(index).ToResult()
+    | ValueNone -> DuplicatePropertyError(property).ToResult()
+
+let inline tryCreatePropertyRow builder owner methods (property: Property<'Tag, 'Signature>) =
+    let row = property.Definition()
+    tryAddPropertyRow<Property<'Tag, 'Signature>> builder owner &methods &row
+
+let inline createPropertyRow builder owner methods property =
+    tryCreatePropertyRow builder owner methods property |> ValidationError.check
+
 /// <param name="builder">The CLI metadata with the <c>TypeDef</c> table that the delegate type will be added to.</param>
 /// <param name="del">Corresponds to the <see cref="T:System.Delegate"/> or <see cref="T:System.MulticastDelegate"/> type.</param>
 /// <param name="asyncResult">A <c>Type</c> corresponding to the <see cref="T:System.IAsyncResult"/> type.</param>

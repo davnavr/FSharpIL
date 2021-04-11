@@ -85,6 +85,7 @@
     <Compile Include="Metadata\MemberParent.fs" />
     <Compile Include="Metadata\FieldModule.fs" />
     <Compile Include="Metadata\MethodDefModules.fs" />
+    <Compile Include="Metadata\PropertyModule.fs" />
     <Compile Include="Metadata\EntryPoint.fs" />
     <Compile Include="Metadata\Unchecked.fs" />
     <Compile Include="Metadata\Checked.fs" />

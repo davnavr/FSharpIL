@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
 // TODO: Rename Parent to Owner.
+// TODO: Consider removing Unsafe option and just use a function in Unsafe module instead.
 
 type StaticMemberParentTag =
     | Unsafe = 0uy
@@ -26,6 +27,20 @@ module StaticMemberParent =
     let Interface (def: RawIndex<InterfaceDef>) = def.ToTaggedIndex StaticMemberParentTag.Interface
     let Struct (def: RawIndex<StructDef>) = def.ToTaggedIndex StaticMemberParentTag.Struct
 
+type InstanceMemberOwnerTag =
+    | Unsafe = 0uy
+    | ConcreteClass = 1uy
+    | AbstractClass = 2uy
+    | SealedClass = 3uy
+    | Delegate = 4uy
+    | Struct = 5uy
+
+type InstanceMemberOwner = TaggedIndex<InstanceMemberOwnerTag>
+
+[<RequireQualifiedAccess>]
+module InstanceMemberOwner =
+    let Struct (def: RawIndex<StructDef>) = def.ToTaggedIndex InstanceMemberOwnerTag.Struct
+
 type AbstractMethodParentTag =
     | Unsafe = 0uy
     | AbstractClass = 1uy
@@ -37,8 +52,11 @@ module AbstractMethodParent =
     let Unsafe (def: RawIndex<TypeDefRow>) = def.ToTaggedIndex AbstractMethodParentTag.Unsafe
     let AbstractClass (def: RawIndex<AbstractClassDef>) = def.ToTaggedIndex AbstractMethodParentTag.AbstractClass
     let Interface (def: RawIndex<InterfaceDef>) = def.ToTaggedIndex AbstractMethodParentTag.Interface
+    //toInstance (parent: AbstractMethodParent): InstanceMemberOwner
 
 [<AutoOpen>]
 module MemberParentPatterns =
-    let (|StaticMemberParent|) (parent: StaticMemberParent) = parent.ToRawIndex<TypeDefRow>()
-    let (|AbstractMethodParent|) (parent: AbstractMethodParent) = parent.ToRawIndex<TypeDefRow>()
+    let inline private helper (parent: TaggedIndex<_>) = parent.ToRawIndex<TypeDefRow>()
+    let (|StaticMemberParent|) (parent: StaticMemberParent) = helper parent
+    let (|AbstractMethodParent|) (parent: AbstractMethodParent) = helper parent
+    let (|InstanceMemberOwner|) (parent: InstanceMemberOwner) = helper parent

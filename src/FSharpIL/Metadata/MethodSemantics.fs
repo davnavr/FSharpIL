@@ -46,13 +46,13 @@ type MethodSemanticsRow internal
 // TODO: How to enforce that the Method column is for a property or event defined on the same class?
 // TODO: Do we need to enforce that getters and setters are static for "static" properties? Maybe provide helper functions for this?
 [<IsReadOnly; Struct>]
-type PropertyMethods internal
+type PropertyMethods
     (
         getter: RawIndex<MethodDefRow> voption,
         setter: RawIndex<MethodDefRow> voption,
         others: ImmutableArray<RawIndex<MethodDefRow>>
     ) =
-    new (getter, setter, [<ParamArray>] others: RawIndex<_>[]) = PropertyMethods(getter, setter, others.ToImmutableArray())
+    new (getter, setter) = PropertyMethods(getter, setter, ImmutableArray.Empty)
     member _.Getter = getter
     member _.Setter = setter
     member _.Others = others

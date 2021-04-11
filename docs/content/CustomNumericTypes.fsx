@@ -187,27 +187,27 @@ let example() =
         |> Struct.addInstanceMethod builder fraction
     let intprop = InstancePropertySignature EncodedType.I4 |> builder.Blobs.PropertySig.GetOrAdd
     // member this.Numerator: int32 with get
-    // TODO: Use helper functions for adding properties instead.
-    Unsafe.AddInstanceProperty (
-        builder,
-        fraction',
+    // TODO: Use safe helper functions for adding properties instead.
+    Property.addInstanceRow
+        builder
+        (InstanceMemberOwner.Struct fraction)
+        (InstancePropertyMethod.Instance get_numerator |> ValueSome)
+        ValueNone
+        ImmutableArray.Empty
         { PropertyName = Identifier.ofStr "Numerator"
           Flags = Unsafe.createFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
-          Type = intprop },
-        getter = ValueSome get_numerator,
-        setter = ValueNone
-    )
+          Type = intprop }
     |> ignore
     // member this.Denominator: int32 with get
-    Unsafe.AddInstanceProperty (
-        builder,
-        fraction.AsTypeIndex(),
+    Property.addInstanceRow
+        builder
+        (InstanceMemberOwner.Struct fraction)
+        (InstancePropertyMethod.Instance get_denominator |> ValueSome)
+        ValueNone
+        ImmutableArray.Empty
         { PropertyName = Identifier.ofStr "Denominator"
           Flags = Unsafe.createFlags<InstanceMethodTag, _> System.Reflection.PropertyAttributes.None
-          Type = intprop },
-        getter = ValueSome get_denominator,
-        setter = ValueNone
-    )
+          Type = intprop }
     |> ignore
 
     // new(numerator: int32, denominator: int32)

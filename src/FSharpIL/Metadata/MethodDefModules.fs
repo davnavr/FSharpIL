@@ -5,6 +5,9 @@ open System.Collections.Immutable
 //module Method =
 
 // TODO: Make tryAddRow functions use inref, since Definition() method is internal.
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
+module InstanceMethod =
+    let methodIndex (method: RawIndex<InstanceMethod>) = method.ChangeTag<MethodDefRow>()
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module AbstractMethod =
