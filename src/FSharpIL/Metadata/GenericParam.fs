@@ -163,38 +163,33 @@ type GenericParamConstraintRow internal (owner: RawIndex<GenericParamRow>, const
     member _.Owner = owner
     member _.Constraint = constr
 
-type IGenericParamTag = abstract Flags: unit -> GenericParameterAttributes
+[<IsReadOnly; Struct>]
+type GenericParamVariance (tag: uint8) =
+    member internal _.Tag = tag
+
+[<AutoOpen>]
+module GenericParamVariance =
+    let (|Invariant|Covariant|Contravariant|) (variance: GenericParamVariance) =
+        match variance.Tag with
+        | 1uy -> Covariant
+        | 2uy -> Contravariant
+        | 0uy
+        | _ -> Invariant
+    let Invariant = GenericParamVariance 0uy
+    let Covariant = GenericParamVariance 1uy
+    let Contravariant = GenericParamVariance 2uy
 
 [<IsReadOnly>]
 [<NoComparison; NoEquality>]
-type GenericParam<'Tag when 'Tag :> IGenericParamTag and 'Tag : struct> = struct
+type GenericParam = struct
     val Flags: GenericParameterAttributes
     val Name: Identifier
     val Constraints: GenericParamConstraintSet
-    new (flags: GenericParamFlags, name, constraints) =
-        { Flags = flags.Value ||| Unchecked.defaultof<'Tag>.Flags()
+    internal new (flags: GenericParamFlags, name, variance: GenericParamVariance, constraints) =
+        { Flags = flags.Value ||| enum(int32 variance.Tag)
           Name = name
           Constraints = constraints }
-    new (flags, name) = GenericParam(flags, name, GenericParamConstraintSet.Empty)
 end
-
-[<IsReadOnly; Struct>]
-[<NoComparison; NoEquality>]
-type InvariantGenericParamTag = interface IGenericParamTag with member _.Flags() = GenericParameterAttributes.None
-
-type InvariantGenericParam = GenericParam<InvariantGenericParamTag>
-
-[<IsReadOnly; Struct>]
-[<NoComparison; NoEquality>]
-type CovariantGenericParamTag = interface IGenericParamTag with member _.Flags() = GenericParameterAttributes.Covariant
-
-type CovariantGenericParam = GenericParam<CovariantGenericParamTag>
-
-[<IsReadOnly; Struct>]
-[<NoComparison; NoEquality>]
-type ContravariantGenericParamTag = interface IGenericParamTag with member _.Flags() = GenericParameterAttributes.Contravariant
-
-type ContravariantGenericParam = GenericParam<ContravariantGenericParamTag>
 
 [<Sealed>]
 type GenericParamTable internal
@@ -244,7 +239,7 @@ type GenericParamTableBuilder internal () =
     member internal _.GetConstraints() = MetadataTable(constraints'.ToImmutable())
 
     // TODO: Ensure that owner of generic parameters cannot be a non-nested enum type.
-    member internal _.TryAdd(owner, parameter: inref<GenericParam<_>>) =
+    member internal _.TryAdd(owner, parameter: inref<GenericParam>) =
         let gparams =
             match lookup.TryGetValue owner with
             | (true, existing) -> existing
@@ -266,36 +261,6 @@ type GenericParamTableBuilder internal () =
                 constraints''.[i] <- i'
             struct(parami, constraints'') |> ValueSome
         else ValueNone
-
-    // TODO: Ensure that owner of generic parameters cannot be a non-nested enum type.
-    [<System.ObsoleteAttribute>]
-    member private _.TryAdd(flags, owner, name, constraints: ImmutableArray<GenericParamConstraint>) =
-        let gparams =
-            match lookup.TryGetValue owner with
-            | (true, existing) -> existing
-            | (false, _) ->
-                let empty = Dictionary<GenericParamRow, _>()
-                lookup.[owner] <- empty
-                empty
-
-        let row = GenericParamRow(uint16 gparams.Count, flags, owner, name)
-        let parami = RawIndex<GenericParamRow>(rows.Count + 1)
-
-        if gparams.TryAdd(row, GenericParamLookupEntry(parami, constraints)) then
-            rows.Add row
-            let constraints'' =
-                Array.init
-                    constraints.Length
-                    (fun i ->
-                        let i' = RawIndex<GenericParamConstraintRow>(constraints'.Count + 1)
-                        constraints'.Add(GenericParamConstraintRow(parami, constraints.[i]))
-                        i')
-            struct(parami, constraints'') |> ValueSome
-        else ValueNone
-
-    [<System.ObsoleteAttribute>]
-    member this.TryAddNonvariant(flags: GenericParamFlags, owner, name, constraints: GenericParamConstraintSet) =
-        this.TryAdd(flags.Value, owner, name, constraints.ToImmutableArray())
 
 /// <summary>
 /// Error used when a duplicate generic parameter was added to the <c>GenericParam</c> table (10, 11).

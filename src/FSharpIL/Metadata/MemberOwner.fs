@@ -55,25 +55,9 @@ module AbstractMethodOwner =
     let Interface (def: RawIndex<InterfaceDef>) = def.ToTaggedIndex AbstractMethodOwnerTag.Interface
     //toInstance (parent: AbstractMethodParent): InstanceMemberOwner
 
-[<System.Obsolete>]
-type VariantGenericParamOwnerTag =
-    | Delegate = 1uy
-    | Interface = 2uy
-
-[<System.Obsolete>]
-type VariantGenericParamOwner = TaggedIndex<VariantGenericParamOwnerTag>
-
-[<System.Obsolete>]
-[<RequireQualifiedAccess>]
-module VariantGenericParamOwner =
-    let Delegate (def: RawIndex<DelegateDef>) = def.ToTaggedIndex VariantGenericParamOwnerTag.Delegate
-    let Interface (def: RawIndex<InterfaceDef>) = def.ToTaggedIndex VariantGenericParamOwnerTag.Interface
-
 [<AutoOpen>]
 module MemberOwnerPatterns =
     let inline private helper (parent: TaggedIndex<_>) = parent.ToRawIndex<TypeDefRow>()
     let (|StaticMemberOwner|) (parent: StaticMemberOwner) = helper parent
     let (|AbstractMethodOwner|) (parent: AbstractMethodOwner) = helper parent
     let (|InstanceMemberOwner|) (parent: InstanceMemberOwner) = helper parent
-    [<System.Obsolete>]
-    let (|VariantGenericParamOwner|) (parent: VariantGenericParamOwner) = helper parent
