@@ -178,21 +178,33 @@ type GenericParamTable internal
         member this.Count = this.Count
         member this.Item with get index = &this.[index]
 
+[<IsReadOnly; Struct>]
+type internal GenericParamLookupEntry
+    (
+        index: RawIndex<GenericParamRow>,
+        constraints: ImmutableArray<GenericParamConstraint>
+    ) =
+    member _.Index = index
+    member _.Constraints = constraints
+
 [<Sealed>]
 type GenericParamTableBuilder internal () =
     let rows = ImmutableArray.CreateBuilder<GenericParamRow>()
     let constraints' = ImmutableArray.CreateBuilder<GenericParamConstraintRow>()
-    // TODO: Make TValue of this dictionary a Dictionary<RawIndex<GenericParamRow>, ImmutableArray<GenericParamConstraint>>
-    let lookup = Dictionary<GenericParamOwner, Dictionary<GenericParamRow, ImmutableArray<GenericParamConstraint>>>()
+    let lookup = Dictionary<GenericParamOwner, Dictionary<GenericParamRow, GenericParamLookupEntry>>()
 
     member _.Count = lookup.Count
 
     member internal _.ToImmutable() =
-        let ownerLookup = Dictionary<RawIndex<GenericParamRow>, _> rows.Count
-        let rowLookup = invalidOp "TODO: Figure out how to lookup rows for generic param table"
+        let ownerLookup = Dictionary<_, _> rows.Count
+        let rowLookup = Dictionary<_, _> lookup.Count
         for KeyValue(owner, rows) in lookup do
-            //for row in rows do ownerLookup.[row] <- owner
-            ()
+            // TODO: When filling items of rowLookup for GenericParam, find easier way that avoids allocating a new Array builder for each owner.
+            let rows' = ImmutableArray.CreateBuilder rows.Count
+            for KeyValue(_, entry) in rows do
+                ownerLookup.[entry.Index] <- owner
+                rows'.Add entry.Index
+            rowLookup.[owner] <- rows'.ToImmutable()
         GenericParamTable(rows.ToImmutable(), ownerLookup, rowLookup)
 
     member internal _.GetConstraints() = MetadataTable(constraints'.ToImmutable())
@@ -206,10 +218,12 @@ type GenericParamTableBuilder internal () =
                 let empty = Dictionary<GenericParamRow, _>()
                 lookup.[owner] <- empty
                 empty
+
         let row = GenericParamRow(uint16 gparams.Count,flags, owner, name)
-        if gparams.TryAdd(row, constraints) then
+        let parami = RawIndex<GenericParamRow>(rows.Count + 1)
+
+        if gparams.TryAdd(row, GenericParamLookupEntry(parami, constraints)) then
             rows.Add row
-            let parami = RawIndex<GenericParamRow> rows.Count
             let constraints'' =
                 Array.init
                     constraints.Length

@@ -151,7 +151,7 @@ let tests =
     let example' = lazy example()
     let metadata = lazy PEFile.toCecilModule example'.Value
 
-    afterRunTests <| fun() -> metadata.Value.Dispose()
+    afterRunTests <| fun() -> if metadata.IsValueCreated then metadata.Value.Dispose()
 
     testList "hello world" [
         testCase "has entrypoint" <| fun() ->

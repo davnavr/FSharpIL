@@ -43,7 +43,7 @@ module ObjectConstructor =
     let methodIndex (method: RawIndex<ObjectConstructor>) = method.ChangeTag<MethodDefRow>()
     // TODO: Might need to use inref when adding ObjectConstructor since it uses an internal method.
     let tryAddRow (builder: CliMetadataBuilder) (InstanceMemberOwner owner) (method: ObjectConstructor) =
-        method.Signature.ChangeTag() |> Constructor.tryAddRow<ObjectConstructor, _, _> builder owner method ".cctor"
+        method.Signature.ChangeTag() |> Constructor.tryAddRow<ObjectConstructor, _, _> builder owner method ".ctor"
     let inline addRow builder owner method = tryAddRow builder owner method |> ValidationError.check
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
