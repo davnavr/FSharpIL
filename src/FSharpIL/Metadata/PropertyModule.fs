@@ -26,7 +26,7 @@ module PropertyMethodPatterns =
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module Property =
-    let inline tryAddInstanceRow
+    let tryCreateInstanceRow
         builder
         (InstanceMemberOwner owner)
         (OptionalPropertyMethod getter: InstancePropertyMethod voption)
@@ -39,5 +39,5 @@ module Property =
             owner
             (PropertyMethods(getter, setter, others'))
             property
-    let inline addInstanceRow builder owner getter setter others property =
-        tryAddInstanceRow builder owner getter setter others property |> ValidationError.check
+    let inline createInstanceRow builder owner getter setter others property =
+        tryCreateInstanceRow builder owner getter setter others property |> ValidationError.check

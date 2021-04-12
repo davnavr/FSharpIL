@@ -30,7 +30,7 @@ let tryAddMethodDefRow<'Tag> (builder: CliMetadataBuilder) owner method =
     | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
     | ValueNone -> DuplicateMethodError(method).ToResult()
 
-let inline tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList =
+let tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList =
     let method =
         MethodDefRow (
             body,
@@ -63,7 +63,8 @@ let tryAddPropertyRow<'Tag>
         else ExistingPropertyMethodsError(index).ToResult()
     | ValueNone -> DuplicatePropertyError(property).ToResult()
 
-let inline tryCreatePropertyRow builder owner methods (property: Property<'Tag, 'Signature>) =
+// TODO: Use inref for this property, since internal Definition() method is used.
+let tryCreatePropertyRow builder owner methods (property: Property<'Tag, 'Signature>) =
     let row = property.Definition()
     tryAddPropertyRow<Property<'Tag, 'Signature>> builder owner &methods &row
 

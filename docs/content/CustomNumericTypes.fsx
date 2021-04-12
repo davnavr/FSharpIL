@@ -178,7 +178,7 @@ let example() =
     let intprop = InstancePropertySignature EncodedType.I4 |> builder.Blobs.PropertySig.GetOrAdd
     // member this.Numerator: int32 with get
     // TODO: Use safe helper functions for adding properties instead.
-    Property.addInstanceRow
+    Property.createInstanceRow
         builder
         (InstanceMemberOwner.Struct fraction)
         (InstancePropertyMethod.Instance get_numerator |> ValueSome)
@@ -189,7 +189,7 @@ let example() =
           Type = intprop }
     |> ignore
     // member this.Denominator: int32 with get
-    Property.addInstanceRow
+    Property.createInstanceRow
         builder
         (InstanceMemberOwner.Struct fraction)
         (InstancePropertyMethod.Instance get_denominator |> ValueSome)

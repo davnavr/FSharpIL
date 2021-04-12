@@ -217,8 +217,8 @@ type MemberRefTableBuilder internal () =
     member _.Count = members.Count
 
     /// <exception cref="T:FSharpIL.Metadata.IndexOwnerMismatchException"/>
-    member internal _.Add<'Tag>(row: MemberRefRow) = // TODO: Should inref<MemberRefrow> be used for Add?
-        let i, duplicate = members.Add row
+    member internal _.Add<'Tag>(row: inref<MemberRefRow>) =
+        let i, duplicate = members.Add &row
         struct(RawIndex<'Tag> i.Value, duplicate)
 
     member internal this.Add<'Sig, 'Tag>
@@ -226,7 +226,8 @@ type MemberRefTableBuilder internal () =
             tag: MemberRefSignatureTag,
             { Class = parent; MemberName = name; Signature = signature: Blob<'Sig> }: inref<_>
         ) =
-        this.Add<'Tag>(MemberRefRow(parent, name, MemberRefSignature(tag, signature.Index)))
+        let row = MemberRefRow(parent, name, MemberRefSignature(tag, signature.Index))
+        this.Add<'Tag> &row
 
     member this.Add(method: inref<MethodRefDefault>) =
         this.Add<_, MethodRefDefault>(MemberRefSignatureTag.MethodDefault, &method)

@@ -8,14 +8,14 @@ open System.Collections.Immutable
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module InstanceMethod =
     let methodIndex (method: RawIndex<InstanceMethod>) = method.ChangeTag<MethodDefRow>()
-    let inline tryAddRow builder (InstanceMemberOwner owner) (method: InstanceMethod) =
+    let tryAddRow builder (InstanceMemberOwner owner) (method: InstanceMethod) =
         method.Definition() |> Unsafe.tryAddMethodDefRow<InstanceMethod> builder owner
     let inline addRow builder owner method = tryAddRow builder owner method |> ValidationError.check
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module AbstractMethod =
     let methodIndex (method: RawIndex<AbstractMethod>) = method.ChangeTag<MethodDefRow>()
-    let inline tryAddRow builder (AbstractMethodOwner owner) (method: AbstractMethod) =
+    let tryAddRow builder (AbstractMethodOwner owner) (method: AbstractMethod) =
         method.Definition() |> Unsafe.tryAddMethodDefRow<AbstractMethod> builder owner
     let inline addRow builder owner method = tryAddRow builder owner method |> ValidationError.check
 
@@ -49,7 +49,7 @@ module ObjectConstructor =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module ClassConstructor =
     let methodIndex (method: RawIndex<ClassConstructor>) = method.ChangeTag<MethodDefRow>()
-    let inline tryAddRow (builder: CliMetadataBuilder) (StaticMemberOwner owner) (method: ClassConstructor) =
+    let tryAddRow (builder: CliMetadataBuilder) (StaticMemberOwner owner) (method: ClassConstructor) =
         MethodDefSignature (
             false,
             false,
@@ -64,6 +64,6 @@ module ClassConstructor =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module StaticMethod =
     let methodIndex (method: RawIndex<StaticMethod>) = method.ChangeTag<MethodDefRow>()
-    let inline tryAddRow builder (StaticMemberOwner owner) (method: StaticMethod) =
+    let tryAddRow builder (StaticMemberOwner owner) (method: StaticMethod) =
         method.Definition() |> Unsafe.tryAddMethodDefRow<StaticMethod> builder owner
     let inline addRow builder owner method = tryAddRow builder owner method |> ValidationError.check

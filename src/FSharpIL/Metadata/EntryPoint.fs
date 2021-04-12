@@ -7,7 +7,8 @@ let inline setToken (builder: CliMetadataBuilder) entryPoint = builder.SetEntryP
 /// <summary>Sets the entrypoint of the assembly to a static method defined in the assembly.</summary>
 let inline set builder main = setToken builder (EntryPointToken.ValidEntryPoint main)
 
-let inline tryAddRow builder owner (entryPoint: EntryPointMethod) =
+// TODO: Make tryAddRow for EntryPoint use inref.
+let tryAddRow builder owner (entryPoint: EntryPointMethod) =
     entryPoint.Definition() |> Unsafe.tryAddMethodDefRow builder owner
 
 let inline addRow builder owner entryPoint = tryAddRow builder owner entryPoint |> ValidationError.check

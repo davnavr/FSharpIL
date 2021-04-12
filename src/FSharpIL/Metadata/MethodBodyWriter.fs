@@ -241,7 +241,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Call(method: RawIndex<MethodDefRow>) = this.Call(0x28uy, method, 0x6uy)
 
     /// <summary>(0x28) Writes an instruction that calls a static method specified by a <c>MethodDef</c> (III.3.19).</summary>
-    member this.Call(method: RawIndex<StaticMethod>) = this.Call(method.AsMethodIndex())
+    member this.Call(method: RawIndex<StaticMethod>) = this.Call(method.ChangeTag<MethodDefRow>())
 
     member private this.Branch(opcode, isByte) =
         this.WriteU1 opcode
@@ -589,7 +589,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Ldftn(method: RawIndex<MethodDefRow>) = this.Ldftn(method, 0x6uy)
 
     /// <summary>(0xFE 0x06) Writes an instruction that pushes a pointer to a static method onto the stack (III.3.41)</summary>
-    member this.Ldftn(method: RawIndex<StaticMethod>) = this.Ldftn(method.AsMethodIndex())
+    member this.Ldftn(method: RawIndex<StaticMethod>) = this.Ldftn(method.ChangeTag<MethodDefRow>())
 
     /// <summary>
     /// (0xFE 0x06) Writes an instruction that pushes a pointer to a method specified by a <c>MethodRef</c> with the

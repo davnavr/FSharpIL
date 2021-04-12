@@ -132,40 +132,6 @@ type TypeDefRow internal (flags, name, ns, extends, parent) =
 
     override _.GetHashCode() = hash(name, ns)
 
-    [<System.ObsoleteAttribute("This doesn't account for enclosing class", true)>]
-    member internal _.GetFullName() =
-        if ns.Length > 0
-        then sprintf "'%s.%O'" ns name
-        else sprintf "'%O'" name
-
-    override this.ToString() =
-        let visibility =
-            match flags &&& TypeAttributes.VisibilityMask with
-            | TypeAttributes.Public -> "public"
-            | TypeAttributes.NestedPublic -> "nested public"
-            | TypeAttributes.NestedPrivate -> "nested private"
-            | TypeAttributes.NestedFamily  -> "nested family"
-            | TypeAttributes.NestedAssembly  -> "nested assembly"
-            | TypeAttributes.NestedFamANDAssem  -> "nested famandassem"
-            | TypeAttributes.NestedFamORAssem  -> "nested famorassem"
-            | _ -> "private"
-        let layout = 
-            match flags &&& TypeAttributes.LayoutMask with
-            | TypeAttributes.SequentialLayout -> "sequential"
-            | TypeAttributes.ExplicitLayout -> "explicit"
-            | _ -> "auto"
-        let str =
-            match flags &&& TypeAttributes.StringFormatMask with
-            | TypeAttributes.UnicodeClass -> " unicode"
-            | TypeAttributes.AutoClass -> " autochar"
-            | TypeAttributes.CustomFormatClass -> String.Empty
-            | _ -> " ansi"
-        let name = this.GetFullName()
-
-        // TODO: Add other flags when printing TypeDefRow.
-
-        sprintf ".class %s %s%s %s" visibility layout str name
-
     interface IEquatable<TypeDefRow> with
         member _.Equals other = ns = other.TypeNamespace && name = other.TypeName
 

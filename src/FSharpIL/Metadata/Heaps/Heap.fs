@@ -33,6 +33,54 @@ module internal Heap =
             member _.GetEnumerator() = heap.GetEnumerator() :> System.Collections.IEnumerator
             member _.TryGetValue(item, index) = heap.TryGetValue(item, &index)
 
+    /// <summary>
+    /// Applies the given function to each string in the <c>#Strings</c> heap referenced in
+    /// the CLI metadata tables (II.24.2.6).
+    /// </summary>
+    let inline internal iterStrings action (metadata: CliMetadata) =
+        metadata.Module.Name.ToString() |> action
+    
+        for tref in metadata.TypeRef.Rows do
+            tref.TypeName.ToString() |> action
+            action tref.TypeNamespace
+    
+        for tdef in metadata.TypeDef.Rows do
+            tdef.TypeName.ToString() |> action
+            action tdef.TypeNamespace
+    
+        for field in metadata.Field.Rows do
+            field.Name.ToString() |> action
+    
+        for method in metadata.MethodDef.Rows do
+            method.Name.ToString() |> action
+    
+        for _, param in metadata.Param do
+            action param.ParamName
+    
+    
+    
+        for mref in metadata.MemberRef.Rows do
+            mref.Name.ToString() |> action
+    
+        for property in metadata.Property.Rows do
+            property.Name.ToString() |> action
+    
+        match metadata.Assembly with
+        | ValueSome assembly ->
+            assembly.Name.ToString() |> action
+            assembly.Culture.ToString() |> action
+        | ValueNone -> ()
+    
+        for assembly in metadata.AssemblyRef.Rows do
+            assembly.Name.ToString() |> action
+            assembly.Culture.ToString() |> action
+    
+        for { FileName = name } in metadata.File.Rows do
+            name.ToString() |> action
+    
+        for gparam in metadata.GenericParam.Rows do
+            gparam.Name.ToString() |> action
+
     // TODO: Implement merging of strings that end the same. Ex: "HelloWorld" and "World" end in the same, so indices would be x and x + 5.
     // TODO: Prevent null character from being used in strings.
     /// <summary>Creates the <c>#Strings</c> metadata stream (II.24.2.3).</summary>
@@ -56,7 +104,7 @@ module internal Heap =
             Dictionary<_, _> capacity
         let mutable size = 1u
 
-        CliMetadata.iterStrings
+        iterStrings
             (function
             | ""
             | null -> ()
@@ -267,7 +315,7 @@ module internal Heap =
     let writeStrings (count: int32) (metadata: CliMetadata) (writer: ChunkWriter) =
         let lookup = HashSet<string> count
         writer.WriteU1 0uy
-        CliMetadata.iterStrings
+        iterStrings
             (function
             | ""
             | null -> ()

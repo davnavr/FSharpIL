@@ -81,15 +81,14 @@ let example() =
     //     | E = -512
     //     | F = 12345678
     let myenum = // TODO: Use safe version for adding enums that uses type lookup.
-        let row =
-            EnumDef (
-                TypeVisibility.Public,
-                myenum_values.ToImmutable(),
-                Identifier.ofStr "MyEnum",
-                ns = "EnumsExample",
-                serializable = true
-            )
-        Unsafe.addEnumRow builder (Extends.TypeRef enum) &row
+        EnumDef (
+            TypeVisibility.Public,
+            myenum_values.ToImmutable(),
+            Identifier.ofStr "MyEnum",
+            ns = "EnumsExample",
+            serializable = true
+        )
+        |> Unsafe.addEnumRow builder (Extends.TypeRef enum)
 
     (* Using Enumeration Types *)
     // [<AbstractClass; Sealed>] type MyEnumShowcase

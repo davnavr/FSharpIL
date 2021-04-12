@@ -10,13 +10,13 @@ module internal Field =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module StaticField =
     let fieldIndex (field: RawIndex<StaticField>) = field.ChangeTag<FieldRow>()
-    let inline tryAddRow builder (StaticMemberOwner owner) (field: inref<StaticField>): Result<RawIndex<StaticField>, _> =
+    let tryAddRow builder (StaticMemberOwner owner) (field: inref<StaticField>): Result<RawIndex<StaticField>, _> =
         Field.tryAddRow builder owner field
     let inline addRow builder owner field = tryAddRow builder owner &field |> ValidationError.check
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module InstanceField =
     let fieldIndex (field: RawIndex<InstanceField>) = field.ChangeTag<FieldRow>()
-    let inline tryAddRow builder (InstanceMemberOwner owner) (field: inref<InstanceField>): Result<RawIndex<InstanceField>, _> =
+    let tryAddRow builder (InstanceMemberOwner owner) (field: inref<InstanceField>): Result<RawIndex<InstanceField>, _> =
         Field.tryAddRow builder owner field
     let inline addRow builder owner field = tryAddRow builder owner &field |> ValidationError.check

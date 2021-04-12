@@ -189,9 +189,10 @@ type GenericParamTableBuilder internal () =
 
     member internal _.ToImmutable() =
         let ownerLookup = Dictionary<RawIndex<GenericParamRow>, _> rows.Count
-        let rowLookup = invalidOp "Figure out how to lookup rows"
+        let rowLookup = invalidOp "TODO: Figure out how to lookup rows for generic param table"
         for KeyValue(owner, rows) in lookup do
-            for row in rows do ownerLookup.[row] <- owner
+            //for row in rows do ownerLookup.[row] <- owner
+            ()
         GenericParamTable(rows.ToImmutable(), ownerLookup, rowLookup)
 
     member internal _.GetConstraints() = MetadataTable(constraints'.ToImmutable())

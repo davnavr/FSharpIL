@@ -8,11 +8,11 @@ type StandAloneSigTable internal (locals: ImmutableArray<Blob<MethodLocalVariabl
 
     member _.TotalCount = locals.Length
 
-    member _.GetSignature(Index i) = locals.[i - 1]
+    member _.GetSignature(Index i) = &locals.ItemRef(i - 1)
 
     interface IMetadataTable<Blob<MethodLocalVariables>> with
         member _.Count = locals.Length
-        member this.Item with get i = this.GetSignature i
+        member this.Item with get i = &this.GetSignature(i)
 
 [<Sealed>]
 type StandAloneSigTableBuilder internal () =

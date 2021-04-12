@@ -116,8 +116,7 @@ let example() =
             (EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeRef acallback))
             &def
     let mydel_encoded =
-        mydel.Row
-        |> Delegate.typeIndex
+        Delegate.typeIndex mydel.Row
         |> TypeDefOrRefOrSpecEncoded.TypeDef
         |> EncodedType.Class
  
