@@ -12,9 +12,6 @@ open Mono.Cecil
 open Mono.Cecil.Cil
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.CliMetadata
-open FSharpIL.Metadata.Unchecked
-open FSharpIL.Metadata.UncheckedExn
 
 [<StatisticalTestColumn>]
 [<MemoryDiagnoser>]
@@ -23,7 +20,7 @@ type HelloWorldBenchmarks () =
     member _.FSharpIL_ComputationExpression() = HelloWorld.example()
 
     [<Benchmark>]
-    member _.FSharpIL_UncheckedExn() =
+    member _.FSharpIL_WithExceptions() =
         let builder =
             { Name = Identifier.ofStr "HelloWorld.exe"
               Mvid = Guid.NewGuid() }
@@ -36,7 +33,7 @@ type HelloWorldBenchmarks () =
               Flags = ()
               PublicKey = None
               Culture = NullCulture }
-            |> setAssembly builder
+            |> Assembly.setRow builder
 
         let lversion = Version(5, 0, 0, 0)
 
@@ -50,7 +47,8 @@ type HelloWorldBenchmarks () =
                 AssemblyName.ofStr "System.Private.CoreLib",
                 token
             )
-            |> referenceAssembly builder
+            |> AssemblyRef.addRow builder
+        let mscorlib' = ResolutionScope.AssemblyRef mscorlib
 
         let struct (consolelib, _) =
             let token =
@@ -62,19 +60,11 @@ type HelloWorldBenchmarks () =
                 AssemblyName.ofStr "System.Console",
                 token
             )
-            |> referenceAssembly builder
+            |> AssemblyRef.addRow builder
 
-        let console =
-            TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Console", "System") |> referenceType builder
-        let object =
-            TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Object", "System") |> referenceType builder
-        let tfmAttr =
-            TypeRef (
-                ResolutionScope.AssemblyRef mscorlib,
-                Identifier.ofStr "TargetFrameworkAttribute",
-                "System.Runtime.Versioning"
-            )
-            |> referenceType builder
+        let console = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef consolelib) typeof<Console>
+        let object = TypeRef.createReflectedRow builder mscorlib' typeof<Object>
+        let tfmAttr = TypeRef.createReflectedRow builder mscorlib' typeof<System.Runtime.Versioning.TargetFrameworkAttribute>
         let string = ParamItem.create EncodedType.String
 
         let struct (writeLine, _) =
@@ -83,14 +73,14 @@ type HelloWorldBenchmarks () =
               Signature =
                 MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string)
                 |> builder.Blobs.MethodRefSig.GetOrAdd }
-            |> referenceDefaultMethod builder
+            |> MethodRef.addRowDefault builder
         let struct (tfmAttrCtor, _) =
             { Class = MemberRefParent.TypeRef tfmAttr
               MemberName = Identifier.ofStr ".ctor"
               Signature =
                 MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string)
                 |> builder.Blobs.MethodRefSig.GetOrAdd }
-            |> referenceDefaultMethod builder
+            |> MethodRef.addRowDefault builder
 
         { Parent = CustomAttributeParent.Assembly assem
           Type = CustomAttributeType.MethodRefDefault tfmAttrCtor
@@ -99,7 +89,7 @@ type HelloWorldBenchmarks () =
               NamedArg = ImmutableArray.Empty }
             |> builder.Blobs.CustomAttribute.GetOrAdd
             |> ValueSome }
-        |> addCustomAttribute builder
+        |> CustomAttribute.addRow builder
 
         let program =
             { Access = TypeVisibility.Public
@@ -107,7 +97,7 @@ type HelloWorldBenchmarks () =
               Extends = Extends.TypeRef object
               Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass))
               TypeNamespace = "HelloWorld" }
-            |> StaticClass.addTypeDef builder
+            |> StaticClass.addRow builder
 
         let main =
             let body content =
@@ -123,9 +113,9 @@ type HelloWorldBenchmarks () =
                 builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs,
                 Param { Flags = ParamFlags(); ParamName = "args" } |> ParamList.singleton
             )
-            |> StaticClass.addEntryPoint builder program
+            |> EntryPoint.addRow builder (StaticClass.typeIndex program)
 
-        setEntryPoint builder main
+        EntryPoint.set builder main
 
         CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.exe
 

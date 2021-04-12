@@ -136,7 +136,7 @@ let example() =
                 builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs,
                 Param { Flags = ParamFlags(); ParamName = "args" } |> ParamList.singleton
             )
-            |> EntryPoint.addRow builder (StaticClass.typeIndex program)
+            |> EntryPoint.tryAddRow builder (StaticClass.typeIndex program)
 
         EntryPoint.set builder main
 

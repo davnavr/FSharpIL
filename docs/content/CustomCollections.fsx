@@ -24,9 +24,6 @@ open System
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.CliMetadata
-open FSharpIL.Metadata.Unchecked
-open FSharpIL.Metadata.UncheckedExn
 open FSharpIL.PortableExecutable
 
 let example() =
@@ -42,7 +39,7 @@ let example() =
           Flags = ()
           PublicKey = None
           Culture = NullCulture }
-        |> setAssembly builder
+        |> Assembly.setRow builder
 
     let struct (mscorlib, _) =
         let token =
@@ -53,17 +50,19 @@ let example() =
             Version(5, 0, 0, 0),
             AssemblyName.ofStr "System.Runtime",
             token
-        ) |> referenceAssembly builder
+        )
+        |> AssemblyRef.addRow builder
+    let mscorlib' = ResolutionScope.AssemblyRef mscorlib
 
-    let object = TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Object", "System") |> referenceType builder
+    let object = TypeRef.createReflectedRow builder mscorlib' typeof<Object>
     // new()
     let struct (object_ctor, _) =
         { Class = MemberRefParent.TypeRef object
           MemberName = Identifier.ofStr ".ctor"
           Signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid) |> builder.Blobs.MethodRefSig.GetOrAdd }
-        |> referenceDefaultMethod builder
+        |> MethodRef.addRowDefault builder
 
-    let array = TypeRef(ResolutionScope.AssemblyRef mscorlib, Identifier.ofStr "Array", "System") |> referenceType builder
+    let array = TypeRef.createReflectedRow builder mscorlib' typeof<System.Array>
     // static member Copy(_: System.Array, _: System.Array, _: int32): System.Void
     let struct (array_copy, _) =
         let array_encoded =
@@ -76,28 +75,29 @@ let example() =
             let parameters = [| array_encoded; array_encoded; ParamItem.create EncodedType.I4 |]
             MethodRefDefaultSignature(false, false, ReturnType.itemVoid, parameters)
             |> builder.Blobs.MethodRefSig.GetOrAdd }
-        |> referenceDefaultMethod builder
+        |> MethodRef.addRowDefault builder
 
     // type MyCollection
-    let myCollection_1 =
+    let mycollection_1 =
         { Access = TypeVisibility.Public
           Flags = ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true) |> Flags.concreteClass
           // C#, VB, and F# compilers append the number of generic parameters to the class name
           ClassName = Identifier.ofStr "MyCollection`1"
           TypeNamespace = "Example"
           Extends = Extends.TypeRef object }
-        |> ConcreteClass.addTypeDef builder
+        |> ConcreteClass.addRow builder
+    let mycollection_1' = ConcreteClass.typeIndex mycollection_1
 
     // 'T
-    GenericParam.addNonvariant
+    UncheckedExn.GenericParam.addNonvariant
         builder
         GenericParamFlags.None
-        (myCollection_1.AsTypeIndex() |> GenericParamOwner.TypeDef)
+        (GenericParamOwner.TypeDef mycollection_1')
         (Identifier.ofStr "T")
         ConstraintSet.empty
     |> ignore
 
-    let tparam = TypeSpec.Var 0u |> builder.Blobs.TypeSpec.GetOrAdd |> addTypeSpec builder
+    let tparam = TypeSpec.Var 0u |> TypeSpec.createRow builder
     let tencoded = EncodedType.Var 0u
     let tarray = EncodedType.SZArray(ImmutableArray.Empty, tencoded)
 
@@ -105,20 +105,19 @@ let example() =
     { Flags = Flags.instanceField(FieldFlags Private)
       FieldName = Identifier.ofStr "items"
       Signature = FieldSignature.create tarray |> builder.Blobs.FieldSig.GetOrAdd }
-    |> ConcreteClass.addInstanceField builder myCollection_1
+    |> InstanceField.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
     |> ignore
     // val mutable private index: int32
     { Flags = Flags.instanceField(FieldFlags Private)
       FieldName = Identifier.ofStr "index"
       Signature = FieldSignature.create EncodedType.I4 |> builder.Blobs.FieldSig.GetOrAdd }
-    |> ConcreteClass.addInstanceField builder myCollection_1
+    |> InstanceField.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
     |> ignore
 
-    let myCollection_1_spec =
-        GenericInst.typeDef1 false (myCollection_1.AsTypeIndex()) tencoded
+    let mycollection_1_spec =
+        GenericInst.typeDef1 false mycollection_1' tencoded
         |> TypeSpec.GenericInst
-        |> builder.Blobs.TypeSpec.GetOrAdd
-        |> addTypeSpec builder
+        |> TypeSpec.createRow builder
 
     let ctor_p_params =
         [|
@@ -128,14 +127,14 @@ let example() =
 
     let struct (items', _) =
         { MemberRef.MemberName = Identifier.ofStr "items"
-          Class = MemberRefParent.TypeSpec myCollection_1_spec
+          Class = MemberRefParent.TypeSpec mycollection_1_spec
           Signature = FieldSignature.create tarray |> builder.Blobs.FieldSig.GetOrAdd }
-        |> builder.MemberRef.Add
+        |> FieldRef.addRow builder
     let struct (index', _) =
         { MemberRef.MemberName = Identifier.ofStr "index"
-          Class = MemberRefParent.TypeSpec myCollection_1_spec
+          Class = MemberRefParent.TypeSpec mycollection_1_spec
           Signature = FieldSignature.create EncodedType.I4 |> builder.Blobs.FieldSig.GetOrAdd }
-        |> builder.MemberRef.Add
+        |> FieldRef.addRow builder
 
     // private new (items: 'T[], index: int32)
     let ctor_p =
@@ -160,14 +159,14 @@ let example() =
             signature = builder.Blobs.MethodDefSig.GetOrAdd(ObjectConstructorSignature ctor_p_params),
             paramList = fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "items" else "index" }
         )
-        |> ConcreteClass.addConstructor builder myCollection_1
+        |> ObjectConstructor.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
 
     let struct(ctor_p', _) =
         let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ctor_p_params)
         { MemberRef.MemberName = Identifier.ofStr ".ctor"
-          Class = MemberRefParent.TypeSpec myCollection_1_spec
+          Class = MemberRefParent.TypeSpec mycollection_1_spec
           Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-        |> builder.MemberRef.Add
+        |> MethodRef.addRowDefault builder
 
     // new(capacity: int32)
     let ctor =
@@ -189,13 +188,10 @@ let example() =
             signature = builder.Blobs.MethodDefSig.GetOrAdd signature,
             paramList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "capacity" }
         )
-        |> ConcreteClass.addConstructor builder myCollection_1
+        |> ObjectConstructor.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
 
     // 'TOther
-    let tother_spec =
-        TypeSpec.MVar 0u
-        |> builder.Blobs.TypeSpec.GetOrAdd
-        |> addTypeSpec builder
+    let tother_spec = TypeSpec.MVar 0u |> TypeSpec.createRow builder
 
     let cast_locals =
         [
@@ -212,10 +208,9 @@ let example() =
         { MemberRef.MemberName = Identifier.ofStr ".ctor"
           Class =
             EncodedType.MVar 0u
-            |> GenericInst.typeDef1 false (myCollection_1.AsTypeIndex())
+            |> GenericInst.typeDef1 false mycollection_1'
             |> TypeSpec.GenericInst
-            |> builder.Blobs.TypeSpec.GetOrAdd
-            |> addTypeSpec builder
+            |> TypeSpec.createRow builder
             |> MemberRefParent.TypeSpec
           Signature =
             let parameters =
@@ -225,7 +220,7 @@ let example() =
                 |]
             MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
             |> builder.Blobs.MethodRefSig.GetOrAdd }
-        |> builder.MemberRef.Add
+        |> MethodRef.addRowDefault builder
 
     // member this.Cast<'TOther>(): Example.MyCollection<'TOther when 'TOther :> 'T>
     let cast =
@@ -283,7 +278,7 @@ let example() =
         let signature =
             let retn =
                 EncodedType.MVar 0u
-                |> GenericInst.typeDef1 false (myCollection_1.AsTypeIndex())
+                |> GenericInst.typeDef1 false mycollection_1'
                 |> EncodedType.GenericInst
                 |> ReturnType.encoded
             InstanceMethodSignature(Generic 1u, retn, ImmutableArray.Empty)
@@ -293,15 +288,15 @@ let example() =
             Identifier.ofStr "Cast",
             builder.Blobs.MethodDefSig.GetOrAdd signature
         )
-        |> ConcreteClass.addInstanceMethod builder myCollection_1
+        |> InstanceMethod.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
 
     // 'TOther when 'TOther :> 'T
     GenericParamConstraint.TypeSpec tparam
     |> ConstraintSet.singleton
-    |> GenericParam.addNonvariant
+    |> UncheckedExn.GenericParam.addNonvariant
         builder
         GenericParamFlags.None
-        (cast.AsMethodIndex() |> GenericParamOwner.MethodDef)
+        (InstanceMethod.methodIndex cast |> GenericParamOwner.MethodDef)
         (Identifier.ofStr "TOther")
     |> ignore
 
@@ -404,7 +399,7 @@ let example() =
         builder.Blobs.MethodDefSig.GetOrAdd signature,
         fun _ _ -> Param { ParamName = "item"; Flags = ParamFlags() }
     )
-    |> ConcreteClass.addInstanceMethod builder myCollection_1
+    |> InstanceMethod.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
     |> ignore
 
     // member this.ToArray()
@@ -443,16 +438,10 @@ let example() =
         Identifier.ofStr "ToArray",
         ReturnType.encoded tarray |> InstanceMethodSignature |> builder.Blobs.MethodDefSig.GetOrAdd
     )
-    |> ConcreteClass.addInstanceMethod builder myCollection_1
+    |> InstanceMethod.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
     |> ignore
 
-    let tfm =
-        TypeRef (
-            ResolutionScope.AssemblyRef mscorlib,
-            Identifier.ofStr "TargetFrameworkAttribute",
-            "System.Runtime.Versioning"
-        )
-        |> referenceType builder
+    let tfm = TypeRef.createReflectedRow builder mscorlib' typeof<System.Runtime.Versioning.TargetFrameworkAttribute>
 
     // new(_: string)
     let struct(tfm_ctor, _) =
@@ -462,9 +451,9 @@ let example() =
             let parameters = ImmutableArray.Create(ParamItem.create EncodedType.String)
             MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
             |> builder.Blobs.MethodRefSig.GetOrAdd }
-        |> referenceDefaultMethod builder
+        |> MethodRef.addRowDefault builder
 
-    setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
+    Assembly.setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

@@ -220,6 +220,8 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     // TODO: Allow call and callvirt to accept a MethodSpec.
     member private this.CallMethodRef method = this.Call(0x28uy, method, 0xAuy)
 
+    // TODO: Instead of using overloads for opcodes like Call, use union types instead.
+
     /// <summary>
     /// (0x28) Writes an instruction that calls a <c>MethodRef</c> with a <c>DEFAULT</c> calling convention (III.3.19).
     /// </summary>

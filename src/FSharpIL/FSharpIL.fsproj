@@ -65,6 +65,7 @@
     <Compile Include="Metadata\AssemblyRefModule.fs" />
     <Compile Include="Metadata\TypeRefModule.fs" />
     <Compile Include="Metadata\MethodRefModule.fs" />
+    <Compile Include="Metadata\FieldRefModule.fs" />
     <Compile Include="Metadata\FileModule.fs" />
     <Compile Include="Metadata\ModuleRefModule.fs" />
     <Compile Include="Metadata\MethodSpecModule.fs" />

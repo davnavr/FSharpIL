@@ -15,6 +15,7 @@ let inline addRowVarArg (builder: CliMetadataBuilder) (method: MethodRefVarArg):
 
 // TODO: Add methodref-adding function variants that don't use inref.
 // TODO: Add variants that have checks.
+// TODO: For functions that have checks, make WarningsBuilder a voption.
 let inline private check (row: inref<MemberRef<_>>) struct(i, duplicate) (warnings: WarningsBuilder) =
     if duplicate then warnings.Add(DuplicateMemberRefWarning(row.Class, row.MemberName))
     i
