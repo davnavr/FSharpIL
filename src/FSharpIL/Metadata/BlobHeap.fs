@@ -65,6 +65,7 @@ type MiscBlobLookupBuilder internal () =
         | Error err -> Error(err.ChangeTag<PublicKeyToken>())
 
     member this.GetOrAdd(publicKeyToken: PublicKeyToken) = this.TryAdd publicKeyToken |> Result.any
+    member inline this.GetOrAdd(bytes: ImmutableArray<byte>) = this.TryAdd bytes |> Result.any
 
     member internal _.ToImmutable() = lookup.ToImmutable()
 

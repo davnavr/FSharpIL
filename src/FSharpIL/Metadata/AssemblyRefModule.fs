@@ -6,6 +6,9 @@ let inline addRow (builder: CliMetadataBuilder) (assembly: AssemblyRef) =
     let i = builder.AssemblyRef.Add(&assembly, &dup)
     struct(i, dup)
 
+let inline createRow builder version name publicKeyOrToken culture hashValue =
+    AssemblyRef(version, name, publicKeyOrToken, culture, hashValue) |> addRow builder
+
 let inline addReflectedRow (builder: CliMetadataBuilder) (assembly: System.Reflection.Assembly) =
     let name = assembly.GetName()
     AssemblyRef (
