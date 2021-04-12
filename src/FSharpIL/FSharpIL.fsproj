@@ -87,8 +87,7 @@
     <Compile Include="Metadata\PropertyModule.fs" />
     <Compile Include="Metadata\InterfaceImplModule.fs" />
     <Compile Include="Metadata\EntryPoint.fs" />
-    <Compile Include="Metadata\Unchecked.fs" />
-    <Compile Include="Metadata\UncheckedExn.fs" />
+    <Compile Include="Metadata\GenericParamModule.fs" />
     <Compile Include="XmlDoc\DocMember.fs" />
     <Compile Include="XmlDoc\Name.fs" />
     <Compile Include="XmlDoc\Doc.fs" />

@@ -89,10 +89,10 @@ let example() =
     let mycollection_1' = ConcreteClass.typeIndex mycollection_1
 
     // 'T
-    UncheckedExn.GenericParam.addNonvariant
+    GenericParam.createInvariantRow
         builder
-        GenericParamFlags.None
         (GenericParamOwner.TypeDef mycollection_1')
+        GenericParamFlags.None
         (Identifier.ofStr "T")
         ConstraintSet.empty
     |> ignore
@@ -293,10 +293,10 @@ let example() =
     // 'TOther when 'TOther :> 'T
     GenericParamConstraint.TypeSpec tparam
     |> ConstraintSet.singleton
-    |> UncheckedExn.GenericParam.addNonvariant
+    |> GenericParam.createInvariantRow
         builder
-        GenericParamFlags.None
         (InstanceMethod.methodIndex cast |> GenericParamOwner.MethodDef)
+        GenericParamFlags.None
         (Identifier.ofStr "TOther")
     |> ignore
 
