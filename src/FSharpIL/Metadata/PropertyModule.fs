@@ -33,7 +33,6 @@ module Property =
         (OptionalPropertyMethod setter: InstancePropertyMethod voption)
         (others: ImmutableArray<InstancePropertyMethod>)
         (property: InstanceProperty) =
-        // TODO: Figure out if the underlying array is converted.
         let others' = let mutable others = others in Unsafe.As<_, ImmutableArray<RawIndex<MethodDefRow>>> &others
         Unsafe.tryCreatePropertyRow
             builder

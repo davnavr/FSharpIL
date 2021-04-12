@@ -284,11 +284,17 @@ let example() =
         wr.Div()
         wr.Ret()
         MethodBody.Default
+    let conv_single_signature =
+        StaticMethodSignature (
+            ReturnType.encoded EncodedType.R4,
+            ParamItem.create fractionEncoded
+        )
+        |> builder.Blobs.MethodDefSig.GetOrAdd
     StaticMethod (
         MethodBody.create ValueNone conv_single_body,
         Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
         Identifier.ofStr "op_Explicit",
-        StaticMethodSignature(ReturnType.encoded EncodedType.R4, ParamItem.create fractionEncoded) |> builder.Blobs.MethodDefSig.GetOrAdd,
+        conv_single_signature,
         fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" }
     )
     |> StaticMethod.addRow builder (StaticMemberOwner.Struct fraction)
@@ -306,18 +312,24 @@ let example() =
         wr.Div()
         wr.Ret()
         MethodBody.Default
+    let conv_double_signature =
+        StaticMethodSignature (
+            ReturnType.encoded EncodedType.R8,
+            ParamItem.create fractionEncoded
+        )
+        |> builder.Blobs.MethodDefSig.GetOrAdd
     StaticMethod (
         MethodBody.create ValueNone conv_double_body,
         Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
         Identifier.ofStr "op_Explicit",
-        StaticMethodSignature(ReturnType.encoded EncodedType.R8, ParamItem.create fractionEncoded) |> builder.Blobs.MethodDefSig.GetOrAdd,
+        conv_double_signature,
         fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" }
     )
     |> StaticMethod.addRow builder (StaticMemberOwner.Struct fraction)
     |> ignore
 
     // interface System.IComparable<Fraction>
-    Unchecked.Struct.implementSpec builder fraction icomparable_fraction |> ignore
+    InterfaceImpl.addRow builder (InterfaceImplementor.Struct fraction) (InterfaceIndex.TypeSpec icomparable_fraction) |> ignore
 
     // member (*virtual*) this.CompareTo(other: Fraction): Fraction
     let compare_body content =

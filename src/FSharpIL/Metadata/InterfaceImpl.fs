@@ -52,13 +52,13 @@ type internal InterfaceImplLookup = IReadOnlyDictionary<RawIndex<TypeDefRow>, Im
 type InterfaceImplTable internal (rows: ImmutableArray<InterfaceImpl>, lookup: InterfaceImplLookup) =
     member _.Count = rows.Length
     member _.Rows = rows
-    member _.Item with get (index: RawIndex<InterfaceImpl>) = rows.[index.Value - 1]
+    member _.Item with get (index: RawIndex<InterfaceImpl>) = &rows.ItemRef(index.Value - 1)
 
     member _.GetIndices (tindex: RawIndex<TypeDefRow>) = lookup.[tindex]
 
     interface IMetadataTable<InterfaceImpl> with
         member this.Count = this.Count
-        member this.Item with get index = this.[index]
+        member this.Item with get index = &this.[index]
 
 [<Sealed>]
 type InterfaceImplTableBuilder internal () =
@@ -69,7 +69,10 @@ type InterfaceImplTableBuilder internal () =
 
     /// <param name="typeRow">The <c>TypeDef</c> that will implement the interface.</param>
     /// <param name="intf">The interface to implement.</param>
-    /// <returns><see langword="true"/>, if the entry was not a duplicate; otherwise <see langword="false"/>.</returns>
+    /// <returns>
+    /// <see langword="true"/>, if the entry was not a duplicate and the row was successfully added; otherwise
+    /// <see langword="false"/>.
+    /// </returns>
     member _.Add(typeRow, intf) =
         let impls =
             match mapping.TryGetValue typeRow with

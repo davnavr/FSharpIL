@@ -9,9 +9,8 @@ type StaticMemberOwnerTag =
     | AbstractClass = 2uy
     | SealedClass = 3uy
     | StaticClass = 4uy
-    | Delegate = 5uy
-    | Interface = 6uy
-    | Struct = 7uy
+    | Interface = 5uy
+    | Struct = 6uy
 
 /// <summary>Represents a row in the <c>TypeDef</c> table that can own a static field or static method.</summary>
 type StaticMemberOwner = TaggedIndex<StaticMemberOwnerTag>
@@ -23,7 +22,6 @@ module StaticMemberOwner =
     let AbstractClass (def: RawIndex<AbstractClassDef>) = def.ToTaggedIndex StaticMemberOwnerTag.AbstractClass
     let SealedClass (def: RawIndex<SealedClassDef>) = def.ToTaggedIndex StaticMemberOwnerTag.SealedClass
     let StaticClass (def: RawIndex<StaticClassDef>) = def.ToTaggedIndex StaticMemberOwnerTag.StaticClass
-    let Delegate (def: RawIndex<DelegateDef>) = def.ToTaggedIndex StaticMemberOwnerTag.Delegate
     let Interface (def: RawIndex<InterfaceDef>) = def.ToTaggedIndex StaticMemberOwnerTag.Interface
     let Struct (def: RawIndex<StructDef>) = def.ToTaggedIndex StaticMemberOwnerTag.Struct
 
@@ -32,13 +30,15 @@ type InstanceMemberOwnerTag =
     | ConcreteClass = 1uy
     | AbstractClass = 2uy
     | SealedClass = 3uy
-    | Delegate = 4uy
-    | Struct = 5uy
+    | Struct = 4uy
 
 type InstanceMemberOwner = TaggedIndex<InstanceMemberOwnerTag>
 
 [<RequireQualifiedAccess>]
 module InstanceMemberOwner =
+    let ConcreteClass (def: RawIndex<ConcreteClassDef>) = def.ToTaggedIndex InstanceMemberOwnerTag.ConcreteClass
+    let AbstractClass (def: RawIndex<AbstractClassDef>) = def.ToTaggedIndex InstanceMemberOwnerTag.AbstractClass
+    let SealedClass (def: RawIndex<SealedClassDef>) = def.ToTaggedIndex InstanceMemberOwnerTag.SealedClass
     let Struct (def: RawIndex<StructDef>) = def.ToTaggedIndex InstanceMemberOwnerTag.Struct
 
 type AbstractMethodOwnerTag =
