@@ -106,7 +106,7 @@ let example() =
             DelegateDef (
                 TypeVisibility.Public,
                 ReturnType.encoded EncodedType.String,
-                ImmutableArray.Create(ParamItem.create EncodedType.String, ParamItem.create EncodedType.I4),
+                ImmutableArray.Create(items = parameters),
                 Identifier.ofStr "MyDelegate"
             )
         Unsafe.addDelegateRow

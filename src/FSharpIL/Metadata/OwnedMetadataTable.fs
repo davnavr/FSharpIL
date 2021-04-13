@@ -23,7 +23,7 @@ type OwnedMetadataTable<'Owner, 'T when 'Owner : equality and 'T : equality> int
 
     member this.GetCount owner =
         match this.TryGetRows owner with
-        | ValueSome rows -> uint32 rows.Length
+        | ValueSome items' -> uint32 items'.Length
         | ValueNone -> 0u
 
     member _.GetOwner index = ownerLookup.[index]
@@ -35,7 +35,7 @@ type OwnedMetadataTable<'Owner, 'T when 'Owner : equality and 'T : equality> int
 /// <summary>Represents a table whose rows are conceptually owned by one row in another table.</summary>
 [<Sealed>]
 type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equality> internal() =
-    let items = Dictionary<RawIndex<'Owner>, HashSet<'T>>()
+    let items = Dictionary<RawIndex<'Owner>, Dictionary<RawIndex<'T>, 'T>>()
     let mutable count = 0
 
     member _.Count = count
@@ -49,23 +49,25 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
             match items.TryGetValue key with
             | (true, existing) -> existing
             | (false, _) ->
-                let empty = HashSet<'T>()
+                let empty = Dictionary()
                 items.[key] <- empty
                 empty
-        if lookup.Add value then
-            count <- count + 1 // TODO: Fix, this index will not be correct if TryAdd is called with different owners.
-            ValueSome(RawIndex<'T> count)
+        let i = RawIndex<'T>(count + 1)
+        if lookup.TryAdd(i, value) then
+            count <- i.Value
+            ValueSome i
         else ValueNone
 
     // TODO: Ensure that order of items matches owners in OwnedMetadataTable`2.
     member internal _.ToImmutable() =
         let itemLookup = Dictionary items.Count
         let ownerLookup = Dictionary count
-        let tableItems = ImmutableArray.CreateBuilder<_> count
+        let tableItems = ImmutableArray.CreateBuilder count
         for KeyValue(owner, items) in items do
-            let items' = HashSet<_> items.Count
-            for row in items do
+            let items' = HashSet items.Count
+            for KeyValue(irow, row) in items do
                 tableItems.Add row
                 ownerLookup.Add(RawIndex<'T> tableItems.Count, owner)
+                if not(items'.Add irow) then sprintf "Duplicate row detected %O" irow |> invalidOp
             itemLookup.[owner] <- items'.ToImmutableArray()
         OwnedMetadataTable<'Owner, 'T>(itemLookup, ownerLookup, tableItems.ToImmutable())
