@@ -14,20 +14,20 @@ type MethodSemanticsFlags =
     | Fire = 0x20us
 
 type MethodAssociationTag =
-    | Event = 0uy
     | Property = 1uy
+    | Event = 2uy
 
 /// <summary>Indicates whether a method is associated with an <c>Event</c> or a <c>Property</c> (II.22.28).</summary>
 type MethodAssociation = TaggedIndex<MethodAssociationTag>
 
 [<RequireQualifiedAccess>]
 module MethodAssociation =
-    //let (|Event|Property|) (association: MethodAssociation) =
-    //    match association.Tag with
-    //    | Event -> Event(failwith "BAD")
-    //    | Property -> Property(association.ToRawIndex<PropertyRow>())
-    //    | bad -> failwith "Unknown method association %A" bad
-    //let Event 
+    let (|Event|Property|) (association: MethodAssociation) =
+        match association.Tag with
+        | MethodAssociationTag.Event -> Event(association.ToRawIndex<EventRow>())
+        | MethodAssociationTag.Property -> Property(association.ToRawIndex<PropertyRow>())
+        | bad -> sprintf "Invalid method association kind %A" bad |> invalidArg "association"
+    let Event (index: RawIndex<EventRow>) = index.ToTaggedIndex MethodAssociationTag.Event
     let Property (index: RawIndex<PropertyRow>) = index.ToTaggedIndex MethodAssociationTag.Property
 
 /// <summary>(0x18) Represents a row in the <c>MethodSemantics</c> table (II.22.28).</summary>
@@ -80,17 +80,20 @@ type EventMethods
 [<Sealed>]
 type MethodSemanticsTableBuilder internal () =
     let semantics = ImmutableArray.CreateBuilder<MethodSemanticsRow>()
-    let events = Dictionary<RawIndex<EventRow>, unit>()
+    let events = Dictionary<RawIndex<EventRow>, EventMethods>()
     let properties = Dictionary<RawIndex<PropertyRow>, PropertyMethods>()
 
     member _.Count = semantics.Count
 
     member private _.AddSemantics(flags, method, assoc) = semantics.Add(MethodSemanticsRow(flags, method, assoc))
 
-    member private this.AddPropertyMethod(flags, method, property) =
+    member inline private this.AddPropertyMethod(flags, method, property) =
         this.AddSemantics(flags, method, MethodAssociation.Property property)
 
-    member internal this.TryAddProperty(property, methods) =
+    member inline private this.AddEventMethod(flags, method, event) =
+        this.AddSemantics(flags, method, MethodAssociation.Event event)
+
+    member internal this.TryAddProperty(property, methods: inref<_>) =
         let success = properties.TryAdd(property, methods)
         if success then
             match methods.Getter with
@@ -102,6 +105,19 @@ type MethodSemanticsTableBuilder internal () =
             | _ -> ()
 
             for other in methods.Others do this.AddPropertyMethod(MethodSemanticsFlags.Other, other, property)
+        success
+
+    member internal this.TryAddEvent(event, methods: inref<_>) =
+        let success = events.TryAdd(event, methods)
+        if success then
+            this.AddEventMethod(MethodSemanticsFlags.AddOn, methods.AddOn, event)
+            this.AddEventMethod(MethodSemanticsFlags.RemoveOn, methods.RemoveOn, event)
+
+            match methods.Fire with
+            | ValueSome fire -> this.AddEventMethod(MethodSemanticsFlags.Fire, fire, event)
+            | _ -> ()
+
+            for other in methods.Others do this.AddEventMethod(MethodSemanticsFlags.Other, other, event)
         success
 
     member _.ToImmutable() = MetadataTable(semantics.ToImmutable())

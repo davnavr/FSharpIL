@@ -58,7 +58,7 @@ let tryAddPropertyRow<'Tag>
     =
     match builder.PropertyMap.TryAdd(owner, property) with
     | ValueSome index ->
-        if builder.MethodSemantics.TryAddProperty(index, methods)
+        if builder.MethodSemantics.TryAddProperty(index, &methods)
         then Ok index
         else ExistingPropertyMethodsError(index).ToResult()
     | ValueNone -> DuplicatePropertyError(property).ToResult()

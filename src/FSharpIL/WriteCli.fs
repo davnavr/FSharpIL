@@ -197,6 +197,16 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             | GenericParamConstraint.TypeRef tref -> uint32 tref, 1u
             | GenericParamConstraint.TypeSpec tspec -> uint32 tspec, 2u
         CodedIndex(typeCount, 2, indexer)
+    let eventType = // TypeDefOrRef
+        let indexer =
+            function
+            | EventType.Null -> 0u, 0u
+            | EventType.AbstractClass (Index tdef)
+            | EventType.ConcreteClass (Index tdef)
+            | EventType.SealedClass (Index tdef) -> uint32 tdef, 0u
+            | EventType.TypeRef tref -> uint32 tref, 1u
+            | EventType.TypeSpec tspec -> uint32 tspec, 2u
+        CodedIndex(typeCount, 2, indexer)
 
     let resolutionScope =
         let total =
@@ -409,8 +419,21 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     for locals in tables.StandAloneSig.LocalVariables do
         info.BlobStream.WriteIndex(locals, writer)
 
-    failwith "TODO: Add EventMap and Event"
+    // EventMap (0x12)
+    if tables.EventMap.Count > 0 then
+        let mutable event = 1
 
+        // TODO: Will the order of the parent types matter for EventMap?
+        for parent in tables.EventMap.Owners do
+            tables.TypeDef.WriteSimpleIndex(parent, writer)
+            tables.Event.WriteSimpleIndex(RawIndex event, writer) // EventList
+            event <- event + int32(tables.EventMap.GetCount parent)
+
+    // Event (0x14)
+    for row in tables.Event.Rows do
+        writer.WriteU2 row.Flags
+        info.StringsStream.WriteStringIndex(row.Name, writer)
+        eventType.WriteIndex(row.EventType, writer)
 
     // PropertyMap (0x15)
     if tables.PropertyMap.Count > 0 then
@@ -419,8 +442,8 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         // TODO: Will the order of the parent types matter for PropertyMap?
         for parent in tables.PropertyMap.Owners do
             tables.TypeDef.WriteSimpleIndex(parent, writer)
-            tables.Property.WriteSimpleIndex(RawIndex property, writer)
-            property <- property + int32 (tables.PropertyMap.GetCount parent)
+            tables.Property.WriteSimpleIndex(RawIndex property, writer) // PropertyList
+            property <- property + int32(tables.PropertyMap.GetCount parent)
 
     // Property (0x17)
     for row in tables.Property.Rows do

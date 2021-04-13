@@ -39,6 +39,7 @@ module EventType =
 [<IsReadOnly; Struct>]
 [<NoComparison; CustomEquality>]
 type EventRow internal (flags: EventAttributes, name: Identifier, eventType: EventType) =
+    /// <summary>Corresponds to the <c>EventFlags</c> column of the <c>Event</c> table (II.22.12).</summary>
     member _.Flags = flags
     member _.Name = name
     /// The type of the event.
