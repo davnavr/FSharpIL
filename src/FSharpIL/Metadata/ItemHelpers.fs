@@ -6,9 +6,6 @@ open FSharpIL.Metadata
 
 [<AutoOpen>]
 module ItemExtensions =
-    type CustomModifier with
-        member this.ModifierType = this.CMod :?> TypeDefOrRefOrSpecEncoded
-
     type ReturnTypeItem with
         member this.ReturnType =
             match this.RetType with

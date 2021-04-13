@@ -188,7 +188,6 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     let typeCount = tables.TypeDef.Count + tables.TypeRef.Count + tables.TypeSpec.Count
     let interfaceImpl = // TypeDefOrRef
         CodedIndex(typeCount, 2, fun (index: InterfaceIndex) -> uint32 index.Value, uint32 index.Tag)
-
     let genericParamConstraint = // TypeDefOrRef
         let indexer =
             function
@@ -410,7 +409,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     for locals in tables.StandAloneSig.LocalVariables do
         info.BlobStream.WriteIndex(locals, writer)
 
-
+    failwith "TODO: Add EventMap and Event"
 
 
     // PropertyMap (0x15)

@@ -5,31 +5,19 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 open System.Runtime.InteropServices
 
-type internal TypeDefOrRefOrSpecTag =
-    | Def = 0uy
-    | Ref = 1uy
-    | Spec = 2uy
-
-/// II.23.2.8
-[<IsReadOnly; Struct>]
-type TypeDefOrRefOrSpecEncoded internal (tag: TypeDefOrRefOrSpecTag, index: int32) =
-    member internal _.Tag = tag
-    member _.Value = index
-    interface ITypeDefOrRefOrSpec
-
 [<RequireQualifiedAccess>]
 module TypeDefOrRefOrSpecEncoded =
     let (|TypeDef|TypeRef|TypeSpec|) (encoded: TypeDefOrRefOrSpecEncoded) =
         match encoded.Tag with
-        | TypeDefOrRefOrSpecTag.Ref -> TypeRef(RawIndex<TypeRef> encoded.Value)
-        | TypeDefOrRefOrSpecTag.Spec -> TypeSpec(RawIndex<TypeSpecRow> encoded.Value)
-        | TypeDefOrRefOrSpecTag.Def
-        | _ -> TypeDef(RawIndex<TypeDefRow> encoded.Value)
+        | TypeDefOrRefOrSpecTag.Def -> TypeDef(encoded.ToRawIndex<TypeDefRow>())
+        | TypeDefOrRefOrSpecTag.Ref -> TypeRef(encoded.ToRawIndex<TypeRef>())
+        | TypeDefOrRefOrSpecTag.Spec -> TypeSpec(encoded.ToRawIndex<TypeSpecRow>())
+        | _ -> invalidArg "encoded" "Invalid encoded type"
 
-    let TypeDef (index: RawIndex<TypeDefRow>) = TypeDefOrRefOrSpecEncoded(TypeDefOrRefOrSpecTag.Def, index.Value)
-    let InterfaceDef (index: RawIndex<InterfaceDef>) = index.ChangeTag() |> TypeDef
-    let TypeRef (index: RawIndex<TypeRef>) = TypeDefOrRefOrSpecEncoded(TypeDefOrRefOrSpecTag.Ref, index.Value)
-    let TypeSpec (index: RawIndex<TypeSpecRow>) = TypeDefOrRefOrSpecEncoded(TypeDefOrRefOrSpecTag.Spec, index.Value)
+    let TypeDef (index: RawIndex<TypeDefRow>) = index.ToTaggedIndex TypeDefOrRefOrSpecTag.Def
+    let InterfaceDef (index: RawIndex<InterfaceDef>) = index.ToTaggedIndex TypeDefOrRefOrSpecTag.Def
+    let TypeRef (index: RawIndex<TypeRef>) = index.ToTaggedIndex TypeDefOrRefOrSpecTag.Ref
+    let TypeSpec (index: RawIndex<TypeSpecRow>) = index.ToTaggedIndex TypeDefOrRefOrSpecTag.Spec
 
 [<RequireQualifiedAccess>]
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

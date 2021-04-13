@@ -17,7 +17,7 @@ type CliMetadata (builder: CliMetadataBuilder) =
         |> ImmutableArray.CreateRange
 
     let standAloneSig = builder.StandAloneSig.ToImmutable()
-
+    let eventMap = builder.EventMap.ToImmutable()
     let propertyMap = builder.PropertyMap.ToImmutable()
 
     let nestedClass = ImmutableArray.CreateRange builder.NestedClass
@@ -64,7 +64,13 @@ type CliMetadata (builder: CliMetadataBuilder) =
             bits <- bits ||| (1UL <<< 0x11)
             uint32 standAloneSig.TotalCount |> counts.Add
 
+        if builder.EventMap.Owners.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x12)
+            uint32 builder.EventMap.Owners.Count |> counts.Add
 
+        if builder.EventMap.Count > 0 then
+            bits <- bits ||| (1UL <<< 0x14)
+            uint32 builder.EventMap.Count |> counts.Add
 
         if builder.PropertyMap.Owners.Count > 0 then
             bits <- bits ||| (1UL <<< 0x15)
@@ -149,8 +155,9 @@ type CliMetadata (builder: CliMetadataBuilder) =
     member val CustomAttribute = builder.CustomAttribute.ToImmutable()
 
     member _.StandAloneSig = standAloneSig
-
-    member val PropertyMap = propertyMap
+    member _.EventMap = eventMap
+    member val Event = MetadataTable eventMap.Rows
+    member _.PropertyMap = propertyMap
     member val Property = MetadataTable propertyMap.Rows
     member val MethodSemantics = builder.MethodSemantics.ToImmutable()
 

@@ -39,15 +39,22 @@ type internal ElementType =
 
     | Pinned = 0x45uy
 
-type internal ITypeDefOrRefOrSpec = interface end
+type TypeDefOrRefOrSpecTag =
+    | Def = 0uy
+    | Ref = 1uy
+    | Spec = 2uy
+
+/// <summary>
+/// Represents a token or index corresponding to a row in the <c>TypeDef</c>, <c>TypeRef</c>, or <c>TypeSpec</c> table (II.23.2.8).
+/// </summary>
+type TypeDefOrRefOrSpecEncoded = TaggedIndex<TypeDefOrRefOrSpecTag>
 
 /// (II.23.2.7)
 [<IsReadOnly; Struct>]
 type CustomModifier = struct
     val Required: bool
-    val internal CMod: ITypeDefOrRefOrSpec // ModifierType
-
-    internal new (required, modifierType) = { Required = required; CMod = modifierType }
+    val ModifierType: TypeDefOrRefOrSpecEncoded
+    new (required, modifierType) = { Required = required; ModifierType = modifierType }
 end
 
 type internal IReturnType = interface end

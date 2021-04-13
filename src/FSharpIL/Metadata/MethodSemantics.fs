@@ -45,6 +45,7 @@ type MethodSemanticsRow internal
 
 // TODO: How to enforce that the Method column is for a property or event defined on the same class?
 // TODO: Do we need to enforce that getters and setters are static for "static" properties? Maybe provide helper functions for this?
+// TODO: Do we need to ensure names of "other" methods do not conflict with get_ and set_, or are the flags in MethodSemantics enough?
 [<IsReadOnly; Struct>]
 type PropertyMethods
     (
@@ -57,11 +58,29 @@ type PropertyMethods
     member _.Setter = setter
     member _.Others = others
 
+// TODO: Figure out where raise_ methods go.
+// TODO: Do we need to ensure names of "other" methods do not conflict with add_, remove_, and fire_, or are the flags in MethodSemantics enough?
+[<IsReadOnly; Struct>]
+type EventMethods
+    (
+        addOn: RawIndex<MethodDefRow>,
+        removeOn: RawIndex<MethodDefRow>,
+        fire: RawIndex<MethodDefRow> voption,
+        others: ImmutableArray<RawIndex<MethodDefRow>>
+    ) =
+    /// <summary>Corresponds to the <c>add_</c> method used to subscribe to the event.</summary>
+    member _.AddOn = addOn
+    /// <summary>Corresponds to the <c>remove_</c> method used to unsubscribe from the event.</summary>
+    member _.RemoveOn = removeOn
+    /// <summary>Corresponds to the optional <c>fire_</c> method.</summary>
+    member _.Fire = fire
+    member _.Others = others
+
 // TODO: Figure out if indices into the MethodSemantics table are used.
 [<Sealed>]
 type MethodSemanticsTableBuilder internal () =
     let semantics = ImmutableArray.CreateBuilder<MethodSemanticsRow>()
-    //let events
+    let events = Dictionary<RawIndex<EventRow>, unit>()
     let properties = Dictionary<RawIndex<PropertyRow>, PropertyMethods>()
 
     member _.Count = semantics.Count

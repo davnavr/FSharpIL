@@ -46,6 +46,7 @@
     <Compile Include="Metadata\TypeSpec.fs" />
     <Compile Include="Metadata\MethodSpec.fs" />
     <Compile Include="Metadata\ItemHelpers.fs" />
+    <Compile Include="Metadata\Event.fs" />
     <Compile Include="Metadata\Property.fs" />
     <Compile Include="Metadata\ConstantTable.fs" />
     <Compile Include="Metadata\MethodSemantics.fs" />
