@@ -223,6 +223,7 @@ type GenericParamTableBuilder internal () =
     let lookup = Dictionary<GenericParamOwner, Dictionary<GenericParamRow, GenericParamLookupEntry>>()
 
     member _.Count = lookup.Count
+    member _.Item with get(index: RawIndex<GenericParamRow>) = &rows.ItemRef(index.Value - 1)
 
     member internal _.ToImmutable() =
         let ownerLookup = Dictionary<_, _> rows.Count

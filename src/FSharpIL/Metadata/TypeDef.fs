@@ -385,6 +385,7 @@ type TypeDefTableBuilder internal () =
         | ValueNone -> failwith "Unable to add <Module> type to TypeDef table"
 
     member _.Count = definitions.Count
+    member _.Item i = &definitions.[i]
 
     member _.GetEnumerator() = definitions.GetEnumerator()
 

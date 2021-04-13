@@ -27,6 +27,7 @@ open System.Collections.Immutable
 open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 
+// TODO: Make common setup code for examples by making this function a CliMetadataBuilder -> PEFile
 let example() =
     let builder =
         { Name = Identifier.ofStr "HelloWorld.exe"
