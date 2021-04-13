@@ -14,6 +14,7 @@ let inline createRow builder version name publicKeyOrToken culture hashValue =
 
 let inline addReflectedRow (builder: CliMetadataBuilder) (assembly: Assembly) =
     let name = assembly.GetName()
+    // TODO: Fix, storing full public key currently doesn't work since writing implementation breaks for very large blobs.
     let ptoken =
         // TODO: Fix, all System.Reflection.Assembly instances retrieved with reflection might have the PublicKey flag always set.
         if name.Flags.HasFlag AssemblyNameFlags.PublicKey then

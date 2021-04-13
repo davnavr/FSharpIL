@@ -136,7 +136,7 @@ module LargeCountsBenchmarks =
                             sprintf "LargeCounts%i.dll" size
                         )
                     generate size |> WritePE.toPath path)
-            [ 100 ]
+            [ 100; 1000 ]
         |> testList "large counts"
 #endif
 

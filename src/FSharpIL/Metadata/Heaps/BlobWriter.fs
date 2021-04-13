@@ -25,7 +25,7 @@ type internal BlobWriter = struct
     /// Thrown when the <paramref name="value"/> is greater than the maximum compressed unsigned integer.
     /// </exception>
     member this.CompressedUnsigned(value: uint32) =
-        match BlobSize.ofUnsigned value with
+        match value with
         | BlobSize.B4 ->
             // Sets bit 31 and bit 30, bit 29 remains clear
             let (U4 (msb, b2, b3, lsb)) = value ||| 0xC000_0000u
