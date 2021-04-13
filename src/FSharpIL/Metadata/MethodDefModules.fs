@@ -67,3 +67,24 @@ module StaticMethod =
     let tryAddRow builder (StaticMemberOwner owner) (method: StaticMethod) =
         method.Definition() |> Unsafe.tryAddMethodDefRow<StaticMethod> builder owner
     let inline addRow builder owner method = tryAddRow builder owner method |> ValidationError.check
+
+type InstanceMethodIndexTag =
+    // TODO: Consider adding | Null = 0uy to avoid having to use voption.
+    | Instance = 1uy
+    | Abstract = 2uy
+    | Final = 3uy
+
+type InstanceMethodIndex = TaggedIndex<InstanceMethodIndexTag>
+
+[<RequireQualifiedAccess>]
+module InstanceMethodIndex =
+    let Instance (method: RawIndex<InstanceMethod>) = method.ToTaggedIndex InstanceMethodIndexTag.Instance
+
+[<AutoOpen>]
+module MethodIndexPatterns =
+    let inline private helper (method: TaggedIndex<_>) = method.ToRawIndex<MethodDefRow>()
+    let (|InstanceMethodIndex|) (method: InstanceMethodIndex) = helper method
+    let inline internal (|OptionalMethodIndex|) (method: TaggedIndex<_> voption) =
+        match method with
+        | ValueSome method' -> helper method' |> ValueSome
+        | ValueNone -> ValueNone

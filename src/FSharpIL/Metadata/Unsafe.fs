@@ -60,7 +60,7 @@ let tryAddPropertyRow<'Tag>
     | ValueSome index ->
         if builder.MethodSemantics.TryAddProperty(index, &methods)
         then Ok index
-        else ExistingPropertyMethodsError(index).ToResult()
+        else ExistingMethodSemanticsError(index).ToResult()
     | ValueNone -> DuplicatePropertyError(property).ToResult()
 
 // TODO: Use inref for this property, since internal Definition() method is used.
@@ -70,6 +70,26 @@ let tryCreatePropertyRow builder owner methods (property: Property<'Tag, 'Signat
 
 let inline createPropertyRow builder owner methods property =
     tryCreatePropertyRow builder owner methods property |> ValidationError.check
+
+let tryAddEventRow<'Tag>
+    (builder: CliMetadataBuilder)
+    (owner: RawIndex<TypeDefRow>)
+    (methods: inref<EventMethods>)
+    (event: inref<EventRow>)
+    =
+    match builder.EventMap.TryAdd(owner, event) with
+    | ValueSome index ->
+        if builder.MethodSemantics.TryAddEvent(index, &methods)
+        then Ok index
+        else ExistingMethodSemanticsError(index).ToResult()
+    | ValueNone -> DuplicateEventError(event).ToResult()
+
+let tryCreateEventRow builder owner methods (event: Event<'Tag>) =
+    let row = event.Definition()
+    tryAddEventRow<Event<'Tag>> builder owner &methods &row
+
+let inline createEventRow builder owner methods event =
+    tryCreateEventRow builder owner methods event |> ValidationError.check
 
 /// <param name="builder">The CLI metadata with the <c>TypeDef</c> table that the delegate type will be added to.</param>
 /// <param name="del">Corresponds to the <see cref="T:System.Delegate"/> or <see cref="T:System.MulticastDelegate"/> type.</param>

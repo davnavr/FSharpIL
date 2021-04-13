@@ -124,6 +124,8 @@ type MethodSemanticsTableBuilder internal () =
 
 /// <category>Errors</category>
 [<Sealed>]
-type ExistingPropertyMethodsError (property: RawIndex<PropertyRow>) =
+type ExistingMethodSemanticsError (association: MethodAssociation) =
     inherit ValidationError()
-    member _.Property = property
+    new (property) = ExistingMethodSemanticsError(MethodAssociation.Property property)
+    new (event) = ExistingMethodSemanticsError(MethodAssociation.Event event)
+    member _.Association = association

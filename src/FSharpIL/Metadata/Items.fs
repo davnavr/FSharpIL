@@ -5,7 +5,7 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 open System.Runtime.InteropServices
 
-[<RequireQualifiedAccess>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module TypeDefOrRefOrSpecEncoded =
     let (|TypeDef|TypeRef|TypeSpec|) (encoded: TypeDefOrRefOrSpecEncoded) =
         match encoded.Tag with
@@ -19,8 +19,7 @@ module TypeDefOrRefOrSpecEncoded =
     let TypeRef (index: RawIndex<TypeRef>) = index.ToTaggedIndex TypeDefOrRefOrSpecTag.Ref
     let TypeSpec (index: RawIndex<TypeSpecRow>) = index.ToTaggedIndex TypeDefOrRefOrSpecTag.Spec
 
-[<RequireQualifiedAccess>]
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module CustomModifier =
     let optional (modifierType: TypeDefOrRefOrSpecEncoded) = CustomModifier(false, modifierType)
     let required (modifierType: TypeDefOrRefOrSpecEncoded) = CustomModifier(true, modifierType)

@@ -46,3 +46,28 @@ type EventRow internal (flags: EventAttributes, name: Identifier, eventType: Eve
     member _.EventType = eventType
 
     interface IEquatable<EventRow> with member _.Equals other = name = other.Name
+
+[<IsReadOnly; Struct>]
+type Event<'Tag> =
+    { Flags: SpecialName
+      /// <summary>Corresponds to the <c>Name</c> column of the <c>Event</c> table (II.22.12).</summary>
+      EventName: Identifier
+      EventType: EventType }
+
+    member internal this.Definition() = EventRow((|Flags|) this.Flags, this.EventName, this.EventType)
+
+type InstanceEvent = Event<InstanceMethodTag>
+type StaticEvent = Event<StaticMethodTag>
+
+/// <summary>
+/// Error used when there is a duplicate row in the <c>Event</c> table (11).
+/// </summary>
+/// <category>Errors</category>
+[<Sealed>]
+type DuplicateEventError (event: EventRow) =
+    inherit ValidationError()
+    member _.Event = event
+    override _.ToString() =
+        sprintf
+            "Unable to add event \"%O\", an event with the same name already exists"
+            event.Name

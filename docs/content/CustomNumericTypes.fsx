@@ -181,7 +181,7 @@ let example() =
     Property.createInstanceRow
         builder
         (InstanceMemberOwner.Struct fraction)
-        (InstancePropertyMethod.Instance get_numerator |> ValueSome)
+        (InstanceMethodIndex.Instance get_numerator |> ValueSome)
         ValueNone
         ImmutableArray.Empty
         { PropertyName = Identifier.ofStr "Numerator"
@@ -192,7 +192,7 @@ let example() =
     Property.createInstanceRow
         builder
         (InstanceMemberOwner.Struct fraction)
-        (InstancePropertyMethod.Instance get_denominator |> ValueSome)
+        (InstanceMethodIndex.Instance get_denominator |> ValueSome)
         ValueNone
         ImmutableArray.Empty
         { PropertyName = Identifier.ofStr "Denominator"

@@ -84,6 +84,7 @@ type StaticProperty = Property<StaticMethodTag, StaticPropertySignature>
 /// Error used when there is a duplicate row in the <c>Property</c> table (8).
 /// </summary>
 /// <category>Errors</category>
+[<Sealed>]
 type DuplicatePropertyError (property: PropertyRow) =
     inherit ValidationError()
     member _.Property = property

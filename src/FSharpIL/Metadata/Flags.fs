@@ -65,24 +65,48 @@ type GlobalVisibility =
             | CompilerControlled -> FieldAttributes.PrivateScope
             | Private -> FieldAttributes.Private
 
-type SpecialName =
-    /// <summary>Leaves both the <c>SpecialName</c> and <c>RTSpecialName</c> flags clear.</summary>
-    | NoSpecialName
-    /// <summary>Sets the <c>SpecialName</c> flag, and leaves the <c>RTSpecialName</c> flag clear.</summary>
-    | SpecialName
-    /// <summary>Sets both the <c>SpecialName</c> and <c>RTSpecialName</c> flags.</summary>
-    | RTSpecialName
+type internal SpecialNameTag =
+    | None = 0uy
+    | Special = 1uy
+    | RTSpecial = 2uy
 
+[<IsReadOnly; Struct>]
+type SpecialName internal (tag: SpecialNameTag) =
+    member internal _.Tag = tag
     interface IFlags<FieldAttributes> with
         member this.Value =
-            match this with
-            | NoSpecialName -> FieldAttributes.PrivateScope
-            | SpecialName -> FieldAttributes.SpecialName
-            | RTSpecialName -> FieldAttributes.RTSpecialName ||| FieldAttributes.SpecialName
-
+            match this.Tag with
+            | SpecialNameTag.Special -> FieldAttributes.SpecialName
+            | SpecialNameTag.RTSpecial -> FieldAttributes.RTSpecialName ||| FieldAttributes.SpecialName
+            | SpecialNameTag.None
+            | _ -> FieldAttributes.PrivateScope
     interface IFlags<MethodAttributes> with
         member this.Value =
-            match this with
-            | NoSpecialName -> MethodAttributes.PrivateScope
-            | SpecialName -> MethodAttributes.SpecialName
-            | RTSpecialName -> MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName
+            match this.Tag with
+            | SpecialNameTag.Special -> MethodAttributes.SpecialName
+            | SpecialNameTag.RTSpecial -> MethodAttributes.RTSpecialName ||| MethodAttributes.SpecialName
+            | SpecialNameTag.None
+            | _ -> MethodAttributes.PrivateScope
+    interface IFlags<EventAttributes> with
+        member this.Value =
+            match this.Tag with
+            | SpecialNameTag.Special -> EventAttributes.SpecialName
+            | SpecialNameTag.RTSpecial -> EventAttributes.RTSpecialName ||| EventAttributes.SpecialName
+            | SpecialNameTag.None
+            | _ -> EventAttributes.None
+
+[<AutoOpen>]
+module SpecialName =
+    let (|NoSpecialName|SpecialName|RTSpecialName|) (specialName: SpecialName) =
+        match specialName.Tag with
+        | SpecialNameTag.Special -> SpecialName
+        | SpecialNameTag.RTSpecial -> RTSpecialName
+        | SpecialNameTag.None
+        | _ -> NoSpecialName
+
+    /// <summary>Leaves both the <c>SpecialName</c> and <c>RTSpecialName</c> flags clear.</summary>
+    let NoSpecialName = SpecialName SpecialNameTag.None
+    /// <summary>Sets both the <c>SpecialName</c> and <c>RTSpecialName</c> flags.</summary>
+    let RTSpecialName = SpecialName SpecialNameTag.RTSpecial
+    /// <summary>Sets the <c>SpecialName</c> flag, and leaves the <c>RTSpecialName</c> flag clear.</summary>
+    let SpecialName = SpecialName SpecialNameTag.Special

@@ -23,7 +23,7 @@ type TaggedIndex<'Tag when 'Tag : struct> internal (tag: 'Tag, value: int32) =
     internal new (tag: 'Tag) = TaggedIndex(tag, 0)
     member _.Tag = tag
     member _.Value = value
-    member internal _.ToRawIndex() = RawIndex value // TODO: Consider using Unsafe.As instead
+    member internal _.ToRawIndex<'To>() = RawIndex<'To> value // TODO: Consider using Unsafe.As instead
     override _.ToString() = sprintf "%O(0x%x)" tag value
 
 [<AutoOpen>]
