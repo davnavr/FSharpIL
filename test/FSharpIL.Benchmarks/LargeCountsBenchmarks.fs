@@ -2,9 +2,12 @@
 
 #if BENCHMARK
 open BenchmarkDotNet.Attributes
+#else
+open Expecto
 #endif
 
 open System
+open System.IO
 open System.Collections.Generic
 open System.Collections.Immutable
 
@@ -13,13 +16,15 @@ open FSharpIL.PortableExecutable
 
 [<RequireQualifiedAccess>]
 module LargeCountsBenchmarks =
-    let inline generate (size: int32) =
+    let generate (size: int32) =
+        let mname = sprintf "LargeCounts%i" size
+
         let builder =
-            { Name = Identifier.ofStr "LargeCounts.dll"
+            { Name = sprintf "%s.dll" mname |> Identifier.ofStr
               Mvid = Guid.NewGuid() }
             |> CliMetadataBuilder
 
-        { Name = AssemblyName.ofStr "LargeCounts"
+        { Name = AssemblyName.ofStr mname
           HashAlgId = ()
           Version = Version()
           Flags = ()
@@ -28,9 +33,13 @@ module LargeCountsBenchmarks =
         |> Assembly.setRow builder
         |> ignore
 
-        let del = invalidOp "Get System.Delegate"
-        let asyncResult = invalidOp ""
-        let asyncCallback = invalidOp ""
+        let struct (mscorlib, _) = AssemblyRef.addReflectedRow builder typeof<Object>.Assembly
+        let mscorlib' = ResolutionScope.AssemblyRef mscorlib
+
+        let object = TypeRef.createReflectedRow builder mscorlib' typeof<Object>
+        let mcdelegate = TypeRef.createReflectedRow builder mscorlib' typeof<MulticastDelegate>
+        let asyncResult = TypeRef.createReflectedRow builder mscorlib' typeof<IAsyncResult>
+        let asyncCallback = TypeRef.createReflectedRow builder mscorlib' typeof<AsyncCallback>
 
         let assemblyRefs =
             Array.init size <| fun i ->
@@ -62,7 +71,7 @@ module LargeCountsBenchmarks =
                   Flags = Flags.concreteClass flags
                   ClassName = sprintf "Class%i" i |> Identifier.ofStr
                   TypeNamespace = sprintf "Namespace%i" i
-                  Extends = Extends.Null } // TODO: Get System.Object
+                  Extends = Extends.TypeRef object } // TODO: Get System.Object
                 |> ConcreteClass.addRow builder
 
         //let structs
@@ -80,9 +89,9 @@ module LargeCountsBenchmarks =
                     )
                 Unsafe.addDelegateRow
                     builder
-                    del
-                    asyncResult
-                    asyncCallback
+                    (Extends.TypeRef mcdelegate)
+                    (EncodedType.typeRefClass asyncResult)
+                    (EncodedType.typeRefClass asyncCallback)
                     &row
 
         //let enums
@@ -110,6 +119,26 @@ module LargeCountsBenchmarks =
             rows
 
         CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.exe
+#if !BENCHMARK
+    [<Tests>]
+    let tests =
+        List.map
+            (fun size ->
+                testCase (sprintf "can save %i to disk" size) <| fun() ->
+                    let path =
+                        Path.Combine (
+                            __SOURCE_DIRECTORY__,
+                            "..",
+                            "..",
+                            "docs",
+                            "content",
+                            "exout",
+                            sprintf "LargeCounts%i.dll" size
+                        )
+                    generate size |> WritePE.toPath path)
+            [ 100 ]
+        |> testList "large counts"
+#endif
 
 #if BENCHMARK
 [<MemoryDiagnoser>]

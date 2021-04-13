@@ -15,6 +15,7 @@
     <Compile Include="..\content\Factorial.fsx" />
     <Compile Include="..\content\CustomNumericTypes.fsx" />
     <Compile Include="..\content\CustomCollections.fsx" />
+    <Compile Include="$(RootDirectory)\test\FSharpIL.Benchmarks\LargeCountsBenchmarks.fs" />
     <Compile Include="$(RootDirectory)\test\ExpectoEntryPoint.fs" />
 
     <PackageReference Include="Expecto" Version="9.0.2" />

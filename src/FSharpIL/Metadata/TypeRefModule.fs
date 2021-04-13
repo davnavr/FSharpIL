@@ -25,7 +25,11 @@ let inline tryAddRowChecked (builder: CliMetadataBuilder) (typeRef: TypeRef) (wa
 let inline ofReflectedType resolutionScope (typeRef: System.Type) =
     if typeRef.IsGenericTypeParameter then invalidArg "typeRef" "Cannot reference a generic type parameter"
     // TODO: Check to ensure that the type is not a closed constructed type (ex: List<int> is invalid).
-    TypeRef(resolutionScope, Identifier.ofStr typeRef.Name, typeRef.Namespace)
+    let ns =
+        match typeRef.Namespace with
+        | null -> System.String.Empty
+        | typeNamespace -> typeNamespace
+    TypeRef(resolutionScope, Identifier.ofStr typeRef.Name, ns)
 
 let inline tryCreateReflectedRow builder resolutionScope typeRef = ofReflectedType resolutionScope typeRef |> tryAddRow builder
 
