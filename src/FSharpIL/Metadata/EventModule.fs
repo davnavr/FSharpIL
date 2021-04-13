@@ -21,3 +21,5 @@ let tryCreateInstanceRow
 
 let inline createInstanceRow builer owner add remove fire others event =
     tryCreateInstanceRow builer owner add remove fire others event |> ValidationError.check
+
+//let tryCreateAddMethod

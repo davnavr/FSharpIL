@@ -5,7 +5,7 @@ open System.Reflection
 open System.Runtime.CompilerServices
 
 // TODO: Figure out if null event types should be allowed.
-// TODO: Should Delegate be used instead of Class?
+// TODO: Use Delegate instead of Class.
 type EventTypeTag =
     | Null = 0uy
     | Ref = 1uy
@@ -30,7 +30,7 @@ module EventType =
         | _ -> Null
 
     let Null = EventType(EventTypeTag.Null, 0)
-    let TypeRef (eventType: RawIndex<TypeSpecRow>) = eventType.ToTaggedIndex EventTypeTag.Ref
+    let TypeRef (eventType: RawIndex<TypeRef>) = eventType.ToTaggedIndex EventTypeTag.Ref
     let Spec (eventType: RawIndex<TypeSpecRow>) = eventType.ToTaggedIndex EventTypeTag.Spec
     let ConcreteClass (eventType: RawIndex<ConcreteClassDef>) = eventType.ToTaggedIndex EventTypeTag.ConcreteClass
     let AbstractClass (eventType: RawIndex<AbstractClassDef>) = eventType.ToTaggedIndex EventTypeTag.AbstractClass
@@ -47,6 +47,7 @@ type EventRow internal (flags: EventAttributes, name: Identifier, eventType: Eve
 
     interface IEquatable<EventRow> with member _.Equals other = name = other.Name
 
+// TODO Make Event`1 a normal struct to allow default value for Flags.
 [<IsReadOnly; Struct>]
 type Event<'Tag> =
     { Flags: SpecialName
