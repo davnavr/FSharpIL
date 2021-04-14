@@ -475,6 +475,22 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// </summary>
     member this.Newobj(ctor: RawIndex<ObjectConstructor>) = this.Newobj(ctor, 0x6uy)
 
+    member private this.Castclass(toType: RawIndex<_>, table) =
+        this.WriteU1 0x74uy
+        this.WriteMetadataToken(uint32 toType, table)
+
+    /// <summary>
+    /// (0x74) Writes an instruction that casts an object on the stack to a type specified by a <c>TypeRef</c> (III.4.3).
+    /// </summary>
+    member this.Castclass(toType: RawIndex<TypeRef>) = this.Castclass(toType, 0x1uy)
+    member this.Castclass(toType: RawIndex<TypeDefRow>) = this.Castclass(toType, 0x2uy)
+    member this.Castclass(toType: RawIndex<TypeSpecRow>) = this.Castclass(toType, 0x1Buy)
+    member inline this.Castclass(toType: EventType) =
+        match toType with
+        | EventType.Def tdef -> this.Castclass tdef
+        | EventType.Ref tref -> this.Castclass tref
+        | EventType.Spec tspec -> this.Castclass tspec
+
     member private this.WriteFieldInstruction(opcode, field: RawIndex<_>, table) =
         this.WriteU1 opcode
         this.WriteMetadataToken(uint32 field, table)

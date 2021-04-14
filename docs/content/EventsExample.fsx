@@ -59,8 +59,21 @@ let example() =
     let mscorlib' = ResolutionScope.AssemblyRef mscorlib
 
     let object = TypeRef.createReflectedRow builder mscorlib' typeof<Object>
+    let dele = TypeRef.createReflectedRow builder mscorlib' typeof<Delegate>
     let tfm = TypeRef.createReflectedRow builder mscorlib' typeof<System.Runtime.Versioning.TargetFrameworkAttribute>
     let evhandler = TypeRef.createReflectedRow builder mscorlib' typeof<EventHandler>
+
+    let dele' = EncodedType.typeRefClass dele
+    let evhandler' = EncodedType.typeRefClass evhandler
+
+    let struct(combine, _) =
+        { Class = MemberRefParent.TypeRef dele
+          MemberName = Identifier.ofStr "Combine"
+          Signature =
+            let parameters = ImmutableArray.Create(ParamItem.create dele', ParamItem.create dele')
+            MethodRefDefaultSignature(true, false, ReturnType.encoded dele', parameters)
+            |> builder.Blobs.MethodRefSig.GetOrAdd }
+        |> MethodRef.addRowDefault builder
 
     // TargetFrameworkAttribute(_: string)
     let struct(tfm_ctor, _) =
@@ -82,21 +95,51 @@ let example() =
           TypeNamespace = ns
           Extends = Extends.TypeRef object }
         |> ConcreteClass.addRow builder
-    let button' = ConcreteClass.typeIndex button
+    let button' = InstanceMemberOwner.ConcreteClass button
 
     (* Creating Events *)
+    let addBody (field: RawIndex<InstanceField>) (etype: EventType) =
+        fun content ->
+            let wr = MethodBodyWriter content
+            wr.Ldarg 0us
+            wr.Dup()
+            wr.Ldfld field
+            wr.Ldarg 1us
+            wr.Call combine
+            wr.Castclass etype
+            wr.Stfld field
+            wr.Ret()
+            MethodBody 3us
+        |> MethodBody.create ValueNone
+
+    let removeBody field (etype: EventType) =
+        fun content ->
+            let wr = MethodBodyWriter content
+            MethodBody()
+        |> MethodBody.create ValueNone
+
+    let click = Identifier.ofStr "Click"
+    // private System.EventHandler Click;
+    let fclick =
+        { FieldName = click
+          Flags = FieldFlags(Private) |> Flags.instanceField
+          Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create evhandler') }
+        |> InstanceField.addRow builder button'
+
     // event System.EventHandler Click;
-    let click =
-        //let add
-
-        //let remove
-
+    let eclick =
         Event.createInstance
             builder
-            (InstanceMemberOwner.ConcreteClass button)
-            { EventName = Identifier.ofStr "Click"
+            button'
+            { EventName = click
               EventType = EventType.TypeRef evhandler
               Flags = NoSpecialName }
+            Public
+            VTableLayout.NewSlot
+            true
+            false
+            (addBody fclick)
+            (removeBody fclick)
 
     (* Events With Data*)
 

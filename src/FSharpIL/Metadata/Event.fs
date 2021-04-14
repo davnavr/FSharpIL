@@ -4,7 +4,7 @@ open System
 open System.Reflection
 open System.Runtime.CompilerServices
 
-// TODO: Figure out if null event types should be allowed.
+// TODO: Remove Null option and use voption instead.
 // TODO: Use Delegate instead of Class.
 type EventTypeTag =
     | Null = 0uy
@@ -28,6 +28,15 @@ module EventType =
         | EventTypeTag.SealedClass -> SealedClass(eventType.ToRawIndex<SealedClassDef>())
         | EventTypeTag.Null
         | _ -> Null
+
+    let (|Def|Ref|Spec|) (eventType: EventType) =
+        match eventType with
+        | ConcreteClass(Index tdef)
+        | AbstractClass(Index tdef)
+        | SealedClass(Index tdef) -> Def(RawIndex<TypeDefRow> tdef)
+        | TypeRef tref -> Ref tref
+        | TypeSpec tspec -> Spec tspec
+        | _ -> invalidArg "eventType" "Invalid event type"
 
     let Null = EventType(EventTypeTag.Null, 0)
     let TypeRef (eventType: RawIndex<TypeRef>) = eventType.ToTaggedIndex EventTypeTag.Ref

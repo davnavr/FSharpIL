@@ -31,8 +31,8 @@ let inline tryCreateInstance
     vTableLayout
     hideBySig
     isVirtual
-    addBody
-    removeBody
+    (addBody: _ -> ConcreteMethodBody)
+    (removeBody: _ -> ConcreteMethodBody)
     =
     let mflags = InstanceMethodFlags(visibility, SpecialName, vTableLayout, hideBySig, isVirtual).Value
     Unsafe.tryCreateEvent builder owner &event mflags true addBody removeBody

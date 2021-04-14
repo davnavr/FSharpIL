@@ -92,14 +92,14 @@ let inline createEventRow builder owner methods event =
     tryCreateEventRow builder owner &methods &event |> ValidationError.check
 
 /// <summary>Creates an event with <c>.addon</c> and <c>.removeon</c> methods and corresponding private field.</summary>
-let tryCreateEvent<'Tag>
+let tryCreateEvent<'Tag, 'Body when 'Body :> IMethodBody>
     (builder: CliMetadataBuilder)
     (owner: RawIndex<TypeDefRow>)
     (event: inref<Event<'Tag>>)
     methodFlags
     hasThis
-    addBody
-    removeBody
+    (addBody: _ -> 'Body)
+    (removeBody: _ -> 'Body)
     =
     let etype = EventHelpers.eventType event.EventType
     let methodFlags' = methodFlags ||| MethodAttributes.SpecialName
