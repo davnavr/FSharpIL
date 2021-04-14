@@ -66,14 +66,16 @@ let example() =
     let dele' = EncodedType.typeRefClass dele
     let evhandler' = EncodedType.typeRefClass evhandler
 
-    let struct(combine, _) =
+    let delemodify name =
+        let parameters = ImmutableArray.Create(ParamItem.create dele', ParamItem.create dele')
+        let signature = MethodRefDefaultSignature(false, false, ReturnType.encoded dele', parameters)
         { Class = MemberRefParent.TypeRef dele
-          MemberName = Identifier.ofStr "Combine"
-          Signature =
-            let parameters = ImmutableArray.Create(ParamItem.create dele', ParamItem.create dele')
-            MethodRefDefaultSignature(true, false, ReturnType.encoded dele', parameters)
-            |> builder.Blobs.MethodRefSig.GetOrAdd }
+          MemberName = Identifier.ofStr name
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> MethodRef.addRowDefault builder
+
+    let struct(combine, _) = delemodify "Combine"
+    let struct(remove, _) = delemodify "Remove"
 
     // TargetFrameworkAttribute(_: string)
     let struct(tfm_ctor, _) =
@@ -112,9 +114,17 @@ let example() =
             MethodBody 3us
         |> MethodBody.create ValueNone
 
-    let removeBody field (etype: EventType) =
+    let removeBody (field: RawIndex<InstanceField>) (etype: EventType) =
         fun content ->
             let wr = MethodBodyWriter content
+            wr.Ldarg 0us
+            wr.Dup()
+            wr.Ldfld field
+            wr.Ldarg 1us
+            wr.Call remove
+            wr.Castclass etype
+            wr.Stfld field
+            wr.Ret()
             MethodBody()
         |> MethodBody.create ValueNone
 
