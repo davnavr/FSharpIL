@@ -135,6 +135,7 @@ end
 type ObjectConstructorSignature = struct
     val Parameters: ImmutableArray<ParamItem>
     new (parameters: ImmutableArray<_>) = { Parameters = parameters }
+    new (parameter: ParamItem) = ObjectConstructorSignature(ImmutableArray.Create parameter)
     new ([<ParamArray>] parameters: ParamItem[]) = ObjectConstructorSignature(parameters.ToImmutableArray())
 
     member internal this.Signature() =

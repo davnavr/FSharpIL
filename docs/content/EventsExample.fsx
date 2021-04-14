@@ -99,6 +99,14 @@ let example() =
           Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create evargs') }
         |> FieldRef.addRow builder
 
+    // EventArgs()
+    let struct(evargs_ctor, _) =
+        let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Empty)
+        { Class = MemberRefParent.TypeRef evargs
+          MemberName = Identifier.ofStr ".ctor"
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        |> MethodRef.addRowDefault builder
+
     // TargetFrameworkAttribute(string frameworkName)
     let struct(tfm_ctor, _) =
         { Class = MemberRefParent.TypeRef tfm
@@ -154,17 +162,17 @@ let example() =
     // private System.EventHandler Click;
     let fclick =
         { FieldName = click
-          Flags = FieldFlags(Private) |> Flags.instanceField
+          Flags = FieldFlags Private |> Flags.instanceField
           Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create evhandler') }
         |> InstanceField.addRow builder button'
 
-    // event System.EventHandler Click;
+    // public event System.EventHandler Click;
     let eclick =
         Event.createInstance
             builder
             button'
             { EventName = click
-              EventType = EventType.TypeRef evhandler
+              EventType = EventType.Ref evhandler
               Flags = NoSpecialName }
             Public
             VTableLayout.NewSlot
@@ -214,8 +222,77 @@ let example() =
         ()
 
     (* Events with data*)
-    // System.EventHandler<System.String>
-    let evhandler_string = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef evhandler_1, ImmutableArray.Create EncodedType.String)
+    let rename = Identifier.ofStr "Rename"
+    // public class RenameEventArgs : System.EventArgs
+    let renameargs =
+        { Access = TypeVisibility.Public
+          Flags = ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true) |> Flags.concreteClass
+          ClassName = Identifier.ofStr "EventArgs" |> Identifier.concat2 rename
+          TypeNamespace = ns
+          Extends = Extends.TypeRef evargs }
+        |> ConcreteClass.addRow builder
+    let renameargs' = InstanceMemberOwner.ConcreteClass renameargs
+
+    // public readonly string Name;
+    let rename_name =
+        let signature = FieldSignature.create EncodedType.String
+        { FieldName = Identifier.ofStr "Name"
+          Flags = FieldFlags(Public, initOnly = true) |> Flags.instanceField
+          Signature = builder.Blobs.FieldSig.GetOrAdd signature }
+        |> InstanceField.addRow builder renameargs'
+
+    // public RenameEventArgs(string name)
+    let rename_ctor =
+        let body =
+            fun content ->
+                let wr = MethodBodyWriter content
+                // : base()
+                wr.Ldarg 0us
+                wr.Call evargs_ctor
+
+                // this.Name <- name;
+                wr.Ldarg 0us
+                wr.Ldarg 1us
+                wr.Stfld rename_name
+
+                wr.Ret()
+                MethodBody 2us
+            |> MethodBody.create ValueNone
+        ObjectConstructor (
+            body,
+            MethodImplFlags(),
+            ConstructorFlags(Public, true) |> Flags.constructor,
+            ObjectConstructorSignature(ParamItem.create EncodedType.String) |> builder.Blobs.MethodDefSig.GetOrAdd,
+            ParamList.named [| "name" |]
+        )
+        |> ObjectConstructor.addRow builder renameargs'
+
+    // System.EventHandler<FakeGuiLibrary.Controls.RenameEventArgs>
+    let evhandler_rename = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef evhandler_1, ImmutableArray.Create EncodedType.String)
+
+    // TODO: Fix bug, since FieldRows one owner at a time, adding with a different owner later will mean previous field indices will be invalid.
+    // private System.EventHandler<FakeGuiLibrary.Controls.RenameEventArgs> Rename;
+    let frename =
+        let signature = EncodedType.GenericInst evhandler_rename |> FieldSignature.create
+        { FieldName = rename
+          Flags = FieldFlags Private |> Flags.instanceField
+          Signature = builder.Blobs.FieldSig.GetOrAdd signature }
+        |> InstanceField.addRow builder button'
+
+    // public event System.EventHandler<FakeGuiLibrary.Controls.RenameEventArgs> Rename;
+    Event.createInstance
+        builder
+        button'
+        { EventName = rename
+          EventType = TypeSpec.GenericInst evhandler_rename |> TypeSpec.createRow builder |> EventType.Spec // TODO: Fix, apparantly this TypeSpec is invalid for EventType
+          Flags = NoSpecialName }
+        Public
+        VTableLayout.NewSlot
+        true
+        false
+        (addBody frename)
+        (removeBody frename)
+    |> ignore<GeneratedEvent>
 
     (* Using custom event handlers *)
 

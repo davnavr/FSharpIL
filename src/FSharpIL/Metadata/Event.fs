@@ -39,7 +39,7 @@ module EventType =
         | _ -> invalidArg "eventType" "Invalid event type"
 
     let Null = EventType(EventTypeTag.Null, 0)
-    let TypeRef (eventType: RawIndex<TypeRef>) = eventType.ToTaggedIndex EventTypeTag.Ref
+    let Ref (eventType: RawIndex<TypeRef>) = eventType.ToTaggedIndex EventTypeTag.Ref
     let Spec (eventType: RawIndex<TypeSpecRow>) = eventType.ToTaggedIndex EventTypeTag.Spec
     let ConcreteClass (eventType: RawIndex<ConcreteClassDef>) = eventType.ToTaggedIndex EventTypeTag.ConcreteClass
     let AbstractClass (eventType: RawIndex<AbstractClassDef>) = eventType.ToTaggedIndex EventTypeTag.AbstractClass
