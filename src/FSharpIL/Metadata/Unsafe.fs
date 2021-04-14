@@ -84,12 +84,66 @@ let tryAddEventRow<'Tag>
         else ExistingMethodSemanticsError(index).ToResult()
     | ValueNone -> DuplicateEventError(event).ToResult()
 
-let tryCreateEventRow builder owner methods (event: Event<'Tag>) =
+let tryCreateEventRow builder owner (methods: inref<_>) (event: inref<Event<'Tag>>) =
     let row = event.Definition()
     tryAddEventRow<Event<'Tag>> builder owner &methods &row
 
 let inline createEventRow builder owner methods event =
-    tryCreateEventRow builder owner methods event |> ValidationError.check
+    tryCreateEventRow builder owner &methods &event |> ValidationError.check
+
+/// <summary>Creates an event with <c>.addon</c> and <c>.removeon</c> methods and corresponding private field.</summary>
+let tryCreateEvent<'Tag>
+    (builder: CliMetadataBuilder)
+    (owner: RawIndex<TypeDefRow>)
+    (event: inref<Event<'Tag>>)
+    methodFlags
+    hasThis
+    addBody
+    removeBody
+    =
+    let etype = EventHelpers.eventType event.EventType
+    let methodFlags' = methodFlags ||| MethodAttributes.SpecialName
+
+    let signature =
+        MethodDefSignature (
+            hasThis,
+            false,
+            MethodCallingConventions.Default,
+            ReturnType.itemVoid,
+            ImmutableArray.Create(ParamItem.create etype)
+        )
+        |> builder.Blobs.MethodDefSig.GetOrAdd
+
+    let add =
+        tryCreateMethodDefRow<MethodDefRow>
+            builder
+            owner
+            (addBody event.EventType)
+            MethodImplAttributes.IL
+            methodFlags'
+            (Identifier.concat2 Identifier.eventAdd event.EventName)
+            signature
+            EventHelpers.parameters
+
+    let remove =
+        tryCreateMethodDefRow<MethodDefRow>
+            builder
+            owner
+            (removeBody event.EventType)
+            MethodImplAttributes.IL
+            methodFlags'
+            (Identifier.concat2 Identifier.eventRemove event.EventName)
+            signature
+            EventHelpers.parameters
+
+    match add, remove with
+    | Ok add', Ok remove' ->
+        let methods = EventMethods(add', remove', ValueNone, ImmutableArray.Empty)
+        match tryCreateEventRow builder owner &methods &event with
+        | Ok row -> GeneratedEvent(row, add', remove') |> Ok
+        | Error err -> Error err
+    | Error err, _
+    | _, Error err -> Error err
 
 /// <param name="builder">The CLI metadata with the <c>TypeDef</c> table that the delegate type will be added to.</param>
 /// <param name="del">Corresponds to the <see cref="T:System.Delegate"/> or <see cref="T:System.MulticastDelegate"/> type.</param>

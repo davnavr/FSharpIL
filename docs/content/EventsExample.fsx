@@ -91,12 +91,12 @@ let example() =
 
         //let remove
 
-        { EventName = Identifier.ofStr "Click"
-          EventType = EventType.TypeRef evhandler
-          Flags = NoSpecialName }
-        Event.tryCreateInstanceRow
+        Event.createInstance
             builder
             (InstanceMemberOwner.ConcreteClass button)
+            { EventName = Identifier.ofStr "Click"
+              EventType = EventType.TypeRef evhandler
+              Flags = NoSpecialName }
 
     (* Events With Data*)
 

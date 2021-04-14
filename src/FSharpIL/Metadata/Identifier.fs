@@ -32,5 +32,12 @@ module Identifier =
             id
             str
 
+    /// Concatenates two identifiers together.
+    let concat2 (str1: Identifier) (str2: Identifier) = Identifier(sprintf "%O%O" str1 str2)
+
+    //let objectConstructor
+    let internal eventAdd = Identifier "add_"
+    let internal eventRemove = Identifier "remove_"
+
 [<AutoOpen>]
 module IdentifierPatterns = let (|Identifier|) (name: Identifier) = name.ToString()

@@ -47,7 +47,8 @@ type EventRow internal (flags: EventAttributes, name: Identifier, eventType: Eve
 
     interface IEquatable<EventRow> with member _.Equals other = name = other.Name
 
-// TODO Make Event`1 a normal struct to allow default value for Flags.
+// TODO: Make Event`1 a non-generic struct.
+// TODO: Make Event`1 a normal struct to allow default value for Flags.
 [<IsReadOnly; Struct>]
 type Event<'Tag> =
     { Flags: SpecialName

@@ -1,5 +1,6 @@
 ﻿namespace FSharpIL.Metadata
 
+open System.Collections.Generic
 open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
@@ -66,4 +67,5 @@ module ParamList =
     /// <exception cref="T:System.InvalidOperationException">Thrown when this function is called.</exception>
     let empty (_: ParamItem) (_: int32) = invalidOp "The parameter list was expected to be empty."
     let singleton (param: ParamRow) = fun (_: ParamItem) (_: int32)-> param
+    let named (names: #IReadOnlyList<string>) (_: ParamItem) (i: int32) = Param { Flags = ParamFlags(); ParamName = names.[i] }
     let noname = fun (_: ParamItem) (_: int32) -> Param { Flags = ParamFlags(); ParamName = "" }
