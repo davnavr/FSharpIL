@@ -62,22 +62,44 @@ let example() =
     let dele = TypeRef.createReflectedRow builder mscorlib' typeof<Delegate>
     let tfm = TypeRef.createReflectedRow builder mscorlib' typeof<System.Runtime.Versioning.TargetFrameworkAttribute>
     let evhandler = TypeRef.createReflectedRow builder mscorlib' typeof<EventHandler>
+    let evhandler_1 = TypeRef.createReflectedRow builder mscorlib' typedefof<EventHandler<_>>
+    let evargs = TypeRef.createReflectedRow builder mscorlib' typeof<EventArgs>
 
     let dele' = EncodedType.typeRefClass dele
     let evhandler' = EncodedType.typeRefClass evhandler
+    let evargs' = EncodedType.typeRefClass evargs
 
-    let delemodify name =
+    let delemodify =
         let parameters = ImmutableArray.Create(ParamItem.create dele', ParamItem.create dele')
         let signature = MethodRefDefaultSignature(false, false, ReturnType.encoded dele', parameters)
-        { Class = MemberRefParent.TypeRef dele
-          MemberName = Identifier.ofStr name
+        fun name ->
+            { Class = MemberRefParent.TypeRef dele
+              MemberName = Identifier.ofStr name
+              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+            |> MethodRef.addRowDefault builder
+
+    // static System.Delegate Combine(System.Delegate a, System.Delegate b)
+    let struct(combine, _) = delemodify "Combine"
+    // static System.Delegate Remove(System.Delegate source, System.Delegate value)
+    let struct(remove, _) = delemodify "Remove"
+
+    // void Invoke(object sender, System.EventArgs e)
+    let struct(evhandler_invoke, _) =
+        let parameters = ImmutableArray.Create(ParamItem.create EncodedType.Object, ParamItem.create evargs')
+        let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, parameters)
+        { Class = MemberRefParent.TypeRef evhandler
+          MemberName = Identifier.ofStr "Invoke"
           Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> MethodRef.addRowDefault builder
 
-    let struct(combine, _) = delemodify "Combine"
-    let struct(remove, _) = delemodify "Remove"
+    // static System.EventArgs Empty;
+    let struct(evargs_empty, _) =
+        { Class = MemberRefParent.TypeRef evargs
+          MemberName = Identifier.ofStr "Empty"
+          Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create evargs') }
+        |> FieldRef.addRow builder
 
-    // TargetFrameworkAttribute(_: string)
+    // TargetFrameworkAttribute(string frameworkName)
     let struct(tfm_ctor, _) =
         { Class = MemberRefParent.TypeRef tfm
           MemberName = Identifier.ofStr ".ctor"
@@ -125,7 +147,7 @@ let example() =
             wr.Castclass etype
             wr.Stfld field
             wr.Ret()
-            MethodBody()
+            MethodBody 3us
         |> MethodBody.create ValueNone
 
     let click = Identifier.ofStr "Click"
@@ -148,12 +170,54 @@ let example() =
             VTableLayout.NewSlot
             true
             false
-            (addBody fclick)
-            (removeBody fclick)
+            (addBody fclick) // this.Click = (System.EventHandler)System.Delegate.Combine(this.click, value);
+            (removeBody fclick) // this.Click = (System.EventHandler)System.Delegate.Remove(this.click, value);
 
-    (* Events With Data*)
+    (* Raising custom events *)
+    let mouseclick_body =
+        let locals =
+            // System.EventHandler click;
+            LocalVariable.encoded evhandler'
+            |> ImmutableArray.Create
+            |> builder.Blobs.LocalVarSig.GetOrAdd
+            |> builder.StandAloneSig.AddLocals
+            |> ValueSome
+        fun content ->
+            let wr = MethodBodyWriter content
+            // click = this.Click;
+            wr.Ldarg 0us
+            wr.Ldfld fclick
+            wr.Stloc 0us
 
-    (* Using Custom Event Handlers *)
+            // click.Invoke(this, System.EventArgs.Empty);
+            wr.Ldloc 0us
+            wr.Ldarg 0us
+            wr.Ldsfld evargs_empty
+            wr.Callvirt evhandler_invoke
+
+            wr.Ret()
+            MethodBody(2us, true)
+        |> MethodBody.create locals
+
+    // public void MouseClick()
+    InstanceMethod (
+        mouseclick_body,
+        InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod,
+        Identifier.ofStr "MouseClick",
+        builder.Blobs.MethodDefSig.GetOrAdd(InstanceMethodSignature ReturnType.itemVoid)
+    )
+    |> InstanceMethod.addRow builder button'
+    |> ignore
+
+    (* Adding and removing listeners *)
+    let addandremove_body =
+        ()
+
+    (* Events with data*)
+    // System.EventHandler<System.String>
+    let evhandler_string = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef evhandler_1, ImmutableArray.Create EncodedType.String)
+
+    (* Using custom event handlers *)
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

@@ -144,9 +144,14 @@ module internal Heap =
         let blob = SerializedBlobHeap(metadata.Blobs, size)
         let writer = BlobWriter(metadata, blob.Content)
 
-        // TODO: Verify that the blob's size is automatically reset for each blob
-
         for field in metadata.Field.Rows do fieldSignature blob &writer field.Signature
+
+        // TODO: Figure out how to write FieldRef signatures up here without iterating through MemberRef table twice.
+        // This is a "temporary" fix.
+        for memberRef in metadata.MemberRef.Rows do
+            match memberRef.Signature with
+            | MemberRefSignature.FieldRef field -> fieldSignature blob &writer field
+            | _ -> ()
 
         for method in metadata.MethodDef.Rows do
             let i = method.Signature
@@ -200,9 +205,7 @@ module internal Heap =
                         writer.Writer.WriteU1 ElementType.Sentinel
                         writer.Parameters signature.VarArgParameters
                 blob.CreateIndex(method, blob.MethodRefSig)
-            | MemberRefSignature.FieldRef field ->
-                fieldSignature blob &writer field
-            | MemberRefSignature.MethodRef _ -> ()
+            | _ -> ()
 
         for row in metadata.Constant.Rows do
             let i = row.Value

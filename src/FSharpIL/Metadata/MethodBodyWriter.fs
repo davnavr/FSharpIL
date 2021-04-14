@@ -517,6 +517,13 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <param name="field">The static field to load the value of.</param>
     member this.Ldsfld(field: RawIndex<StaticField>) = this.WriteFieldInstruction(0x7Euy, field, 0x4uy)
 
+    /// <summary>
+    /// (0x7E) Writes an instruction that pushes the value of a static field specified by a <c>FieldRef</c> onto the stack
+    /// (III.4.14).
+    /// </summary>
+    /// <param name="field">The static field to load the value of.</param>
+    member this.Ldsfld(field: RawIndex<FieldRef>) = this.WriteFieldInstruction(0x7Euy, field, 0xAuy)
+
     /// <summary>(0x7D) Writes an instruction that stores a value into a static field (III.4.30).</summary>
     member this.Stsfld field = this.WriteFieldInstruction(0x80uy, field, 0x4uy)
 
