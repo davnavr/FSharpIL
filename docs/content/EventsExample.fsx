@@ -64,6 +64,9 @@ let example() =
     let evhandler = TypeRef.createReflectedRow builder mscorlib' typeof<EventHandler>
     let evhandler_1 = TypeRef.createReflectedRow builder mscorlib' typedefof<EventHandler<_>>
     let evargs = TypeRef.createReflectedRow builder mscorlib' typeof<EventArgs>
+    let mcdelegate = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<MulticastDelegate>
+    let aresult = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<IAsyncResult>
+    let acallback = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<AsyncCallback>
 
     let dele' = EncodedType.typeRefClass dele
     let evhandler' = EncodedType.typeRefClass evhandler
@@ -222,27 +225,27 @@ let example() =
         ()
 
     (* Events with data*)
-    let rename = Identifier.ofStr "Rename"
-    // public class RenameEventArgs : System.EventArgs
-    let renameargs =
+    let txtchanged = Identifier.ofStr "TextChanged"
+    // public class TextChangedEventArgs : System.EventArgs
+    let txtchanged_evargs =
         { Access = TypeVisibility.Public
           Flags = ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true) |> Flags.concreteClass
-          ClassName = Identifier.ofStr "EventArgs" |> Identifier.concat2 rename
+          ClassName = Identifier.ofStr "EventArgs" |> Identifier.concat2 txtchanged
           TypeNamespace = ns
           Extends = Extends.TypeRef evargs }
         |> ConcreteClass.addRow builder
-    let renameargs' = InstanceMemberOwner.ConcreteClass renameargs
+    let txtchanged_evargs' = InstanceMemberOwner.ConcreteClass txtchanged_evargs
 
     // public readonly string Name;
-    let rename_name =
+    let txtchanged_name =
         let signature = FieldSignature.create EncodedType.String
         { FieldName = Identifier.ofStr "Name"
           Flags = FieldFlags(Public, initOnly = true) |> Flags.instanceField
           Signature = builder.Blobs.FieldSig.GetOrAdd signature }
-        |> InstanceField.addRow builder renameargs'
+        |> InstanceField.addRow builder txtchanged_evargs'
 
-    // public RenameEventArgs(string name)
-    let rename_ctor =
+    // public TextChangedEventArgs(string name)
+    let txtchanged_ctor =
         let body =
             fun content ->
                 let wr = MethodBodyWriter content
@@ -253,7 +256,7 @@ let example() =
                 // this.Name <- name;
                 wr.Ldarg 0us
                 wr.Ldarg 1us
-                wr.Stfld rename_name
+                wr.Stfld txtchanged_name
 
                 wr.Ret()
                 MethodBody 2us
@@ -265,36 +268,67 @@ let example() =
             ObjectConstructorSignature(ParamItem.create EncodedType.String) |> builder.Blobs.MethodDefSig.GetOrAdd,
             ParamList.named [| "name" |]
         )
-        |> ObjectConstructor.addRow builder renameargs'
+        |> ObjectConstructor.addRow builder txtchanged_evargs'
 
-    // System.EventHandler<FakeGuiLibrary.Controls.RenameEventArgs>
-    let evhandler_rename = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef evhandler_1, ImmutableArray.Create EncodedType.String)
+    // System.EventHandler<FakeGuiLibrary.Controls.TextChangedEventArgs>
+    let evhandler_txtchanged = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef evhandler_1, ImmutableArray.Create EncodedType.String)
 
     // TODO: Fix bug, since FieldRows one owner at a time, adding with a different owner later will mean previous field indices will be invalid.
-    // private System.EventHandler<FakeGuiLibrary.Controls.RenameEventArgs> Rename;
-    let frename =
-        let signature = EncodedType.GenericInst evhandler_rename |> FieldSignature.create
-        { FieldName = rename
+    // private System.EventHandler<FakeGuiLibrary.Controls.TextChangedEventArgs> Rename;
+    let ftxtchanged =
+        let signature = EncodedType.GenericInst evhandler_txtchanged |> FieldSignature.create
+        { FieldName = txtchanged
           Flags = FieldFlags Private |> Flags.instanceField
           Signature = builder.Blobs.FieldSig.GetOrAdd signature }
         |> InstanceField.addRow builder button'
 
-    // public event System.EventHandler<FakeGuiLibrary.Controls.RenameEventArgs> Rename;
+    // public event System.EventHandler<FakeGuiLibrary.Controls.TextChangedEventArgs> Rename;
     Event.createInstance
         builder
         button'
-        { EventName = rename
-          EventType = TypeSpec.GenericInst evhandler_rename |> TypeSpec.createRow builder |> EventType.Spec // TODO: Fix, apparantly this TypeSpec is invalid for EventType
+        { EventName = txtchanged
+          EventType = TypeSpec.GenericInst evhandler_txtchanged |> TypeSpec.createRow builder |> EventType.Spec // TODO: Fix, apparantly this TypeSpec is invalid for EventType
           Flags = NoSpecialName }
         Public
         VTableLayout.NewSlot
         true
         false
-        (addBody frename)
-        (removeBody frename)
+        (addBody ftxtchanged)
+        (removeBody ftxtchanged)
     |> ignore<GeneratedEvent>
 
     (* Using custom event handlers *)
+    // public class MouseMovedEventArgs : System.EventArgs
+    let mmove_evargs =
+        { Access = TypeVisibility.Public
+          Flags = ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true) |> Flags.concreteClass
+          ClassName = Identifier.ofStr "MouseMoveEventArgs"
+          TypeNamespace = ns
+          Extends = Extends.TypeRef evargs }
+        |> ConcreteClass.addRow builder
+    let mmove_evargs' = InstanceMemberOwner.ConcreteClass mmove_evargs
+
+    // public delegate void MouseMovedEventHandler(object sender, MouseMovedEventArgs args);
+    let evhandler_mmove =
+        let args =
+            ConcreteClass.typeIndex mmove_evargs
+            |> TypeDefOrRefOrSpecEncoded.TypeDef
+            |> EncodedType.Class
+        let parameters = Array.map ParamItem.create [| EncodedType.Object; args |]
+        let def =
+            DelegateDef (
+                TypeVisibility.Public,
+                ReturnType.itemVoid,
+                ImmutableArray.Create(items = parameters),
+                Identifier.ofStr "MouseMovedEventHandler",
+                ns = ns
+            )
+        Unsafe.addDelegateRow
+            builder
+            (Extends.TypeRef mcdelegate)
+            (EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeRef aresult))
+            (EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeRef acallback))
+            &def
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 
