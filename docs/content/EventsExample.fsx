@@ -238,10 +238,9 @@ let example() =
 
     // public readonly string Name;
     let txtchanged_name =
-        let signature = FieldSignature.create EncodedType.String
         { FieldName = Identifier.ofStr "Name"
           Flags = FieldFlags(Public, initOnly = true) |> Flags.instanceField
-          Signature = builder.Blobs.FieldSig.GetOrAdd signature }
+          Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create EncodedType.String) }
         |> InstanceField.addRow builder txtchanged_evargs'
 
     // public TextChangedEventArgs(string name)
@@ -273,7 +272,6 @@ let example() =
     // System.EventHandler<FakeGuiLibrary.Controls.TextChangedEventArgs>
     let evhandler_txtchanged = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef evhandler_1, ImmutableArray.Create EncodedType.String)
 
-    // TODO: Fix bug, since FieldRows one owner at a time, adding with a different owner later will mean previous field indices will be invalid.
     // private System.EventHandler<FakeGuiLibrary.Controls.TextChangedEventArgs> Rename;
     let ftxtchanged =
         let signature = EncodedType.GenericInst evhandler_txtchanged |> FieldSignature.create
@@ -296,39 +294,6 @@ let example() =
         (addBody ftxtchanged)
         (removeBody ftxtchanged)
     |> ignore<GeneratedEvent>
-
-    (* Using custom event handlers *)
-    // public class MouseMovedEventArgs : System.EventArgs
-    let mmove_evargs =
-        { Access = TypeVisibility.Public
-          Flags = ClassFlags(AutoLayout, AnsiClass, beforeFieldInit = true) |> Flags.concreteClass
-          ClassName = Identifier.ofStr "MouseMoveEventArgs"
-          TypeNamespace = ns
-          Extends = Extends.TypeRef evargs }
-        |> ConcreteClass.addRow builder
-    let mmove_evargs' = InstanceMemberOwner.ConcreteClass mmove_evargs
-
-    // public delegate void MouseMovedEventHandler(object sender, MouseMovedEventArgs args);
-    let evhandler_mmove =
-        let args =
-            ConcreteClass.typeIndex mmove_evargs
-            |> TypeDefOrRefOrSpecEncoded.TypeDef
-            |> EncodedType.Class
-        let parameters = Array.map ParamItem.create [| EncodedType.Object; args |]
-        let def =
-            DelegateDef (
-                TypeVisibility.Public,
-                ReturnType.itemVoid,
-                ImmutableArray.Create(items = parameters),
-                Identifier.ofStr "MouseMovedEventHandler",
-                ns = ns
-            )
-        Unsafe.addDelegateRow
-            builder
-            (Extends.TypeRef mcdelegate)
-            (EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeRef aresult))
-            (EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeRef acallback))
-            &def
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 
