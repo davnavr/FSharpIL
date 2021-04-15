@@ -26,7 +26,7 @@ let tryCreateTypeDefRow<'Tag> (builder: CliMetadataBuilder) flags typeName typeN
 
 // TODO: Only use inref for MethodDefRow if it is a struct.
 let tryAddMethodDefRow<'Tag> (builder: CliMetadataBuilder) owner method =
-    match builder.Method.TryAdd(owner, method) with
+    match builder.Method.TryAdd(owner, &method) with
     | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
     | ValueNone -> DuplicateMethodError(method).ToResult()
 
@@ -46,7 +46,7 @@ let inline createMethodDefRow<'Tag> builder owner body implFlags methodFlags nam
     tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList |> ValidationError.check
 
 let tryAddFieldRow<'Tag> (builder: CliMetadataBuilder) owner field =
-    match builder.Field.TryAdd(owner, field) with
+    match builder.Field.TryAdd(owner, &field) with
     | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
     | ValueNone -> DuplicateFieldError(field).ToResult()
 
@@ -56,7 +56,7 @@ let tryAddPropertyRow<'Tag>
     (methods: inref<PropertyMethods>)
     (property: inref<PropertyRow>)
     =
-    match builder.PropertyMap.TryAdd(owner, property) with
+    match builder.PropertyMap.TryAdd(owner, &property) with
     | ValueSome index ->
         if builder.MethodSemantics.TryAddProperty(index, &methods)
         then Ok index
@@ -77,7 +77,7 @@ let tryAddEventRow<'Tag>
     (methods: inref<EventMethods>)
     (event: inref<EventRow>)
     =
-    match builder.EventMap.TryAdd(owner, event) with
+    match builder.EventMap.TryAdd(owner, &event) with
     | ValueSome index ->
         if builder.MethodSemantics.TryAddEvent(index, &methods)
         then Ok index
@@ -282,7 +282,7 @@ let tryAddEnumRow builder enum (def: inref<EnumDef>) =
                     Identifier.ofStr "value__",
                     signature
                 )
-            builder.Field.TryAdd(trow, row).Value.ChangeTag<InstanceField>()
+            builder.Field.TryAdd(trow, &row).Value.ChangeTag<InstanceField>()
 
         for value in def.Values do
             let vtype = TypeDefOrRefOrSpecEncoded.TypeDef trow |> EncodedType.ValueType
@@ -296,7 +296,7 @@ let tryAddEnumRow builder enum (def: inref<EnumDef>) =
                     value.Name,
                     signature
                 )
-            let field' = builder.Field.TryAdd(trow, field).Value
+            let field' = builder.Field.TryAdd(trow, &field).Value
             let cvalue = builder.Constant.TryAdd(field', ConstantBlob.Integer value.Value).Value
             values.Add(EnumValueRow(field'.ChangeTag<StaticField>(), cvalue))
 

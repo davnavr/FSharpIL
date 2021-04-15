@@ -16,7 +16,7 @@ module InstanceMethod =
 module AbstractMethod =
     let methodIndex (method: RawIndex<AbstractMethod>) = method.ChangeTag<MethodDefRow>()
     let tryAddRow builder (AbstractMethodOwner owner) (method: AbstractMethod) =
-        method.Definition() |> Unsafe.tryAddMethodDefRow<AbstractMethod> builder owner
+        method.Definition() |>Unsafe.tryAddMethodDefRow<AbstractMethod> builder owner
     let inline addRow builder owner method = tryAddRow builder owner method |> ValidationError.check
 
 [<RequireQualifiedAccess>]
