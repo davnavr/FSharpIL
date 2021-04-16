@@ -52,14 +52,20 @@ type ParamRow =
 
     override this.ToString() = this.ParamName
 
+type ParamItemTag =
+    | Param = 0uy
+    | ByRef = 1uy
+    | TypedByRef = 2uy
+
 /// <summary>Represents a <c>Param</c> item used in signatures (II.23.2.10).</summary>
 [<IsReadOnly>]
 [<NoComparison; StructuralEquality>]
 type ParamItem = struct
+    val Tag: ParamItemTag
     val CustomMod: ImmutableArray<CustomModifier>
-    val internal Type: IEncodedType // ParamType
-    internal new (modifiers, paramType) = { CustomMod = modifiers; Type = paramType }
-    override this.ToString() = this.Type.ToString()
+    val internal ParamType: IEncodedType voption
+    internal new (tag, modifiers, paramType) = { Tag = tag; CustomMod = modifiers; ParamType = paramType }
+    override this.ToString() = this.ParamType.ToString()
 end
 
 [<RequireQualifiedAccess>]

@@ -13,9 +13,6 @@ module ItemExtensions =
             | :? ReturnTypeVoid -> ReturnType.Void
             | unknown -> failwithf "Unknown return type %A" unknown
 
-    type ParamItem with
-        member this.ParamType = Unsafe.As<EncodedType> this.Type
-
     type FieldSignature with
         member this.FieldType = Unsafe.As<EncodedType> this.Type
 

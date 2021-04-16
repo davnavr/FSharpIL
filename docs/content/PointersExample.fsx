@@ -107,12 +107,12 @@ let example() =
             MethodBody.Default
         |> MethodBody.create ValueNone
     let managed1_sig =
-        StaticMethodSignature ReturnType.itemVoid
+        StaticMethodSignature(ReturnType.itemVoid, ParamItem.byRef EncodedType.String)
     StaticMethod (
         managed1_body,
         StaticMethodFlags(Public, NoSpecialName) |> Flags.staticMethod,
         name = Identifier.ofStr "ManagedPointersExample",
-        signature = builder.Blobs.MethodDefSig.GetOrAdd managed1_sig // TODO: Create byref parameters................................................................
+        signature = builder.Blobs.MethodDefSig.GetOrAdd managed1_sig
     )
     |> StaticMethod.addRow builder examples'
     |> ignore<RawIndex<_>>

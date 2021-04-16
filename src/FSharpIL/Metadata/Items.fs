@@ -65,18 +65,18 @@ type FunctionPointer internal (tag: bool, index: int32) =
 
 /// Represents a native pointer (II.14.4.1).
 [<IsReadOnly; Struct>]
-type Pointer (modifiers: ImmutableArray<CustomModifier>, ptype: EncodedType) =
+type Pointer (modifiers: ImmutableArray<CustomModifier>, ptype: EncodedType voption) =
     member _.Modifiers = modifiers
-    member internal _.Type = ptype
+    member _.Type = ptype
 
 [<RequireQualifiedAccess>]
 module Pointer =
-    let (|Encoded|Void|) (pointer: Pointer) =
-        if pointer.Type = Unchecked.defaultof<EncodedType>
-        then Void pointer.Modifiers
-        else Encoded(pointer.Modifiers, pointer.Type)
-    let inline Encoded modifiers (ptype: EncodedType) = Pointer(modifiers, ptype)
-    let inline Void modifiers = Pointer(modifiers, Unchecked.defaultof<EncodedType>)
+    let inline (|Encoded|Void|) (pointer: Pointer) =
+        match pointer.Type with
+        | ValueSome ptype -> Encoded(pointer.Modifiers, ptype)
+        | ValueNone -> Void pointer.Modifiers
+    let inline Encoded modifiers (ptype: EncodedType) = Pointer(modifiers, ValueSome ptype)
+    let inline Void modifiers = Pointer(modifiers, ValueNone)
     let inline toType ptype = Encoded ImmutableArray.Empty ptype
 
 [<RequireQualifiedAccess>]
@@ -182,8 +182,25 @@ module GenericInst =
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module ParamItem =
-    let modified modifiers (paramType: EncodedType) = ParamItem(modifiers, paramType)
-    let create paramType = modified ImmutableArray.Empty paramType
+    let getType (param: inref<ParamItem>) =
+        ValueOption.map Unsafe.As<EncodedType> param.ParamType
+
+    let inline (|Param|ByRef|TypedByRef|) (param: ParamItem) =
+        match getType &param with
+        | ValueNone -> TypedByRef
+        | ValueSome ptype ->
+            match param.Tag with
+            | ParamItemTag.ByRef -> ByRef(param.CustomMod, ptype)
+            | ParamItemTag.Param
+            | _ -> Param(param.CustomMod, ptype)
+
+    let Param modifiers (paramType: EncodedType) = ParamItem(ParamItemTag.Param, modifiers, ValueSome(paramType :> IEncodedType))
+    let ByRef modifiers (paramType: EncodedType) = ParamItem(ParamItemTag.ByRef, modifiers, ValueSome(paramType :> IEncodedType))
+    let TypedByRef modifiers = ParamItem(ParamItemTag.TypedByRef, modifiers, ValueNone)
+
+    let create paramType = Param ImmutableArray.Empty paramType
+    let byRef paramType = ByRef ImmutableArray.Empty paramType
+    let typedByRef = TypedByRef ImmutableArray.Empty
     let mvar num = EncodedType.MVar num |> create
     let var num = EncodedType.Var num |> create
 

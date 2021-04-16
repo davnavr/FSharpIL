@@ -164,7 +164,11 @@ type internal BlobWriter = struct
     member this.Parameters(items: ImmutableArray<ParamItem>) =
         for param in items do
             this.CustomMod param.CustomMod
-            this.EncodedType param.ParamType
+            match ParamItem.getType &param with
+            | ValueNone -> this.Writer.WriteU1 ElementType.TypedByRef
+            | ValueSome ptype ->
+                if param.Tag = ParamItemTag.ByRef then this.Writer.WriteU1 ElementType.ByRef
+                this.EncodedType ptype
 
     member this.Elem(elem: Elem) =
         match elem with

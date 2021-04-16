@@ -2,6 +2,7 @@
 module internal FSharpIL.XmlDoc.Name
 
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 open System.Xml
 
 open FSharpIL.Metadata
@@ -114,7 +115,7 @@ let write index (metadata: CliMetadata) (writer: XmlWriter) =
 
         for i = 1 to parameters.Length do
             if i = 1 then writer.WriteRaw "("
-            encodedType metadata writer parameters.[i - 1].ParamType
+            encodedType metadata writer (Unsafe.As<EncodedType> parameters.[i - 1].ParamType)
             if i < parameters.Length
             then writer.WriteRaw ","
             else writer.WriteRaw ")"
