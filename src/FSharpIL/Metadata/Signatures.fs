@@ -20,7 +20,7 @@ type internal ElementType =
     | R4 = 0xCuy
     | R8 = 0xDuy
     | String = 0xEuy
-
+    | Ptr = 0xFuy
     | ByRef = 0x10uy
     | ValueType = 0x11uy
     | Class = 0x12uy
@@ -34,10 +34,17 @@ type internal ElementType =
     | Object = 0x1Cuy
     | SZArray = 0x1Duy
     | MVar = 0x1Euy
-
+    | CModReqd = 0x1Fuy
+    | CModOpt = 0x20uy
+    | Internal = 0x21uy
+    | Modifier = 0x40uy
     | Sentinel = 0x41uy
-
     | Pinned = 0x45uy
+    | Type = 50uy
+    | Boxed = 0x51uy
+    | Field = 0x53uy
+    | Property = 0x54uy
+    | Enum = 0x55uy
 
 type TypeDefOrRefOrSpecTag =
     | Def = 0uy

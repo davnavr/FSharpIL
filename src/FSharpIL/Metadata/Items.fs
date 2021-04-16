@@ -57,6 +57,37 @@ type GenericInst = struct
         GenericInst(t, gargs.ToImmutable(), isValueType)
 end
 
+/// <summary>Represents a pointer to a function <c>FNPTR</c> (II.23.2.12).</summary>
+[<IsReadOnly; Struct>]
+type FunctionPointer internal (tag: bool, index: int32) =
+    member internal _.Tag = tag
+    member internal _.Index = index
+
+/// Represents a native pointer (II.14.4.1).
+[<IsReadOnly; Struct>]
+type Pointer (modifiers: ImmutableArray<CustomModifier>, ptype: EncodedType) =
+    member _.Modifiers = modifiers
+    member internal _.Type = ptype
+
+[<RequireQualifiedAccess>]
+module Pointer =
+    let (|Encoded|Void|) (pointer: Pointer) =
+        if pointer.Type = Unchecked.defaultof<EncodedType>
+        then Void pointer.Modifiers
+        else Encoded(pointer.Modifiers, pointer.Type)
+    let inline Encoded modifiers (ptype: EncodedType) = Pointer(modifiers, ptype)
+    let inline Void modifiers = Pointer(modifiers, Unchecked.defaultof<EncodedType>)
+    let inline toType ptype = Encoded ImmutableArray.Empty ptype
+
+[<RequireQualifiedAccess>]
+module FunctionPointer =
+    let (|Def|Ref|) (signature: FunctionPointer) =
+        if signature.Tag
+        then Def(Blob<MethodDefSignature> signature.Index)
+        else Ref(Blob<MethodRefSignature> signature.Index)
+    let Def (signature: Blob<MethodDefSignature>) = FunctionPointer(true, signature.Index)
+    let Ref (signature: Blob<MethodRefSignature>) = FunctionPointer(false, signature.Index)
+
 /// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
 [<RequireQualifiedAccess>]
 type EncodedType =
@@ -90,15 +121,15 @@ type EncodedType =
     | U
     | Array of EncodedType * ArrayShape
     | Class of TypeDefOrRefOrSpecEncoded
-    | FunctionPointer // of MethodDefSig
-    //| FunctionPointer // of MethodRefSig
+    /// Represents a method pointer (II.14.5).
+    | FnPtr of FunctionPointer
     | GenericInst of GenericInst
     /// Represents a generic parameter in a generic method.
     | MVar of number: uint32
     /// <summary>Represents the <see cref="T:System.Object"/> type.</summary>
     | Object
-    //| PTR // of ?
-    //| PTR // of ?
+    /// Represents a native pointer (II.14.4.1).
+    | Ptr of Pointer
     /// <summary>Represents the <see cref="T:System.String"/> type.</summary>
     | String
     | SZArray of ImmutableArray<CustomModifier> * EncodedType

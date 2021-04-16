@@ -1,7 +1,6 @@
 ﻿namespace FSharpIL.Metadata.Heaps
 
 open System
-open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 open System.Text
@@ -106,21 +105,25 @@ type internal BlobWriter = struct
         | EncodedType.Class item ->
             this.Writer.WriteU1 ElementType.Class
             this.TypeDefOrRefOrSpecEncoded item
-
+        | EncodedType.FnPtr fpointer ->
+            match fpointer with
+            | _ -> failwith "TODO: Write method signature"
         | EncodedType.GenericInst inst -> this.GenericInst inst
-
         | EncodedType.I -> this.Writer.WriteU1 ElementType.I
         | EncodedType.I1 -> this.Writer.WriteU1 ElementType.I1
         | EncodedType.I2 -> this.Writer.WriteU1 ElementType.I2
         | EncodedType.I4 -> this.Writer.WriteU1 ElementType.I4
         | EncodedType.I8 -> this.Writer.WriteU1 ElementType.I8
-
         | EncodedType.MVar num ->
             this.Writer.WriteU1 ElementType.MVar
             this.CompressedUnsigned num
-
         | EncodedType.Object -> this.Writer.WriteU1 ElementType.Object
-
+        | EncodedType.Ptr pointer ->
+            this.Writer.WriteU1 ElementType.Ptr
+            this.CustomMod pointer.Modifiers
+            match pointer with
+            | Pointer.Encoded(_, ptype) -> this.EncodedType ptype
+            | Pointer.Void _ -> this.Writer.WriteU1 ElementType.Void
         | EncodedType.String -> this.Writer.WriteU1 ElementType.String
         | EncodedType.SZArray(modifiers, element) ->
             this.Writer.WriteU1 ElementType.SZArray
@@ -129,27 +132,22 @@ type internal BlobWriter = struct
                 failwith "Custom modifiers for SZArray is not yet supported"
 
             this.EncodedType element
-
-
         | EncodedType.R4 -> this.Writer.WriteU1 ElementType.R4
         | EncodedType.R8 -> this.Writer.WriteU1 ElementType.R8
+        | EncodedType.U -> this.Writer.WriteU1 ElementType.U
         | EncodedType.U1 -> this.Writer.WriteU1 ElementType.U1
         | EncodedType.U2 -> this.Writer.WriteU1 ElementType.U2
         | EncodedType.U4 -> this.Writer.WriteU1 ElementType.U4
         | EncodedType.U8 -> this.Writer.WriteU1 ElementType.U8
-
         | EncodedType.ValueType item ->
             this.Writer.WriteU1 ElementType.ValueType
             this.TypeDefOrRefOrSpecEncoded item
-
         | EncodedType.Var num ->
             this.Writer.WriteU1 ElementType.Var
             this.CompressedUnsigned num
 
-        | bad -> failwithf "Unable to write unsupported type %A" bad
-
-    member _.CustomMod(modifiers: #IReadOnlyCollection<CustomModifier>) =
-        if modifiers.Count > 0 then
+    member _.CustomMod(modifiers: ImmutableArray<CustomModifier>) =
+        if modifiers.Length > 0 then
             failwith "TODO: Implement writing of custom modifiers"
             ()
 
@@ -158,7 +156,10 @@ type internal BlobWriter = struct
         match item.ReturnType with
         | ReturnType.Void -> this.Writer.WriteU1 ElementType.Void
         | ReturnType.Type item -> this.EncodedType item
-        | bad -> failwithf "Unable to write unsupported return type %A" bad
+        | ReturnType.ByRefType item ->
+            this.Writer.WriteU1 ElementType.ByRef
+            this.EncodedType item
+        | ReturnType.TypedByRef -> this.Writer.WriteU1 ElementType.TypedByRef
 
     member this.Parameters(items: ImmutableArray<ParamItem>) =
         for param in items do

@@ -46,6 +46,7 @@ module LocalVariable =
 
     let Type modifiers constraints (ltype: EncodedType) =
         LocalVariable(LocalVariableTag.Type, modifiers, constraints, ltype)
+    /// Represent a local variable containing a managed pointer (II.14.4.2).
     let ByRef modifiers constraints (ltype: EncodedType) =
         LocalVariable(LocalVariableTag.ByRef, modifiers, constraints, ltype)
     let TypedByRef modifiers constraints (ltype: EncodedType) =
