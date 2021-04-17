@@ -16,7 +16,7 @@ type CliMetadata (builder: CliMetadataBuilder) =
         |> Seq.collect (fun method -> method.GetParameters blobs.MethodDefSig.[method.Signature])
         |> ImmutableArray.CreateRange
 
-    let standAloneSig = builder.StandAloneSig.ToImmutable()
+    let standAloneSig = builder.StandAloneSig.ToImmutable blobs.LocalVarSig
     let eventMap = builder.EventMap.ToImmutable()
     let propertyMap = builder.PropertyMap.ToImmutable()
 

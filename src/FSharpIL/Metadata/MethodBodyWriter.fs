@@ -14,6 +14,7 @@ open FSharpIL.Writing
 type internal MethodBodyContentImpl (writer, metadata, us: UserStringHeap) =
     inherit MethodBodyContent(writer)
     do if writer.Size > 0u then invalidArg "writer" "The method body writer must be a new instance"
+    [<Obsolete("Might not be necessary in order to write method bodies.")>]
     member _.Metadata: CliMetadata = metadata
     member _.UserString = us
     member this.CreateWriter() = MethodBodyWriter this
@@ -242,6 +243,14 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
 
     /// <summary>(0x28) Writes an instruction that calls a static method specified by a <c>MethodDef</c> (III.3.19).</summary>
     member this.Call(method: RawIndex<StaticMethod>) = this.Call(method.ChangeTag<MethodDefRow>())
+
+    /// <summary>(0x29) Writes an instruction that calls a method corresponding a function pointer (III.3.20).</summary>
+    /// <param name="description">
+    /// Corresponds to <c>callsitedescr</c>, which describes the arguments of the called methods.
+    /// </param>
+    member this.Calli(description: RawIndex<FunctionPointer>) = // TODO: Find other way to write index to method callsitedescr without accessing Metadata.
+        this.WriteU1 0x29uy
+        this.WriteMetadataToken(content.Metadata.StandAloneSig.RowIndex description, 0x11uy)
 
     member private this.Branch(opcode, isByte) =
         this.WriteU1 opcode

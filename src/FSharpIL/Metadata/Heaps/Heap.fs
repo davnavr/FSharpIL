@@ -141,6 +141,7 @@ module internal Heap =
 
     /// <summary>Creates the <c>#Blob</c> metadata stream, which contains signatures (II.24.2.4).</summary>
     let blob (metadata: CliMetadata) size =
+        // TODO: Iterate through collections in BlobHeap instead of CliMetadata.
         let blob = SerializedBlobHeap(metadata.Blobs, size)
         let writer = BlobWriter(metadata, blob.Content)
 
@@ -165,6 +166,8 @@ module internal Heap =
                 writer.MethodRefSig method
                 blob.CreateIndex(method, blob.MethodRefSig)
             | _ -> ()
+
+        invalidOp "TODO: Iterate through metadata.Blobs instead"
 
         for row in metadata.Constant.Rows do
             let i = row.Value

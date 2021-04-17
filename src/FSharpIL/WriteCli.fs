@@ -415,9 +415,13 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
 
 
-    // StandAloneSig, LocalVarSig (0x11)
-    for locals in tables.StandAloneSig.LocalVariables do
+    // StandAloneSig (0x11)
+    for locals in tables.StandAloneSig.LocalVariables do // LocalVarSig
         info.BlobStream.WriteIndex(locals, writer)
+    for signature in tables.StandAloneSig.MethodSignatures do // MethodDefSig, MethodRefSig
+        match signature with
+        | FunctionPointer.Def mdef -> info.BlobStream.WriteIndex(mdef, writer)
+        | FunctionPointer.Ref mref -> info.BlobStream.WriteIndex(mref, writer)
 
     // EventMap (0x12)
     if tables.EventMap.Count > 0 then

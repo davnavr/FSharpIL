@@ -132,6 +132,9 @@ let example() =
         |> builder.Blobs.MethodRefSig.GetOrAdd
         |> MethodRefSignature
         |> FunctionPointer.Ref
+    let mapper' = builder.StandAloneSig.AddSignature mapper
+
+    let tto = TypeSpec.MVar 1u |> TypeSpec.createRow builder
 
     // public static TTo[] MapArray<TFrom, TTo>(delegate*<TFrom, TTo> mapper, TFrom[] array)
     let maparray =
@@ -139,15 +142,60 @@ let example() =
         let body =
             let locals =
                 ImmutableArray.Create (
-                    LocalVariable.encoded(garray 1u) // TTo[] result;
+                    LocalVariable.encoded(garray 1u), // TTo[] result;
+                    LocalVariable.encoded EncodedType.I4 // int i;
                 )
                 |> builder.Blobs.LocalVarSig.GetOrAdd
                 |> builder.StandAloneSig.AddLocals
                 |> ValueSome
             fun content ->
                 let wr = MethodBodyWriter content
+                // result = new TTo[array.Length];
+                wr.Ldarg 1us
+                wr.Ldlen()
+                wr.Conv_i4()
+                wr.Newarr tto
+                wr.Stloc 0us
+
+                // i = 0;
+                wr.Ldc_i4 0
+                wr.Stloc 1us
+
+                (* go to condition of loop *)
+                let start = wr.Br_s()
+                let start_offset = wr.ByteCount
+
+                (* body of loop *)
+                let lbody = Label wr
+                // result[i] = mapper(array[i]);
+                wr.Ldloc 0us
+                wr.Ldloc 1us
+                wr.Ldarg 1us
+                wr.Ldloc 0us
+                wr.Calli mapper'
+                wr.Stelem tto
+
+                // i += 1;
+                wr.Ldloc 1us
+                wr.Ldc_i4 1
+                wr.Add()
+                wr.Stloc 1us
+
+                start.SetTarget(int32 (wr.ByteCount - start_offset))
+                // i < array.Length
+                wr.Ldloc 1us
+                wr.Ldarg 1us
+                wr.Ldlen()
+                wr.Conv_i4()
+
+                (*go to start if true*)
+                let go = wr.Blt_s()
+                lbody.SetTarget go
+
+                // return result;
+                wr.Ldloc 0us
                 wr.Ret()
-                MethodBody(0us, true)
+                MethodBody(4us, true)
             |> MethodBody.create locals
         let parameters =
             ImmutableArray.Create (
