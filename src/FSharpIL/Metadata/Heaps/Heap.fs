@@ -156,54 +156,13 @@ module internal Heap =
         for method in metadata.MethodDef.Rows do
             let i = method.Signature
             if not (blob.MethodDefSig.ContainsKey i) then
-                let signature = metadata.Blobs.MethodDefSig.ItemRef i
-                let gcount, cconventions =
-                    match signature.CallingConventions with
-                    | Default -> ValueNone, CallingConvention.Default
-                    | VarArg -> ValueNone, CallingConvention.VarArg
-                    | Generic cnt -> ValueSome cnt, CallingConvention.Generic
-
-                let mutable flags = cconventions
-                if signature.HasThis then flags <- flags ||| CallingConvention.HasThis
-                if signature.ExplicitThis then flags <- flags ||| CallingConvention.ExplicitThis
-                writer.Writer.WriteU1 flags
-
-                // GenParamCount
-                match gcount with
-                | ValueSome cnt -> writer.CompressedUnsigned cnt
-                | ValueNone -> ()
-
-                writer.CompressedUnsigned signature.Parameters.Length // ParamCount
-                writer.RetType signature.ReturnType
-                writer.Parameters signature.Parameters
+                writer.MethodDefSig(&metadata.Blobs.MethodDefSig.ItemRef i)
                 blob.CreateIndex(i, blob.MethodDefSig)
 
         for memberRef in metadata.MemberRef.Rows do
             match memberRef.Signature with
             | MemberRefSignature.MethodRef method when not (blob.MethodRefSig.ContainsKey method) ->
-                match method with
-                | MethodRefSignature.Default method ->
-                    let signature = metadata.Blobs.MethodRefSig.ItemRef method
-                    writer.Writer.WriteU1 signature.CallingConventions
-                    writer.CompressedUnsigned signature.Parameters.Length // ParamCount
-                    writer.RetType signature.ReturnType
-                    writer.Parameters signature.Parameters
-                | MethodRefSignature.Generic method ->
-                    let signature = metadata.Blobs.MethodRefSig.ItemRef method
-                    writer.Writer.WriteU1 signature.CallingConventions
-                    writer.CompressedUnsigned signature.GenParamCount
-                    writer.CompressedUnsigned signature.Parameters.Length // ParamCount
-                    writer.RetType signature.ReturnType
-                    writer.Parameters signature.Parameters
-                | MethodRefSignature.VarArg method ->
-                    let signature = metadata.Blobs.MethodRefSig.ItemRef method
-                    writer.Writer.WriteU1 signature.CallingConventions
-                    writer.CompressedUnsigned signature.ParamCount
-                    writer.RetType signature.ReturnType
-                    writer.Parameters signature.Parameters
-                    if not signature.VarArgParameters.IsEmpty then
-                        writer.Writer.WriteU1 ElementType.Sentinel
-                        writer.Parameters signature.VarArgParameters
+                writer.MethodRefSig method
                 blob.CreateIndex(method, blob.MethodRefSig)
             | _ -> ()
 
@@ -261,7 +220,7 @@ module internal Heap =
                 let signature = metadata.Blobs.TypeSpec.ItemRef i
 
                 match signature with
-                | TypeSpec.GenericInst inst -> writer.GenericInst inst
+                | TypeSpec.GenericInst inst -> writer.GenericInst &inst
                 // TODO: Factor out common code shared between writing of TypeSpec and encoded Type.
                 | TypeSpec.MVar num ->
                     writer.Writer.WriteU1 ElementType.MVar

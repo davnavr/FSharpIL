@@ -83,6 +83,7 @@ let example() =
             |]
             |> Array.map ParamItem.create
         StaticMethodSignature(ReturnType.itemVoid, parameters)
+    // public unsafe static void NativePointersExample(int* P_0, void* P_1)
     StaticMethod (
         native1_body,
         StaticMethodFlags(Public, NoSpecialName) |> Flags.staticMethod,
@@ -108,6 +109,7 @@ let example() =
         |> MethodBody.create ValueNone
     let managed1_sig =
         StaticMethodSignature(ReturnType.itemVoid, ParamItem.byRef EncodedType.String)
+    // public static void ManagedPointersExample(ref string P_0)
     StaticMethod (
         managed1_body,
         StaticMethodFlags(Public, NoSpecialName) |> Flags.staticMethod,
@@ -116,6 +118,72 @@ let example() =
     )
     |> StaticMethod.addRow builder examples'
     |> ignore<RawIndex<_>>
+
+    (* Function Pointers *)
+    let mapper =
+        // TODO: Should default or generic calling convention be used?
+        MethodRefGenericSignature (
+            false,
+            false,
+            2u,
+            ReturnType.encoded(EncodedType.MVar 1u),
+            ImmutableArray.Create(ParamItem.mvar 0u)
+        )
+        |> builder.Blobs.MethodRefSig.GetOrAdd
+        |> MethodRefSignature
+        |> FunctionPointer.Ref
+
+    // public static TTo[] MapArray<TFrom, TTo>(delegate*<TFrom, TTo> mapper, TFrom[] array)
+    let maparray =
+        let garray num = EncodedType.SZArray(ImmutableArray.Empty, EncodedType.MVar num)
+        let body =
+            let locals =
+                ImmutableArray.Create (
+                    LocalVariable.encoded(garray 1u) // TTo[] result;
+                )
+                |> builder.Blobs.LocalVarSig.GetOrAdd
+                |> builder.StandAloneSig.AddLocals
+                |> ValueSome
+            fun content ->
+                let wr = MethodBodyWriter content
+                wr.Ret()
+                MethodBody(0us, true)
+            |> MethodBody.create locals
+        let parameters =
+            ImmutableArray.Create (
+                ParamItem.create(EncodedType.FnPtr mapper), // delegate*<TFrom, TTo> mapper
+                ParamItem.create(garray 0u) // TFrom[] array
+            )
+        let signature =
+            StaticMethodSignature(MethodCallingConventions.Generic 2u, ReturnType.encoded(garray 1u), parameters)
+        StaticMethod (
+            body,
+            StaticMethodFlags(Public, NoSpecialName) |> Flags.staticMethod,
+            name = Identifier.ofStr "MapArray",
+            signature = builder.Blobs.MethodDefSig.GetOrAdd signature,
+            parameters = ParamList.named [| "mapper"; "array" |]
+        )
+        |> StaticMethod.addRow builder examples'
+
+    // TFrom
+    GenericParam.createRow
+        builder
+        (StaticMethod.methodIndex maparray |> GenericParamOwner.MethodDef)
+        GenericParamFlags.None
+        (Identifier.ofStr "TFrom")
+        Invariant
+        ConstraintSet.empty
+    |> ignore
+
+    // TTo
+    GenericParam.createRow
+        builder
+        (StaticMethod.methodIndex maparray |> GenericParamOwner.MethodDef)
+        GenericParamFlags.None
+        (Identifier.ofStr "TTo")
+        Invariant
+        ConstraintSet.empty
+    |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

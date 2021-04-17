@@ -87,12 +87,58 @@ type internal BlobWriter = struct
     member this.TypeDefOrRefOrSpecEncoded(index: TypeDefOrRefOrSpecEncoded) =
         this.TypeDefOrRefOrSpecEncoded(uint32 index.Tag, uint32 index.Value)
 
-    member this.GenericInst(inst: GenericInst) =
+    member this.GenericInst(inst: inref<GenericInst>) =
         this.Writer.WriteU1 ElementType.GenericInst
         this.Writer.WriteU1(if inst.IsValueType then ElementType.ValueType else ElementType.Class)
         this.TypeDefOrRefOrSpecEncoded inst.Type
         this.CompressedUnsigned inst.GenericArguments.Length
         for garg in inst.GenericArguments do this.EncodedType garg
+
+    member this.MethodDefSig(signature: inref<MethodDefSignature>) =
+        let gcount, cconventions =
+            match signature.CallingConventions with
+            | Default -> ValueNone, CallingConvention.Default
+            | VarArg -> ValueNone, CallingConvention.VarArg
+            | Generic cnt -> ValueSome cnt, CallingConvention.Generic
+
+        let mutable flags = cconventions
+        if signature.HasThis then flags <- flags ||| CallingConvention.HasThis
+        if signature.ExplicitThis then flags <- flags ||| CallingConvention.ExplicitThis
+        this.Writer.WriteU1 flags
+
+        // GenParamCount
+        match gcount with
+        | ValueSome cnt -> this.CompressedUnsigned cnt
+        | ValueNone -> ()
+
+        this.CompressedUnsigned signature.Parameters.Length // ParamCount
+        this.RetType signature.ReturnType
+        this.Parameters signature.Parameters
+
+    member this.MethodRefSig(signature: MethodRefSignature) =
+        match signature with
+        | MethodRefSignature.Default method ->
+            let signature' = this.Metadata.Blobs.MethodRefSig.ItemRef method
+            this.Writer.WriteU1 signature'.CallingConventions
+            this.CompressedUnsigned signature'.Parameters.Length // ParamCount
+            this.RetType signature'.ReturnType
+            this.Parameters signature'.Parameters
+        | MethodRefSignature.Generic method ->
+            let signature' = this.Metadata.Blobs.MethodRefSig.ItemRef method
+            this.Writer.WriteU1 signature'.CallingConventions
+            this.CompressedUnsigned signature'.GenParamCount
+            this.CompressedUnsigned signature'.Parameters.Length // ParamCount
+            this.RetType signature'.ReturnType
+            this.Parameters signature'.Parameters
+        | MethodRefSignature.VarArg method ->
+            let signature' = this.Metadata.Blobs.MethodRefSig.ItemRef method
+            this.Writer.WriteU1 signature'.CallingConventions
+            this.CompressedUnsigned signature'.ParamCount
+            this.RetType signature'.ReturnType
+            this.Parameters signature'.Parameters
+            if not signature'.VarArgParameters.IsEmpty then
+                this.Writer.WriteU1 ElementType.Sentinel
+                this.Parameters signature'.VarArgParameters
 
     member this.EncodedType(item: EncodedType) =
         match item with
@@ -106,9 +152,11 @@ type internal BlobWriter = struct
             this.Writer.WriteU1 ElementType.Class
             this.TypeDefOrRefOrSpecEncoded item
         | EncodedType.FnPtr fpointer ->
+            this.Writer.WriteU1 ElementType.FnPtr
             match fpointer with
-            | _ -> failwith "TODO: Write method signature"
-        | EncodedType.GenericInst inst -> this.GenericInst inst
+            | FunctionPointer.Def method -> this.MethodDefSig(&this.Metadata.Blobs.MethodDefSig.ItemRef method)
+            | FunctionPointer.Ref method -> this.MethodRefSig method
+        | EncodedType.GenericInst inst -> this.GenericInst &inst
         | EncodedType.I -> this.Writer.WriteU1 ElementType.I
         | EncodedType.I1 -> this.Writer.WriteU1 ElementType.I1
         | EncodedType.I2 -> this.Writer.WriteU1 ElementType.I2

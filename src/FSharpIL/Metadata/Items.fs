@@ -57,9 +57,15 @@ type GenericInst = struct
         GenericInst(t, gargs.ToImmutable(), isValueType)
 end
 
+type internal FunctionPointerTag =
+    | RefDefault = 1uy
+    | RefGeneric = 2uy
+    | RefVarArg = 3uy
+    | Def = 4uy
+
 /// <summary>Represents a pointer to a function <c>FNPTR</c> (II.23.2.12).</summary>
 [<IsReadOnly; Struct>]
-type FunctionPointer internal (tag: bool, index: int32) =
+type FunctionPointer internal (tag: FunctionPointerTag, index: int32) =
     member internal _.Tag = tag
     member internal _.Index = index
 
@@ -82,11 +88,15 @@ module Pointer =
 [<RequireQualifiedAccess>]
 module FunctionPointer =
     let (|Def|Ref|) (signature: FunctionPointer) =
-        if signature.Tag
-        then Def(Blob<MethodDefSignature> signature.Index)
-        else Ref(Blob<MethodRefSignature> signature.Index)
-    let Def (signature: Blob<MethodDefSignature>) = FunctionPointer(true, signature.Index)
-    let Ref (signature: Blob<MethodRefSignature>) = FunctionPointer(false, signature.Index)
+        match signature.Tag with
+        | FunctionPointerTag.Def -> Def(Blob<MethodDefSignature> signature.Index)
+        | _ ->
+            let mutable tag = signature.Tag
+            Ref(MethodRefSignature(Unsafe.As &tag, signature.Index))
+    let Def (signature: Blob<MethodDefSignature>) = FunctionPointer(FunctionPointerTag.Def, signature.Index)
+    let Ref (signature: MethodRefSignature) =
+        let mutable tag = signature.Tag
+        FunctionPointer(Unsafe.As &tag, signature.Index)
 
 /// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
 [<RequireQualifiedAccess>]

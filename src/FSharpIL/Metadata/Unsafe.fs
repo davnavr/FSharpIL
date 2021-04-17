@@ -8,6 +8,7 @@ open System.Reflection
 open FSharpIL
 
 let changeIndexTag<'From, 'To> (index: RawIndex<'From>) = index.ChangeTag<'To>()
+let changeBlobTag<'From, 'To> (blob: Blob<'From>) = blob.ChangeTag<'To>()
 
 let createFlags<'Tag, 'Flags when 'Flags :> System.Enum> flags = ValidFlags<'Tag, 'Flags> flags
 
