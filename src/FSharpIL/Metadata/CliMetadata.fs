@@ -21,7 +21,7 @@ type MetadataTableFlags =
     | PropertyMap = 0x200000UL
     | Property = 0x800000UL
     | MethodSemantics = 0x1000000UL
-
+    | MethodImpl = 0x2000000UL
     | ModuleRef = 0x4000000UL
     | TypeSpec = 0x8000000UL
 
@@ -35,8 +35,6 @@ type MetadataTableFlags =
     | MethodSpec = 0x80000000000UL
     | GenericParamConstraint = 0x100000000000UL
 
-// TODO: Make a computation expression for Result<_, _> or ValidationResult<_>
-// TODO: If making a module for unsafe functions, consider using a CompilerMessageAttribute as a warning.
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
 [<Sealed>]
 type CliMetadata (builder: CliMetadataBuilder) =
@@ -117,7 +115,9 @@ type CliMetadata (builder: CliMetadataBuilder) =
             bits <- bits ||| MetadataTableFlags.MethodSemantics
             uint32 builder.MethodSemantics.Count |> counts.Add
 
-
+        if builder.MethodImpl.Count > 0 then
+            bits <- bits ||| MetadataTableFlags.MethodImpl
+            uint32 builder.MethodImpl.Count |> counts.Add
 
         if builder.ModuleRef.Count > 0 then
             bits <- bits ||| MetadataTableFlags.ModuleRef
@@ -193,7 +193,7 @@ type CliMetadata (builder: CliMetadataBuilder) =
     member _.PropertyMap = propertyMap
     member val Property = MetadataTable propertyMap.Rows
     member val MethodSemantics = builder.MethodSemantics.ToImmutable()
-
+    member val MethodImpl = builder.MethodImpl.ToImmutable()
     member val ModuleRef = builder.ModuleRef.ToImmutable()
     member val TypeSpec = builder.TypeSpec.ToImmutable()
 

@@ -460,8 +460,11 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         tables.MethodDef.WriteSimpleIndex(row.Method, writer)
         methodSemanticsAssociation.WriteIndex(row.Association, writer)
 
-
-
+    // MethodImpl (0x19)
+    for row in tables.MethodImpl do
+        tables.TypeDef.WriteSimpleIndex(row.Class, writer)
+        methodDefOrRef.WriteIndex(row.MethodBody, writer)
+        methodDefOrRef.WriteIndex(row.MethodDeclaration, writer)
 
     // ModuleRef (0x1A)
     for moduleRef in tables.ModuleRef.Rows do

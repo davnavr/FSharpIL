@@ -42,6 +42,7 @@
     <Compile Include="Metadata\Method.fs" />
     <Compile Include="Metadata\MemberRef.fs" />
     <Compile Include="Metadata\MethodSpecRow.fs" />
+    <Compile Include="Metadata\MethodImpl.fs" />
     <Compile Include="Metadata\Items.fs" />
     <Compile Include="Metadata\TypeSpec.fs" />
     <Compile Include="Metadata\MethodSpec.fs" />

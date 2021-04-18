@@ -126,8 +126,8 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     member this.Property = this.PropertyMap.Rows
     /// (0x18)
     member val MethodSemantics = MethodSemanticsTableBuilder()
-    // (0x19)
-    // member MethodImpl
+    /// (0x19)
+    member val MethodImpl = MethodImplTableBuilder()
     /// (0x1A)
     member val ModuleRef = RowArrayList<ModuleRef>.Create()
     /// (0x1B)
