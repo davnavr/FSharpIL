@@ -19,6 +19,13 @@ module AbstractMethod =
         method.Definition() |>Unsafe.tryAddMethodDefRow<AbstractMethod> builder owner
     let inline addRow builder owner method = tryAddRow builder owner method |> ValidationError.check
 
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
+module FinalMethod =
+    let methodIndex (method: RawIndex<FinalMethod>) = method.ChangeTag<MethodDefRow>()
+    let tryAddRow builder (InstanceMemberOwner owner) (method: FinalMethod) =
+        method.Definition() |>Unsafe.tryAddMethodDefRow<FinalMethod> builder owner
+    let inline addRow builder owner method = tryAddRow builder owner method |> ValidationError.check
+
 [<RequireQualifiedAccess>]
 module internal Constructor =
     let inline tryAddRow<'Tag, 'Flags, 'Signature>

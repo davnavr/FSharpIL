@@ -69,6 +69,20 @@ let example() =
             MethodRefDefaultSignature(true, false, ReturnType.itemVoid)
             |> builder.Blobs.MethodRefSig.GetOrAdd }
         |> MethodRef.addRowDefault builder
+    // member _.CompareTo(_: 'T): int32
+    let struct (icomparable_compare, _) =
+        let signature =
+            MethodRefGenericSignature (
+                true,
+                false,
+                1u,
+                ReturnType.encoded EncodedType.I4,
+                ImmutableArray.Create(ParamItem.var 0u)
+            )
+        { Class = MemberRefParent.TypeRef icomparable_1
+          MemberName = Identifier.ofStr "CompareTo"
+          Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
+        |> MethodRef.addRowGeneric builder
     // member _.ToString(): string
     let struct (stringBuilder_ToString, _) =
         { Class = MemberRefParent.TypeRef stringBuilder
@@ -109,10 +123,11 @@ let example() =
 
     let fractionEncoded = EncodedType.typeDefStruct fraction'
 
-    let icomparable_fraction =
-        GenericInst.typeRef1 false icomparable_1 fractionEncoded
+    let icomparable t =
+        GenericInst.typeRef1 false icomparable_1 t
         |> TypeSpec.GenericInst
         |> TypeSpec.createRow builder
+        |> InterfaceIndex.TypeSpec
 
     let readonly = TypeRef.createReflectedRow builder mscorlib' typeof<System.Runtime.CompilerServices.IsReadOnlyAttribute>
     // new()
@@ -300,38 +315,42 @@ let example() =
     |> StaticMethod.addRow builder (StaticMemberOwner.Struct fraction)
     |> ignore
     // static member op_Explicit(fraction: Fraction): System.Double
-    let conv_double_body content =
-        let wr = MethodBodyWriter content
-        // (float this.numerator) / (float this.denominator)
-        wr.Ldarg 0us
-        wr.Ldfld numerator
-        wr.Conv_r8()
-        wr.Ldarg 0us
-        wr.Ldfld denominator
-        wr.Conv_r8()
-        wr.Div()
-        wr.Ret()
-        MethodBody.Default
-    let conv_double_signature =
-        StaticMethodSignature (
-            ReturnType.encoded EncodedType.R8,
-            ParamItem.create fractionEncoded
+    let conv_double =
+        let body content =
+            let wr = MethodBodyWriter content
+            // (float this.numerator) / (float this.denominator)
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Conv_r8()
+            wr.Ldarg 0us
+            wr.Ldfld denominator
+            wr.Conv_r8()
+            wr.Div()
+            wr.Ret()
+            MethodBody.Default
+        let signature =
+            StaticMethodSignature (
+                ReturnType.encoded EncodedType.R8,
+                ParamItem.create fractionEncoded
+            )
+            |> builder.Blobs.MethodDefSig.GetOrAdd
+        StaticMethod (
+            MethodBody.create ValueNone body,
+            Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
+            Identifier.ofStr "op_Explicit",
+            signature,
+            ParamList.named [| "fraction" |]
         )
-        |> builder.Blobs.MethodDefSig.GetOrAdd
-    StaticMethod (
-        MethodBody.create ValueNone conv_double_body,
-        Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
-        Identifier.ofStr "op_Explicit",
-        conv_double_signature,
-        fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" }
-    )
-    |> StaticMethod.addRow builder (StaticMemberOwner.Struct fraction)
-    |> ignore
+        |> StaticMethod.addRow builder (StaticMemberOwner.Struct fraction)
 
     // interface System.IComparable<Fraction>
-    InterfaceImpl.addRow builder (InterfaceImplementor.Struct fraction) (InterfaceIndex.TypeSpec icomparable_fraction) |> ignore
+    InterfaceImpl.addRow
+        builder
+        (InterfaceImplementor.Struct fraction)
+        (icomparable fractionEncoded)
+    |> ignore
 
-    // member (*virtual*) this.CompareTo(other: Fraction): Fraction
+    // member (*virtual*) this.CompareTo(other: Fraction): System.Int32
     let compare_body content =
         let wr = MethodBodyWriter content
         wr.Ldarg 0us
@@ -409,7 +428,67 @@ let example() =
     |> InstanceMethod.addRow builder (InstanceMemberOwner.Struct fraction)
     |> ignore
 
-    // TODO: Figure out how to avoid duplicating code for setting target framework.
+    // interface System.IComparable<System.Double> with
+    InterfaceImpl.addRow
+        builder
+        (InterfaceImplementor.Struct fraction)
+        (icomparable EncodedType.R8)
+    |> ignore
+
+    // member private (*final*) (*virtual*) (*hidebysig*) (*newslot*) this.``System.IComparable<System.Double>.CompareTo``
+    //     (
+    //         other: System.Double
+    //     ): System.Int32
+    let compare_float =
+        let body content =
+            let wr = MethodBodyWriter content
+            (* Since `this` is a pointer, we need to get the actual value with `ldobj` *)
+            // let value: System.Double = Fraction.op_Explicit this
+            wr.Ldarg 0us
+            wr.Ldobj(Struct.typeIndex fraction)
+            wr.Call conv_double
+
+            // value > other
+            wr.Dup()
+            wr.Ldarg 1us
+            let gt = wr.Bgt_s()
+
+            // value < other
+            wr.Ldarg 1us
+            let lt = wr.Blt_s()
+
+            // 0
+            wr.Ldc_i4 0
+            wr.Ret()
+
+            // -1
+            let lt' = Label wr
+            lt'.SetTarget lt
+            wr.Ldc_i4 -1
+            wr.Ret()
+
+            // 1
+            let gt' = Label wr
+            gt'.SetTarget gt
+            wr.Ldc_i4 1
+            wr.Ret()
+            MethodBody 3us
+        let signature = InstanceMethodSignature(ReturnType.encoded EncodedType.I4, ParamItem.create EncodedType.R8)
+        FinalMethod (
+            MethodBody.create ValueNone body,
+            Flags.finalMethod(InstanceMethodFlags(Private, NoSpecialName, NewSlot, hideBySig = true, isVirtual = true)),
+            Identifier.ofStr "System.IComparable<System.Double>.CompareTo",
+            builder.Blobs.MethodDefSig.GetOrAdd signature,
+            ParamList.named [| "other" |]
+        )
+        |> FinalMethod.addRow builder (InstanceMemberOwner.Struct fraction)
+
+    MethodImpl.add
+        builder
+        (Struct.typeIndex fraction)
+        (MethodDefOrRef.Def(FinalMethod.methodIndex compare_float))
+        (MethodDefOrRef.RefGeneric icomparable_compare)
+
     let tfm = TypeRef.createReflectedRow builder mscorlib' typeof<System.Runtime.Versioning.TargetFrameworkAttribute>
     // new(_: string)
     let struct(tfm_ctor, _) =
@@ -426,6 +505,7 @@ let example() =
     let metadata = CliMetadata builder
 
     use doc = new MemoryStream()
+    use xwriter = XmlWriter.Create doc
 
     Doc.generateDoc
         (fun i xml ->
@@ -439,29 +519,31 @@ let example() =
                 xml.WriteEndElement()
             | _ -> ())
         metadata
-        (XmlWriter.Create doc)
+        xwriter
         assemblyName
         [
             DocMember.Type fraction'
         ]
 
     // TODO: Return XML documentation as well.
-    PEFile.ofMetadata ImageFileFlags.dll metadata
+    {| File = PEFile.ofMetadata ImageFileFlags.dll metadata
+       Xml = doc.GetBuffer() |}
 
 (*** hide ***)
 #if COMPILED
 [<Tests>]
 let tests =
     let example' = lazy example()
-    let metadata = lazy PEFile.toCecilModule example'.Value
+    let metadata = lazy PEFile.toCecilModule example'.Value.File
     let fraction = lazy metadata.Value.GetType("CustomNumbers", "Fraction")
 
     afterRunTests <| fun() -> if metadata.IsValueCreated then metadata.Value.Dispose()
 
     testList "custom numeric types" [
         testCase "can save to disk" <| fun() ->
-            let path = Path.Combine(__SOURCE_DIRECTORY__, "exout", "CustomNumbers.dll")
-            WritePE.toPath path example'.Value
+            let dir = Path.Combine(__SOURCE_DIRECTORY__, "exout")
+            WritePE.toPath (Path.Combine(dir, "CustomNumbers.dll")) example'.Value.File
+            File.WriteAllBytes(Path.Combine(dir, "CustomNumbers.xml"), example'.Value.Xml)
 
         testCase "assembly name is correct" <| fun() -> test <@ metadata.Value.Assembly.Name.Name = "CustomNumbers" @>
 
@@ -476,6 +558,7 @@ let tests =
                     "op_Explicit"
                     "CompareTo"
                     "ToString"
+                    "System.IComparable<System.Double>.CompareTo"
                 ]
             let actual =
                 fraction.Value.Methods

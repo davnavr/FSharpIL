@@ -469,6 +469,16 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <summary>(0x6F) Writes an instruction that calls a late-bound method specified by an instance method (III.4.2).</summary>
     member this.Callvirt(method: RawIndex<InstanceMethod>) = this.CallvirtMethodDef(method.ChangeTag<MethodDefRow>())
 
+    member private this.Ldobj(typeTok: RawIndex<_>, table) =
+        this.WriteU1 0x71uy
+        this.WriteMetadataToken(uint32 typeTok, table)
+
+    /// <summary>
+    /// (0x71) Writes an instruction that copies a value of a type specified by a <c>TypeDef</c> from an address <c>src</c>
+    /// (III.4.13).
+    /// </summary>
+    member this.Ldobj(typeTok: RawIndex<TypeDefRow>) = this.Ldobj(typeTok, 0x2uy)
+
     /// <summary>
     /// (0x72) Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
     /// </summary>

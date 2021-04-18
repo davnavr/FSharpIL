@@ -90,6 +90,7 @@
     <Compile Include="Metadata\EventModule.fs" />
     <Compile Include="Metadata\PropertyModule.fs" />
     <Compile Include="Metadata\InterfaceImplModule.fs" />
+    <Compile Include="Metadata\MethodImplModule.fs" />
     <Compile Include="Metadata\EntryPoint.fs" />
     <Compile Include="Metadata\GenericParamModule.fs" />
     <Compile Include="XmlDoc\DocMember.fs" />
