@@ -79,7 +79,6 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// Gets the number of bytes that have been written.
     member _.ByteCount = content.Writer.Size
 
-    // TODO: Create enum type for metadata tables.
     member inline private _.WriteMetadataToken(index, table) = MetadataToken.write index table content.Writer
 
     member private this.WriteMetadataToken(index: RawIndex<FieldRow>) =

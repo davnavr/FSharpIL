@@ -2,6 +2,39 @@
 
 open System.Collections.Immutable
 
+[<System.Flags>]
+type MetadataTableFlags =
+    | Module = 1UL
+    | TypeRef = 2UL
+    | TypeDef = 4UL
+    | Field = 0x10UL // (1UL <<< 4)
+    | MethodDef = 0x40UL
+    | Param = 0x100UL
+    | InterfaceImpl = 0x200UL
+    | MemberRef = 0x400UL
+    | Constant = 0x800UL
+    | CustomAttribute = 0x1000UL
+
+    | StandAloneSig = 0x20000UL
+    | EventMap = 0x40000UL
+    | Event = 0x100000UL
+    | PropertyMap = 0x200000UL
+    | Property = 0x800000UL
+    | MethodSemantics = 0x1000000UL
+
+    | ModuleRef = 0x4000000UL
+    | TypeSpec = 0x8000000UL
+
+    | Assembly = 0x100000000UL
+    | AssemblyRef = 0x800000000UL
+
+    | File = 0x4000000000UL
+
+    | NestedClass = 0x20000000000UL
+    | GenericParam = 0x40000000000UL
+    | MethodSpec = 0x80000000000UL
+    | GenericParamConstraint = 0x100000000000UL
+
 // TODO: Make a computation expression for Result<_, _> or ValidationResult<_>
 // TODO: If making a module for unsafe functions, consider using a CompilerMessageAttribute as a warning.
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
@@ -26,103 +59,103 @@ type CliMetadata (builder: CliMetadataBuilder) =
 
     let valid, rowCounts =
         // Module table is always present
-        let mutable bits = 1UL
+        let mutable bits = MetadataTableFlags.Module
         let counts = ImmutableArray.CreateBuilder 48
         counts.Add 1u
 
         if builder.TypeRef.Count > 0 then
-            bits <- bits ||| (1UL <<< 1)
+            bits <- bits ||| MetadataTableFlags.TypeRef
             uint32 builder.TypeRef.Count |> counts.Add
         if builder.TypeDef.Count > 0 then
-            bits <- bits ||| (1UL <<< 2)
+            bits <- bits ||| MetadataTableFlags.TypeDef
             uint32 builder.TypeDef.Count |> counts.Add
         if builder.Field.Count > 0 then
-            bits <- bits ||| (1UL <<< 4)
+            bits <- bits ||| MetadataTableFlags.Field
             uint32 builder.Field.Count |> counts.Add
         if methodDef.Count > 0 then
-            bits <- bits ||| (1UL <<< 6)
+            bits <- bits ||| MetadataTableFlags.MethodDef
             uint32 methodDef.Count |> counts.Add
         if not parameters.IsEmpty then
-            bits <- bits ||| (1UL <<< 8)
+            bits <- bits ||| MetadataTableFlags.Param
             uint32 parameters.Length |> counts.Add
         if builder.InterfaceImpl.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x9)
+            bits <- bits ||| MetadataTableFlags.InterfaceImpl
             uint32 builder.InterfaceImpl.Count |> counts.Add
         if builder.MemberRef.Count > 0 then
-            bits <- bits ||| (1UL <<< 0xA)
+            bits <- bits ||| MetadataTableFlags.MemberRef
             uint32 builder.MemberRef.Count |> counts.Add
         if builder.Constant.Count > 0 then
-            bits <- bits ||| (1UL <<< 0xB)
+            bits <- bits ||| MetadataTableFlags.Constant
             uint32 builder.Constant.Count |> counts.Add
         if builder.CustomAttribute.Count > 0 then
-            bits <- bits ||| (1UL <<< 0xC)
+            bits <- bits ||| MetadataTableFlags.CustomAttribute
             uint32 builder.CustomAttribute.Count |> counts.Add
 
 
 
         if standAloneSig.TotalCount > 0 then
-            bits <- bits ||| (1UL <<< 0x11)
+            bits <- bits ||| MetadataTableFlags.StandAloneSig
             uint32 standAloneSig.TotalCount |> counts.Add
 
         if builder.EventMap.Owners.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x12)
+            bits <- bits ||| MetadataTableFlags.EventMap
             uint32 builder.EventMap.Owners.Count |> counts.Add
 
         if builder.EventMap.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x14)
+            bits <- bits ||| MetadataTableFlags.Event
             uint32 builder.EventMap.Count |> counts.Add
 
         if builder.PropertyMap.Owners.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x15)
+            bits <- bits ||| MetadataTableFlags.PropertyMap
             uint32 builder.PropertyMap.Owners.Count |> counts.Add
 
         if builder.PropertyMap.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x17)
+            bits <- bits ||| MetadataTableFlags.Property
             uint32 builder.PropertyMap.Count |> counts.Add
 
         if builder.MethodSemantics.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x18)
+            bits <- bits ||| MetadataTableFlags.MethodSemantics
             uint32 builder.MethodSemantics.Count |> counts.Add
 
 
 
         if builder.ModuleRef.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x1A)
+            bits <- bits ||| MetadataTableFlags.ModuleRef
             uint32 builder.ModuleRef.Count |> counts.Add
         if builder.TypeSpec.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x1B)
+            bits <- bits ||| MetadataTableFlags.TypeSpec
             uint32 builder.TypeSpec.Count |> counts.Add
 
 
         if builder.Assembly.IsSome then
-            bits <- bits ||| (1UL <<< 0x20)
+            bits <- bits ||| MetadataTableFlags.Assembly
             counts.Add 1u
         if builder.AssemblyRef.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x23)
+            bits <- bits ||| MetadataTableFlags.AssemblyRef
             uint32 builder.AssemblyRef.Count |> counts.Add
 
 
 
         if builder.File.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x26)
+            bits <- bits ||| MetadataTableFlags.File
             uint32 builder.File.Count |> counts.Add
 
 
 
         if nestedClass.Length > 0 then
-            bits <- bits ||| (1UL <<< 0x29)
+            bits <- bits ||| MetadataTableFlags.NestedClass
             uint32 nestedClass.Length |> counts.Add
 
         if genericParam.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x2A)
+            bits <- bits ||| MetadataTableFlags.GenericParam
             uint32 genericParam.Count |> counts.Add
 
         if builder.MethodSpec.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x2B)
+            bits <- bits ||| MetadataTableFlags.MethodSpec
             uint32 builder.MethodSpec.Count |> counts.Add
 
         if genericParamConstraints.Count > 0 then
-            bits <- bits ||| (1UL <<< 0x2C)
+            bits <- bits ||| MetadataTableFlags.GenericParamConstraint
             uint32 genericParamConstraints.Count |> counts.Add
 
         bits, counts.ToImmutable()
@@ -175,7 +208,7 @@ type CliMetadata (builder: CliMetadataBuilder) =
     member _.GenericParamConstraint: MetadataTable<_> = genericParamConstraints
 
     /// Gets a bit vector that indicates which tables are present (II.24.2.6).
-    member _.Valid: uint64 = valid
+    member _.Valid: MetadataTableFlags = valid
 
     /// <summary>
     /// Corresponds to the <c>Rows</c> field of the <c>#~</c> stream header,
