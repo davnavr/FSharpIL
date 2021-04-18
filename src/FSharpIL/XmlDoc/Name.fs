@@ -110,7 +110,7 @@ let write index (metadata: CliMetadata) (writer: XmlWriter) =
         // NOTE: For id strings and cref, `` number of generic parameters is included.
         writer.WriteRaw(metadata.GenericParam.GetRows(GenericParamOwner.MethodDef index').Length |> string)
 
-        let signature = &metadata.Blobs.MethodDefSig.ItemRef method.Signature
+        let signature = &metadata.Blobs.MethodDefSig.[method.Signature]
         let parameters = signature.Parameters
 
         for i = 1 to parameters.Length do

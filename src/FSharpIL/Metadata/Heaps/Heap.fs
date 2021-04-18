@@ -134,95 +134,92 @@ module internal Heap =
 
         Lookup<_>(guids, uint32 guids.Count * 16u, indexOf)
 
-    let inline private fieldSignature (blob: SerializedBlobHeap) (writer: inref<BlobWriter>) signature =
-        if not (blob.FieldSig.ContainsKey signature) then
-            writer.FieldSig(blob.Blobs.FieldSig.ItemRef signature)
-            blob.CreateIndex(signature, blob.FieldSig)
+    let private methodRefSig (blob: SerializedBlobHeap) (writer: inref<BlobWriter>) tag i =
+        let i' = MethodRefSignature(tag, i)
+        if not(blob.MethodRefSig.ContainsKey i') then
+            writer.MethodRefSig i'
+            blob.CreateIndex(i', blob.MethodRefSig)
 
     /// <summary>Creates the <c>#Blob</c> metadata stream, which contains signatures (II.24.2.4).</summary>
     let blob (metadata: CliMetadata) size =
-        // TODO: Iterate through collections in BlobHeap instead of CliMetadata.
         let blob = SerializedBlobHeap(metadata.Blobs, size)
         let writer = BlobWriter(metadata, blob.Content)
 
-        for field in metadata.Field.Rows do fieldSignature blob &writer field.Signature
+        // FieldSig
+        for i = 0 to metadata.Blobs.FieldSig.Count - 1 do
+            let i' = Blob i
+            if not(blob.FieldSig.ContainsKey i') then
+                writer.FieldSig &metadata.Blobs.FieldSig.[i']
+                blob.CreateIndex(i', blob.FieldSig)
 
-        // TODO: Figure out how to write FieldRef signatures up here without iterating through MemberRef table twice.
-        // This is a "temporary" fix.
-        for memberRef in metadata.MemberRef.Rows do
-            match memberRef.Signature with
-            | MemberRefSignature.FieldRef field -> fieldSignature blob &writer field
-            | _ -> ()
+        // MethodDefSig
+        for i = 0 to metadata.Blobs.MethodDefSig.Count - 1 do
+            let i' = Blob i
+            if not(blob.MethodDefSig.ContainsKey i') then
+                writer.MethodDefSig(&metadata.Blobs.MethodDefSig.[i'])
+                blob.CreateIndex(i', blob.MethodDefSig)
 
-        for method in metadata.MethodDef.Rows do
-            let i = method.Signature
-            if not (blob.MethodDefSig.ContainsKey i) then
-                writer.MethodDefSig(&metadata.Blobs.MethodDefSig.ItemRef i)
-                blob.CreateIndex(i, blob.MethodDefSig)
+        // MethodRefSig
+        for i = 0 to metadata.Blobs.MethodRefSig.DefaultCount - 1 do
+            methodRefSig blob &writer MemberRefSignatureTag.MethodDefault i
+        for i = 0 to metadata.Blobs.MethodRefSig.GenericCount - 1 do
+            methodRefSig blob &writer MemberRefSignatureTag.MethodGeneric i
+        for i = 0 to metadata.Blobs.MethodRefSig.VarArgCount - 1 do
+            methodRefSig blob &writer MemberRefSignatureTag.MethodVarArg i
 
-        for memberRef in metadata.MemberRef.Rows do
-            match memberRef.Signature with
-            | MemberRefSignature.MethodRef method when not (blob.MethodRefSig.ContainsKey method) ->
-                writer.MethodRefSig method
-                blob.CreateIndex(method, blob.MethodRefSig)
-            | _ -> ()
+        // Constant
+        for i = 0 to metadata.Blobs.Constant.Integers.Length - 1 do
+            let value = &metadata.Blobs.Constant.Integers.ItemRef i
+            let i' = ConstantBlob(value.Tag.ConstantType, i)
+            if not(blob.Constant.ContainsKey i') then
+                match value.Tag with
+                | IntegerType.Bool
+                | IntegerType.I1
+                | IntegerType.U1 -> writer.Writer.WriteU1 value.U1
+                | IntegerType.Char
+                | IntegerType.I2
+                | IntegerType.U2 -> writer.Writer.WriteU2 value.U2
+                | IntegerType.I4
+                | IntegerType.U4 -> writer.Writer.WriteU4 value.U4
+                | IntegerType.I8
+                | IntegerType.U8 -> writer.Writer.WriteU4 value.U4
+                | _ -> invalidOp "Cannot write integer constant blob for unknown integer type"
+                blob.CreateIndex(i', blob.Constant)
+        if metadata.Blobs.Constant.Count > metadata.Blobs.Constant.Integers.Length then
+            failwith "TODO: Write Float and String constants."
 
-        invalidOp "TODO: Iterate through metadata.Blobs instead"
-
-        for row in metadata.Constant.Rows do
-            let i = row.Value
-            if not (blob.Constant.ContainsKey i) then
-                match i with
-                | ConstantBlob.Integer i' ->
-                    let value = metadata.Blobs.Constant.ItemRef i'
-                    match value.Tag with
-                    | IntegerType.Bool
-                    | IntegerType.I1
-                    | IntegerType.U1 -> writer.Writer.WriteU1 value.U1
-                    | IntegerType.Char
-                    | IntegerType.I2
-                    | IntegerType.U2 -> writer.Writer.WriteU2 value.U2
-                    | IntegerType.I4
-                    | IntegerType.U4 -> writer.Writer.WriteU4 value.U4
-                    | IntegerType.I8
-                    | IntegerType.U8 -> writer.Writer.WriteU4 value.U4
-                    | _ -> invalidOp "Cannot write integer constant blob for unknown integer type"
-                | ConstantBlob.String i' -> failwith "TODO: String constant values are not supported at this time"
-                | ConstantBlob.Null -> writer.Writer.WriteU4 0u
-
-                blob.CreateIndex(i, blob.Constant)
-
-        for { Value = value } in metadata.CustomAttribute do
-            match value with
-            | ValueSome i when not (blob.CustomAttribute.ContainsKey i) ->
-                let signature = metadata.Blobs.CustomAttribue.ItemRef i
+        // CustomAttribute
+        for i = 0 to metadata.Blobs.CustomAttribue.Count - 1 do
+            let i' = Blob i
+            if not(blob.CustomAttribute.ContainsKey i') then
+                let signature = &metadata.Blobs.CustomAttribue.[i']
                 writer.Writer.WriteU2 1us // Prolog
                 for arg in signature.FixedArg do
                     writer.FixedArg arg
                 writer.Writer.WriteU2 signature.NamedArg.Length // NumNamed
                 for arg in signature.NamedArg do
                     failwithf "TODO: Implement writing of named arguments for custom attributes"
-                blob.CreateIndex(i, blob.CustomAttribute)
-            | _ -> ()
+                blob.CreateIndex(i', blob.CustomAttribute)
+                ()
 
-        for row in metadata.Property.Rows do
-            let i = row.Type
-            if not (blob.PropertySig.ContainsKey i) then
-                let signature = metadata.Blobs.PropertySig.ItemRef i
+        // PropertySig
+        for i = 0 to metadata.Blobs.PropertySig.Count - 1 do
+            let i' = Blob i
+            if not(blob.PropertySig.ContainsKey i') then
+                let signature = &metadata.Blobs.PropertySig.[i']
                 let property = if signature.HasThis then 0x28uy else 0x8uy
                 writer.Writer.WriteU1 property
                 writer.CompressedUnsigned signature.Parameters.Length // ParamCount
                 writer.CustomMod signature.CustomMod
                 writer.EncodedType signature.Type
                 writer.Parameters signature.Parameters
-                blob.CreateIndex(i, blob.PropertySig)
+                blob.CreateIndex(i', blob.PropertySig)
 
-        for typeSpec in metadata.TypeSpec.Rows do
-            let i = typeSpec.Signature
-            if not (blob.TypeSpec.ContainsKey i) then
-                let signature = metadata.Blobs.TypeSpec.ItemRef i
-
-                match signature with
+        // TypeSpec
+        for i = 0 to metadata.Blobs.TypeSpec.Count - 1 do
+            let i' = TypeSpecBlob i
+            if not(blob.TypeSpec.ContainsKey i') then
+                match metadata.Blobs.TypeSpec.[i'] with
                 | TypeSpec.GenericInst inst -> writer.GenericInst &inst
                 // TODO: Factor out common code shared between writing of TypeSpec and encoded Type.
                 | TypeSpec.MVar num ->
@@ -231,21 +228,23 @@ module internal Heap =
                 | TypeSpec.Var num ->
                     writer.Writer.WriteU1 ElementType.Var
                     writer.CompressedUnsigned num
+                blob.CreateIndex(i', blob.TypeSpec)
 
-                blob.CreateIndex(i, blob.TypeSpec)
-
-        for methodSpec in metadata.MethodSpec.Rows do
-            let i = methodSpec.Instantiation
-            if not (blob.MethodSpec.ContainsKey i) then
-                let inst = metadata.Blobs.MethodSpec.ItemRef i
+        // MethodSpec
+        for i = 0 to metadata.Blobs.MethodSpec.Count - 1 do
+            let i' = MethodSpecBlob i
+            if not(blob.MethodSpec.ContainsKey i') then
+                let inst = &metadata.Blobs.MethodSpec.[i']
                 writer.Writer.WriteU1 0xAuy // GENERICINST
                 writer.CompressedUnsigned inst.Count
                 for gparam in inst.GenericArguments do writer.EncodedType gparam
-                blob.CreateIndex(i, blob.MethodSpec)
+                blob.CreateIndex(i', blob.MethodSpec)
 
-        for locals in metadata.StandAloneSig.LocalVariables do
-            if not (blob.LocalVarSig.ContainsKey locals) then
-                let signature = metadata.Blobs.LocalVarSig.ItemRef locals
+        // LocalVarSig
+        for i = 0 to metadata.Blobs.LocalVarSig.Count - 1 do
+            let i' = Blob i
+            if not(blob.LocalVarSig.ContainsKey i') then
+                let signature = &metadata.Blobs.LocalVarSig.[i']
                 writer.Writer.WriteU1 0x7uy // LOCAL_SIG
                 writer.CompressedUnsigned signature.Length // Count
                 for local in signature do
@@ -259,21 +258,14 @@ module internal Heap =
                         if local.Tag = LocalVariableTag.ByRef then
                             writer.Writer.WriteU1 ElementType.ByRef
                         writer.EncodedType local.LocalType
-                blob.CreateIndex(locals, blob.LocalVarSig)
+                blob.CreateIndex(i', blob.LocalVarSig)
 
-        for row in metadata.AssemblyRef.Rows do
-            match row.PublicKeyOrToken.AsByteBlob() with
-            | ValueSome i ->
-                let token = metadata.Blobs.MiscBytes.ItemRef i
-                writer.Writer.WriteBytes token // TODO: Fix, something is wrong with length of public key tokens.
-                blob.CreateIndex(i, blob.MiscBytes)
-            | ValueNone -> ()
-
-        for { File.HashValue = i } in metadata.File.Rows do
-            if not (blob.MiscBytes.ContainsKey i) then
-                let hash = metadata.Blobs.MiscBytes.ItemRef i
-                writer.Writer.WriteBytes hash
-                blob.CreateIndex(i, blob.MiscBytes)
+        // Miscellaneous
+        for i = 0 to metadata.Blobs.MiscBytes.Count - 1 do
+            let i' = Blob i
+            if not(blob.MiscBytes.ContainsKey i') then
+                writer.Writer.WriteBytes metadata.Blobs.MiscBytes.[i']
+                blob.CreateIndex(i', blob.MiscBytes)
 
         blob
 

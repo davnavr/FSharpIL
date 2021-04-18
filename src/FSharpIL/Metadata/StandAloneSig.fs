@@ -22,7 +22,7 @@ type StandAloneSigTable internal
 
     interface IMetadataTable<MethodLocalVariables> with
         member this.Count = this.TotalCount
-        member this.Item with get i = &locals'.ItemRef(this.GetSignature(i))
+        member this.Item with get i = &locals'.[this.GetSignature i]
 
 [<Sealed>]
 type StandAloneSigTableBuilder internal () =

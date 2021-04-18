@@ -96,11 +96,10 @@ type DuplicatePropertyError (property: PropertyRow) =
 [<Sealed>]
 type PropertySigBlobLookup internal (lookup: BlobLookup<PropertySignature>) =
     member _.Count = lookup.Count
-    member private _.GetSignature(i: Blob<_>) = lookup.[i.ChangeTag()]
-    member _.ItemRef i: inref<_> = &lookup.ItemRef i
-    member _.Item with get i = lookup.[i]
-    member this.Item with get (i: Blob<InstancePropertySignature>) = this.GetSignature i
-    member this.Item with get (i: Blob<StaticPropertySignature>) = this.GetSignature i
+    member private _.GetSignature(i: Blob<_>) = &lookup.[i.ChangeTag()]
+    member _.Item with get (i: Blob<PropertySignature>) = &lookup.[i]
+    member this.Item with get (i: Blob<InstancePropertySignature>) = &this.GetSignature i
+    member this.Item with get (i: Blob<StaticPropertySignature>) = &this.GetSignature i
 
 [<Sealed>]
 type PropertySigBlobLookupBuilder internal () =

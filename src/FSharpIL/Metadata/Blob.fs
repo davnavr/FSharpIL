@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Collections.Generic
+open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL
@@ -31,10 +32,9 @@ module internal Blob =
             Ok(Blob<'Item> i)
 
 [<IsReadOnly; Struct>]
-type BlobLookup<'Item> internal (blobs: 'Item[]) =
+type BlobLookup<'Item> internal (blobs: ImmutableArray<'Item>) =
     member _.Count = blobs.Length
-    member _.Item with get (i: Blob<'Item>) = blobs.[i.Index]
-    member _.ItemRef(i: Blob<'Item>): inref<'Item> = &blobs.[i.Index]
+    member _.Item with get (i: Blob<'Item>) = &blobs.ItemRef(i.Index)
 
 [<Sealed>]
 type BlobLookupBuilder<'Item when 'Item : equality> internal () =
@@ -46,7 +46,7 @@ type BlobLookupBuilder<'Item when 'Item : equality> internal () =
     member this.GetOrAdd item = this.TryAdd item |> Result.any
 
     member internal _.ToImmutable() =
-        let blobs = Array.zeroCreate lookup.Count
+        let mutable blobs = Array.zeroCreate lookup.Count
         for KeyValue(item, i) in lookup do
             blobs.[i] <- item
-        BlobLookup<'Item> blobs
+        BlobLookup<'Item>(Unsafe.As &blobs)

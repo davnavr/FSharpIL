@@ -17,8 +17,7 @@ type TypeSpec =
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type TypeSpecBlobLookup internal (blobs: TypeSpec[]) =
     member _.Count = blobs.Length
-    member _.Item with get (i: TypeSpecBlob) = blobs.[i.Index]
-    member _.ItemRef(i: TypeSpecBlob): inref<TypeSpec> = &blobs.[i.Index]
+    member _.Item with get (i: TypeSpecBlob): inref<_> = &blobs.[i.Index]
 
 [<Sealed>]
 type TypeSpecBlobLookupBuilder internal () =

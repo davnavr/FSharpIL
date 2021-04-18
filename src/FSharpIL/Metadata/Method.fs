@@ -220,13 +220,12 @@ module EntryPointToken =
 [<Sealed>]
 type MethodDefSigBlobLookup internal (lookup: BlobLookup<MethodDefSignature>) =
     member _.Count = lookup.Count
-    member _.Item with get i = lookup.[i]
-    member _.ItemRef i: inref<_> = &lookup.ItemRef(i)
-    member private _.GetSignature<'Tag>(index: Blob<'Tag>) = lookup.[index.ChangeTag()]
-    member this.Item with get i = this.GetSignature<InstanceMethodSignature> i
-    member this.Item with get i = this.GetSignature<ObjectConstructorSignature> i
-    member this.Item with get i = this.GetSignature<StaticMethodSignature> i
-    member this.Item with get i = this.GetSignature<EntryPointSignature> i
+    member _.Item with get i = &lookup.[i]
+    member private _.GetSignature<'Tag>(index: Blob<'Tag>) = &lookup.[index.ChangeTag()]
+    member this.Item with get i = &this.GetSignature<InstanceMethodSignature> i
+    member this.Item with get i = &this.GetSignature<ObjectConstructorSignature> i
+    member this.Item with get i = &this.GetSignature<StaticMethodSignature> i
+    member this.Item with get i = &this.GetSignature<EntryPointSignature> i
 
 [<Sealed>]
 type MethodDefSigBlobLookupBuilder internal () =

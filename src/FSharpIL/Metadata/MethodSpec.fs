@@ -23,8 +23,7 @@ end
 [<IsReadOnly; Struct>]
 type MethodSpecBlobLookup internal (blobs: MethodSpec[]) =
     member _.Count = blobs.Length
-    member _.Item with get (i: MethodSpecBlob) = blobs.[i.Index]
-    member _.ItemRef(i: MethodSpecBlob): inref<MethodSpec> = &blobs.[i.Index]
+    member _.Item with get (i: MethodSpecBlob): inref<MethodSpec> = &blobs.[i.Index]
 
 [<Sealed>]
 type MethodSpecBlobLookupBuilder internal () =

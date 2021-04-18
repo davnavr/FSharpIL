@@ -128,8 +128,7 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
             let locals, localsi =
                 match method.Body.LocalVariables with
                 | ValueSome i ->
-                    let row = info.Cli.StandAloneSig.GetSignature i
-                    let signature = info.Cli.Blobs.LocalVarSig.ItemRef row
+                    let signature = &info.Cli.Blobs.LocalVarSig.[info.Cli.StandAloneSig.GetSignature i]
                     signature.Length, uint32 i
                 | ValueNone -> 0, 0u
             let tiny = size < 64u && body.MaxStack <= 8us && locals <= 0 // &&
@@ -346,7 +345,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         let mutable param = 1u
 
         for method in tables.MethodDef.Rows do
-            let signature = tables.Blobs.MethodDefSig.ItemRef method.Signature
+            let signature = &tables.Blobs.MethodDefSig.[method.Signature]
             writer.WriteU4 info.MethodBodies.[method.Body] // Rva
             writer.WriteU2 method.ImplFlags
             writer.WriteU2 method.Flags
@@ -466,8 +465,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
     // ModuleRef (0x1A)
     for moduleRef in tables.ModuleRef.Rows do
-        let name = tables.File.[moduleRef.File].FileName
-        info.StringsStream.WriteStringIndex(name, writer)
+        info.StringsStream.WriteStringIndex(tables.File.[moduleRef.File].FileName, writer)
 
     // TypeSpec (0x1B)
     for typeSpec in tables.TypeSpec.Rows do info.BlobStream.WriteIndex(typeSpec.Signature, writer)

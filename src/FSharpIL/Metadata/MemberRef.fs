@@ -252,12 +252,12 @@ type MethodRefSigBlobLookup internal
         rvararg: MethodRefVarArgSignature[]
     ) =
     member _.Count = rdefault.Length + rgeneric.Length + rvararg.Length
-    member _.ItemRef(i: Blob<MethodRefDefaultSignature>): inref<_> = &rdefault.[i.Index]
-    member _.ItemRef(i: Blob<MethodRefGenericSignature>): inref<_> = &rgeneric.[i.Index]
-    member _.ItemRef(i: Blob<MethodRefVarArgSignature>): inref<_> = &rvararg.[i.Index]
-    member this.Item with get (i: Blob<MethodRefDefaultSignature>) = this.ItemRef i
-    member this.Item with get (i: Blob<MethodRefGenericSignature>) = this.ItemRef i
-    member this.Item with get (i: Blob<MethodRefVarArgSignature>) = this.ItemRef i
+    member _.DefaultCount = rdefault.Length
+    member _.GenericCount = rgeneric.Length
+    member _.VarArgCount = rvararg.Length
+    member _.Item with get (i: Blob<MethodRefDefaultSignature>): inref<_> = &rdefault.[i.Index]
+    member _.Item with get (i: Blob<MethodRefGenericSignature>): inref<_> = &rgeneric.[i.Index]
+    member _.Item with get (i: Blob<MethodRefVarArgSignature>): inref<_> = &rvararg.[i.Index]
 
 [<Sealed>]
 type MethodRefSigBlobLookupBuilder internal () =

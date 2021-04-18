@@ -2,6 +2,8 @@
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
 open Microsoft.FSharp.Core.Operators.Checked
 
@@ -90,6 +92,9 @@ type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, default
             size <- size + uint32 length
 
     member this.WriteBytes(bytes: byte[]) = this.WriteBytes(Span<_> bytes)
+    member this.WriteBytes(bytes: ImmutableArray<byte>) =
+        let mutable bytes' = bytes
+        this.WriteBytes(Unsafe.As<_, byte[]> &bytes')
     member this.WriteBytes(bytes: seq<byte>) = Seq.iter this.WriteU1 bytes
 
     [<Obsolete>]

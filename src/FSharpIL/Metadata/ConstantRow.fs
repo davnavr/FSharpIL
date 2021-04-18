@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Collections.Generic
+open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL
@@ -136,13 +137,15 @@ type ConstantRow internal (parent: ConstantParent, value: ConstantBlob) =
 [<Sealed>]
 type ConstantBlobLookup internal
     (
-        integers: IntegerConstant[]
-        //floats: FloatConstant[],
-        //strings: ConstantString[]
+        integers: ImmutableArray<IntegerConstant>
+        //floats: ImmutableArray<FloatConstant>,
+        //strings: ImmutableArray<ConstantString>
     ) =
     member _.Count = integers.Length // +
-    member _.Item with get (i: IntegerConstantBlob) = integers.[i.Index]
-    member _.ItemRef(i: IntegerConstantBlob): inref<_> = &integers.[i.Index]
+    member _.Integers = integers
+    member _.Item with get (i: IntegerConstantBlob) =
+        let index = i.Index
+        &integers.ItemRef index
 
 // TODO: Don't forget to include counts of floats and strings later.
 
@@ -165,7 +168,7 @@ type ConstantBlobLookupBuilder internal () =
     member _.Count = integers.Count // +
 
     member internal _.ToImmutable() =
-        let integers' = Array.zeroCreate integers.Count
+        let mutable integers' = Array.zeroCreate<IntegerConstant> integers.Count
         for KeyValue(int, i) in integers do
             integers'.[i] <- int
-        ConstantBlobLookup(integers')
+        ConstantBlobLookup(Unsafe.As &integers')

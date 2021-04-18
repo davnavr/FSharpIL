@@ -118,20 +118,20 @@ type internal BlobWriter = struct
     member this.MethodRefSig(signature: MethodRefSignature) =
         match signature with
         | MethodRefSignature.Default method ->
-            let signature' = this.Metadata.Blobs.MethodRefSig.ItemRef method
+            let signature' = &this.Metadata.Blobs.MethodRefSig.[method]
             this.Writer.WriteU1 signature'.CallingConventions
             this.CompressedUnsigned signature'.Parameters.Length // ParamCount
             this.RetType signature'.ReturnType
             this.Parameters signature'.Parameters
         | MethodRefSignature.Generic method ->
-            let signature' = this.Metadata.Blobs.MethodRefSig.ItemRef method
+            let signature' = &this.Metadata.Blobs.MethodRefSig.[method]
             this.Writer.WriteU1 signature'.CallingConventions
             this.CompressedUnsigned signature'.GenParamCount
             this.CompressedUnsigned signature'.Parameters.Length // ParamCount
             this.RetType signature'.ReturnType
             this.Parameters signature'.Parameters
         | MethodRefSignature.VarArg method ->
-            let signature' = this.Metadata.Blobs.MethodRefSig.ItemRef method
+            let signature' = &this.Metadata.Blobs.MethodRefSig.[method]
             this.Writer.WriteU1 signature'.CallingConventions
             this.CompressedUnsigned signature'.ParamCount
             this.RetType signature'.ReturnType
@@ -154,7 +154,7 @@ type internal BlobWriter = struct
         | EncodedType.FnPtr fpointer ->
             this.Writer.WriteU1 ElementType.FnPtr
             match fpointer with
-            | FunctionPointer.Def method -> this.MethodDefSig(&this.Metadata.Blobs.MethodDefSig.ItemRef method)
+            | FunctionPointer.Def method -> this.MethodDefSig &this.Metadata.Blobs.MethodDefSig.[method]
             | FunctionPointer.Ref method -> this.MethodRefSig method
         | EncodedType.GenericInst inst -> this.GenericInst &inst
         | EncodedType.I -> this.Writer.WriteU1 ElementType.I
@@ -235,7 +235,7 @@ type internal BlobWriter = struct
         | FixedArg.Elem elem -> this.Elem elem
         | FixedArg.SZArray _ -> failwith "TODO: Implement writing of SZArray for FixedArg"
 
-    member this.FieldSig(signature: FieldSignature) =
+    member this.FieldSig(signature: inref<FieldSignature>) =
         this.Writer.WriteU1 0x6uy // FIELD
         this.CustomMod signature.CustomMod
         this.EncodedType signature.FieldType
