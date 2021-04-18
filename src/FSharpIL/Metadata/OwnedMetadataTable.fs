@@ -16,7 +16,7 @@ type OwnedMetadataTable<'Owner, 'T when 'Owner : equality and 'T : equality> int
     member _.Count = items.Length
     member _.Owners = itemLookup.Keys
     member _.Rows = items
-    member _.Item with get (index: RawIndex<'T>) = &items.ItemRef indexMap.[index]
+    member _.Item with get(index: RawIndex<'T>) = &items.ItemRef indexMap.[index]
 
     member _.TryGetRows owner =
         match itemLookup.TryGetValue owner with
@@ -29,6 +29,8 @@ type OwnedMetadataTable<'Owner, 'T when 'Owner : equality and 'T : equality> int
         | ValueNone -> 0u
 
     member _.GetOwner index = ownerLookup.[index]
+
+    member _.GetRowIndex(index: RawIndex<'T>) = uint32 indexMap.[index] + 1u
 
     interface IMetadataTable<'T> with
         member this.Count = this.Count

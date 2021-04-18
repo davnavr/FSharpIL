@@ -64,9 +64,6 @@ let example() =
     let evhandler = TypeRef.createReflectedRow builder mscorlib' typeof<EventHandler>
     let evhandler_1 = TypeRef.createReflectedRow builder mscorlib' typedefof<EventHandler<_>>
     let evargs = TypeRef.createReflectedRow builder mscorlib' typeof<EventArgs>
-    let mcdelegate = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<MulticastDelegate>
-    let aresult = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<IAsyncResult>
-    let acallback = TypeRef.createReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<AsyncCallback>
 
     let dele' = EncodedType.typeRefClass dele
     let evhandler' = EncodedType.typeRefClass evhandler

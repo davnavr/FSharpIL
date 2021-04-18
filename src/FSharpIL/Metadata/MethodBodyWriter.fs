@@ -14,7 +14,6 @@ open FSharpIL.Writing
 type internal MethodBodyContentImpl (writer, metadata, us: UserStringHeap) =
     inherit MethodBodyContent(writer)
     do if writer.Size > 0u then invalidArg "writer" "The method body writer must be a new instance"
-    [<Obsolete("Might not be necessary in order to write method bodies.")>]
     member _.Metadata: CliMetadata = metadata
     member _.UserString = us
     member this.CreateWriter() = MethodBodyWriter this
@@ -77,12 +76,19 @@ module private LocalVarIndex =
 type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     new (content: MethodBodyContent) = MethodBodyWriter(content :?> MethodBodyContentImpl)
 
-    member private _.WriteMetadataToken(index, table) = MetadataToken.write index table content.Writer
-
     /// Gets the number of bytes that have been written.
     member _.ByteCount = content.Writer.Size
 
-    member private _.WriteU1 value = content.Writer.WriteU1 value
+    // TODO: Create enum type for metadata tables.
+    member inline private _.WriteMetadataToken(index, table) = MetadataToken.write index table content.Writer
+
+    member private this.WriteMetadataToken(index: RawIndex<FieldRow>) =
+        this.WriteMetadataToken(content.Metadata.Field.GetRowIndex index, 0x4uy)
+    member private this.WriteMetadataToken(index: RawIndex<MethodDefRow>) =
+        this.WriteMetadataToken(content.Metadata.MethodDef.GetRowIndex index, 0x6uy)
+    member private this.WriteMetadataToken(index: RawIndex<MemberRefRow>) = this.WriteMetadataToken(uint32 index, 0xAuy)
+
+    member inline private _.WriteU1 value = content.Writer.WriteU1 value
 
     /// (0x00) Writes an instruction that does nothing (III.3.51).
     member this.Nop() = this.WriteU1 0uy
@@ -177,7 +183,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <summary>
     /// (0x15 to 0x1F) Writes an instruction that pushes a <c>char</c> onto the stack as an <c>int32</c> (III.3.40).
     /// </summary>
-    member this.Ldc_i4(c: char) = this.Ldc_i4(int8 c)
+    member inline this.Ldc_i4(c: char) = this.Ldc_i4(int8 c)
 
     /// <summary>
     /// (0x15 to 0x1F, 0x20) Writes an instruction that pushes a signed four-byte integer onto the stack (III.3.40).
@@ -214,12 +220,12 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0x26) Writes an instruction that "removes the top element from the stack" (III.3.54).
     member this.Pop() = this.WriteU1 0x26uy
 
-    member private this.Call(opcode, index: RawIndex<_>, table) =
-        this.WriteU1 opcode
-        this.WriteMetadataToken(uint32 index, table)
+    member inline private this.Call() = this.WriteU1 0x28uy
 
     // TODO: Allow call and callvirt to accept a MethodSpec.
-    member private this.CallMethodRef method = this.Call(0x28uy, method, 0xAuy)
+    member private this.CallMethodRef(method: RawIndex<_>) =
+        this.Call()
+        this.WriteMetadataToken(method.ChangeTag<MemberRefRow>())
 
     // TODO: Instead of using overloads for opcodes like Call, use union types instead.
 
@@ -239,7 +245,9 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Call(method: RawIndex<MethodRefVarArg>) = this.CallMethodRef method
 
     /// <summary>(0x28) Writes an instruction that calls a <c>MethodDef</c> (III.3.19).</summary>
-    member this.Call(method: RawIndex<MethodDefRow>) = this.Call(0x28uy, method, 0x6uy)
+    member this.Call(method: RawIndex<MethodDefRow>) =
+        this.Call()
+        this.WriteMetadataToken method
 
     /// <summary>(0x28) Writes an instruction that calls a static method specified by a <c>MethodDef</c> (III.3.19).</summary>
     member this.Call(method: RawIndex<StaticMethod>) = this.Call(method.ChangeTag<MethodDefRow>())
@@ -248,7 +256,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// <param name="description">
     /// Corresponds to <c>callsitedescr</c>, which describes the arguments of the called methods.
     /// </param>
-    member this.Calli(description: RawIndex<FunctionPointer>) = // TODO: Find other way to write index to method callsitedescr without accessing Metadata.
+    member this.Calli(description: RawIndex<FunctionPointer>) =
         this.WriteU1 0x29uy
         this.WriteMetadataToken(content.Metadata.StandAloneSig.RowIndex description, 0x11uy)
 
@@ -433,8 +441,13 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     // member this.Conv_ovf
     // member this.Conv_ovf__un
 
-    member private this.CallvirtMethodRef method = this.Call(0x6Fuy, method, 0xAuy)
-    member private this.CallvirtMethodDef method = this.Call(0x6Fuy, method, 0x6uy)
+    member inline private this.Callvirt() = this.WriteU1 0x6Fuy
+    member private this.CallvirtMethodRef(method: RawIndex<_>) =
+        this.Callvirt()
+        this.WriteMetadataToken(method.ChangeTag<MemberRefRow>())
+    member private this.CallvirtMethodDef(method: RawIndex<MethodDefRow>) =
+        this.Callvirt()
+        this.WriteMetadataToken method
 
     /// <summary>
     /// (0x6F) Writes an instruction that calls a late-bound method specified by a <c>MethodRef</c> with a <c>DEFAULT</c>
@@ -455,7 +468,7 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     member this.Callvirt(method: RawIndex<MethodRefVarArg>) = this.CallvirtMethodRef method
 
     /// <summary>(0x6F) Writes an instruction that calls a late-bound method specified by an instance method (III.4.2).</summary>
-    member this.Callvirt(method: RawIndex<InstanceMethod>) = this.CallvirtMethodDef method
+    member this.Callvirt(method: RawIndex<InstanceMethod>) = this.CallvirtMethodDef(method.ChangeTag<MethodDefRow>())
 
     /// <summary>
     /// (0x72) Writes an instruction that loads a string from the <c>#US</c> heap (III.4.16).
@@ -470,19 +483,23 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
             MetadataToken.userString str content.UserString content.Writer
 
     // TODO: Figure out of Newobj can accept a .ctor with a VARARG signature.
-    member private this.Newobj(ctor, table) = this.Call(0x73uy, ctor, table)
+    member inline private this.Newobj() = this.WriteU1 0x73uy
 
     /// <summary>
     /// (0x73) Writes an instruction that allocates "an uninitialized object or value type" and calls the constructor specified
     /// by a <c>MemberRef</c> with a <c>DEFAULT</c> calling convention (III.4.21).
     /// </summary>
-    member this.Newobj(ctor: RawIndex<MethodRefDefault>) = this.Newobj(ctor, 0xAuy)
+    member this.Newobj(ctor: RawIndex<MethodRefDefault>) =
+        this.Newobj()
+        this.WriteMetadataToken(ctor.ChangeTag<MemberRefRow>())
 
     /// <summary>
     /// (0x73) Writes an instruction that allocates "an uninitialized object or value type" and calls the constructor method
     /// (III.4.21).
     /// </summary>
-    member this.Newobj(ctor: RawIndex<ObjectConstructor>) = this.Newobj(ctor, 0x6uy)
+    member this.Newobj(ctor: RawIndex<ObjectConstructor>) =
+        this.Newobj()
+        this.WriteMetadataToken(ctor.ChangeTag<MethodDefRow>())
 
     member private this.Castclass(toType: RawIndex<_>, table) =
         this.WriteU1 0x74uy
@@ -492,6 +509,9 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0x74) Writes an instruction that casts an object on the stack to a type specified by a <c>TypeRef</c> (III.4.3).
     /// </summary>
     member this.Castclass(toType: RawIndex<TypeRef>) = this.Castclass(toType, 0x1uy)
+    /// <summary>
+    /// (0x74) Writes an instruction that casts an object on the stack to a type specified by a <c>TypeDef</c> (III.4.3).
+    /// </summary>
     member this.Castclass(toType: RawIndex<TypeDefRow>) = this.Castclass(toType, 0x2uy)
     member this.Castclass(toType: RawIndex<TypeSpecRow>) = this.Castclass(toType, 0x1Buy)
     member inline this.Castclass(toType: EventType) =
@@ -500,41 +520,65 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         | EventType.Ref tref -> this.Castclass tref
         | EventType.Spec tspec -> this.Castclass tspec
 
-    member private this.WriteFieldInstruction(opcode, field: RawIndex<_>, table) =
-        this.WriteU1 opcode
-        this.WriteMetadataToken(uint32 field, table)
+    member inline private this.Ldfld() = this.WriteU1 0x7Buy
+
     /// <summary>(0x7B) Writes an instruction that pushes the value of an object's field onto the stack (III.4.10).</summary>
     /// <param name="field">The field to load the value of.</param>
-    member this.Ldfld(field: RawIndex<InstanceField>) = this.WriteFieldInstruction(0x7Buy, field, 0x4uy)
+    member this.Ldfld(field: RawIndex<InstanceField>) =
+        this.Ldfld()
+        this.WriteMetadataToken(field.ChangeTag<FieldRow>())
 
     /// <summary>
     /// (0x7B) Writes an instruction that pushes the value of an instance field specified by a <c>FieldRef</c> onto the stack
     /// (III.4.10).
     /// </summary>
-    member this.Ldfld(field: RawIndex<FieldRef>) = this.WriteFieldInstruction(0x7Buy, field, 0xAuy)
+    member this.Ldfld(field: RawIndex<FieldRef>) =
+        this.Ldfld()
+        this.WriteMetadataToken(field.ChangeTag<MemberRefRow>())
+
+    member inline private this.Stfld() = this.WriteU1 0x7Duy
 
     /// <summary>(0x7D) Writes an instruction that stores a value into an object's field (III.4.28).</summary>
-    member this.Stfld(field: RawIndex<InstanceField>) = this.WriteFieldInstruction(0x7Duy, field, 0x4uy)
+    member this.Stfld(field: RawIndex<InstanceField>) =
+        this.Stfld()
+        this.WriteMetadataToken(field.ChangeTag<FieldRow>())
 
     /// <summary>
     /// (0x7D) Writes an instruction that stores a value into an instance field specified by a <c>FieldRef</c> (III.4.28).
     /// </summary>
-    member this.Stfld(field: RawIndex<FieldRef>) = this.WriteFieldInstruction(0x7Duy, field, 0xAuy)
+    member this.Stfld(field: RawIndex<FieldRef>) =
+        this.Stfld()
+        this.WriteMetadataToken(field.ChangeTag<MemberRefRow>())
+
+    member this.Ldsfld() = this.WriteU1 0x7Euy
 
     // TODO: Allow a FieldRef to be used when loading and storing a static field.
     /// <summary>(0x7E) Writes an instruction that pushes the value of a static field onto the stack (III.4.14).</summary>
     /// <param name="field">The static field to load the value of.</param>
-    member this.Ldsfld(field: RawIndex<StaticField>) = this.WriteFieldInstruction(0x7Euy, field, 0x4uy)
+    member this.Ldsfld(field: RawIndex<StaticField>) =
+        this.Ldsfld()
+        this.WriteMetadataToken(field.ChangeTag<FieldRow>())
 
     /// <summary>
     /// (0x7E) Writes an instruction that pushes the value of a static field specified by a <c>FieldRef</c> onto the stack
     /// (III.4.14).
     /// </summary>
     /// <param name="field">The static field to load the value of.</param>
-    member this.Ldsfld(field: RawIndex<FieldRef>) = this.WriteFieldInstruction(0x7Euy, field, 0xAuy)
+    member this.Ldsfld(field: RawIndex<FieldRef>) =
+        this.Ldsfld()
+        this.WriteMetadataToken(field.ChangeTag<MemberRefRow>())
 
-    /// <summary>(0x7D) Writes an instruction that stores a value into a static field (III.4.30).</summary>
-    member this.Stsfld field = this.WriteFieldInstruction(0x80uy, field, 0x4uy)
+    member inline private this.Stsfld() = this.WriteU1 0x80uy
+
+    /// <summary>(0x80) Writes an instruction that stores a value into a static field specified by a <c>Field</c> (III.4.30).</summary>
+    member this.Stsfld(field: RawIndex<StaticField>) =
+        this.Stsfld()
+        this.WriteMetadataToken(field.ChangeTag<FieldRow>())
+
+    /// <summary>(0x80) Writes an instruction that stores a value into a static field specified by a <c>FieldRef</c> (III.4.30).</summary>
+    member this.Stsfld(field: RawIndex<FieldRef>) =
+        this.Stsfld()
+        this.WriteMetadataToken(field.ChangeTag<MemberRefRow>())
 
     member private this.Box(index: RawIndex<_>, table) =
         this.WriteU1 0x8Cuy
@@ -609,16 +653,17 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// </summary>
     member this.Unbox_any(tspec: RawIndex<TypeSpecRow>) = this.Unbox_any(tspec, 0x1Buy)
 
-    member private this.Ldftn(method: RawIndex<_>, table) =
+    member inline private this.Ldftn() =
         this.WriteU1 0xFEuy
         this.WriteU1 0x06uy
-        this.WriteMetadataToken(uint32 method, table)
 
     /// <summary>
     /// (0xFE 0x06) Writes an instruction that pushes "a pointer to a method" specified by a <c>MethodDef</c> onto the stack
     /// (III.3.41)
     /// </summary>
-    member this.Ldftn(method: RawIndex<MethodDefRow>) = this.Ldftn(method, 0x6uy)
+    member this.Ldftn(method: RawIndex<MethodDefRow>) =
+        this.Ldftn()
+        this.WriteMetadataToken method
 
     /// <summary>(0xFE 0x06) Writes an instruction that pushes a pointer to a static method onto the stack (III.3.41)</summary>
     member this.Ldftn(method: RawIndex<StaticMethod>) = this.Ldftn(method.ChangeTag<MethodDefRow>())
@@ -627,7 +672,9 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0xFE 0x06) Writes an instruction that pushes a pointer to a method specified by a <c>MethodRef</c> with the
     /// <c>DEFAULT</c> calling convention onto the stack (III.3.41).
     /// </summary>
-    member this.Ldftn(method: RawIndex<MethodRefDefault>) = this.Ldftn(method, 0xAuy)
+    member this.Ldftn(method: RawIndex<MethodRefDefault>) =
+        this.Ldftn()
+        this.WriteMetadataToken(method.ChangeTag<MemberRefRow>())
 
     // TODO: Add checks to ensure that the next written instruction after tail. is ret
     member private this.Tail() = this.WriteU1 0xFEuy; this.WriteU1 0x14uy
