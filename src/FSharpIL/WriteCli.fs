@@ -399,6 +399,8 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
                 | IntegerType.U8 -> ElementType.U8
                 | _ -> sprintf "Invalid constant integer type for parent %O" row.Parent |> invalidOp
             | ConstantBlob.String _ -> ElementType.String
+            | ConstantBlob.Float FloatConstantBlob.R4 -> ElementType.R4
+            | ConstantBlob.Float FloatConstantBlob.R8 -> ElementType.R8
             | ConstantBlob.Null -> ElementType.Class
 
         writer.WriteU1 ctype // Type

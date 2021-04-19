@@ -31,4 +31,4 @@ module LiteralField =
             | ValueSome _ -> ok
             | ValueNone -> sprintf "Unable to add constant value to field %A" field |> invalidOp
         | err -> err
-    let inline addRow builder owner field value = tryAddRow builder owner &field value |> ValidationError.check
+    let inline addRow builder owner value field = tryAddRow builder owner &field value |> ValidationError.check

@@ -200,8 +200,6 @@ module internal Heap =
             if not(blob.Constant.ContainsKey i') then
                 writer.Writer.WriteBytes(System.Text.Encoding.Unicode.GetBytes value)
                 blob.CreateIndex(i', blob.Constant)
-        if metadata.Blobs.Constant.Count > metadata.Blobs.Constant.Integers.Length + metadata.Blobs.Constant.Strings.Length then
-            failwith "TODO: Write Float constants."
 
         // CustomAttribute
         for i = 0 to metadata.Blobs.CustomAttribue.Count - 1 do

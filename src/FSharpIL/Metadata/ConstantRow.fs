@@ -106,7 +106,13 @@ type IntegerConstantBlob = struct // ConstantBlob<IntegerConstant>
 end
 
 [<IsReadOnly; Struct>]
-type FloatConstant internal (tag: ConstantValueType, value: int64) =
+type FloatConstant internal (tag: ConstantValueType, value: uint64) =
+    new (value: System.Double) =
+        let mutable value' = value
+        FloatConstant(ConstantValueType.R8, Unsafe.As<_, _> &value')
+    new (value: System.Single) =
+        let mutable value' = value
+        FloatConstant(ConstantValueType.R8, uint64(Unsafe.As<_, uint32> &value'))
     member _.Tag = tag
     member internal _.U4 = uint32 value
     member internal _.U8 = value
@@ -118,6 +124,14 @@ type FloatConstant internal (tag: ConstantValueType, value: int64) =
         Unsafe.As<_, System.Double> &value'
 
 type FloatConstantBlob = ConstantBlob<FloatConstant>
+
+[<RequireQualifiedAccess>]
+module FloatConstantBlob =
+    let inline (|R4|R8|) (blob: FloatConstantBlob) =
+        match blob.Tag with
+        | ConstantValueType.R4 -> R4
+        | ConstantValueType.R8 -> R8
+        | bad -> sprintf "Invalid floating-point numeric type %A" bad |> invalidArg "blob"
 
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
@@ -210,6 +224,7 @@ type ConstantBlobLookupBuilder internal () =
             Ok(Blob<StringConstant> i)
 
     member this.GetOrAdd(int: IntegerConstant) = this.TryAdd int |> Result.any
+    member this.GetOrAdd(flt: FloatConstant) = this.TryAdd flt |> Result.any
     member this.GetOrAdd(str: StringConstant) = this.TryAdd str |> Result.any
 
     member _.Count = integers.Count + floats.Count + strings.Count
