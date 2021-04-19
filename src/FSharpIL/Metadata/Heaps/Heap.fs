@@ -169,7 +169,7 @@ module internal Heap =
 
         // Constant
         for i = 0 to metadata.Blobs.Constant.Integers.Length - 1 do
-            let value = &metadata.Blobs.Constant.Integers.ItemRef i
+            let value = metadata.Blobs.Constant.Integers.[i]
             let i' = ConstantBlob(value.Tag.ConstantType, i)
             if not(blob.Constant.ContainsKey i') then
                 match value.Tag with
@@ -184,6 +184,15 @@ module internal Heap =
                 | IntegerType.I8
                 | IntegerType.U8 -> writer.Writer.WriteU4 value.U4
                 | _ -> invalidOp "Cannot write integer constant blob for unknown integer type"
+                blob.CreateIndex(i', blob.Constant)
+        for i = 0 to metadata.Blobs.Constant.Floats.Length - 1 do
+            let value = metadata.Blobs.Constant.Floats.[i]
+            let i' = ConstantBlob(value.Tag, i)
+            if not(blob.Constant.ContainsKey i') then
+                match value.Tag with
+                | ConstantValueType.R8 -> writer.Writer.WriteU8 value.U8
+                | ConstantValueType.R4 -> writer.Writer.WriteU4 value.U4
+                | _ -> invalidOp "Invalid floating-point type"
                 blob.CreateIndex(i', blob.Constant)
         for i = 0 to metadata.Blobs.Constant.Strings.Length - 1 do
             let (StringConstant value) = metadata.Blobs.Constant.Strings.[i]
