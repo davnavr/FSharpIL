@@ -103,13 +103,13 @@ let example() =
     let tarray = EncodedType.SZArray(ImmutableArray.Empty, tencoded)
 
     // val mutable private items: 'T[]
-    { Flags = Flags.instanceField(FieldFlags Private)
+    { Flags = FieldFlags Private
       FieldName = Identifier.ofStr "items"
       Signature = FieldSignature.create tarray |> builder.Blobs.FieldSig.GetOrAdd }
     |> InstanceField.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
     |> ignore
     // val mutable private index: int32
-    { Flags = Flags.instanceField(FieldFlags Private)
+    { Flags = FieldFlags Private
       FieldName = Identifier.ofStr "index"
       Signature = FieldSignature.create EncodedType.I4 |> builder.Blobs.FieldSig.GetOrAdd }
     |> InstanceField.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)

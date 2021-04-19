@@ -107,12 +107,11 @@ module LargeCountsBenchmarks =
 
         let ifields =
             let rows = List(classes.Length)
-            let flags = FieldFlags Private
             // TODO: Have more fields for each type
             for tdef in classes do
                 let ftype = TypeDefOrRefOrSpecEncoded.TypeDef(ConcreteClass.typeIndex tdef) |> EncodedType.Class
                 { FieldName = Identifier.ofStr "myInstanceField"
-                  Flags = Flags.instanceField flags
+                  Flags = FieldFlags Private
                   Signature = FieldSignature.create ftype |> builder.Blobs.FieldSig.GetOrAdd }
                 |> InstanceField.addRow builder (InstanceMemberOwner.ConcreteClass tdef)
                 |> rows.Add

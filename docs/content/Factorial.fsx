@@ -113,7 +113,7 @@ let example() =
         let! cache =
             let row =
                 { FieldName = Identifier.ofStr "cache"
-                  Flags = Flags.staticField(FieldFlags Private)
+                  Flags = FieldFlags Private
                   Signature =
                     EncodedType.GenericInst dictionary_u4_u4
                     |> FieldSignature.create

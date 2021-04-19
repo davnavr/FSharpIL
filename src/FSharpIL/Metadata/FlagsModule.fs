@@ -10,8 +10,11 @@ let sealedClass (Flags flags: ClassFlags) = TypeFlags<SealedClassTag>(TypeAttrib
 let staticClass (Flags flags: ClassFlags) = TypeFlags<StaticClassTag>(TypeAttributes.Abstract ||| TypeAttributes.Sealed ||| flags)
 let valueType (Flags flags: ClassFlags) = TypeFlags<StructFlags>(TypeAttributes.Sealed ||| flags)
 
+[<System.Obsolete>]
 let instanceField (Flags flags: FieldFlags<Visibility>) = ValidFlags<InstanceFieldTag, _> flags
+[<System.Obsolete>]
 let staticField (Flags flags: FieldFlags<Visibility>) = ValidFlags<StaticFieldTag, _>(flags ||| FieldAttributes.Static)
+[<System.Obsolete>]
 let globalField (Flags flags: FieldFlags<GlobalVisibility>) = ValidFlags<GlobalField, _>(flags ||| FieldAttributes.Static) // TODO: Set other special flags
 
 let instanceMethod (Flags flags: InstanceMethodFlags) = ValidFlags<InstanceMethodTag, _> flags

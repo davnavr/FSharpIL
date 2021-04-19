@@ -162,7 +162,7 @@ let example() =
     // private System.EventHandler Click;
     let fclick =
         { FieldName = click
-          Flags = FieldFlags Private |> Flags.instanceField
+          Flags = FieldFlags Private
           Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create evhandler') }
         |> InstanceField.addRow builder button'
 
@@ -236,7 +236,7 @@ let example() =
     // public readonly string Name;
     let txtchanged_name =
         { FieldName = Identifier.ofStr "Name"
-          Flags = FieldFlags(Public, initOnly = true) |> Flags.instanceField
+          Flags = FieldFlags(Public, initOnly = true)
           Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create EncodedType.String) }
         |> InstanceField.addRow builder txtchanged_evargs'
 
@@ -273,7 +273,7 @@ let example() =
     let ftxtchanged =
         let signature = EncodedType.GenericInst evhandler_txtchanged |> FieldSignature.create
         { FieldName = txtchanged
-          Flags = FieldFlags Private |> Flags.instanceField
+          Flags = FieldFlags Private
           Signature = builder.Blobs.FieldSig.GetOrAdd signature }
         |> InstanceField.addRow builder button'
 

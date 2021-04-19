@@ -146,13 +146,13 @@ let example() =
     let intfield = FieldSignature.create EncodedType.I4 |> builder.Blobs.FieldSig.GetOrAdd
     // val private (*initonly*) numerator: int32
     let numerator =
-        { Flags = FieldFlags(Private, initOnly = true) |> Flags.instanceField
+        { Flags = FieldFlags(Private, initOnly = true)
           FieldName = Identifier.ofStr "numerator"
           Signature = intfield }
         |> InstanceField.addRow builder (InstanceMemberOwner.Struct fraction)
     // val private (*initonly*) denominator: int32
     let denominator =
-        { Flags = FieldFlags(Private, initOnly = true) |> Flags.instanceField
+        { Flags = FieldFlags(Private, initOnly = true)
           FieldName = Identifier.ofStr "denominator"
           Signature = intfield }
         |> InstanceField.addRow builder (InstanceMemberOwner.Struct fraction)

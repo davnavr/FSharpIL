@@ -4,8 +4,8 @@
 
 [<RequireQualifiedAccess>]
 module internal Field =
-    let inline tryAddRow (builder: CliMetadataBuilder) owner (field: Field<'Flags>) =
-        field.Row() |> Unsafe.tryAddFieldRow<Field<'Flags>> builder owner
+    let inline tryAddRow (builder: CliMetadataBuilder) owner (field: Field<'Flags, 'Tag>) =
+        field.Row() |> Unsafe.tryAddFieldRow<Field<'Flags, 'Tag>> builder owner
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module StaticField =
