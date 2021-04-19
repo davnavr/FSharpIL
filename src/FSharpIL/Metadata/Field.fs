@@ -66,6 +66,7 @@ end
 [<NoComparison; StructuralEquality>]
 type Field<'Flags, 'Tag when 'Flags :> IFlags<FieldAttributes> and 'Tag :> IFieldTag and 'Tag : struct> =
     { Flags: 'Flags
+      /// <summary>Corresponds to the <c>Name</c> column of the <c>Field</c> table (II.22.15).</summary>
       FieldName: Identifier
       Signature: Blob<FieldSignature> }
 

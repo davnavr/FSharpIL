@@ -20,3 +20,15 @@ module InstanceField =
     let tryAddRow builder (InstanceMemberOwner owner) (field: inref<InstanceField>): Result<RawIndex<InstanceField>, _> =
         Field.tryAddRow builder owner field
     let inline addRow builder owner field = tryAddRow builder owner &field |> ValidationError.check
+
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
+module LiteralField =
+    let fieldIndex (field: RawIndex<LiteralField>) = field.ChangeTag<FieldRow>()
+    let tryAddRow builder (StaticMemberOwner owner) (field: inref<LiteralField>) value: Result<RawIndex<LiteralField>, _> =
+        match Field.tryAddRow builder owner field with
+        | Ok i as ok ->
+            match builder.Constant.TryAdd(fieldIndex i, value) with
+            | ValueSome _ -> ok
+            | ValueNone -> sprintf "Unable to add constant value to field %A" field |> invalidOp
+        | err -> err
+    let inline addRow builder owner field value = tryAddRow builder owner &field value |> ValidationError.check
