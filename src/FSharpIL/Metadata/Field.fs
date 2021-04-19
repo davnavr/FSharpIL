@@ -9,7 +9,7 @@ type [<AbstractClass; Sealed>] StaticFieldTag = class end
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
 type Field<'Flags> =
-    { Flags: ValidFlags<'Flags, FieldAttributes> 
+    { Flags: ValidFlags<'Flags, FieldAttributes> // 'Flags
       FieldName: Identifier
       Signature: Blob<FieldSignature> }
 

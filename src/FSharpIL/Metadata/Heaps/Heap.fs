@@ -185,8 +185,14 @@ module internal Heap =
                 | IntegerType.U8 -> writer.Writer.WriteU4 value.U4
                 | _ -> invalidOp "Cannot write integer constant blob for unknown integer type"
                 blob.CreateIndex(i', blob.Constant)
-        if metadata.Blobs.Constant.Count > metadata.Blobs.Constant.Integers.Length then
-            failwith "TODO: Write Float and String constants."
+        for i = 0 to metadata.Blobs.Constant.Strings.Length - 1 do
+            let (StringConstant value) = metadata.Blobs.Constant.Strings.[i]
+            let i' = ConstantBlob(ConstantValueType.String, i)
+            if not(blob.Constant.ContainsKey i') then
+                writer.Writer.WriteBytes(System.Text.Encoding.Unicode.GetBytes value)
+                blob.CreateIndex(i', blob.Constant)
+        if metadata.Blobs.Constant.Count > metadata.Blobs.Constant.Integers.Length + metadata.Blobs.Constant.Strings.Length then
+            failwith "TODO: Write Float constants."
 
         // CustomAttribute
         for i = 0 to metadata.Blobs.CustomAttribue.Count - 1 do

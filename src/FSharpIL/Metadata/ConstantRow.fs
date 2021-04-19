@@ -90,19 +90,19 @@ end
 
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
-type ConstantString (str: string) = override _.ToString() = str
+type StringConstant (str: string) =
+    new (str: Identifier) = StringConstant(str.ToString())
+    override _.ToString() = str
 
 [<AutoOpen>]
-module ConstantString =
-    let (|ConstantString|) (str: ConstantString) = str.ToString()
+module StringConstant =
+    let (|StringConstant|) (str: StringConstant) = str.ToString()
 
 [<IsReadOnly>]
 type ConstantBlob = struct
     val Tag: ConstantValueType
     val internal Index: int32 // NOTE: This index shouldn't be turned into a Blob<_>, and instead refers to an index into one of ConstantBlobLookup's arrays.
     internal new (tag, index) = { Tag = tag; Index = index }
-    new (str: Blob<ConstantString>) = ConstantBlob(ConstantValueType.String, str.Index)
-    new (int: IntegerConstantBlob) = ConstantBlob(int.Tag.ConstantType, int.Index)
 end
 
 [<RequireQualifiedAccess>]
@@ -111,7 +111,7 @@ module ConstantBlob =
     let (|Null|Integer|String|) (constant: ConstantBlob) =
         match constant.Tag with
         | ConstantValueType.Null -> Null
-        | ConstantValueType.String -> String(Blob<ConstantString> constant.Index)
+        | ConstantValueType.String -> String(Blob<StringConstant> constant.Index)
         | ConstantValueType.Boolean
         | ConstantValueType.Char
         | ConstantValueType.I1
@@ -124,8 +124,8 @@ module ConstantBlob =
         | ConstantValueType.U8 -> Integer(IntegerConstantBlob(constant.Tag.IntegerType, constant.Index))
         | _ -> invalidArg "constant" "Invalid constant value kind"
     let Null = ConstantBlob(ConstantValueType.Null, 0)
-    let Integer (int: IntegerConstantBlob) = ConstantBlob int
-    let String (str: Blob<ConstantString>) = ConstantBlob str
+    let Integer (int: IntegerConstantBlob) = ConstantBlob(int.Tag.ConstantType, int.Index)
+    let String (str: Blob<StringConstant>) = ConstantBlob(ConstantValueType.String, str.Index)
     //let Float (flt: FloatConstantBlob)
 
 /// <summary>Represents a row in the <c>Constant</c> table (II.22.9).</summary>
@@ -137,23 +137,22 @@ type ConstantRow internal (parent: ConstantParent, value: ConstantBlob) =
 [<Sealed>]
 type ConstantBlobLookup internal
     (
-        integers: ImmutableArray<IntegerConstant>
+        integers: ImmutableArray<IntegerConstant>,
         //floats: ImmutableArray<FloatConstant>,
-        //strings: ImmutableArray<ConstantString>
+        strings: ImmutableArray<StringConstant>
     ) =
-    member _.Count = integers.Length // +
+    member _.Count = integers.Length + strings.Length // + floats.Length
     member _.Integers = integers
-    member _.Item with get (i: IntegerConstantBlob) =
-        let index = i.Index
-        &integers.ItemRef index
-
-// TODO: Don't forget to include counts of floats and strings later.
+    //member _.Floats = floats
+    member _.Strings = strings
+    member _.Item with get (i: IntegerConstantBlob) = let index = i.Index in &integers.ItemRef index
+    member _.Item with get (i: Blob<StringConstant>) = strings.[i.Index]
 
 [<Sealed>]
 type ConstantBlobLookupBuilder internal () =
     let integers = Dictionary<IntegerConstant, int32>()
     //let floats = Dictionary<FloatConstant, int32>()
-    //let strings = Dictionary<ConstantString, int32>()
+    let strings = Dictionary<StringConstant, int32>()
 
     member _.TryAdd(int: IntegerConstant) =
         let tag, i = int.Tag, integers.Count
@@ -163,12 +162,25 @@ type ConstantBlobLookupBuilder internal () =
             integers.[int] <- i
             Ok(IntegerConstantBlob(tag, i))
 
-    member this.GetOrAdd(int: IntegerConstant) = this.TryAdd int |> Result.any
+    member _.TryAdd(str: StringConstant) =
+        let i = strings.Count
+        match strings.TryGetValue str with
+        | true, existing -> Error(Blob<StringConstant> existing)
+        | false, _ ->
+            strings.[str] <- i
+            Ok(Blob<StringConstant> i)
 
-    member _.Count = integers.Count // +
+    member this.GetOrAdd(int: IntegerConstant) = this.TryAdd int |> Result.any
+    member this.GetOrAdd(str: StringConstant) = this.TryAdd str |> Result.any
+
+    member _.Count = integers.Count + strings.Count // TODO: Don't forget to include counts of floats and strings later.
 
     member internal _.ToImmutable() =
         let mutable integers' = Array.zeroCreate<IntegerConstant> integers.Count
         for KeyValue(int, i) in integers do
             integers'.[i] <- int
-        ConstantBlobLookup(Unsafe.As &integers')
+        // let mutable floats' = Array.zeroCreate<FloatConstant> floats.Count
+        let mutable strings' = Array.zeroCreate<StringConstant> strings.Count
+        for KeyValue(str, i) in strings do
+            strings'.[i] <- str
+        ConstantBlobLookup(Unsafe.As &integers', Unsafe.As &strings')
