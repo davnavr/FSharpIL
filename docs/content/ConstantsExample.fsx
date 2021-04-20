@@ -21,9 +21,6 @@ The corresponding decompiled IL code is shown in C# instead of F#, as it is more
 
 ## Example
 *)
-open System
-open System.Collections.Immutable
-
 open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 
@@ -57,28 +54,58 @@ let example() =
 
     let object = TypeRef.createReflectedRow builder mscorlib' typeof<Object>
 
-    // public static class Math
-    let math =
+    // public static class ConstantsExample
+    let examples =
         { Access = TypeVisibility.Public
           Flags = ClassFlags(AutoLayout, AnsiClass) |> Flags.staticClass
-          ClassName = Identifier.ofStr "Math"
-          TypeNamespace = "CustomNumbers"
+          ClassName = Identifier.ofStr "ConstantsExample"
+          TypeNamespace = String.Empty
           Extends = Extends.TypeRef object }
         |> StaticClass.addRow builder
-    let math' = StaticMemberOwner.StaticClass math
+    let examples' = StaticMemberOwner.StaticClass examples
 
-    // 3.14159265358979323846d
+    // public const double Pi = 3.14159265358979323846d;
     let pi =
-        let value =
-            FloatConstant Math.PI
-            |> builder.Blobs.Constant.GetOrAdd
-            |> ConstantBlob.Float
-        { Flags = LiteralFieldFlags Public
-          FieldName = Identifier.ofStr "Pi"
-          Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create EncodedType.R8) }
-        |> LiteralField.addRow builder math' value
+        FloatConstant Math.PI
+        |> builder.Blobs.Constant.GetOrAdd
+        |> ConstantBlob.Float
+    { Flags = LiteralFieldFlags Public
+      FieldName = Identifier.ofStr "Pi"
+      Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create EncodedType.R8) }
+    |> LiteralField.addRow builder examples' pi
+    |> ignore
 
-    // TODO: Add example that uses default parameter value.
+    let hello =
+        StringConstant "Hello!"
+        |> builder.Blobs.Constant.GetOrAdd
+        |> ConstantBlob.String
+
+    // public const string DefaultMessage = "Hello!";
+    { Flags = LiteralFieldFlags Public
+      FieldName = Identifier.ofStr "DefaultMessage"
+      Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create EncodedType.String) }
+    |> LiteralField.addRow builder examples' hello
+    |> ignore
+
+    // public static void ShowMessage(string message)
+    let showmsg =
+        let body content =
+            let wr = MethodBodyWriter content
+            wr.Ret()
+            MethodBody()
+        let signature = StaticMethodSignature(ReturnType.itemVoid, ParamItem.create EncodedType.String)
+        StaticMethod (
+            MethodBody.create ValueNone body,
+            Flags.staticMethod(StaticMethodFlags Public),
+            Identifier.ofStr "ShowMessage",
+            builder.Blobs.MethodDefSig.GetOrAdd signature
+        )
+        |> StaticMethod.addRow builder examples'
+
+    // (string message = "Hello!")
+    Parameter(ParamFlags(), "message", ValueSome hello)
+    |> Parameters.singleton builder (StaticMethod.methodIndex showmsg)
+    |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 
