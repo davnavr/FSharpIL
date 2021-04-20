@@ -2,7 +2,7 @@
 
 open System.Runtime.CompilerServices
 
-// TODO: Rename to RowIndex
+// TODO: Rename to RowIndex or Index
 /// Represents an index into a metadata table.
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
@@ -28,6 +28,8 @@ type TaggedIndex<'Tag when 'Tag : struct> internal (tag: 'Tag, value: int32) =
     member _.Value = value
     member internal _.ToRawIndex<'To>() = RawIndex<'To> value
     override _.ToString() = sprintf "%O(0x%x)" tag value
+
+// TODO: Create separate index type for OwnedMetadataTable and parameters.
 
 [<AutoOpen>]
 module internal IndexHelpers =

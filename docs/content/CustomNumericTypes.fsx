@@ -215,7 +215,7 @@ let example() =
           Type = intprop }
     |> ignore
 
-    // new(numerator: int32, denominator: int32)
+    // new(_: int32, _: int32)
     let ctor =
         let body content =
             let wr = MethodBodyWriter content
@@ -232,88 +232,83 @@ let example() =
             body = MethodBody.create ValueNone body,
             implFlags = MethodImplFlags(),
             flags = (ConstructorFlags(Public, true) |> Flags.constructor),
-            signature = builder.Blobs.MethodDefSig.GetOrAdd signature,
-            paramList =
-                fun _ i ->
-                    { Flags = ParamFlags()
-                      ParamName =
-                        match i with
-                        | 0 -> "numerator"
-                        | _ -> "denominator" }
-                    |> Param
+            signature = builder.Blobs.MethodDefSig.GetOrAdd signature
         )
         |> ObjectConstructor.addRow builder (InstanceMemberOwner.Struct fraction)
 
-    // static member op_Multiply(a: Fraction, b: Fraction): Fraction
-    let multiply_body content =
-        let wr = MethodBodyWriter content
-        // new Fraction(a.numerator * b.numerator, a.denominator * b.denominator)
-        wr.Ldarg 0us
-        wr.Ldfld numerator
-        wr.Ldarg 1us
-        wr.Ldfld numerator
-        wr.Mul()
-        wr.Ldarg 0us
-        wr.Ldfld denominator
-        wr.Ldarg 1us
-        wr.Ldfld denominator
-        wr.Mul()
-        wr.Newobj ctor
-        wr.Ret()
-        MethodBody.Default
-    let multiply_sig =
-        let parameters =
-            ImmutableArray.Create (
-                ParamItem.create fractionEncoded,
-                ParamItem.create fractionEncoded
-            )
-        let signature = StaticMethodSignature(MethodCallingConventions.Default, ReturnType.encoded fractionEncoded, parameters)
-        builder.Blobs.MethodDefSig.GetOrAdd signature
+    // (numerator, denominator)
+    Parameters.named builder (ObjectConstructor.methodIndex ctor) [| "numerator"; "denominator" |] |> ignore
 
-    StaticMethod (
-        MethodBody.create ValueNone multiply_body,
-        Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
-        Identifier.ofStr "op_Multiply",
-        multiply_sig,
-        fun _ i ->
-            { Flags = ParamFlags()
-              ParamName =
-                match i with
-                | 0 -> "a"
-                | _ -> "b" }
-            |> Param
-    )
-    |> StaticMethod.addRow builder (StaticMemberOwner.Struct fraction)
-    |> ignore
+    // static member op_Multiply(_: Fraction, _: Fraction): Fraction
+    let multiply =
+        let body content =
+            let wr = MethodBodyWriter content
+            // new Fraction(a.numerator * b.numerator, a.denominator * b.denominator)
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Ldarg 1us
+            wr.Ldfld numerator
+            wr.Mul()
+            wr.Ldarg 0us
+            wr.Ldfld denominator
+            wr.Ldarg 1us
+            wr.Ldfld denominator
+            wr.Mul()
+            wr.Newobj ctor
+            wr.Ret()
+            MethodBody.Default
+        let signature =
+            let parameters =
+                ImmutableArray.Create (
+                    ParamItem.create fractionEncoded,
+                    ParamItem.create fractionEncoded
+                )
+            let signature = StaticMethodSignature(MethodCallingConventions.Default, ReturnType.encoded fractionEncoded, parameters)
+            builder.Blobs.MethodDefSig.GetOrAdd signature
+        StaticMethod (
+            MethodBody.create ValueNone body,
+            Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
+            Identifier.ofStr "op_Multiply",
+            signature
+        )
+        |> StaticMethod.addRow builder (StaticMemberOwner.Struct fraction)
+
+    // (a, b)
+    Parameters.named builder (StaticMethod.methodIndex multiply) [| "a"; "b" |] |> ignore
+
+    // (fraction)
+    let conv_param method = Parameter "fraction" |> Parameters.singleton builder (StaticMethod.methodIndex method) |> ignore
 
     // static member op_Explicit(fraction: Fraction): System.Single
-    let conv_single_body content =
-        let wr = MethodBodyWriter content
-        // (float32 this.numerator) / (float32 this.denominator)
-        wr.Ldarg 0us
-        wr.Ldfld numerator
-        wr.Conv_r4()
-        wr.Ldarg 0us
-        wr.Ldfld denominator
-        wr.Conv_r4()
-        wr.Div()
-        wr.Ret()
-        MethodBody.Default
-    let conv_single_signature =
-        StaticMethodSignature (
-            ReturnType.encoded EncodedType.R4,
-            ParamItem.create fractionEncoded
+    let conv_single =
+        let body content =
+            let wr = MethodBodyWriter content
+            // (float32 this.numerator) / (float32 this.denominator)
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Conv_r4()
+            wr.Ldarg 0us
+            wr.Ldfld denominator
+            wr.Conv_r4()
+            wr.Div()
+            wr.Ret()
+            MethodBody.Default
+        let signature =
+            StaticMethodSignature (
+                ReturnType.encoded EncodedType.R4,
+                ParamItem.create fractionEncoded
+            )
+            |> builder.Blobs.MethodDefSig.GetOrAdd
+        StaticMethod (
+            MethodBody.create ValueNone body,
+            Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
+            Identifier.ofStr "op_Explicit",
+            signature
         )
-        |> builder.Blobs.MethodDefSig.GetOrAdd
-    StaticMethod (
-        MethodBody.create ValueNone conv_single_body,
-        Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
-        Identifier.ofStr "op_Explicit",
-        conv_single_signature,
-        fun _ _ -> Param { Flags = ParamFlags(); ParamName = "fraction" }
-    )
-    |> StaticMethod.addRow builder (StaticMemberOwner.Struct fraction)
-    |> ignore
+        |> StaticMethod.addRow builder (StaticMemberOwner.Struct fraction)
+
+    conv_param conv_single
+
     // static member op_Explicit(fraction: Fraction): System.Double
     let conv_double =
         let body content =
@@ -338,10 +333,11 @@ let example() =
             MethodBody.create ValueNone body,
             Flags.staticMethod(StaticMethodFlags(Public, SpecialName, true)),
             Identifier.ofStr "op_Explicit",
-            signature,
-            ParamList.named [| "fraction" |]
+            signature
         )
         |> StaticMethod.addRow builder (StaticMemberOwner.Struct fraction)
+
+    conv_param conv_double
 
     // interface System.IComparable<Fraction>
     InterfaceImpl.addRow
@@ -350,52 +346,56 @@ let example() =
         (icomparable fractionEncoded)
     |> ignore
 
-    // member (*virtual*) this.CompareTo(other: Fraction): System.Int32
-    let compare_body content =
-        let wr = MethodBodyWriter content
-        wr.Ldarg 0us
-        wr.Ldfld denominator // this.denominator
-        wr.Ldarg 1us
-        wr.Ldfld denominator // other.denominator
-        let ne = wr.Bne_un_s()
-        let ne_pos = wr.ByteCount
+    // (other)
+    let compare_param method = Parameter "other" |> Parameters.singleton builder method |> ignore
 
-        // Both denominators are equal here
-        // this.numerator - other.numerator
-        wr.Ldarg 0us
-        wr.Ldfld numerator
-        wr.Ldarg 1us
-        wr.Ldfld numerator
-        wr.Sub()
-        wr.Ret()
+    // member (*virtual*) this.CompareTo(_: Fraction): System.Int32
+    let compare_fraction =
+        let body content =
+            let wr = MethodBodyWriter content
+            wr.Ldarg 0us
+            wr.Ldfld denominator // this.denominator
+            wr.Ldarg 1us
+            wr.Ldfld denominator // other.denominator
+            let ne = wr.Bne_un_s()
+            let ne_pos = wr.ByteCount
 
-        ne.SetTarget(int32 (wr.ByteCount - ne_pos))
+            // Both denominators are equal here
+            // this.numerator - other.numerator
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Ldarg 1us
+            wr.Ldfld numerator
+            wr.Sub()
+            wr.Ret()
 
-        // Both denominators are not equal here
-        // TODO: Account for fact that denominators might be negative when comparing fractions.
-        // (this.numerator * other.denominator) - (other.numerator * this.denominator)
-        wr.Ldarg 0us
-        wr.Ldfld numerator
-        wr.Ldarg 1us
-        wr.Ldfld denominator
-        wr.Mul()
-        wr.Ldarg 1us
-        wr.Ldfld numerator
-        wr.Ldarg 0us
-        wr.Ldfld denominator
-        wr.Mul()
-        wr.Sub()
-        wr.Ret()
-        MethodBody.Default
-    InstanceMethod (
-        MethodBody.create ValueNone compare_body,
-        InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, true, true) |> Flags.instanceMethod,
-        Identifier.ofStr "CompareTo",
-        InstanceMethodSignature(ReturnType.itemI4, ParamItem.create fractionEncoded) |> builder.Blobs.MethodDefSig.GetOrAdd,
-        fun _ _ -> Param { Flags = ParamFlags(); ParamName = "other" }
-    )
-    |> InstanceMethod.addRow builder (InstanceMemberOwner.Struct fraction)
-    |> ignore
+            ne.SetTarget(int32 (wr.ByteCount - ne_pos))
+
+            // Both denominators are not equal here
+            // TODO: Account for fact that denominators might be negative when comparing fractions.
+            // (this.numerator * other.denominator) - (other.numerator * this.denominator)
+            wr.Ldarg 0us
+            wr.Ldfld numerator
+            wr.Ldarg 1us
+            wr.Ldfld denominator
+            wr.Mul()
+            wr.Ldarg 1us
+            wr.Ldfld numerator
+            wr.Ldarg 0us
+            wr.Ldfld denominator
+            wr.Mul()
+            wr.Sub()
+            wr.Ret()
+            MethodBody.Default
+        InstanceMethod (
+            MethodBody.create ValueNone body,
+            InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, true, true) |> Flags.instanceMethod,
+            Identifier.ofStr "CompareTo",
+            InstanceMethodSignature(ReturnType.itemI4, ParamItem.create fractionEncoded) |> builder.Blobs.MethodDefSig.GetOrAdd
+        )
+        |> InstanceMethod.addRow builder (InstanceMemberOwner.Struct fraction)
+
+    compare_param (InstanceMethod.methodIndex compare_fraction)
 
     // override this.ToString(): string
     let tostring_body content =
@@ -478,10 +478,11 @@ let example() =
             MethodBody.create ValueNone body,
             Flags.finalMethod(InstanceMethodFlags(Private, NoSpecialName, NewSlot, hideBySig = true, isVirtual = true)),
             Identifier.ofStr "System.IComparable<System.Double>.CompareTo",
-            builder.Blobs.MethodDefSig.GetOrAdd signature,
-            ParamList.named [| "other" |]
+            builder.Blobs.MethodDefSig.GetOrAdd signature
         )
         |> FinalMethod.addRow builder (InstanceMemberOwner.Struct fraction)
+
+    compare_param (FinalMethod.methodIndex compare_float)
 
     MethodImpl.add
         builder

@@ -54,8 +54,8 @@ module internal Heap =
         for method in metadata.MethodDef.Rows do
             method.Name.ToString() |> action
     
-        for _, param in metadata.Param do
-            action param.ParamName
+        for param in metadata.Param.Rows do
+            action param.Name
     
     
     
@@ -93,7 +93,7 @@ module internal Heap =
                 + (2 * metadata.TypeDef.Count)
                 + metadata.Field.Count
                 + metadata.MethodDef.Count
-                + metadata.Param.Length
+                + metadata.Param.Count
 
                 + metadata.MemberRef.Count
 

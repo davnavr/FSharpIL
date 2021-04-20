@@ -40,8 +40,7 @@ module internal Constructor =
             method.ImplFlags.Value,
             method.Flags.Value,
             Identifier.ofStr name,
-            signature,
-            method.ParamList
+            signature
         )
         |> Unsafe.tryAddMethodDefRow<'Tag> builder owner
 

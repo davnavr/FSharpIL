@@ -157,10 +157,12 @@ let example() =
             body = MethodBody.create ValueNone body,
             implFlags = MethodImplFlags(),
             flags = (ConstructorFlags(Private, true) |> Flags.constructor),
-            signature = builder.Blobs.MethodDefSig.GetOrAdd(ObjectConstructorSignature ctor_p_params),
-            paramList = fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "items" else "index" }
+            signature = builder.Blobs.MethodDefSig.GetOrAdd(ObjectConstructorSignature ctor_p_params)
         )
         |> ObjectConstructor.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
+
+    // (items, index)
+    Parameters.named builder (ObjectConstructor.methodIndex ctor_p) [| "items"; "index" |] |> ignore
 
     let struct(ctor_p', _) =
         let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ctor_p_params)
@@ -169,7 +171,7 @@ let example() =
           Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> MethodRef.addRowDefault builder
 
-    // new(capacity: int32)
+    // new(_: int32)
     let ctor =
         let body content =
             let wr = MethodBodyWriter content
@@ -186,10 +188,12 @@ let example() =
             body = MethodBody.create ValueNone body,
             implFlags = MethodImplFlags(),
             flags = (ConstructorFlags(Public, true) |> Flags.constructor),
-            signature = builder.Blobs.MethodDefSig.GetOrAdd signature,
-            paramList = fun _ _ -> Param { Flags = ParamFlags(); ParamName = "capacity" }
+            signature = builder.Blobs.MethodDefSig.GetOrAdd signature
         )
         |> ObjectConstructor.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
+
+    // (capacity)
+    Parameter "capacity" |> Parameters.singleton builder (ObjectConstructor.methodIndex ctor) |> ignore
 
     // 'TOther
     let tother_spec = TypeSpec.MVar 0u |> TypeSpec.createRow builder
@@ -303,106 +307,108 @@ let example() =
     |> ignore
 
     // member this.Add(item: 'T)
-    let add_body =
-        let locals =
-            [
-                EncodedType.I4 // len: int32
-                tarray // replacement: 'T[]
-            ]
-            |> List.map LocalVariable.encoded
-            |> ImmutableArray.CreateRange
-            |> builder.Blobs.LocalVarSig.GetOrAdd
-            |> builder.StandAloneSig.AddLocals
-            |> ValueSome
-        fun content ->
-            let wr = MethodBodyWriter content
-            // let mutable len: int32 = this.items.Length
-            wr.Ldarg 0us
-            wr.Ldfld items'
-            wr.Ldlen()
-            wr.Conv_i4()
-            wr.Stloc 0us
+    let add =
+        let body =
+            let locals =
+                [
+                    EncodedType.I4 // len: int32
+                    tarray // replacement: 'T[]
+                ]
+                |> List.map LocalVariable.encoded
+                |> ImmutableArray.CreateRange
+                |> builder.Blobs.LocalVarSig.GetOrAdd
+                |> builder.StandAloneSig.AddLocals
+                |> ValueSome
+            fun content ->
+                let wr = MethodBodyWriter content
+                // let mutable len: int32 = this.items.Length
+                wr.Ldarg 0us
+                wr.Ldfld items'
+                wr.Ldlen()
+                wr.Conv_i4()
+                wr.Stloc 0us
 
-            // this.index
-            wr.Ldarg 0us
-            wr.Ldfld index'
-            // this.index < len
-            wr.Ldloc 0us
-            let reallocate = wr.Blt_s()
+                // this.index
+                wr.Ldarg 0us
+                wr.Ldfld index'
+                // this.index < len
+                wr.Ldloc 0us
+                let reallocate = wr.Blt_s()
 
-            // TODO: Make new array here.
-            (*Create a new array that is double the original length*)
-            wr.Ldloc 0us
-            wr.Ldc_i4 0
-            // len > 0
-            let double_length = wr.Bgt_s()
+                // TODO: Make new array here.
+                (*Create a new array that is double the original length*)
+                wr.Ldloc 0us
+                wr.Ldc_i4 0
+                // len > 0
+                let double_length = wr.Bgt_s()
 
-            // len <- 1
-            wr.Ldc_i4 1
-            wr.Stloc 0us
-            let skip_double = wr.Br_s()
+                // len <- 1
+                wr.Ldc_i4 1
+                wr.Stloc 0us
+                let skip_double = wr.Br_s()
 
-            Label(wr).SetTarget double_length
+                Label(wr).SetTarget double_length
 
-            // len <- len * 2
-            wr.Ldloc 0us
-            wr.Ldc_i4 2
-            wr.Mul()
-            wr.Stloc 0us
+                // len <- len * 2
+                wr.Ldloc 0us
+                wr.Ldc_i4 2
+                wr.Mul()
+                wr.Stloc 0us
 
-            Label(wr).SetTarget skip_double
+                Label(wr).SetTarget skip_double
 
-            // let replacement: 'T[] = Array.zeroCreate<'T> len
-            wr.Ldloc 0us
-            wr.Newarr tparam
-            wr.Stloc 1us
+                // let replacement: 'T[] = Array.zeroCreate<'T> len
+                wr.Ldloc 0us
+                wr.Newarr tparam
+                wr.Stloc 1us
 
-            // System.Array.Copy(this.items, replacement, this.items.Length)
-            wr.Ldarg 0us
-            wr.Ldfld items'
-            wr.Ldloc 1us
-            wr.Ldarg 0us
-            wr.Ldfld items'
-            wr.Ldlen()
-            wr.Conv_i4()
-            wr.Call array_copy
+                // System.Array.Copy(this.items, replacement, this.items.Length)
+                wr.Ldarg 0us
+                wr.Ldfld items'
+                wr.Ldloc 1us
+                wr.Ldarg 0us
+                wr.Ldfld items'
+                wr.Ldlen()
+                wr.Conv_i4()
+                wr.Call array_copy
 
-            // this.items <- replacement
-            wr.Ldarg 0us
-            wr.Ldloc 1us
-            wr.Stfld items'
+                // this.items <- replacement
+                wr.Ldarg 0us
+                wr.Ldloc 1us
+                wr.Stfld items'
 
-            Label(wr).SetTarget reallocate
+                Label(wr).SetTarget reallocate
 
-            // this.items.[this.index] <- item
-            wr.Ldarg 0us
-            wr.Ldfld items'
-            wr.Ldarg 0us
-            wr.Ldfld index'
-            wr.Ldarg 1us
-            wr.Stelem tparam
+                // this.items.[this.index] <- item
+                wr.Ldarg 0us
+                wr.Ldfld items'
+                wr.Ldarg 0us
+                wr.Ldfld index'
+                wr.Ldarg 1us
+                wr.Stelem tparam
 
-            // this.index <- this.index + 1
-            wr.Ldarg 0us
-            wr.Dup()
-            wr.Ldfld index'
-            wr.Ldc_i4 1
-            wr.Add()
-            wr.Stfld index'
+                // this.index <- this.index + 1
+                wr.Ldarg 0us
+                wr.Dup()
+                wr.Ldfld index'
+                wr.Ldc_i4 1
+                wr.Add()
+                wr.Stfld index'
 
-            wr.Ret()
-            MethodBody(0x3us, true)
-        |> MethodBody.create locals
-    let signature = InstanceMethodSignature(ReturnType.itemVoid, ParamItem.var 0u)
-    InstanceMethod (
-        add_body,
-        InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod,
-        Identifier.ofStr "Add",
-        builder.Blobs.MethodDefSig.GetOrAdd signature,
-        fun _ _ -> Param { ParamName = "item"; Flags = ParamFlags() }
-    )
-    |> InstanceMethod.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
-    |> ignore
+                wr.Ret()
+                MethodBody(0x3us, true)
+            |> MethodBody.create locals
+        let signature = InstanceMethodSignature(ReturnType.itemVoid, ParamItem.var 0u)
+        InstanceMethod (
+            body,
+            InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, hideBySig = true) |> Flags.instanceMethod,
+            Identifier.ofStr "Add",
+            builder.Blobs.MethodDefSig.GetOrAdd signature
+        )
+        |> InstanceMethod.addRow builder (InstanceMemberOwner.ConcreteClass mycollection_1)
+
+    // (item)
+    Parameter "item" |> Parameters.singleton builder (InstanceMethod.methodIndex add) |> ignore
 
     // member this.ToArray()
     let toarray_body =

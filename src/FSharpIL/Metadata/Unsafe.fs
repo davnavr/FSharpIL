@@ -31,20 +31,18 @@ let tryAddMethodDefRow<'Tag> (builder: CliMetadataBuilder) owner method =
     | ValueSome index -> RawIndex<'Tag> index.Value |> Ok
     | ValueNone -> DuplicateMethodError(method).ToResult()
 
-let tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList =
-    let method =
-        MethodDefRow (
-            body,
-            implFlags,
-            methodFlags,
-            name,
-            signature,
-            paramList
-        )
-    tryAddMethodDefRow<'Tag> builder owner method
+let tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature =
+    MethodDefRow (
+        body,
+        implFlags,
+        methodFlags,
+        name,
+        signature
+    )
+    |> tryAddMethodDefRow<'Tag> builder owner
 
-let inline createMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList =
-    tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature paramList |> ValidationError.check
+let inline createMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature =
+    tryCreateMethodDefRow<'Tag> builder owner body implFlags methodFlags name signature |> ValidationError.check
 
 let tryAddFieldRow<'Tag> (builder: CliMetadataBuilder) owner field =
     match builder.Field.TryAdd(owner, &field) with
@@ -124,7 +122,6 @@ let tryCreateEvent<'Tag, 'Body when 'Body :> IMethodBody>
             methodFlags'
             (Identifier.concat2 Identifier.eventAdd event.EventName)
             signature
-            EventHelpers.parameters
 
     let remove =
         tryCreateMethodDefRow<MethodDefRow>
@@ -135,14 +132,16 @@ let tryCreateEvent<'Tag, 'Body when 'Body :> IMethodBody>
             methodFlags'
             (Identifier.concat2 Identifier.eventRemove event.EventName)
             signature
-            EventHelpers.parameters
 
     match add, remove with
     | Ok add', Ok remove' ->
         let methods = EventMethods(add', remove', ValueNone, ImmutableArray.Empty)
-        match tryCreateEventRow builder owner &methods &event with
-        | Ok row -> GeneratedEvent(row, add', remove') |> Ok
-        | Error err -> Error err
+        let row = tryCreateEventRow builder owner &methods &event
+        match EventHelpers.parameters builder add', EventHelpers.parameters builder remove', row with
+        | Ok _, Ok _, Ok row' -> GeneratedEvent(row', add', remove') |> Ok
+        | Error err, _, _
+        | _, Error err, _
+        | _, _, Error err -> Error err
     | Error err, _
     | _, Error err -> Error err
 
@@ -151,6 +150,7 @@ let tryCreateEvent<'Tag, 'Body when 'Body :> IMethodBody>
 /// <param name="asyncResult">A <c>Type</c> corresponding to the <see cref="T:System.IAsyncResult"/> type.</param>
 /// <param name="asyncCallback">A <c>Type</c> corresponding to the <see cref="T:System.AsyncCallback"/> type.</param>
 /// <param name="def"/>
+// TODO: Allow naming and setting of flags for delegate parameters.
 let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<DelegateDef>) =
     let result =
         tryCreateTypeDefRow<DelegateDef>
@@ -175,7 +175,6 @@ let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<Delegate
                 DelegateHelpers.ctorFlags
                 (Identifier.ofStr ".ctor")
                 (DelegateHelpers.ctorSignature builder)
-                DelegateHelpers.ctorParameters
 
         let invoke =
             createMethodDefRow<InstanceMethod>
@@ -186,7 +185,6 @@ let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<Delegate
                 def.MethodFlags
                 (Identifier.ofStr "Invoke")
                 (DelegateHelpers.invokeSignature builder &def)
-                ParamList.noname
 
         let beginInvoke =
             let pcount = def.Parameters.Length
@@ -207,14 +205,14 @@ let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<Delegate
                 def.MethodFlags
                 (Identifier.ofStr "BeginInvoke")
                 (builder.Blobs.MethodDefSig.GetOrAdd signature)
-                (fun _ i ->
-                    let name =
-                        if i = pcount
-                        then "callback"
-                        elif i = pcount + 1
-                        then "objects"
-                        else ""
-                    Param { ParamName = name; Flags = ParamFlags() })
+                //(fun _ i ->
+                //    let name =
+                //        if i = pcount
+                //        then "callback"
+                //        elif i = pcount + 1
+                //        then "objects"
+                //        else ""
+                //    Param { ParamName = name; Flags = ParamFlags() })
 
         let endInvoke =
             let signature =
@@ -234,8 +232,12 @@ let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<Delegate
                 def.MethodFlags
                 (Identifier.ofStr "EndInvoke")
                 signature
-                (fun _ _ -> Param { ParamName = "result"; Flags = ParamFlags() })
+                //(fun _ _ -> Param { ParamName = "result"; Flags = ParamFlags() })
 
+        // TODO: Add empty list for Invoke method?
+        // TODO: Figure out if rows in the Param table are required for EVERY parameter a method has.
+        match DelegateHelpers.ctorParameters builder (changeIndexTag ctor) with
+        | _ -> ()
         DelegateInfo(del', ctor, invoke, beginInvoke, endInvoke) |> Ok
     | Error err -> Error err
 

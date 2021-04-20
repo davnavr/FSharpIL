@@ -120,17 +120,10 @@ let example() =
                     |> builder.Blobs.FieldSig.GetOrAdd }
             StaticField.tryAddRow builder factorial' &row
 
-        let calculateBody, setCalculateBody = MethodBody.mutableBody()
+        let helperBody, setHelperBody = MethodBody.mutableBody()
 
-        // static member private CalculateHelper(num: uint32, accumulator: uint32): uint32
+        // static member private CalculateHelper(_: uint32, _: uint32): uint32
         let! helper =
-            let parameters _ i =
-                { Flags = ParamFlags()
-                  ParamName =
-                    match i with
-                    | 0 -> "num"
-                    | _ -> "accumulator" }
-                |> Param
             let signature =
                 StaticMethodSignature(
                     Default,
@@ -138,16 +131,18 @@ let example() =
                     ImmutableArray.Create(ParamItem.create EncodedType.U4, ParamItem.create EncodedType.U4)
                 )
             StaticMethod (
-                calculateBody,
+                helperBody,
                 Flags.staticMethod(StaticMethodFlags(Private, NoSpecialName, true)),
                 Identifier.ofStr "CalculateHelper",
-                builder.Blobs.MethodDefSig.GetOrAdd signature,
-                parameters
+                builder.Blobs.MethodDefSig.GetOrAdd signature
             )
             |> StaticMethod.tryAddRow builder factorial'
 
-        // static member Calculate(num: uint32): uint32
-        let! _ =
+        // (num, accumulator)
+        let! _ = Parameters.tryNamed builder (StaticMethod.methodIndex helper) [| "num"; "accumulator" |]
+
+        // static member Calculate(_: uint32): uint32
+        let! calculate =
             let body content =
                 let writer = MethodBodyWriter content
                 // CachedFactorial.cache.ContainsKey(num)
@@ -182,10 +177,12 @@ let example() =
                 MethodBody.create ValueNone body,
                 Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
                 Identifier.ofStr "Calculate",
-                builder.Blobs.MethodDefSig.GetOrAdd signature,
-                fun _ _ -> Param { Flags = ParamFlags(); ParamName = "num" }
+                builder.Blobs.MethodDefSig.GetOrAdd signature
             )
             |> StaticMethod.tryAddRow builder factorial'
+
+        // (num)
+        let! _ = Parameter "num" |> Parameters.trySingleton builder (StaticMethod.methodIndex calculate)
 
         (* Class constructor to initialize cache *)
         // static member (*specialname rtspecialname*) ``.cctor``(): System.Void
@@ -197,12 +194,11 @@ let example() =
                 writer.Stsfld cache
                 writer.Ret()
                 MethodBody.Default
-            Constructor(
+            ClassConstructor (
                 MethodBody.create ValueNone body,
                 MethodImplFlags(),
                 ConstructorFlags(Public, true) |> Flags.classConstructor,
-                (),
-                ParamList.empty
+                ()
             )
             |> ClassConstructor.tryAddRow builder factorial'
 
@@ -217,7 +213,7 @@ let example() =
 
         Assembly.setTargetFramework builder assembly tfm_ctor ".NETCoreApp,Version=v5.0"
 
-        setCalculateBody <| fun content ->
+        setHelperBody <| fun content ->
             let writer = MethodBodyWriter content
             writer.Ldarg 0us
             writer.Ldc_i4 1

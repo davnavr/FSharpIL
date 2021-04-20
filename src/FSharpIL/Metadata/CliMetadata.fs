@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
 [<System.Flags>]
 type MetadataTableFlags =
@@ -40,12 +41,8 @@ type MetadataTableFlags =
 type CliMetadata (builder: CliMetadataBuilder) =
     let blobs = builder.Blobs.ToImmutable()
 
-    // TODO: Determine if readOnlyDict or ImmutableDictionary has faster lookup times.
     let methodDef = builder.Method.ToImmutable()
-    let parameters =
-        methodDef.Rows
-        |> Seq.collect (fun method -> method.GetParameters blobs.MethodDefSig.[method.Signature])
-        |> ImmutableArray.CreateRange
+    let parameters = builder.Param.ToImmutable methodDef.Indices
 
     let standAloneSig = builder.StandAloneSig.ToImmutable blobs.LocalVarSig
     let eventMap = builder.EventMap.ToImmutable()
@@ -73,9 +70,9 @@ type CliMetadata (builder: CliMetadataBuilder) =
         if methodDef.Count > 0 then
             bits <- bits ||| MetadataTableFlags.MethodDef
             uint32 methodDef.Count |> counts.Add
-        if not parameters.IsEmpty then
+        if parameters.Count > 0 then
             bits <- bits ||| MetadataTableFlags.Param
-            uint32 parameters.Length |> counts.Add
+            uint32 parameters.Count |> counts.Add
         if builder.InterfaceImpl.Count > 0 then
             bits <- bits ||| MetadataTableFlags.InterfaceImpl
             uint32 builder.InterfaceImpl.Count |> counts.Add

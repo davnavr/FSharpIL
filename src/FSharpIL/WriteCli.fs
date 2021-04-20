@@ -239,7 +239,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         CodedIndex(total, 3, fun (index: MemberRefParent) -> uint32 index.Value, uint32 index.Tag)
 
     let constantParent = // HasConstant
-        let total = tables.Field.Count + tables.Param.Length + tables.Property.Count
+        let total = tables.Field.Count + tables.Param.Count + tables.Property.Count
         CodedIndex(total, 2, fun (index: ConstantParent) -> uint32 index.Value, uint32 index.Tag)
 
     let customAttriuteParent = // HasCustomAttribute
@@ -248,7 +248,7 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
             + tables.Field.Count
             + tables.TypeRef.Count
             + tables.TypeDef.Count
-            + tables.Param.Length
+            + tables.Param.Count
             + tables.InterfaceImpl.Count
             + tables.MemberRef.Count
             + 1 // Module
@@ -318,7 +318,6 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // TypeDef (0x02)
     if tables.TypeDef.Count > 0 then
         let mutable index, field, method = 1, 1u, 1u
-
         for tdef in tables.TypeDef.Rows do
             writer.WriteU4 tdef.Flags
             info.StringsStream.WriteStringIndex(tdef.TypeName, writer)
@@ -343,28 +342,21 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // MethodDef (0x06)
     if tables.MethodDef.Count > 0 then
         let mutable param = 1u
-
-        for method in tables.MethodDef.Rows do
-            let signature = &tables.Blobs.MethodDefSig.[method.Signature]
+        for i in tables.MethodDef.Indices do
+            let method = &tables.MethodDef.[i]
             writer.WriteU4 info.MethodBodies.[method.Body] // Rva
             writer.WriteU2 method.ImplFlags
             writer.WriteU2 method.Flags
             info.StringsStream.WriteStringIndex(method.Name, writer)
             info.BlobStream.WriteIndex(method.Signature, writer) // Signature
-
-            // TODO: Since both the Param table (which is an ImmutableArray) and the ImmutableTable class have an implementation for writing an index, maybe make it an extension method?
-            // If doing the above, maybe add an extension member to allow retrieval of IndexSize as well.
-            if tables.Param.Length < 65536
-            then writer.WriteU2 param
-            else writer.WriteU4 param
-
-            param <- param + uint32 signature.Parameters.Length
+            tables.Param.WriteSimpleIndex(param, writer) // ParamList
+            param <- param + uint32(tables.Param.GetParameters(i).Length)
 
     // Param (0x08)
-    for sequence, row in tables.Param do
-        writer.WriteU2 row.Flags.Value
-        writer.WriteU2(sequence + 1)
-        info.StringsStream.WriteIndex(row.ParamName, writer)
+    for row in tables.Param.Rows do
+        writer.WriteU2 row.Flags
+        writer.WriteU2 row.Sequence
+        info.StringsStream.WriteIndex(row.Name, writer)
 
     // InterfaceImpl (0x09)
     for row in tables.InterfaceImpl.Rows do

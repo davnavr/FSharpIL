@@ -29,11 +29,12 @@
     <Compile Include="Metadata\Flags.fs" />
     <Compile Include="Metadata\Signatures.fs" />
     <Compile Include="Metadata\FieldRow.fs" />
+    <Compile Include="Metadata\ConstantRow.fs" />
     <Compile Include="Metadata\Param.fs" />
     <Compile Include="Metadata\MethodBody.fs" />
     <Compile Include="Metadata\MethodDefRow.fs" />
+    <Compile Include="Metadata\ParamTable.fs" />
     <Compile Include="Metadata\TypeSpecRow.fs" />
-    <Compile Include="Metadata\ConstantRow.fs" />
     <Compile Include="Metadata\TypeDef.fs" />
     <Compile Include="Metadata\GenericParam.fs" />
     <Compile Include="Metadata\InterfaceImpl.fs" />
@@ -80,6 +81,7 @@
     <Compile Include="Metadata\MethodBodyWriter.fs" />
     <Compile Include="Metadata\MethodBodyModule.fs" />
     <Compile Include="Metadata\TypeDefInfo.fs" />
+    <Compile Include="Metadata\ParamRows.fs" />
     <Compile Include="Metadata\DelegateHelpers.fs" />
     <Compile Include="Metadata\EventHelpers.fs" />
     <Compile Include="Metadata\Unsafe.fs" />
@@ -87,6 +89,7 @@
     <Compile Include="Metadata\MemberOwner.fs" />
     <Compile Include="Metadata\FieldModule.fs" />
     <Compile Include="Metadata\MethodDefModules.fs" />
+    <Compile Include="Metadata\Parameters.fs" />
     <Compile Include="Metadata\EventModule.fs" />
     <Compile Include="Metadata\PropertyModule.fs" />
     <Compile Include="Metadata\InterfaceImplModule.fs" />

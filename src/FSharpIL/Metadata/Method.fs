@@ -74,25 +74,21 @@ type Method<'Body, 'Flags, 'Signature when 'Body :> IMethodBody>
         flags: ValidFlags<'Flags, MethodAttributes>,
         name: Identifier,
         signature: Blob<'Signature>,
-        parameters: ParamItem -> int -> ParamRow,
         implFlags: MethodImplFlags
     ) =
-    new (body, flags, name, signature, parameters) = Method(body, flags, name, signature, parameters, MethodImplFlags())
-    new (body, flags, name, signature) = Method(body, flags, name, signature, ParamList.noname)
+    new (body, flags, name, signature) = Method(body, flags, name, signature, MethodImplFlags())
     member _.Body = body
     member _.ImplFlags = implFlags
     member _.Flags = flags
     member _.MethodName = name
     member _.Signature = signature
-    member _.ParamList = parameters
     member internal this.Definition() =
         MethodDefRow (
             this.Body,
             this.ImplFlags.Value,
             this.Flags.Value,
             this.MethodName,
-            this.Signature.ChangeTag(),
-            this.ParamList
+            this.Signature.ChangeTag()
         )
 
 [<IsReadOnly>]
@@ -148,14 +144,12 @@ type Constructor<'Flags, 'Signature> = struct
     val ImplFlags: MethodImplFlags
     val Flags: ValidFlags<'Flags, MethodAttributes>
     val Signature: 'Signature
-    val ParamList: ParamItem -> int -> ParamRow // TODO: Remove Paramlist and move it to ObjectConstructor.
 
-    new (body, implFlags, flags, signature, paramList) =
+    new (body, implFlags, flags, signature) =
         { Body = body
           ImplFlags = implFlags
           Flags = flags
-          Signature = signature
-          ParamList = paramList }
+          Signature = signature }
 end
 
 // TODO: Prevent constructors from having generic parameters (an entry in the GenericParam table).

@@ -20,10 +20,7 @@ let ctorSignature (builder: CliMetadataBuilder) =
     let signature = MethodDefSignature(true, false, MethodCallingConventions.Default, ReturnType.itemVoid, parameters)
     builder.Blobs.MethodDefSig.GetOrAdd signature
 
-let ctorParameters (_: ParamItem) (i: int32) =
-    { ParamName = if i = 0 then "object" else "method"
-      Flags = ParamFlags() }
-    |> Param
+let ctorParameters = ParamRows.addNamed [| "object"; "method" |]
 
 let inline invokeSignature (builder: CliMetadataBuilder) (delegateDef: inref<DelegateDef>) =
     let signature = MethodDefSignature(true, false, Default, delegateDef.ReturnType, delegateDef.Parameters)

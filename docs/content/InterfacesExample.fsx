@@ -62,7 +62,7 @@ let example() =
         )
         |> Interface.addRow builder
 
-    // abstract Add: num: int32 -> INumber
+    // abstract Add: int32 -> INumber
     let inumber_add =
         let rtype =
             TypeDefOrRefOrSpecEncoded.InterfaceDef inumber
@@ -74,10 +74,12 @@ let example() =
             // TODO: Figure out how to stop users from saying isVirtual = false, note that Flags.abstractMethod ensures abstract methods are virtual anyway
             InstanceMethodFlags(Public, NoSpecialName, ReuseSlot, isVirtual = true) |> Flags.abstractMethod,
             Identifier.ofStr "Add",
-            builder.Blobs.MethodDefSig.GetOrAdd signature,
-            Param { Flags = ParamFlags(); ParamName = "num" } |> ParamList.singleton
+            builder.Blobs.MethodDefSig.GetOrAdd signature
         )
         |> AbstractMethod.addRow builder (AbstractMethodOwner.Interface inumber)
+
+    // (num)
+    Parameter "num" |> Parameters.singleton builder (AbstractMethod.methodIndex inumber_add) |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

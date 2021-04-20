@@ -78,6 +78,8 @@ let example() =
           Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create EncodedType.R8) }
         |> LiteralField.addRow builder math' value
 
+    // TODO: Add example that uses default parameter value.
+
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 
 (*** hide ***)

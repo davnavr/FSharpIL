@@ -28,7 +28,9 @@ module MetadataTableExtensions =
         /// Gets a value indicating whether or not a simple index into this table takes up four or two bytes.
         member this.HasLargeIndices = this.Count >= 65536
 
-        member internal this.WriteSimpleIndex(i: RawIndex<'Row>, writer: ChunkWriter) =
+        member inline internal this.WriteSimpleIndex(i: uint32, writer: ChunkWriter) =
             if this.HasLargeIndices
             then writer.WriteU4 i
             else writer.WriteU2 i
+
+        member inline internal this.WriteSimpleIndex(i: RawIndex<'Row>, writer) = this.WriteSimpleIndex(uint32 i, writer)

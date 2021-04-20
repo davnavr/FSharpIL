@@ -1,6 +1,8 @@
 ﻿[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix); RequireQualifiedAccess>]
 module FSharpIL.Metadata.EntryPoint
 
+let methodIndex (method: RawIndex<EntryPointMethod>) = method.ChangeTag<MethodDefRow>()
+
 /// <summary>Sets the entrypoint of the assembly.</summary>
 let inline setToken (builder: CliMetadataBuilder) entryPoint = builder.SetEntryPointToken entryPoint
 

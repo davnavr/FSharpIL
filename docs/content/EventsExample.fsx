@@ -261,10 +261,12 @@ let example() =
             body,
             MethodImplFlags(),
             ConstructorFlags(Public, true) |> Flags.constructor,
-            ObjectConstructorSignature(ParamItem.create EncodedType.String) |> builder.Blobs.MethodDefSig.GetOrAdd,
-            ParamList.named [| "name" |]
+            ObjectConstructorSignature(ParamItem.create EncodedType.String) |> builder.Blobs.MethodDefSig.GetOrAdd
         )
         |> ObjectConstructor.addRow builder txtchanged_evargs'
+
+    // (string name)
+    Parameters.named builder (ObjectConstructor.methodIndex txtchanged_ctor) [| "name" |] |> ignore
 
     // System.EventHandler<FakeGuiLibrary.Controls.TextChangedEventArgs>
     let evhandler_txtchanged = GenericInst(TypeDefOrRefOrSpecEncoded.TypeRef evhandler_1, ImmutableArray.Create EncodedType.String)

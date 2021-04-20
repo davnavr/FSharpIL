@@ -10,12 +10,14 @@ type OwnedMetadataTable<'Owner, 'T when 'Owner : equality and 'T : equality> int
         itemLookup: Dictionary<RawIndex<'Owner>, ImmutableArray<RawIndex<'T>>>,
         ownerLookup: Dictionary<RawIndex<'T>, RawIndex<'Owner>>,
         indexMap: Dictionary<RawIndex<'T>, int32>,
-        items: ImmutableArray<'T>
+        items: ImmutableArray<'T>,
+        indices: ImmutableArray<RawIndex<'T>>
     ) =
     /// Gets the sum of the number of items associated with each owning row.
     member _.Count = items.Length
     member _.Owners = itemLookup.Keys
     member _.Rows = items
+    member _.Indices = indices
     member _.Item with get(index: RawIndex<'T>) = &items.ItemRef indexMap.[index]
 
     member _.TryGetRows owner =
@@ -38,14 +40,14 @@ type OwnedMetadataTable<'Owner, 'T when 'Owner : equality and 'T : equality> int
 
 /// <summary>Represents a table whose rows are conceptually owned by one row in another table.</summary>
 [<Sealed>]
-type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equality> internal() =
+type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equality> internal () =
     let items = Dictionary<RawIndex<'Owner>, Dictionary<'T, int32>>()
     let mutable count = 0
 
     member _.Count = count
     member _.Owners = items.Keys :> IReadOnlyCollection<_>
     /// Gets the rows of this metadata table, unordered.
-    member _.Rows = Seq.collect (fun (lookup: Dictionary<_, _>) -> lookup.Keys ) items.Values
+    member _.Rows = Seq.collect (fun (lookup: Dictionary<_, _>) -> lookup.Keys) items.Values
 
     member _.TryAdd(key, value: inref<'T>) =
         let lookup =
@@ -66,6 +68,7 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
         let indexMap = Dictionary items.Count
         let ownerLookup = Dictionary count
         let mutable rows, itable = Array.zeroCreate<'T> count, 0
+        let mutable indices' = Array.zeroCreate<RawIndex<'T>> count
         for KeyValue(owner, rows') in items do
             let start = itable
             let mutable indices = Array.zeroCreate<RawIndex<'T>> rows'.Count
@@ -73,8 +76,9 @@ type OwnedMetadataTableBuilder<'Owner, 'T when 'Owner : equality and 'T : equali
                 let irow' = RawIndex<'T>(irow + 1)
                 indices.[itable - start] <- irow'
                 rows.[itable] <- row
+                indices'.[itable] <- irow'
                 indexMap.[irow'] <- itable
                 itable <- itable + 1
                 ownerLookup.[irow'] <- owner
             itemLookup.[owner] <- Unsafe.As &indices
-        OwnedMetadataTable<'Owner, 'T>(itemLookup, ownerLookup, indexMap, Unsafe.As &rows)
+        OwnedMetadataTable<'Owner, 'T>(itemLookup, ownerLookup, indexMap, Unsafe.As &rows, Unsafe.As &indices')

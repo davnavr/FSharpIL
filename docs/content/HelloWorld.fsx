@@ -122,7 +122,7 @@ let example() =
             |> StaticClass.tryAddRow builder
 
         (* Create the entrypoint method of the current assembly. *)
-        // [<EntryPoint>] static member Main(args: string[]): System.Void
+        // [<EntryPoint>] static member Main(_: string[]): System.Void
         let! main =
             let body content =
                 let writer = MethodBodyWriter content
@@ -134,10 +134,12 @@ let example() =
                 MethodBody.create ValueNone body,
                 Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
                 Identifier.ofStr "Main",
-                builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs,
-                Param { Flags = ParamFlags(); ParamName = "args" } |> ParamList.singleton
+                builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs
             )
             |> EntryPoint.tryAddRow builder (StaticClass.typeIndex program)
+
+        // (args)
+        let! _ = Parameters.tryNamed builder (EntryPoint.methodIndex main) [| "args" |]
 
         EntryPoint.set builder main
 

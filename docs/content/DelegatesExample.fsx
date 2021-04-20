@@ -185,10 +185,12 @@ let example() =
             body,
             StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
             Identifier.ofStr "DuplicateString",
-            builder.Blobs.MethodDefSig.GetOrAdd signature,
-            fun _ i -> Param { Flags = ParamFlags(); ParamName = if i = 0 then "str" else "times" }
+            builder.Blobs.MethodDefSig.GetOrAdd signature
         )
         |> StaticMethod.addRow builder (StaticMemberOwner.ConcreteClass myclass)
+
+    // (str, times)
+    Parameters.named builder (StaticMethod.methodIndex dupstr) [| "str"; "times" |] |> ignore
 
     // static member Example1(): string
     let example1 =
@@ -221,6 +223,7 @@ let example() =
             name = Identifier.ofStr "Example1",
             signature = builder.Blobs.MethodDefSig.GetOrAdd(StaticMethodSignature(ReturnType.encoded EncodedType.String))
         )
+
     StaticMethod.addRow builder (StaticMemberOwner.ConcreteClass myclass) example1 |> ignore
 
     // System.Func<string, int32>
@@ -238,7 +241,7 @@ let example() =
             builder.Blobs.MethodRefSig.GetOrAdd signature }
         |> MethodRef.addRowDefault builder
 
-    // static member Example2(str: string): System.Func<string, int32>
+    // static member Example2(_: string): System.Func<string, int32>
     let example2 =
         let body content =
             let wr = MethodBodyWriter content
@@ -249,14 +252,17 @@ let example() =
             MethodBody()
         let signature =
             StaticMethodSignature(EncodedType.GenericInst func_2_inst |> ReturnType.encoded, ParamItem.create EncodedType.String)
-        StaticMethod (
-            MethodBody.create ValueNone body,
-            StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
-            Identifier.ofStr "Example2",
-            builder.Blobs.MethodDefSig.GetOrAdd signature,
-            Param { ParamName = "str"; Flags = ParamFlags() } |> ParamList.singleton
-        )
-    StaticMethod.addRow builder (StaticMemberOwner.ConcreteClass myclass) example2 |> ignore
+        let info =
+            StaticMethod (
+                MethodBody.create ValueNone body,
+                StaticMethodFlags(Public, NoSpecialName, true) |> Flags.staticMethod,
+                Identifier.ofStr "Example2",
+                builder.Blobs.MethodDefSig.GetOrAdd signature
+            )
+        StaticMethod.addRow builder (StaticMemberOwner.ConcreteClass myclass) info
+
+    // (str)
+    Parameter "str" |> Parameters.singleton builder (StaticMethod.methodIndex example2) |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll
 

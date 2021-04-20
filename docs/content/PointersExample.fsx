@@ -208,10 +208,11 @@ let example() =
             body,
             StaticMethodFlags(Public, NoSpecialName) |> Flags.staticMethod,
             name = Identifier.ofStr "MapArray",
-            signature = builder.Blobs.MethodDefSig.GetOrAdd signature,
-            parameters = ParamList.named [| "mapper"; "array" |]
+            signature = builder.Blobs.MethodDefSig.GetOrAdd signature
         )
         |> StaticMethod.addRow builder examples'
+
+    Parameters.named builder (StaticMethod.methodIndex maparray) [| "mapper"; "array" |] |> ignore
 
     // TFrom
     GenericParam.createRow

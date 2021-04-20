@@ -96,8 +96,8 @@ type CliMetadataBuilder (mdle: ModuleTable) =
     member val Field = OwnedMetadataTableBuilder<TypeDefRow, FieldRow>()
     /// (0x06)
     member val Method = OwnedMetadataTableBuilder<TypeDefRow, MethodDefRow>()
-    // (0x08)
-    // member Param
+    /// (0x08)
+    member val Param = ParamTableBuilder()
     /// (0x09)
     member val InterfaceImpl = InterfaceImplTableBuilder()
     /// (0x0A)

@@ -8,7 +8,7 @@ module internal EventHelpers =
         | EventType.TypeSpec tspec -> EncodedType.Class(TypeDefOrRefOrSpecEncoded.TypeSpec tspec)
         | bad -> failwithf "Unsupported event type %A" bad
 
-    let parameters = ParamList.named [| "handler" |]
+    let parameters = ParamRows.addNamed [| "handler" |]
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type GeneratedEvent internal (row: RawIndex<EventRow>, add: RawIndex<MethodDefRow>, remove: RawIndex<MethodDefRow>) =

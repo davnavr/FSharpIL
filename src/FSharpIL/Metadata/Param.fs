@@ -1,6 +1,5 @@
 ﻿namespace FSharpIL.Metadata
 
-open System.Collections.Generic
 open System.Collections.Immutable
 open System.Reflection
 open System.Runtime.CompilerServices
@@ -30,27 +29,21 @@ type ParamFlags = struct
     interface IFlags<ParameterAttributes> with member this.Value = this.Value
 end
 
-/// Represents a parameter.
 [<IsReadOnly; Struct>]
-type Param =
-    { Flags: ParamFlags
-      /// The name of the parameter.
-      ParamName: string }
+type Parameter (flags: ParamFlags, name: string, value: ConstantBlob voption) =
+    new (flags, name) = Parameter(flags, name, ValueNone)
+    new (name) = Parameter(ParamFlags(), name)
+    member _.Flags = flags
+    member _.Name = name
+    member _.Value = value
 
-/// <summary>Represents a row in the <c>Param</c> table (II.22.33)</summary>
-type ParamRow =
-    | Param of Param
-    // | SomeParamWithADefaultValueInTheConstantTable // of Param * ?
-
-    member this.Flags =
-        match this with
-        | Param { Flags = name } -> name
-
-    member this.ParamName =
-        match this with
-        | Param { ParamName = name } -> name
-
-    override this.ToString() = this.ParamName
+/// <summary>Represents a row in the <c>Param</c> table (II.22.33).</summary>
+[<IsReadOnly; Struct>]
+type ParamRow internal (flags: ParamFlags, sequence: uint16, name: string) =
+    member _.Flags: ParameterAttributes = (|Flags|) flags
+    member _.Sequence = sequence
+    member _.Name = name
+    override _.ToString() = name
 
 type ParamItemTag =
     | Param = 0uy
@@ -67,11 +60,3 @@ type ParamItem = struct
     internal new (tag, modifiers, paramType) = { Tag = tag; CustomMod = modifiers; ParamType = paramType }
     override this.ToString() = this.ParamType.ToString()
 end
-
-[<RequireQualifiedAccess>]
-module ParamList =
-    /// <exception cref="T:System.InvalidOperationException">Thrown when this function is called.</exception>
-    let empty (_: ParamItem) (_: int32) = invalidOp "The parameter list was expected to be empty."
-    let singleton (param: ParamRow) = fun (_: ParamItem) (_: int32)-> param
-    let named (names: #IReadOnlyList<string>) (_: ParamItem) (i: int32) = Param { Flags = ParamFlags(); ParamName = names.[i] }
-    let noname = fun (_: ParamItem) (_: int32) -> Param { Flags = ParamFlags(); ParamName = "" }

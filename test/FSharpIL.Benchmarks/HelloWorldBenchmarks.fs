@@ -110,10 +110,11 @@ type HelloWorldBenchmarks () =
                 MethodBody.create ValueNone body,
                 Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
                 Identifier.ofStr "Main",
-                builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs,
-                Param { Flags = ParamFlags(); ParamName = "args" } |> ParamList.singleton
+                builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs
             )
             |> EntryPoint.addRow builder (StaticClass.typeIndex program)
+
+        Parameters.named builder (EntryPoint.methodIndex main) [| "args" |] |> ignore
 
         EntryPoint.set builder main
 
