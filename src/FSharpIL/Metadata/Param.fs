@@ -40,6 +40,7 @@ type Parameter (flags: ParamFlags, name: string, value: ConstantBlob voption) =
 /// <summary>Represents a row in the <c>Param</c> table (II.22.33).</summary>
 [<IsReadOnly; Struct>]
 type ParamRow internal (flags: ParamFlags, sequence: uint16, name: string) =
+    new (sequence, name) = ParamRow(ParamFlags(), sequence, name)
     member _.Flags: ParameterAttributes = (|Flags|) flags
     member _.Sequence = sequence
     member _.Name = name

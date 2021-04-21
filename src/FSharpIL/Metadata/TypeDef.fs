@@ -189,7 +189,8 @@ module TypeVisibility =
 /// <seealso cref="T:FSharpIL.Metadata.StaticClassDef"/>
 type ClassDef<'Flags> = // TODO: Make ClassDef a struct
     { /// <summary>
-      /// Corresponds to the <c>VisibilityMask</c> flags of a type, as well as an entry in the <c>NestedClass</c> table if the current type is nested.
+      /// Corresponds to the <c>VisibilityMask</c> flags of a type, as well as an entry in the <c>NestedClass</c> table if the
+      /// current type is nested.
       /// </summary>
       Access: TypeVisibility
       Flags: ValidFlags<'Flags, TypeAttributes>
@@ -206,6 +207,14 @@ type SealedClassDef = ClassDef<SealedClassTag>
 /// Represents a sealed and abstract class, meaning that it can only contain static members.
 type StaticClassDef = ClassDef<StaticClassTag>
 
+[<IsReadOnly; Struct>]
+type DelegateParam (flags: ParamFlags, name: string, item: ParamItem) =
+    new (name, item) = DelegateParam(ParamFlags(), name, item)
+    new (item) = DelegateParam(null, item)
+    member _.Flags = flags
+    member _.Name = name
+    member _.Type = item
+
 // TODO: Allow addition of additional instance or static methods to delegates, and make beginInvoke and endInvoke methods optional (I.8.9.3)
 /// <summary>
 /// Represents a delegate type, which is a <c>TypeDef</c> that derives from <see cref="T:System.Delegate"/> (I.8.9.3 and II.14.6).
@@ -214,7 +223,7 @@ type StaticClassDef = ClassDef<StaticClassTag>
 type DelegateDef = struct
     val Access: TypeVisibility
     val ReturnType: ReturnTypeItem
-    val Parameters: ImmutableArray<ParamItem>
+    val Parameters: ImmutableArray<DelegateParam>
     val DelegateName: Identifier
     val TypeNamespace: string
     val Flags: TypeAttributes
@@ -248,7 +257,6 @@ type DelegateDef = struct
         DelegateDef(access, returnType, parameters, name, ns, tflags, mflags)
 end
 
-// TODO: Figure out how to use Blob`1 here.
 [<IsReadOnly; Struct>]
 type EnumValue internal (name: Identifier, value: IntegerConstantBlob) =
     member _.Name = name
@@ -380,7 +388,8 @@ type TypeDefTableBuilder internal () =
     let definitions = RowHashSet<TypeDefRow>.Create()
 
     member val Module =
-        match definitions.TryAdd ModuleType.Row with
+        let row = ModuleType.Row
+        match definitions.TryAdd &row with
         | ValueSome i -> RawIndex<ModuleType> i.Value
         | ValueNone -> failwith "Unable to add <Module> type to TypeDef table"
 
@@ -390,7 +399,7 @@ type TypeDefTableBuilder internal () =
     member _.GetEnumerator() = definitions.GetEnumerator()
 
     // TODO: Add methods for adding classes, structs, etc. that are called by the functions in the CliMetadata module.
-    member internal _.TryAdd(typeDef: inref<TypeDefRow>) = definitions.TryAdd typeDef
+    member internal _.TryAdd(typeDef: inref<TypeDefRow>) = definitions.TryAdd &typeDef
 
     member internal _.ToImmutable() = definitions.ToImmutable()
 

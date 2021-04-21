@@ -83,7 +83,7 @@ module LargeCountsBenchmarks =
                     DelegateDef (
                         TypeVisibility.Public,
                         ReturnType.encoded EncodedType.I4,
-                        ImmutableArray.Create(ParamItem.create EncodedType.String),
+                        ImmutableArray.Create(ParamItem.create EncodedType.String |> DelegateParam),
                         sprintf "Delegate%i" i |> Identifier.ofStr,
                         sprintf "Namespace%i" i
                     )

@@ -4,6 +4,7 @@ module FSharpIL.Metadata.Unsafe
 
 open System.Collections.Immutable
 open System.Reflection
+open System.Runtime.CompilerServices
 
 open FSharpIL
 
@@ -175,8 +176,30 @@ let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<Delegate
                 DelegateHelpers.ctorFlags
                 (Identifier.ofStr ".ctor")
                 (DelegateHelpers.ctorSignature builder)
+        let ctorParameters = DelegateHelpers.ctorParameters builder (changeIndexTag ctor)
+
+        let inline parameters length = Array.zeroCreate<ParamRow> length, Array.zeroCreate<ParamItem> length
+        let mutable invokeParamRows, invokeParamItems = parameters def.Parameters.Length
+        let mutable beginInvokeParamRows, beginInvokeParamItems = parameters(def.Parameters.Length + 2)
+
+        for i = 0 to def.Parameters.Length - 1 do
+            let param = &def.Parameters.ItemRef i
+            let row = ParamRow(param.Flags, uint16 i + 1us, param.Name)
+            invokeParamRows.[i] <- row
+            beginInvokeParamRows.[i] <- row
+            invokeParamItems.[i] <- param.Type
+            beginInvokeParamItems.[i] <- param.Type
+
+        let callbacki = beginInvokeParamItems.Length - 2
+        beginInvokeParamRows.[callbacki] <- ParamRow(uint16 callbacki + 1us, "callback")
+        beginInvokeParamItems.[callbacki] <- asyncResult'
+
+        let binvokei = beginInvokeParamItems.Length - 1
+        beginInvokeParamRows.[binvokei] <- ParamRow(uint16 beginInvokeParamItems.Length, "objects")
+        beginInvokeParamItems.[binvokei] <- ParamItem.create EncodedType.Object
 
         let invoke =
+            let signature = MethodDefSignature(true, false, Default, def.ReturnType, Unsafe.As &invokeParamItems)
             createMethodDefRow<InstanceMethod>
                 builder
                 trow
@@ -184,19 +207,11 @@ let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<Delegate
                 DelegateHelpers.implFlags
                 def.MethodFlags
                 (Identifier.ofStr "Invoke")
-                (DelegateHelpers.invokeSignature builder &def)
+                (builder.Blobs.MethodDefSig.GetOrAdd signature)
 
         let beginInvoke =
-            let pcount = def.Parameters.Length
-
             let signature =
-                let parameters = ImmutableArray.CreateBuilder(pcount + 2)
-                parameters.AddRange def.Parameters
-                parameters.Add asyncResult' // callback
-                parameters.Add(ParamItem.create EncodedType.Object) // objects
-
-                MethodDefSignature(true, false, Default, ReturnType.encoded asyncCallback, parameters.ToImmutable())
-
+                MethodDefSignature(true, false, Default, ReturnType.encoded asyncCallback, Unsafe.As &beginInvokeParamItems)
             createMethodDefRow<InstanceMethod>
                 builder
                 trow
@@ -205,14 +220,6 @@ let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<Delegate
                 def.MethodFlags
                 (Identifier.ofStr "BeginInvoke")
                 (builder.Blobs.MethodDefSig.GetOrAdd signature)
-                //(fun _ i ->
-                //    let name =
-                //        if i = pcount
-                //        then "callback"
-                //        elif i = pcount + 1
-                //        then "objects"
-                //        else ""
-                //    Param { ParamName = name; Flags = ParamFlags() })
 
         let endInvoke =
             let signature =
@@ -232,13 +239,16 @@ let tryAddDelegateRow builder del asyncResult asyncCallback (def: inref<Delegate
                 def.MethodFlags
                 (Identifier.ofStr "EndInvoke")
                 signature
-                //(fun _ _ -> Param { ParamName = "result"; Flags = ParamFlags() })
 
-        // TODO: Add empty list for Invoke method?
-        // TODO: Figure out if rows in the Param table are required for EVERY parameter a method has.
-        match DelegateHelpers.ctorParameters builder (changeIndexTag ctor) with
-        | _ -> ()
-        DelegateInfo(del', ctor, invoke, beginInvoke, endInvoke) |> Ok
+        let invokeParameters = ParamRows.add (Unsafe.As &invokeParamRows) builder (changeIndexTag invoke)
+        let beginInvokeParameters = ParamRows.add (Unsafe.As &beginInvokeParamRows) builder (changeIndexTag beginInvoke)
+        let endInvokeParameters = DelegateHelpers.endInvokeParamRows builder (changeIndexTag endInvoke)
+        match ctorParameters, invokeParameters, beginInvokeParameters, endInvokeParameters with
+        | Ok _, Ok _, Ok _, Ok _ -> DelegateInfo(del', ctor, invoke, beginInvoke, endInvoke) |> Ok
+        | Error err, _, _, _
+        | _, Error err, _, _
+        | _, _, Error err, _
+        | _, _, _, Error err -> Error err
     | Error err -> Error err
 
 let inline addDelegateRow builder del asyncResult asyncCallback (def: inref<DelegateDef>) =

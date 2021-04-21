@@ -101,7 +101,10 @@ let example() =
 
     // type MyDelegate = delegate of (string * int32) -> string
     let mydel = // TODO: For this example, use the safe version of function to create a delegate type thta uses type lookup.
-        let parameters = Array.map ParamItem.create [| EncodedType.String; EncodedType.I4 |]
+        let parameters =
+            Array.map
+                (fun (name, t) ->  DelegateParam(name, ParamItem.create t))
+                [| "str", EncodedType.String; "num", EncodedType.I4 |]
         let def =
             DelegateDef (
                 TypeVisibility.Public,
