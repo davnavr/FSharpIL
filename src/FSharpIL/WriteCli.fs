@@ -99,29 +99,21 @@ let header info (writer: ChunkWriter) =
     writer.WriteU8 0UL // ExportAddressTableJumps
     writer.WriteU8 0UL // ManagedNativeHeader
 
-/// <param name="start">
-/// The first node that the method bodies will temporarily be written to before being written as part of the CLI metadata.
-/// </param>
-/// <param name="body"/>
-/// <param name="info">
-/// Provides the CLI metadata and the strings that are referenced in the method body.
-/// </param>
-let methodBody (start: LinkedListNode<byte[]>) (body: IMethodBody) (info: CliInfo) =
+let methodBody content (body: IMethodBody) =
     if not body.Exists then invalidArg "body" "The method body should exist"
-
-    let writer = ChunkWriter start
-    let content = MethodBodyContentImpl(writer, info.Cli, info.UserStringStream)
     let info = body.WriteBody content
-    struct(writer.Size, info)
+    struct(content.Writer.Size, info)
 
 let bodies rva (info: CliInfo) (writer: ChunkWriter) =
     let chunk = LinkedList<byte[]>().AddFirst(Array.zeroCreate writer.Chunk.Value.Length)
+    let content = MethodBodyContent(info.Cli, info.UserStringStream)
     let mutable offset = rva
 
     for method in info.Cli.MethodDef.Rows do
         match info.MethodBodies.TryGetValue method.Body with
         | false, _ when method.Body.Exists ->
-            let struct(size, body) = methodBody chunk method.Body info
+            content.Reset chunk
+            let struct(size, body) = methodBody content method.Body
             
             // NOTE: For fat (and tiny) formats, "two least significant bits of first byte" indicate the type.
             // TODO: Add checks for no exceptions and extra data sections to generate Tiny format.
@@ -131,7 +123,7 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
                     let signature = &info.Cli.Blobs.LocalVarSig.[info.Cli.StandAloneSig.GetSignature i]
                     signature.Length, uint32 i
                 | ValueNone -> 0, 0u
-            let tiny = size < 64u && body.MaxStack <= 8us && locals <= 0 // &&
+            let tiny = size < 64u && body.MaxStack <= 8us && locals <= 0 && not content.ThrowsExceptions // &&
             let pos = uint32 writer.Position
 
             // Header

@@ -6,18 +6,6 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata.Heaps
 open FSharpIL.Writing
 
-// TODO: Come up with better name for this class.
-/// <exception cref="T:System.ArgumentException">
-/// The number of bytes written by the <paramref name="writer"/> is greater than zero.
-/// </exception>
-[<Sealed>]
-type internal MethodBodyContentImpl (writer, metadata, us: UserStringHeap) =
-    inherit MethodBodyContent(writer)
-    do if writer.Size > 0u then invalidArg "writer" "The method body writer must be a new instance"
-    member _.Metadata: CliMetadata = metadata
-    member _.UserString = us
-    member this.CreateWriter() = MethodBodyWriter this
-
 /// Represents the target of a branch instruction (III.1.7.2).
 [<IsByRefLike>]
 type BranchTarget = struct
@@ -70,12 +58,21 @@ module private LocalVarIndex =
         elif index < 0xFFFFus then Long
         else ArgumentOutOfRangeException("indx", index, "A local variable index of 65535 is invalid") |> raise
 
+[<AutoOpen>]
+module MethodBodyWriter =
+    type MethodBodyContent with
+        member this.Metadata =
+            let mutable metadata = this.MetadataTables
+            Unsafe.As<obj, CliMetadata> &metadata
+        member internal this.UserString =
+            let mutable us = this.UserStringHeap
+            Unsafe.As<obj, UserStringHeap> &us
+
+// TODO: Either use this struct or simply make its members as extension members. Note that some members such as Nop can be moved to MethodBodyContent.
 // TODO: Figure out how exception handling information will be included.
 // TODO: Figure out how to prevent (some) invalid method bodies.
 [<IsByRefLike; Struct>]
-type MethodBodyWriter internal (content: MethodBodyContentImpl) =
-    new (content: MethodBodyContent) = MethodBodyWriter(content :?> MethodBodyContentImpl)
-
+type MethodBodyWriter (content: MethodBodyContent) =
     /// Gets the number of bytes that have been written.
     member _.ByteCount = content.Writer.Size
 
@@ -102,7 +99,8 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
     /// (0x02 to 0x05, 0x0E, 0xFE 0x09) Writes an instruction that loads an argument onto the stack (III.3.38).
     /// </summary>
     /// <remarks>
-    /// For argument numbers <c>0</c> through <c>3</c>, and for argument numbers less than <c>256</c>, the corresponding short forms of theinstruction is used.
+    /// For argument numbers <c>0</c> through <c>3</c>, and for argument numbers less than <c>256</c>, the corresponding short
+    /// forms of theinstruction is used.
     /// </remarks>
     member this.Ldarg(num: uint16) =
         if num <= 255us then
@@ -530,6 +528,11 @@ type MethodBodyWriter internal (content: MethodBodyContentImpl) =
         | EventType.Spec tspec -> this.Castclass tspec
 
     member inline private this.Ldfld() = this.WriteU1 0x7Buy
+
+    /// (0x7A) Writes an instruction that throws an exception object on the stack (III.4.31).
+    member this.Throw() =
+        content.ThrowsExceptions <- true
+        this.WriteU1 0x7Auy
 
     /// <summary>(0x7B) Writes an instruction that pushes the value of an object's field onto the stack (III.4.10).</summary>
     /// <param name="field">The field to load the value of.</param>

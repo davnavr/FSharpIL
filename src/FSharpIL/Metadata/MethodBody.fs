@@ -1,8 +1,11 @@
 ﻿namespace FSharpIL.Metadata
 
 open System
+open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
+
+open FSharpIL.Writing
 
 type internal LocalVariableTag =
     | Type = 0uy
@@ -44,9 +47,22 @@ type MethodBody (maxStack: uint16, initLocals: bool) =
 
     static member val Default = MethodBody 8us
 
-[<AbstractClass>]
-type MethodBodyContent internal (writer: FSharpIL.Writing.ChunkWriter) =
+[<Flags>]
+type internal MethodContentFlags =
+    | None = 0uy
+    | ThrowsExceptions = 1uy
+
+[<Sealed>]
+type MethodBodyContent (metadata: obj, usHeap: obj) =
+    let mutable writer = Unchecked.defaultof<ChunkWriter>
+    let mutable throws = false
     member internal _.Writer = writer
+    member _.ThrowsExceptions with get() = throws and internal set value = throws <- value
+    member internal _.MetadataTables = metadata
+    member internal _.UserStringHeap = usHeap
+    member internal this.Reset(content: LinkedListNode<byte[]>) =
+        writer <- ChunkWriter content
+        this.ThrowsExceptions <- false
 
 type IMethodBody =
     //abstract ImplFlags: MethodImplFlags
