@@ -80,13 +80,6 @@ let example() =
         |> builder.Blobs.Constant.GetOrAdd
         |> ConstantBlob.String
 
-    // public const string DefaultMessage = "Hello!";
-    { Flags = LiteralFieldFlags Public
-      FieldName = Identifier.ofStr "DefaultMessage"
-      Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create EncodedType.String) }
-    |> LiteralField.addRow builder examples' hello
-    |> ignore
-
     // public static void ShowMessage(string message)
     let showmsg =
         let body content =
@@ -103,8 +96,15 @@ let example() =
         |> StaticMethod.addRow builder examples'
 
     // (string message = "Hello!")
-    Parameter(ParamFlags(), "message", ValueSome hello)
+    Parameter(ParamFlags(), "message", ValueSome hello) // TODO: When Constant table is sorted, move this below PI.
     |> Parameters.singleton builder (StaticMethod.methodIndex showmsg)
+    |> ignore
+
+    // public const string DefaultMessage = "Hello!";
+    { Flags = LiteralFieldFlags Public
+      FieldName = Identifier.ofStr "DefaultMessage"
+      Signature = builder.Blobs.FieldSig.GetOrAdd(FieldSignature.create EncodedType.String) }
+    |> LiteralField.addRow builder examples' hello
     |> ignore
 
     CliMetadata builder |> PEFile.ofMetadata ImageFileFlags.dll

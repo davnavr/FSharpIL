@@ -57,4 +57,5 @@ type ConstantTableBuilder internal () =
     member this.TryAdd(parent: RawIndex<ParamRow>, value) = this.TryAdd(ConstantParent.Param parent, value)
     member this.TryAdd(parent: RawIndex<PropertyRow>, value) = this.TryAdd(ConstantParent.Property parent, value)
 
+    // TODO: Sort constant rows by parent.
     member internal _.ToImmutable() = ConstantTable(lookup.ToImmutable(), rows.ToImmutable())
