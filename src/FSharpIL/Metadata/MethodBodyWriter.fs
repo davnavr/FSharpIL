@@ -68,13 +68,27 @@ module MethodBodyWriter =
             let mutable us = this.UserStringHeap
             Unsafe.As<obj, UserStringHeap> &us
 
+[<IsByRefLike; IsReadOnly; Struct>]
+type TryBlock (offset: uint32) =
+    member _.Offset = offset
+
+[<IsReadOnly; Struct>]
+type ExceptionHandlerBlock (content: MethodBodyContent) =
+    /// <summary>(0xDC) Writes an instruction that ends the "<c>fault</c> clause of an exception block (III.3.35).</summary>
+    member _.Endfault() = content.WriteU1 0xDCuy
+    /// <summary>(0xDC) Writes an instruction that ends the "<c>finally</c> clause of an exception block (III.3.35).</summary>
+    member inline this.Endfinally() = this.Endfault()
+    /// (0xFE 0x11) Writes an instruction that ends "an exception handling filter clause" (III.3.34).
+    member _.Endfilter() =
+        content.WriteU1 0xFEuy
+        content.WriteU1 0x11uy
+
 // TODO: Either use this struct or simply make its members as extension members. Note that some members such as Nop can be moved to MethodBodyContent.
-// TODO: Figure out how exception handling information will be included.
+// TODO: Create a better name than "Writer".
 // TODO: Figure out how to prevent (some) invalid method bodies.
-[<IsByRefLike; Struct>]
+[<IsByRefLike; IsReadOnly; Struct>]
 type MethodBodyWriter (content: MethodBodyContent) =
-    /// Gets the number of bytes that have been written.
-    member _.ByteCount = content.Writer.Size
+    member inline _.ByteCount = content.ByteCount
 
     member inline private _.WriteMetadataToken(index, table) = MetadataToken.write index table content.Writer
 
@@ -84,7 +98,9 @@ type MethodBodyWriter (content: MethodBodyContent) =
         this.WriteMetadataToken(content.Metadata.MethodDef.GetRowIndex index, 0x6uy)
     member private this.WriteMetadataToken(index: RawIndex<MemberRefRow>) = this.WriteMetadataToken(uint32 index, 0xAuy)
 
-    member inline private _.WriteU1 value = content.Writer.WriteU1 value
+    member inline private _.WriteU1 value = content.WriteU1 value
+
+    member _.StartTryBlock() = TryBlock(content.StartTryBlock())
 
     /// (0x00) Writes an instruction that does nothing (III.3.51).
     member this.Nop() = this.WriteU1 0uy

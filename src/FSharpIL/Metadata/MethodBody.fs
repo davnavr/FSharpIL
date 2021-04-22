@@ -56,13 +56,35 @@ type internal MethodContentFlags =
 type MethodBodyContent (metadata: obj, usHeap: obj) =
     let mutable writer = Unchecked.defaultof<ChunkWriter>
     let mutable throws = false
+    let tryBlocks = Stack<uint32>()
+    let tryLookup = Dictionary<uint32, uint32>()
+
     member internal _.Writer = writer
-    member _.ThrowsExceptions with get() = throws and internal set value = throws <- value
     member internal _.MetadataTables = metadata
     member internal _.UserStringHeap = usHeap
+
+    member _.ThrowsExceptions with get() = throws and internal set value = throws <- value
+
+    /// Gets the number of bytes that have been written.
+    member _.ByteCount = writer.Size
+
     member internal this.Reset(content: LinkedListNode<byte[]>) =
+        if tryBlocks.Count > 0 then
+            sprintf "Invalid method body, %i try blocks do not have exception handlers" tryBlocks.Count |> invalidOp
         writer <- ChunkWriter content
         this.ThrowsExceptions <- false
+
+    member internal this.StartTryBlock() =
+        let offset = this.ByteCount
+        tryBlocks.Push offset
+        offset
+
+    member internal this.EndTryBlock() =
+        let offset = tryBlocks.Pop()
+        tryLookup.[offset] <- this.ByteCount - offset
+        invalidOp "How to keep track of corresponding handler size?"
+
+    member inline internal _.WriteU1 value = writer.WriteU1 value
 
 type IMethodBody =
     //abstract ImplFlags: MethodImplFlags
