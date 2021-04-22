@@ -3,8 +3,10 @@ module FSharpIL.WritePE
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
+open System.IO
 
-open FSharp.Core.Operators.Checked
+open Microsoft.FSharp.Core.Operators.Checked
 
 open FSharpIL.PortableExecutable
 open FSharpIL.Writing
@@ -20,18 +22,6 @@ module Size =
     [<Literal>]
     let OptionalHeader = 0xE0us
 
-    [<Literal>]
-    /// The size of the standard fields (PE32).
-    let StandardFields = 28u
-
-    [<Literal>]
-    /// The size of the NT specific fields (PE32).
-    let NTSpecificFields = 68u
-
-    [<Literal>]
-    /// The size of the ten data directories.
-    let DataDirectories = 128u
-
     /// The length of a single section header.
     [<Literal>]
     let SectionHeader = 40u
@@ -44,6 +34,7 @@ type PEInfo =
       mutable UninitializedDataSize: ChunkWriter
       mutable BaseOfCode: ChunkWriter
       mutable BaseOfData: ChunkWriter
+      mutable ImageSize: ChunkWriter
       mutable CliHeaderRva: ChunkWriter
       Sections: ChunkWriter[] }
 
@@ -85,11 +76,11 @@ let standardFields info (writer: ChunkWriter) =
     writer.SkipBytes 4u
 
 // II.25.2.3.2
-let ntSpecificFields pe (writer: ChunkWriter) =
-    let nt = pe.NTSpecificFields
+let ntSpecificFields info (writer: ChunkWriter) =
+    let nt = info.File.NTSpecificFields
     writer.WriteU4 nt.ImageBase
-    writer.WriteU2 nt.SectionAlignment
-    writer.WriteU2 nt.FileAlignment
+    writer.WriteU4 nt.SectionAlignment
+    writer.WriteU4 nt.FileAlignment
     writer.WriteU2 nt.OSMajor
     writer.WriteU2 nt.OSMinor
     writer.WriteU2 nt.UserMajor
@@ -97,11 +88,14 @@ let ntSpecificFields pe (writer: ChunkWriter) =
     writer.WriteU2 nt.SubSysMajor
     writer.WriteU2 nt.SubSysMinor
     writer.WriteU4 nt.Win32VersionValue
-    writer.WriteU4 0u // ImageSize // TODO: Figure out how to calculate the ImageSize
-    writer.WriteU4 pe.NTSpecificFields.FileAlignment
+
+    info.ImageSize <- writer.CreateWriter()
+    writer.SkipBytes 4u
+
+    writer.WriteU4 nt.FileAlignment
     writer.WriteU4 nt.FileChecksum
-    writer.WriteU4 nt.Subsystem
-    writer.WriteU4 nt.DllFlags
+    writer.WriteU2 nt.Subsystem
+    writer.WriteU2 nt.DllFlags
     writer.WriteU4 nt.StackReserveSize
     writer.WriteU4 nt.StackCommitSize
     writer.WriteU4 nt.HeapReserveSize
@@ -144,9 +138,7 @@ let sections (info: PEInfo) (writer: ChunkWriter) =
     let mutable fileOffset =
         Size.PEHeader
         + Size.CoffHeader
-        + Size.StandardFields
-        + Size.NTSpecificFields
-        + Size.DataDirectories
+        + uint32 Size.OptionalHeader
         + (uint32 pe.SectionTable.Length * Size.SectionHeader)
         |> Round.upTo falignment
 
@@ -189,12 +181,18 @@ let sections (info: PEInfo) (writer: ChunkWriter) =
         header.WriteU4 roundedSize // SizeOfRawData, size of section rounded up to file alignment
         header.WriteU4 fileOffset // PointerToRawData
 
+        // TODO: Come up with a better name to check section name
+        if info.BaseOfCode.Size = 0u && string section.Header.SectionName = ".text" then
+            info.BaseOfCode.WriteU4 virtualAddress
+        if info.BaseOfData.Size = 0u && string section.Header.SectionName = ".rsrc" then
+            info.BaseOfData.WriteU4 virtualAddress
+
         fileOffset <- fileOffset + roundedSize
         virtualAddress <- Round.upTo salignment (virtualAddress + size)
 
     info.CodeSize.WriteU4 codeSize
-    info.InitializedDataSize.WriteU4 codeSize
-    info.UninitializedDataSize.WriteU4 codeSize
+    info.InitializedDataSize.WriteU4 initializedDataSize
+    info.UninitializedDataSize.WriteU4 uninitializedDataSize
 
 let write pe =
     try
@@ -206,17 +204,18 @@ let write pe =
               UninitializedDataSize = uninitialized
               BaseOfCode = uninitialized
               BaseOfData = uninitialized
+              ImageSize = uninitialized
               CliHeaderRva = uninitialized
               Sections = Array.zeroCreate pe.SectionTable.Length }
-        let falignment = int32 pe.NTSpecificFields.FileAlignment
         let content = LinkedList<byte[]>()
+        let falignment = int32 pe.NTSpecificFields.FileAlignment
         let writer = ChunkWriter(Array.zeroCreate falignment |> content.AddFirst)
 
         writer.WriteBytes Magic.DosStub
         writer.WriteBytes Magic.PESignature
         coffHeader pe writer
         standardFields info writer
-        ntSpecificFields pe writer
+        ntSpecificFields info writer
         dataDirectories info writer
 
         // Section headers
@@ -236,13 +235,21 @@ let write pe =
 
         writer.MoveToEnd() // Padding before sections
 
+        let headerChunks = uint32 content.Count
+
         sections info writer
+
+        // Calculate the image size
+        let imageSize =
+            let falignment' = uint32 pe.NTSpecificFields.FileAlignment
+            let round = uint32 pe.NTSpecificFields.SectionAlignment / falignment' |> Round.upTo
+            (round headerChunks + round(uint32 content.Count - headerChunks)) * falignment'
+        info.ImageSize.WriteU4 imageSize
 
         content.Count * falignment, content
     with
     | ex -> InternalException ex |> raise
 
-/// Returns a byte array containing the Portable Executable file.
 let toArray pe =
     let size, content = write pe
     let output = Array.zeroCreate<byte> size
@@ -259,4 +266,38 @@ let toArray pe =
             InvalidOperationException(msg, ex) |> raise
     output
 
-// TODO: Add toStream and toImmutableArray functions.
+let toBlock pe =
+    let size, content = write pe
+    let builder = ImmutableArray.CreateBuilder<byte> size
+    for chunk in content do
+        builder.AddRange chunk
+    builder.ToImmutable()
+
+let stream pe =
+    // TODO: Return an optimized stream type instead.
+    new MemoryStream(toArray pe) :> Stream
+
+// TODO: Add toSeq function.
+
+let toStream (stream: Stream) pe =
+    match stream with
+    | null -> nameof stream |> nullArg
+    | _ when not stream.CanWrite -> invalidArg (nameof stream) "The stream must support writing"
+    | _ ->
+        try
+            let _, content = write pe
+            for chunk in content do
+                stream.Write(ReadOnlySpan chunk)
+        finally
+            stream.Close()
+
+let toFile (file: FileInfo) pe =
+    match file with
+    | null -> nullArg "file"
+    | _ ->
+        let stream = file.OpenWrite()
+        toStream stream pe
+
+let toPath path pe =
+    let stream = File.OpenWrite path
+    toStream stream pe

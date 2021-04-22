@@ -1,37 +1,102 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
+
+/// <summary>
+/// Represents a violation of a Common Language Specification rule (I.7).
+/// </summary>
+[<IsReadOnly; Struct>]
+type ClsViolationMessage =
+    { Number: uint8
+      Message: string }
+
+    override this.ToString() = sprintf "Rule %i: %s" this.Number this.Message
+
+/// <category>CLS Rules</category>
+[<AbstractClass>]
+type ClsViolation internal (message: ClsViolationMessage) =
+    member _.Message = message
+
+/// <summary>Base type of all <c>WARNING</c> checks (II.22.1).</summary>
+/// <category>Warnings</category>
+[<AbstractClass>]
+type ValidationWarning internal () = class end
+
+/// <summary>
+/// Base type of all <c>ERROR</c> checks, which indicate that the generated CLI metadata is invalid (II.22.1).
+/// </summary>
+/// <category>Errors</category>
+[<AbstractClass>]
+type ValidationError internal () =
+    member this.ToResult(): Result<_, ValidationError> = Error this
+
+exception ValidationErrorException of ValidationError
+
+[<RequireQualifiedAccess>]
+module ValidationError =
+    /// <exception cref="T:FSharpIL.Metadata.ValidationErrorException">
+    /// Thrown when the <paramref name="result"/> is an error.
+    /// </exception>
+    let check result =
+        match result with
+        | Ok success -> success
+        | Error (err: ValidationError) -> raise (ValidationErrorException err)
 
 /// II.22.1
-type ValidationResult<'Result, 'ClsViolation, 'Warning, 'Error> =
-    | ValidationSuccess of 'Result * IImmutableList<'ClsViolation>
-    | ValidationWarning of 'Result * IImmutableList<'ClsViolation> * IImmutableList<'Warning>
-    | ValidationError of 'Error
+[<IsReadOnly; Struct>]
+type ValidationResult<'Result> =
+    { ClsViolations: ImmutableArray<ClsViolation>
+      Warnings: ImmutableArray<ValidationWarning>
+      Result: Result<'Result, ValidationError> }
 
-    member this.Warnings =
-        match this with
-        | ValidationWarning (_, _, warnings) -> warnings
-        | _ -> ImmutableArray.Empty :> IImmutableList<_>
+[<AutoOpen>]
+module ValidationResultPatterns =
+    let (|ValidationSuccess|ValidationWarning|ValidationError|) value =
+        match value with
+        | { Result = Ok result } when value.Warnings.IsEmpty -> ValidationSuccess(result, value.ClsViolations)
+        | { Result = Ok result } -> ValidationWarning(result, value.ClsViolations, value.Warnings)
+        | { Result = Error error } -> ValidationError error
 
-    member this.ClsChecks =
-        match this with
-        | ValidationSuccess (_, checks)
-        | ValidationWarning (_, checks, _) -> checks
-        | _ -> ImmutableArray.Empty :> IImmutableList<_>
-
-    member this.IsError =
-        match this with
-        | ValidationError _ -> true
-        | ValidationSuccess _
-        | ValidationWarning _ -> false
+    /// Extracts the result only if there are no warnings or CLS rule violations.
+    let (|StrictSuccess|StrictWarning|StrictError|) =
+        function
+        | ValidationSuccess (result, cls) when cls.Length < 1 -> StrictSuccess result
+        | ValidationSuccess (_, cls) -> StrictWarning(cls, ImmutableArray.Empty)
+        | ValidationWarning (_, cls, warning) -> StrictWarning(cls, warning)
+        | ValidationError err -> StrictError err
 
 [<RequireQualifiedAccess>]
 module ValidationResult =
+    let inline success value cls =
+        { ClsViolations = cls
+          Warnings = ImmutableArray.Empty
+          Result = Ok value }
+
+    let inline warning value cls warnings =
+        { ClsViolations = cls
+          Warnings = warnings
+          Result = Ok value }
+
+    let inline error err cls warnings =
+        { ClsViolations = cls
+          Warnings = warnings
+          Result = Error err }
+
+    /// <summary>
+    /// Retrieves the value associated with the result.
+    /// </summary>
+    /// <exception cref="T:FSharpIL.Metadata.ValidationErrorException"/>
     let get value =
         match value with
         | ValidationSuccess (result, _)
         | ValidationWarning (result, _, _) -> result
-        | ValidationError err -> string err |> invalidArg "value"
+        | ValidationError err -> ValidationErrorException err |> raise
+
+    let ofOption none value =
+        match value with
+        | Some value' -> success value' ImmutableArray.Empty
+        | None -> error none ImmutableArray.Empty ImmutableArray.Empty
 
     let toOption value =
         match value with
@@ -45,18 +110,60 @@ module ValidationResult =
         | ValidationWarning (result, _, _) -> Ok result
         | ValidationError err -> Error err
 
-    let map mapping value =
-        match value with
-        | ValidationSuccess (result, checks) -> ValidationSuccess(mapping result, checks)
-        | ValidationWarning (result, checks, warnings) -> ValidationWarning(mapping result, checks, warnings)
-        | ValidationError err -> ValidationError err
+type ClsViolationsBuilder = ImmutableArray<ClsViolation>.Builder
+type WarningsBuilder = ImmutableArray<ValidationWarning>.Builder
+
+[<Sealed>]
+type ValidationResultBuilder internal () =
+    member inline _.Bind(comp, func) =
+        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
+            match comp with
+            | Ok result -> func result cls warnings
+            | Error (err: ValidationError) -> Error err
+
+    member inline _.Bind(comp: ValidationResult<_>, func) =
+        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
+            cls.AddRange comp.ClsViolations
+            warnings.AddRange comp.Warnings
+            match comp.Result with
+            | Ok result -> func result cls warnings
+            | Error err -> Error err
+
+    member inline _.Bind(comp: WarningsBuilder -> _, func) =
+        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
+            let result = comp warnings
+            func result cls warnings
+
+    member inline _.Bind(comp: WarningsBuilder -> Result<_, ValidationError>, func) =
+        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
+            match comp warnings with
+            | Ok result -> func result cls warnings
+            | Error err -> Error err
+
+    member inline _.Return value (_: ClsViolationsBuilder) (_: WarningsBuilder) = Result<_, ValidationError>.Ok value
+
+    member inline _.ReturnFrom(value: Result<_, ValidationError>) =
+        fun (_: ClsViolationsBuilder) (_: WarningsBuilder) -> value
+
+    member inline _.ReturnFrom(value: ValidationResult<_>) =
+        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
+            cls.AddRange value.ClsViolations
+            warnings.AddRange value.Warnings
+            value.Result
+
+    member inline _.Run expr =
+        let cls = ImmutableArray.CreateBuilder<_>()
+        let warnings = ImmutableArray.CreateBuilder<_>()
+        let result = expr cls warnings
+        { ClsViolations = cls.ToImmutable()
+          Warnings = warnings.ToImmutable()
+          Result = result }
+
+    member inline _.TryFinally(expr, compensation) (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) =
+        try expr cls warnings: Result<_, ValidationError>
+        finally compensation()
+
+    member inline this.Zero() = this.Return()
 
 [<AutoOpen>]
-module ValidationResultPatterns =
-    /// Extracts the result only if there are no warnings or CLS rule violations.
-    let (|StrictSuccess|StrictWarning|StrictError|) =
-        function
-        | ValidationSuccess (result, cls) when cls.Count < 1 -> Choice1Of3 result
-        | ValidationSuccess (_, cls) -> Choice2Of3(cls, ImmutableArray.Empty :> IImmutableList<_>)
-        | ValidationWarning (_, cls, warning) -> Choice2Of3(cls, warning)
-        | ValidationError err -> Choice3Of3 err
+module ValidationResultBuilder = let validated = ValidationResultBuilder()

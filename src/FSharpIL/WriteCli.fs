@@ -1,9 +1,11 @@
-﻿module internal FSharpIL.WriteCli
+﻿[<RequireQualifiedAccess>]
+module internal FSharpIL.WriteCli
 
 open FSharp.Core.Operators.Checked
 
 open System
 open System.Collections.Generic
+open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Heaps
@@ -15,11 +17,13 @@ module Size =
     [<Literal>]
     let CliHeader = 0x48u
 
-[<Sealed>]
-type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * uint32) =
-    let large = count > (65535 <<< n)
+    /// The size of a fat method body header, as a number of 4-byte integers (II.25.4.3).
+    [<Literal>]
+    let FatFormat = 3us
 
-    member val IndexSize = if large then 4 else 2
+[<IsReadOnly; IsByRefLike; Struct>]
+type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * uint32) =
+    member _.LargeIndices = count > (65535 <<< n)
 
     member _.IndexOf (item: 'T) =
         let index, tag = indexer item
@@ -27,9 +31,18 @@ type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * ui
     
     member this.WriteIndex(item, writer: ChunkWriter) =
         let index = this.IndexOf item
-        if large then writer.WriteU4 index else writer.WriteU2 index
+        if this.LargeIndices
+        then writer.WriteU4 index
+        else writer.WriteU2 index
 
-let codedIndex count n indexer = CodedIndex<_>(count, n, indexer)
+let codedIndex count n indexer = CodedIndex(count, n, indexer)
+
+[<RequireQualifiedAccess>]
+module private ILMethodFlags =
+    let [<Literal>] TinyFormat = 0x2uy
+    let [<Literal>] FatFormat = 0x3us
+    let [<Literal>] MoreSects = 0x8us
+    let [<Literal>] InitLocals = 0x10us
 
 [<ReferenceEquality; NoComparison>]
 type CliInfo =
@@ -39,11 +52,11 @@ type CliInfo =
       mutable Metadata: ChunkWriter
       /// Specifies the RVA and size of the "hash data for this PE file" (II.25.3.3).
       mutable StrongNameSignature: ChunkWriter
-      MethodBodies: Dictionary<MethodDef, uint32>
+      MethodBodies: Dictionary<IMethodBody, uint32>
       StringsStream: Heap<string>
       UserStringStream: UserStringHeap
       GuidStream: Heap<Guid>
-      BlobStream: BlobHeap }
+      BlobStream: SerializedBlobHeap }
 
 /// Writes the CLI header (II.25.3.3).
 let header info (writer: ChunkWriter) =
@@ -57,7 +70,17 @@ let header info (writer: ChunkWriter) =
     writer.SkipBytes 8u
 
     writer.WriteU4 info.Cli.HeaderFlags // Flags
-    writer.WriteU4 0u // EntryPointToken // TODO: Figure out what this token value should be. Is an index into the MethodDef table allowed?
+
+    let entryPointTable, entryPointToken =
+        match info.Cli.EntryPointToken with
+        | ValueNone -> 0uy, 0u
+        | ValueSome (ValidEntryPoint (Index main))
+        | ValueSome (CustomEntryPoint (Index main)) ->
+            0x6uy, uint32 main
+        | ValueSome (EntryPointFile file) ->
+            0x26uy, uint32 file
+
+    MetadataToken.write entryPointToken entryPointTable writer
 
     // Resources
     writer.WriteU4 0u
@@ -76,42 +99,54 @@ let header info (writer: ChunkWriter) =
     writer.WriteU8 0UL // ExportAddressTableJumps
     writer.WriteU8 0UL // ManagedNativeHeader
 
-/// Writes the method bodies.
+let methodBody content (body: IMethodBody) =
+    if not body.Exists then invalidArg "body" "The method body should exist"
+    let info = body.WriteBody content
+    struct(content.Writer.Size, info)
+
 let bodies rva (info: CliInfo) (writer: ChunkWriter) =
+    let chunk = LinkedList<byte[]>().AddFirst(Array.zeroCreate writer.Chunk.Value.Length)
+    let content = MethodBodyContent(info.Cli, info.UserStringStream)
     let mutable offset = rva
 
-    for method in info.Cli.MethodDef.Items do
-        // TODO: Ensure that MethodDefs with the same method bodies point to the same RVA.
-        // TODO: Write fat format when necessary.
-        // NOTE: For fat (and tiny) formats, "two least significant bits of first byte" indicate the type.
-        // TODO: Check conditions to see if tiny format can be used.
-        let header = writer.CreateWriter()
-        writer.SkipBytes 1u
-        let body = writer.CreateWriter()
+    for method in info.Cli.MethodDef.Rows do
+        match info.MethodBodies.TryGetValue method.Body with
+        | false, _ when method.Body.Exists ->
+            content.Reset chunk
+            let struct(size, body) = methodBody content method.Body
+            
+            // NOTE: For fat (and tiny) formats, "two least significant bits of first byte" indicate the type.
+            // TODO: Add checks for no exceptions and extra data sections to generate Tiny format.
+            let locals, localsi =
+                match method.Body.LocalVariables with
+                | ValueSome i ->
+                    let signature = &info.Cli.Blobs.LocalVarSig.[info.Cli.StandAloneSig.GetSignature i]
+                    signature.Length, uint32 i
+                | ValueNone -> 0, 0u
+            let tiny = size < 64u && body.MaxStack <= 8us && locals <= 0 && not content.ThrowsExceptions // &&
+            let pos = uint32 writer.Position
 
-        for opcode in method.Body do
-            match opcode with
-            | Opcode.Nop -> body.WriteU1 0uy
-            | Opcode.Break -> body.WriteU1 1uy
-            | Opcode.Call callee ->
-                body.WriteU1 0x28uy
-                MetadataToken.callee info.Cli callee body
+            // Header
+            if tiny
+            then ILMethodFlags.TinyFormat ||| (byte size <<< 2) |> writer.WriteU1 // Flags and Size
+            else
+                let mutable flags = ILMethodFlags.FatFormat // TODO: Set other fat method flags as needed.
+                if body.InitLocals then flags <- flags ||| ILMethodFlags.InitLocals
+                flags ||| (Size.FatFormat <<< 12) |> writer.WriteU2 // Flags and Size
+                writer.WriteU2 body.MaxStack
+                writer.WriteU4 size
+                MetadataToken.write localsi 0x11uy writer // LocalVarSigTok
 
-            | Opcode.Ret -> body.WriteU1 0x2Auy
+            // Body
+            writer.WriteBytes(chunk, 0, size) |> ignore
+            if not tiny then writer.AlignTo 4u
 
-            | Opcode.Ldstr str ->
-                body.WriteU1 0x72uy
-                MetadataToken.userString str info.UserStringStream body
+            info.MethodBodies.Item <- method.Body, offset
+            offset <- offset + (uint32 writer.Position) - pos
 
-            | _ -> failwithf "TODO: Implement support for more opcodes (%A)" opcode
-
-        let size = body.Size
-        0x2uy ||| (byte size <<< 2) |> header.WriteU1
-        info.MethodBodies.Item <- method, offset
-        offset <- offset + size
-        writer.SkipBytes size
-
-        // TODO: Write extra method data sections.
+            // TODO: Write extra method data sections.
+        | false, _ -> info.MethodBodies.Item <- method.Body, 0u
+        | true, _ -> ()
 
     writer.AlignTo 4u
 
@@ -141,68 +176,123 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     // Tables
 
     // Calculate how big indices and coded indices should be.
+    let typeCount = tables.TypeDef.Count + tables.TypeRef.Count + tables.TypeSpec.Count
+    let interfaceImpl = // TypeDefOrRef
+        CodedIndex(typeCount, 2, fun (index: InterfaceIndex) -> uint32 index.Value, uint32 index.Tag)
+    let genericParamConstraint = // TypeDefOrRef
+        let indexer =
+            function
+            | GenericParamConstraint.AbstractClass (Index tdef)
+            | GenericParamConstraint.Class (Index tdef) 
+            | GenericParamConstraint.Interface (Index tdef) -> uint32 tdef, 0u
+            | GenericParamConstraint.TypeRef tref -> uint32 tref, 1u
+            | GenericParamConstraint.TypeSpec tspec -> uint32 tspec, 2u
+        CodedIndex(typeCount, 2, indexer)
+    let eventType = // TypeDefOrRef
+        let indexer =
+            function
+            | EventType.Null -> 0u, 0u
+            | EventType.AbstractClass (Index tdef)
+            | EventType.ConcreteClass (Index tdef)
+            | EventType.SealedClass (Index tdef) -> uint32 tdef, 0u
+            | EventType.TypeRef tref -> uint32 tref, 1u
+            | EventType.TypeSpec tspec -> uint32 tspec, 2u
+        CodedIndex(typeCount, 2, indexer)
+
     let resolutionScope =
-        // TODO: Include ModuleRef table when determine how big a ResolutionScope should be.
         let total =
             1 // Module
+            + tables.ModuleRef.Count
             + tables.AssemblyRef.Count
             + tables.TypeRef.Count
-        function
-        | ResolutionScope.AssemblyRef assm -> tables.AssemblyRef.IndexOf assm, 2u
-        | bad -> failwithf "Unsupported resolution scope %A" bad
-        |> codedIndex total 2
+        let indexer rscope =
+            match rscope with
+            | ResolutionScope.Null -> 0u, 0u
+            | _ -> uint32 rscope.Value, uint32 rscope.Tag
+        CodedIndex(total, 2, indexer)
 
     let extends =
-        // TODO: Include TypeSpec table.
-        let total = tables.TypeDef.Count + tables.TypeRef.Count
-        function
-        | Extends.AbstractClass { TypeHandle = tdef }
-        | Extends.ConcreteClass { TypeHandle = tdef } -> tables.TypeDef.IndexOf tdef, 0u
-        | Extends.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
-        | bad -> failwithf "Unsupported extends %A" bad
-        |> codedIndex total 2
+        let indexer =
+            function
+            | Extends.AbstractClass (Index tdef)
+            | Extends.ConcreteClass (Index tdef) -> uint32 tdef, 0u
+            | Extends.TypeRef tref -> uint32 tref, 1u
+            | Extends.TypeSpec tspec -> uint32 tspec, 2u
+            | Extends.Null -> 0u, 0u
+        CodedIndex(typeCount, 2, indexer)
 
     let memberRefParent =
-        // TODO: Include ModuleRef and TypeSpec tables.
-        let total = tables.TypeDef.Count + tables.TypeRef.Count + tables.MethodDef.Count
-        function
-        | MemberRefParent.TypeRef tref -> tables.TypeRef.IndexOf tref, 1u
-        |> codedIndex total 3
+        let total =
+            tables.TypeDef.Count
+            + tables.TypeRef.Count
+            + tables.ModuleRef.Count
+            + tables.MethodDef.Count
+            + tables.TypeSpec.Count
+        CodedIndex(total, 3, fun (index: MemberRefParent) -> uint32 index.Value, uint32 index.Tag)
 
-    let customAttriuteParent =
+    let constantParent = // HasConstant
+        let total = tables.Field.Count + tables.Param.Count + tables.Property.Count
+        CodedIndex(total, 2, fun (index: ConstantParent) -> uint32 index.Value, uint32 index.Tag)
+
+    let customAttriuteParent = // HasCustomAttribute
         let total =
             tables.MethodDef.Count
             + tables.Field.Count
             + tables.TypeRef.Count
             + tables.TypeDef.Count
-            + tables.Param.Length
-            // InterfaceImpl
+            + tables.Param.Count
+            + tables.InterfaceImpl.Count
             + tables.MemberRef.Count
             + 1 // Module
             // Permission
             // Property
             // Event
             // StandAloneSig
-            // ModuleRef
-            // TypeSpec
+            + tables.ModuleRef.Count
+            + tables.TypeSpec.Count
             + if tables.Assembly.IsSome then 1 else 0
             + tables.AssemblyRef.Count
-            // File
+            + tables.File.Count
             // ExportedType
             // ManifestResource
             // GenericParam
             // GenericParamConstraint
             // MethodSpec
-        function
-        | CustomAttributeParent.Assembly _ -> 1u, 14u
-        | bad -> failwithf "Unsupported custom attribute parent %A" bad
-        |> codedIndex total 5
+        let indexer (parent: CustomAttributeParent) =
+            match parent.Tag with
+            | CustomAttributeParentTag.TypeDef -> parent.ToRawIndex<TypeDefRow>() |> uint32, 3u
+            | CustomAttributeParentTag.Assembly -> 1u, 14u
+            | _ -> ArgumentOutOfRangeException("parent", parent, "Invalid custom attribute parent") |> raise
+        CodedIndex(total, 5, indexer)
+
+    let methodSemanticsAssociation = // HasSemantics
+        let total = tables.Property.Count // + tables.Event.Count
+        CodedIndex(total, 1, fun (index: MethodAssociation) -> uint32 index.Value, uint32 index.Tag)
+
+    let methodDefOrRef =
+        // TODO: Figure out if table count for MethodDefOrRef coded index includes all of MemberRef or just MethodRefs.
+        let total = tables.MethodDef.Count + tables.MemberRef.Count
+        let indexer =
+            function
+            | MethodDefOrRef.Def method -> uint32 method, 0u
+            | MethodDefOrRef.RefDefault (Index method)
+            | MethodDefOrRef.RefGeneric (Index method)
+            | MethodDefOrRef.RefVarArg (Index method) -> uint32 method, 1u
+        CodedIndex(total, 1, indexer)
 
     let customAttributeType =
         let total = tables.MethodDef.Count + tables.MemberRef.Count
-        function
-        | CustomAttributeType.MemberRef mref -> tables.MemberRef.IndexOf mref.Handle, 3u
-        |> codedIndex total 3
+        let indexer =
+            function
+            | CustomAttributeType.MethodRefDefault (Index mref)
+            | CustomAttributeType.MethodRefGeneric (Index mref)
+            | CustomAttributeType.MethodRefVarArg (Index mref) -> uint32 mref, 3u
+            | CustomAttributeType.MethodDef mdef -> uint32 mdef, 2u
+        CodedIndex(total, 3, indexer)
+
+    let genericParamOwner = // TypeOrMethodDef
+        let total = tables.TypeDef.Count + tables.MethodDef.Count
+        CodedIndex(total, 1, fun (index: GenericParamOwner) -> uint32 index.Value, uint32 index.Tag)
 
     // Module (0x00)
     writer.WriteU2 0us // Generation
@@ -212,77 +302,95 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     info.GuidStream.WriteZero writer // Encbaseid
 
     // TypeRef (0x01)
-    for tref in tables.TypeRef.Items do
+    for tref in tables.TypeRef.Rows do
         resolutionScope.WriteIndex(tref.ResolutionScope, writer)
         info.StringsStream.WriteStringIndex(tref.TypeName, writer)
         info.StringsStream.WriteIndex(tref.TypeNamespace, writer)
 
     // TypeDef (0x02)
     if tables.TypeDef.Count > 0 then
-        let mutable field = 1u
-        let mutable method = 1u
-
-        for tdef in tables.TypeDef.Items do
+        let mutable index, field, method = 1, 1u, 1u
+        for tdef in tables.TypeDef.Rows do
             writer.WriteU4 tdef.Flags
             info.StringsStream.WriteStringIndex(tdef.TypeName, writer)
             info.StringsStream.WriteIndex(tdef.TypeNamespace, writer)
             extends.WriteIndex(tdef.Extends, writer)
 
-            // Field
-            let field' = if tdef.FieldList.IsEmpty then 0u else field
-            field <- uint32 tdef.FieldList.Length
-            tables.Field.WriteSimpleIndex(field', writer)
+            let index' = RawIndex index
+            index <- index + 1
 
-            // Method
-            let method' = if tdef.MethodList.IsEmpty then 0u else method
-            method <- uint32 tdef.MethodList.Length
-            tables.Field.WriteSimpleIndex(method', writer)
+            tables.Field.WriteSimpleIndex(RawIndex field, writer)
+            field <- field + (tables.Field.GetCount index')
+
+            tables.Field.WriteSimpleIndex(RawIndex method, writer)
+            method <- method + (tables.MethodDef.GetCount index')
 
     // Field (0x04)
-    for row in tables.Field.Items do
+    for row in tables.Field.Rows do
         writer.WriteU2 row.Flags
         info.StringsStream.WriteStringIndex(row.Name, writer)
-        invalidOp "TODO: Write index for field signatures."
+        info.BlobStream.WriteIndex(row.Signature, writer) // Signature
 
     // MethodDef (0x06)
     if tables.MethodDef.Count > 0 then
         let mutable param = 1u
-
-        for method in tables.MethodDef.Items do
-            writer.WriteU4 info.MethodBodies.[method]
+        for i in tables.MethodDef.Indices do
+            let method = &tables.MethodDef.[i]
+            writer.WriteU4 info.MethodBodies.[method.Body] // Rva
             writer.WriteU2 method.ImplFlags
             writer.WriteU2 method.Flags
             info.StringsStream.WriteStringIndex(method.Name, writer)
             info.BlobStream.WriteIndex(method.Signature, writer) // Signature
-
-            let param' = if method.ParamList.IsEmpty then 0u else param // Param
-            param <- param + uint32 method.ParamList.Length
-            // TODO: Since both the Param table (which is an ImmutableArray) and the ImmutableTable class have an implementation for writing an index, maybe make it an extension method?
-            // If doing the above, maybe add an extension member to allow retrieval of IndexSize as well.
-            if tables.Param.Length < 65536
-            then writer.WriteU2 param'
-            else writer.WriteU4 param'
+            tables.Param.WriteSimpleIndex(param, writer) // ParamList
+            param <- param + uint32(tables.Param.GetParameters(i).Length)
 
     // Param (0x08)
-    for sequence, row in tables.Param do
-        writer.WriteU2 row.Flags.Flags
-        writer.WriteU2(sequence + 1)
-        info.StringsStream.WriteIndex(row.ParamName, writer)
+    for row in tables.Param.Rows do
+        writer.WriteU2 row.Flags
+        writer.WriteU2 row.Sequence
+        info.StringsStream.WriteIndex(row.Name, writer)
 
-
-
+    // InterfaceImpl (0x09)
+    for row in tables.InterfaceImpl.Rows do
+        tables.TypeDef.WriteSimpleIndex(row.Class, writer)
+        interfaceImpl.WriteIndex(row.Interface, writer)
 
     // MemberRef (0x0A)
-    for row in tables.MemberRef.Items do
+    for row in tables.MemberRef.Rows do
         memberRefParent.WriteIndex(row.Class, writer)
-        info.StringsStream.WriteStringIndex(row.MemberName, writer)
+        info.StringsStream.WriteStringIndex(row.Name, writer)
 
         // Signature
-        match row with
-        | MethodRef method -> info.BlobStream.WriteIndex(method.Signature, writer)
+        match row.Signature with
+        | MemberRefSignature.MethodRef method -> info.BlobStream.WriteIndex(method, writer)
+        | MemberRefSignature.FieldRef field -> info.BlobStream.WriteIndex(field, writer)
 
+    // Constant (0x0B)
+    for row in tables.Constant.Rows do
+        let ctype =
+            match row.Value with
+            | ConstantBlob.Integer value ->
+                match value.Tag with
+                | IntegerType.Bool -> ElementType.Boolean
+                | IntegerType.Char -> ElementType.Char
+                | IntegerType.I1 -> ElementType.I1
+                | IntegerType.U1 -> ElementType.U1
+                | IntegerType.I2 -> ElementType.I2
+                | IntegerType.U2 -> ElementType.U2
+                | IntegerType.I4 -> ElementType.I4
+                | IntegerType.U4 -> ElementType.U4
+                | IntegerType.I8 -> ElementType.I8
+                | IntegerType.U8 -> ElementType.U8
+                | _ -> sprintf "Invalid constant integer type for parent %O" row.Parent |> invalidOp
+            | ConstantBlob.String _ -> ElementType.String
+            | ConstantBlob.Float FloatConstantBlob.R4 -> ElementType.R4
+            | ConstantBlob.Float FloatConstantBlob.R8 -> ElementType.R8
+            | ConstantBlob.Null -> ElementType.Class
 
-
+        writer.WriteU1 ctype // Type
+        writer.WriteU1 0uy // Padding
+        constantParent.WriteIndex(row.Parent, writer)
+        info.BlobStream.WriteIndex(row.Value, writer)
 
     // CustomAttribute (0x0C)
     for row in tables.CustomAttribute do
@@ -292,11 +400,72 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
 
 
 
+    // StandAloneSig (0x11)
+    for locals in tables.StandAloneSig.LocalVariables do // LocalVarSig
+        info.BlobStream.WriteIndex(locals, writer)
+    for signature in tables.StandAloneSig.MethodSignatures do // MethodDefSig, MethodRefSig
+        match signature with
+        | FunctionPointer.Def mdef -> info.BlobStream.WriteIndex(mdef, writer)
+        | FunctionPointer.Ref mref -> info.BlobStream.WriteIndex(mref, writer)
+
+    // EventMap (0x12)
+    if tables.EventMap.Count > 0 then
+        let mutable event = 1
+
+        // TODO: Will the order of the parent types matter for EventMap?
+        for parent in tables.EventMap.Owners do
+            tables.TypeDef.WriteSimpleIndex(parent, writer)
+            tables.Event.WriteSimpleIndex(RawIndex event, writer) // EventList
+            event <- event + int32(tables.EventMap.GetCount parent)
+
+    // Event (0x14)
+    for row in tables.Event.Rows do
+        writer.WriteU2 row.Flags
+        info.StringsStream.WriteStringIndex(row.Name, writer)
+        eventType.WriteIndex(row.EventType, writer)
+
+    // PropertyMap (0x15)
+    if tables.PropertyMap.Count > 0 then
+        let mutable property = 1
+
+        // TODO: Will the order of the parent types matter for PropertyMap?
+        for parent in tables.PropertyMap.Owners do
+            tables.TypeDef.WriteSimpleIndex(parent, writer)
+            tables.Property.WriteSimpleIndex(RawIndex property, writer) // PropertyList
+            property <- property + int32(tables.PropertyMap.GetCount parent)
+
+    // Property (0x17)
+    for row in tables.Property.Rows do
+        writer.WriteU2 row.Flags
+        info.StringsStream.WriteStringIndex(row.Name, writer)
+        info.BlobStream.WriteIndex(row.Type, writer)
+
+    // MethodSemantics (0x18)
+    for row in tables.MethodSemantics.Rows do
+        writer.WriteU2 row.Semantics
+        tables.MethodDef.WriteSimpleIndex(row.Method, writer)
+        methodSemanticsAssociation.WriteIndex(row.Association, writer)
+
+    // MethodImpl (0x19)
+    for row in tables.MethodImpl do
+        tables.TypeDef.WriteSimpleIndex(row.Class, writer)
+        methodDefOrRef.WriteIndex(row.MethodBody, writer)
+        methodDefOrRef.WriteIndex(row.MethodDeclaration, writer)
+
+    // ModuleRef (0x1A)
+    for moduleRef in tables.ModuleRef.Rows do
+        info.StringsStream.WriteStringIndex(tables.File.[moduleRef.File].FileName, writer)
+
+    // TypeSpec (0x1B)
+    for typeSpec in tables.TypeSpec.Rows do info.BlobStream.WriteIndex(typeSpec.Signature, writer)
+
+
+
 
     // Assembly (0x20)
     if tables.Assembly.IsSome then
         let assembly = tables.Assembly.Value
-        writer.WriteU4 0u // TODO: Determine what HashAlgId should be.
+        writer.WriteU4 0x8004u // TODO: Determine what HashAlgId should be.
         writer.WriteU2 assembly.Version.Major
         writer.WriteU2 assembly.Version.Minor
         writer.WriteU2 (max assembly.Version.Build 0)
@@ -307,21 +476,58 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
         info.StringsStream.WriteStringIndex(assembly.Culture, writer)
 
     // AssemblyRef (0x23)
-    for row in tables.AssemblyRef.Items do
+    for row in tables.AssemblyRef.Rows do
         writer.WriteU2 row.Version.Major
         writer.WriteU2 row.Version.Minor
         writer.WriteU2 row.Version.Build
         writer.WriteU2 row.Version.Revision
         writer.WriteU4 row.Flags
-        info.BlobStream.WriteIndex(row.PublicKeyOrToken, writer)
+
+        match row.PublicKeyOrToken.AsByteBlob() with
+        | ValueSome i -> info.BlobStream.WriteIndex(i, writer)
+        | ValueNone -> info.BlobStream.WriteEmpty writer
+
         info.StringsStream.WriteStringIndex(row.Name, writer)
         info.StringsStream.WriteStringIndex(row.Culture, writer)
         info.BlobStream.WriteEmpty writer // HashValue // TODO: Figure out how to write the HashValue into a blob.
+
+
+
+
+    // File (0x26)
+    for file in tables.File.Rows do
+        let flags =
+            if file.ContainsMetadata
+            then 0u
+            else 1u
+        writer.WriteU4 flags
+        info.StringsStream.WriteStringIndex(file.FileName, writer)
+        info.BlobStream.WriteIndex(file.HashValue, writer)
+
+
+
 
     // NestedClass (0x29)
     for row in tables.NestedClass do
         tables.TypeDef.WriteSimpleIndex(row.NestedClass, writer)
         tables.TypeDef.WriteSimpleIndex(row.EnclosingClass, writer)
+
+    // GenericParam (0x2A)
+    for row in tables.GenericParam.Rows do
+        writer.WriteU2 row.Number
+        writer.WriteU2 row.Flags
+        genericParamOwner.WriteIndex(row.Owner, writer)
+        info.StringsStream.WriteStringIndex(row.Name, writer)
+
+    // MethodSpec (0x2B)
+    for methodSpec in tables.MethodSpec.Rows do
+        methodDefOrRef.WriteIndex(methodSpec.Method, writer)
+        info.BlobStream.WriteIndex(methodSpec.Instantiation, writer)
+
+    // GenericParamConstraint (0x2C)
+    for row in tables.GenericParamConstraint.Rows do
+        tables.GenericParam.WriteSimpleIndex(row.Owner, writer)
+        genericParamConstraint.WriteIndex(row.Constraint, writer)
 
     // TODO: Write more tables.
     ()
@@ -371,9 +577,9 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     let inline stream (header: ChunkWriter) content =
         let heap = writer.CreateWriter()
         content heap
+        heap.AlignTo 4u
         header.WriteU4 offset
         header.WriteU4 heap.Size
-        heap.AlignTo 4u
         let size = heap.Size
         offset <- offset + size
         writer.SkipBytes size
@@ -385,7 +591,8 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     stream strings (Heap.writeStrings info.StringsStream.Count info.Cli)
 
     // #US
-    stream us (Heap.writeUS info.UserStringStream)
+    if us <> Unchecked.defaultof<ChunkWriter> then
+        stream us (Heap.writeUS info.UserStringStream info.Cli)
 
     // #GUID
     stream guid (Heap.writeGuid info.Cli) // TODO: Fix, GUID heap should be an array of guids, where 1 refers to the first item.
@@ -413,31 +620,32 @@ let metadata (cli: CliMetadata) (headerRva: uint32) (section: ChunkWriter) =
           StringsStream = Heap.strings cli
           UserStringStream = UserStringHeap 64
           GuidStream = Heap.guid cli
-          BlobStream = Heap.blob cli }
+          BlobStream = Heap.blob cli section.Chunk.Value.Length }
     let mutable rva = headerRva
 
     header info writer
     rva <- rva + Size.CliHeader
 
-    do // Strong Name Signature
+    // Strong Name Signature
+    if not cli.Header.StrongNameSignature.IsEmpty then
         info.StrongNameSignature.WriteU4 rva
         writer.ResetSize()
         writer.WriteBytes(cli.Header.StrongNameSignature)
         info.StrongNameSignature.WriteU4 writer.Size
-        writer.AlignTo 4u // TODO: See if alignment is necessary here.
-        rva <- rva + writer.Size
-
-    do // Method Bodies
-        writer.ResetSize()
-        bodies rva info writer
         writer.AlignTo 4u
         rva <- rva + writer.Size
 
-    do // CLI metadata
-        info.Metadata.WriteU4 rva
-        writer.ResetSize()
-        root info writer
-        info.Metadata.WriteU4 writer.Size
-        rva <- rva + writer.Size
+    // Method Bodies
+    writer.ResetSize()
+    bodies rva info writer
+    writer.AlignTo 4u
+    rva <- rva + writer.Size
+
+    // CLI metadata
+    info.Metadata.WriteU4 rva
+    writer.ResetSize()
+    root info writer
+    info.Metadata.WriteU4 writer.Size
+    rva <- rva + writer.Size
 
     section.SkipBytes (rva - headerRva)

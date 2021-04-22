@@ -4,8 +4,6 @@ open System.Collections.Immutable
 
 open FSharpIL.Metadata
 
-#nowarn "25"
-
 type PEFile =
     { FileHeader: CoffHeader
       StandardFields: StandardFields
@@ -24,10 +22,10 @@ type PEFile =
 
 [<RequireQualifiedAccess>]
 module PEFile =
-    let ofMetadata fileType (metadata: CliMetadata) =
+    let ofMetadata characteristics (metadata: CliMetadata) =
         let text =
             { Kind = TextSection
               Data = [| ClrLoaderStub; CliHeader metadata |].ToImmutableArray() }
         { PEFile.Default with
-            FileHeader = { CoffHeader.Default with Characteristics = FileType fileType }
+            FileHeader = { CoffHeader.Default with Characteristics = characteristics }
             Sections = ImmutableArray.Create<Section> text |> PESections }

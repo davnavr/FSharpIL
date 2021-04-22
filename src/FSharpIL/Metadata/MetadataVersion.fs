@@ -1,14 +1,13 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Text
-open System.Runtime.CompilerServices
 
 open FSharpIL
 
-[<Struct; IsReadOnly>]
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
-type MetadataVersion =
-    internal
+type MetadataVersion = // TODO: Make this a record.
+    private
     | MetadataVersion of byte * byte[]
 
     override this.ToString() =

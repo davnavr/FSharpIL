@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>FSharpIL.Tests.Examples</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="DelegatesTests.fs" />
+    <Compile Include="FactorialTests.fs" />
+    <Compile Include="FractionTests.fs" />
+    <Compile Include="CollectionTests.fs" />
+    <Compile Include="$(RootDirectory)\test\ExpectoEntryPoint.fs" />
+
+    <PackageReference Include="Expecto" Version="9.0.2" />
+    <PackageReference Include="Expecto.FsCheck" Version="9.0.2" />
+    <PackageReference Include="FsCheck" Version="2.14.3" />
+    <PackageReference Include="Unquote" Version="5.0.0" />
+
+    <Reference Include="$(RootDirectory)\docs\content\exout\CustomNumbers.dll" />
+    <Reference Include="$(RootDirectory)\docs\content\exout\Factorial.dll" />
+    <Reference Include="$(RootDirectory)\docs\content\exout\CustomCollections.dll" />
+    <Reference Include="$(RootDirectory)\docs\content\exout\DelegatesExample.dll" />
+  </ItemGroup>
+
+</Project>

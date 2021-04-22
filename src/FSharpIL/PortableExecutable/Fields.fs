@@ -2,9 +2,10 @@
 
 open System
 
+[<Obsolete>]
 type IsDll =
-    | IsDll
-    | IsExe
+    | [<Obsolete>] IsDll
+    | [<Obsolete>] IsExe
 
 // II.25.2.2.1
 /// Flags that specify file characteristics in the PE file header.
@@ -15,16 +16,10 @@ type ImageFileFlags =
     | File32BitMachine = 0x0100us // TODO This flag depends on a flag from the CLI header, should it be validated?
     | FileDll = 0x2000us
 
-type FileCharacteristics =
-    | FileType of IsDll
-    | FileFlags of ImageFileFlags
-
-    static member op_Implicit(characteristics: FileCharacteristics) =
-        match characteristics with
-        | FileType IsExe -> ImageFileFlags.FileExecutableImage
-        | FileType IsDll -> ImageFileFlags.FileExecutableImage ||| ImageFileFlags.FileDll
-        | FileFlags flags -> flags
-        |> uint16
+[<RequireQualifiedAccess>]
+module ImageFileFlags =
+    let dll = ImageFileFlags.FileExecutableImage ||| ImageFileFlags.FileDll
+    let exe = ImageFileFlags.FileExecutableImage
 
 type MachineFlags =
     | I386 = 0x14Cus
@@ -37,7 +32,7 @@ type CoffHeader =
       SymbolTablePointer: uint32
       SymbolCount: uint32
       // OptionalHeaderSize
-      Characteristics: FileCharacteristics }
+      Characteristics: ImageFileFlags }
 
     /// Default PE file header indicating that the file is a <c>.dll</c> file.
     static member Default =
@@ -45,7 +40,7 @@ type CoffHeader =
           TimeDateStamp = 0u
           SymbolTablePointer = 0u
           SymbolCount = 0u
-          Characteristics = FileType IsDll }
+          Characteristics = ImageFileFlags.dll }
 
 // II.25.2.3.1
 type StandardFields =
@@ -73,20 +68,20 @@ type ImageBase =
     static member Default = ImageBase 0x40us
 
 type ImageSubsystem =
-    | Unknown = 0uy
-    | Native = 1uy
-    | WindowsGui = 2uy
-    | WindowsCui = 3uy
-    | OS2Cui = 5uy
-    | PosixCui = 7uy
-    | NativeWindows = 8uy
-    | WindowsCEGui = 9uy
-    | EfiApplication = 10uy
-    | EfiBootServiceDriver = 11uy
-    | EfiRuntimeDriver = 12uy
-    | EfiRom = 13uy
-    | Xbox = 14uy
-    | WindowsBootApplication = 16uy
+    | Unknown = 0us
+    | Native = 1us
+    | WindowsGui = 2us
+    | WindowsCui = 3us
+    | OS2Cui = 5us
+    | PosixCui = 7us
+    | NativeWindows = 8us
+    | WindowsCEGui = 9us
+    | EfiApplication = 10us
+    | EfiBootServiceDriver = 11us
+    | EfiRuntimeDriver = 12us
+    | EfiRom = 13us
+    | Xbox = 14us
+    | WindowsBootApplication = 16us
 
 [<Flags>]
 type PEFileFlags =

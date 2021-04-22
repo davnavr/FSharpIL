@@ -3,37 +3,102 @@
   <PropertyGroup>
     <AssemblyName>FSharpIL</AssemblyName>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <LangVersion>5.0</LangVersion>
     <OutputType>Library</OutputType>
     <TargetFrameworks>netstandard2.1;net5.0</TargetFrameworks>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="AssemblyVisibility.fs" />
+    <Compile Include="Result.fs" />
     <Compile Include="Bytes.fs" />
     <Compile Include="InternalException.fs" />
     <Compile Include="Magic.fs" />
     <Compile Include="Round.fs" />
     <Compile Include="Writing\ChunkWriter.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
-    <Compile Include="Metadata\MiscTypes.fs" />
-    <Compile Include="Metadata\Flags.fs" />
+    <Compile Include="Metadata\Index.fs" />
+    <Compile Include="Metadata\Blob.fs" />
+    <Compile Include="Metadata\MetadataTable.fs" />
+    <Compile Include="Metadata\RowArrayList.fs" />
+    <Compile Include="Metadata\RowHashSet.fs" />
     <Compile Include="Metadata\Identifier.fs" />
-    <Compile Include="Metadata\AssemblyName.fs" />
+    <Compile Include="Metadata\Assembly.fs" />
+    <Compile Include="Metadata\AssemblyRef.fs" />
+    <Compile Include="Metadata\File.fs" />
+    <Compile Include="Metadata\ModuleRef.fs" />
+    <Compile Include="Metadata\TypeRef.fs" />
+    <Compile Include="Metadata\Flags.fs" />
+    <Compile Include="Metadata\Signatures.fs" />
+    <Compile Include="Metadata\FieldRow.fs" />
+    <Compile Include="Metadata\ConstantRow.fs" />
+    <Compile Include="Metadata\Param.fs" />
+    <Compile Include="Metadata\MethodBody.fs" />
+    <Compile Include="Metadata\MethodDefRow.fs" />
+    <Compile Include="Metadata\ParamTable.fs" />
+    <Compile Include="Metadata\TypeSpecRow.fs" />
+    <Compile Include="Metadata\TypeDef.fs" />
+    <Compile Include="Metadata\GenericParam.fs" />
+    <Compile Include="Metadata\InterfaceImpl.fs" />
+    <Compile Include="Metadata\OwnedMetadataTable.fs" />
+    <Compile Include="Metadata\Field.fs" />
+    <Compile Include="Metadata\Method.fs" />
+    <Compile Include="Metadata\MemberRef.fs" />
+    <Compile Include="Metadata\MethodSpecRow.fs" />
+    <Compile Include="Metadata\MethodImpl.fs" />
+    <Compile Include="Metadata\Items.fs" />
+    <Compile Include="Metadata\TypeSpec.fs" />
+    <Compile Include="Metadata\MethodSpec.fs" />
+    <Compile Include="Metadata\ItemHelpers.fs" />
+    <Compile Include="Metadata\Event.fs" />
+    <Compile Include="Metadata\Property.fs" />
+    <Compile Include="Metadata\ConstantTable.fs" />
+    <Compile Include="Metadata\MethodSemantics.fs" />
+    <Compile Include="Metadata\CustomAttribute.fs" />
+    <Compile Include="Metadata\StandAloneSig.fs" />
+    <Compile Include="Metadata\FlagsModule.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
-    <Compile Include="Metadata\Handle.fs" />
-    <Compile Include="Metadata\ImmutableTable.fs" />
-    <Compile Include="Metadata\MemberList.fs" />
-    <Compile Include="Metadata\MetadataTables.fs" />
+    <Compile Include="Metadata\BlobHeap.fs" />
+    <Compile Include="Metadata\CliMetadataBuilder.fs" />
+    <Compile Include="Metadata\EntryPointSignature.fs" />
+    <Compile Include="Metadata\TypeLookupCache.fs" />
     <Compile Include="Metadata\CliMetadata.fs" />
-    <Compile Include="Metadata\MetadataBuilder.fs" />
+    <Compile Include="Metadata\CustomAttributeModule.fs" />
+    <Compile Include="Metadata\AssemblyModule.fs" />
+    <Compile Include="Metadata\AssemblyRefModule.fs" />
+    <Compile Include="Metadata\TypeRefModule.fs" />
+    <Compile Include="Metadata\MethodRefModule.fs" />
+    <Compile Include="Metadata\FieldRefModule.fs" />
+    <Compile Include="Metadata\FileModule.fs" />
+    <Compile Include="Metadata\ModuleRefModule.fs" />
+    <Compile Include="Metadata\MethodSpecModule.fs" />
+    <Compile Include="Metadata\TypeSpecModule.fs" />
     <Compile Include="Metadata\Heaps\BlobSize.fs" />
-    <Compile Include="Metadata\Heaps\ChunkWriterExtensions.fs" />
+    <Compile Include="Metadata\Heaps\BlobWriter.fs" />
     <Compile Include="Metadata\Heaps\HeapExtensions.fs" />
-    <Compile Include="Metadata\Heaps\BlobHeap.fs" />
+    <Compile Include="Metadata\Heaps\SerializedBlobHeap.fs" />
     <Compile Include="Metadata\Heaps\UserString.fs" />
     <Compile Include="Metadata\Heaps\Heap.fs" />
     <Compile Include="Metadata\MetadataToken.fs" />
+    <Compile Include="Metadata\MethodBodyWriter.fs" />
+    <Compile Include="Metadata\MethodBodyModule.fs" />
+    <Compile Include="Metadata\TypeDefInfo.fs" />
+    <Compile Include="Metadata\ParamRows.fs" />
+    <Compile Include="Metadata\DelegateHelpers.fs" />
+    <Compile Include="Metadata\EventHelpers.fs" />
+    <Compile Include="Metadata\Unsafe.fs" />
+    <Compile Include="Metadata\TypeDefModules.fs" />
+    <Compile Include="Metadata\MemberOwner.fs" />
+    <Compile Include="Metadata\FieldModule.fs" />
+    <Compile Include="Metadata\MethodDefModules.fs" />
+    <Compile Include="Metadata\Parameters.fs" />
+    <Compile Include="Metadata\EventModule.fs" />
+    <Compile Include="Metadata\PropertyModule.fs" />
+    <Compile Include="Metadata\InterfaceImplModule.fs" />
+    <Compile Include="Metadata\MethodImplModule.fs" />
+    <Compile Include="Metadata\EntryPoint.fs" />
+    <Compile Include="Metadata\GenericParamModule.fs" />
+    <Compile Include="XmlDoc\DocMember.fs" />
+    <Compile Include="XmlDoc\Name.fs" />
+    <Compile Include="XmlDoc\Doc.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />
@@ -42,7 +107,6 @@
     <Compile Include="WriteCli.fs" />
     <Compile Include="WritePE.fsi" />
     <Compile Include="WritePE.fs" />
-    <Compile Include="Builders.fs" />
 
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
   </ItemGroup>

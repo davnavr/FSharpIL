@@ -1,5 +1,7 @@
 ﻿namespace FSharpIL.PortableExecutable
 
+open System.Text
+
 [<StructuralComparison; StructuralEquality>]
 type SectionName =
     internal
@@ -7,7 +9,7 @@ type SectionName =
 
     override this.ToString() =
         let (SectionName name) = this
-        Array.map char name |> System.String
+        Encoding.UTF8.GetString(name).TrimEnd '\000'
 
 [<RequireQualifiedAccess>]
 module SectionName =

@@ -1,6 +1,7 @@
 ﻿namespace rec FSharpIL.PortableExecutable
 
 open System.Collections.Immutable
+open System.Diagnostics
 
 open FSharpIL.Metadata
 
@@ -47,6 +48,7 @@ type SectionKind =
     | RelocSection
     | RsrcSection
 
+[<DebuggerDisplay("{Data}", Name = "{Header.SectionName.ToString()}")>]
 type Section =
     { Data: ImmutableArray<SectionData>
       Kind: SectionKind }
