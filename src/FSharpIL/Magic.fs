@@ -2,6 +2,8 @@
 [<RequireQualifiedAccess>]
 module internal FSharpIL.Magic
 
+open System
+
 let DosStub =
     let lfanew = [| 0x80; 0x00; 0x00; 0x00 |]
     [|
@@ -32,3 +34,13 @@ let PE32 = 0x10Bus
 
 /// The signature of the CLI metadata root.
 let CliSignature = [| 0x42uy; 0x53uy; 0x4Auy; 0x42uy; |]
+
+let matches (expected: byte[]) (actual: Span<byte>) =
+    if expected.Length <> actual.Length then
+        sprintf "Expected %i bytes but got %i" expected.Length actual.Length |> invalidArg "actual"
+    let mutable i = 0
+    while i >= 0 && i < expected.Length do
+        if expected.[i] = actual.[i]
+        then i <- i + 1
+        else i <- -1
+    i > -1

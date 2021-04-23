@@ -88,7 +88,7 @@ type ExceptionHandlerBlock (content: MethodBodyContent) =
 // TODO: Figure out how to prevent (some) invalid method bodies.
 [<IsByRefLike; IsReadOnly; Struct>]
 type MethodBodyWriter (content: MethodBodyContent) =
-    member inline _.ByteCount = content.ByteCount
+    member _.ByteCount = content.ByteCount
 
     member inline private _.WriteMetadataToken(index, table) = MetadataToken.write index table content.Writer
 
