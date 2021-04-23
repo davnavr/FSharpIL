@@ -1,7 +1,8 @@
 ﻿namespace FSharpIL.Reading
 
 type MetadataReader<'State> =
-    { HandleError: 'State -> ReadState -> ReadError -> 'State }
+    { ReadLfanew: (uint32 -> 'State -> 'State) voption
+      HandleError: 'State -> ReadState -> ReadError -> 'State }
 
 [<RequireQualifiedAccess>]
 module MetadataReader =

@@ -4,6 +4,8 @@ module internal FSharpIL.Magic
 
 open System
 
+let PE = "MZ"B
+
 let DosStub =
     let lfanew = [| 0x80; 0x00; 0x00; 0x00 |]
     [|

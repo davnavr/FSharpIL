@@ -12,7 +12,7 @@ type ReadError =
         | InvalidPEMagic magic ->
             sprintf
                 "The file was not a Portable Executable, expected magic %s, but got %s"
-                (Bytes.print Magic.PESignature)
+                (Bytes.print Magic.PE)
                 (Bytes.print magic)
         | UnexpectedEndOfFile -> "The end of the file was unexpectedly reached"
 

@@ -110,6 +110,7 @@
     <Compile Include="Reading\ReadError.fs" />
     <Compile Include="Reading\ReadState.fs" />
     <Compile Include="Reading\MetadataReader.fs" />
+    <Compile Include="ReadCli.fsi" />
     <Compile Include="ReadCli.fs" />
 
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
