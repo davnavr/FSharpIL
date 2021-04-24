@@ -7,8 +7,7 @@ type IsDll =
     | [<Obsolete>] IsDll
     | [<Obsolete>] IsExe
 
-// II.25.2.2.1
-/// Flags that specify file characteristics in the PE file header.
+/// Flags that specify file characteristics in the PE file header (II.25.2.2.1).
 [<Flags>]
 type ImageFileFlags =
     | FileRelocsStripped = 0x0001us
@@ -24,7 +23,7 @@ module ImageFileFlags =
 type MachineFlags =
     | I386 = 0x14Cus
 
-// II.25.2.2
+/// (II.25.2.2)
 type CoffHeader =
     { Machine: MachineFlags
       // NumberOfSections
@@ -34,7 +33,7 @@ type CoffHeader =
       // OptionalHeaderSize
       Characteristics: ImageFileFlags }
 
-    /// Default PE file header indicating that the file is a <c>.dll</c> file.
+    /// <summary>Default PE file header indicating that the file is a <c>.dll</c> file.</summary>
     static member Default =
         { Machine = MachineFlags.I386
           TimeDateStamp = 0u
@@ -42,7 +41,12 @@ type CoffHeader =
           SymbolCount = 0u
           Characteristics = ImageFileFlags.dll }
 
-// II.25.2.3.1
+type OptionalHeaderMagic =
+    /// Identifies the Portable Executable file as a PE32 executable.
+    | PE32 = 0x10Bus
+    | PE32Plus = 0x20Bus
+
+/// (II.25.2.3.1)
 type StandardFields =
     { // Note that the Magic field is not included, so it should always be PE32 (0x10B), not PE32+ (0x20B)
       LMajor: byte
@@ -98,7 +102,7 @@ type PEFileFlags =
     | GuardCF = 0x4000us
     | TerminalServerAware = 0x8000us
 
-// II.25.2.3.2
+/// (II.25.2.3.2)
 type NTSpecificFields =
     { ImageBase: ImageBase
       Alignment: Alignment

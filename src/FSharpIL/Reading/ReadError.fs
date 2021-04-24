@@ -1,19 +1,25 @@
 ﻿namespace FSharpIL.Reading
 
+open System.Collections.Immutable
+
 open FSharpIL
 
 [<NoComparison; NoEquality>]
 type ReadError =
-    | InvalidPEMagic of byte[]
+    | InvalidMagic of expected: ImmutableArray<byte> * actual: byte[]
     | UnexpectedEndOfFile
 
     member this.Message =
         match this with
-        | InvalidPEMagic magic ->
+        | InvalidMagic(expected, Bytes.ReadOnlySpan actual) ->
             sprintf
-                "The file was not a Portable Executable, expected magic %s, but got %s"
-                (Bytes.print Magic.PE)
-                (Bytes.print magic)
+                "Expected magic %s, but got %s"
+                (Bytes.print(expected.AsSpan()))
+                (Bytes.print actual)
         | UnexpectedEndOfFile -> "The end of the file was unexpectedly reached"
 
-exception ReadException of ReadError with override this.Message = this.Data0.Message
+exception ReadException
+    of offset: uint64 * state: ReadState * error: ReadError
+    with
+        override this.Message =
+            sprintf "Error occured at offset %i while %s. %s" this.offset this.state.Description this.error.Message

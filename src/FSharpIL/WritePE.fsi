@@ -39,3 +39,6 @@ val toFile : file: FileInfo -> PEFile -> unit
 /// </summary>
 /// <exception cref="T:System.ArgumentNullException">The <paramref name="path"/> is <see langword="null"/>.</exception>
 val toPath : path: string -> PEFile -> unit
+
+module Size =
+    [<Literal>] val CoffHeader: uint32 = 20u

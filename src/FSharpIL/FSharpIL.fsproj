@@ -107,8 +107,8 @@
     <Compile Include="WriteCli.fs" />
     <Compile Include="WritePE.fsi" />
     <Compile Include="WritePE.fs" />
-    <Compile Include="Reading\ReadError.fs" />
     <Compile Include="Reading\ReadState.fs" />
+    <Compile Include="Reading\ReadError.fs" />
     <Compile Include="Reading\MetadataReader.fs" />
     <Compile Include="ReadCli.fsi" />
     <Compile Include="ReadCli.fs" />
