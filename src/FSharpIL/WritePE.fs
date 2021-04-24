@@ -14,17 +14,10 @@ open FSharpIL.Writing
 [<RequireQualifiedAccess>]
 module Size =
     let PEHeader = Magic.DosStub.Length + Magic.PESignature.Length |> uint32
-
-    [<Literal>]
-    let CoffHeader = 20u
-
-    /// The value of the `SizeOfOptionalHeader` field in the COFF file header.
-    [<Literal>]
-    let OptionalHeader = 0xE0us
-
+    let [<Literal>] CoffHeader = 20u
+    let [<Literal>] OptionalHeader = 0xE0us
     /// The length of a single section header.
-    [<Literal>]
-    let SectionHeader = 40u
+    let [<Literal>] SectionHeader = 40u
 
 [<ReferenceEquality; NoComparison>]
 type PEInfo =

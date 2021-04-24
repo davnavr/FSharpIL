@@ -13,6 +13,7 @@ open FSharpIL.Reading
 
 #nowarn "9"
 
+/// <summary>Creates a <see cref="System.Span`1"/> from a region of memory allocated on the stack.</summary>
 [<RequiresExplicitTypeArguments>]
 let inline allocspan<'T when 'T : unmanaged> length = Span<'T>(NativePtr.toVoidPtr(NativePtr.stackalloc<'T> length), length)
 
@@ -66,7 +67,8 @@ type Reader (src: Stream) =
 [<NoComparison; NoEquality>]
 type MutableFile =
     { mutable Lfanew: uint32
-      mutable OptionalHeaderSize: uint16 }
+      mutable OptionalHeaderSize: uint16
+      mutable Magic: OptionalHeaderMagic }
 
 let readCoffHeader (src: Reader) (file: MutableFile) (reader: MetadataReader<'UserState>) ustate =
     let buffer = arrspan<byte>(int32 WritePE.Size.CoffHeader)
@@ -80,19 +82,45 @@ let readCoffHeader (src: Reader) (file: MutableFile) (reader: MetadataReader<'Us
               SymbolTablePointer = Bytes.readU4 8 buffer
               SymbolCount = Bytes.readU4 12 buffer
               Characteristics = LanguagePrimitives.EnumOfValue(Bytes.readU2 18 buffer) }
-            (Bytes.readU2 2 buffer)
+            (Bytes.readU2 2 buffer) // NumberOfSections
             file.OptionalHeaderSize
             ustate
         |> Ok
     else Error UnexpectedEndOfFile
 
-
+let readStandardFields (src: Reader) (magic: byref<OptionalHeaderMagic>) (reader: MetadataReader<'UserState>) ustate =
+    let magic' = allocspan<byte> 2
+    if src.ReadBytes magic' = 2 then
+        magic <- LanguagePrimitives.EnumOfValue(Bytes.readU2 0 magic')
+        let length = if magic = OptionalHeaderMagic.PE32 then 26 else 22 // TODO: Return an Error if the magic value is not PE332 or PE32+.
+        let fields = arrspan<byte> length
+        if src.ReadBytes fields = length then
+            let baseOfData =
+                match magic with
+                | OptionalHeaderMagic.PE32 -> ValueSome(Bytes.readU4 24 fields)
+                | _ -> ValueNone
+            MetadataReader.readStandardFields
+                reader
+                magic
+                fields.[2] // LMajor
+                fields.[3] // LMinor
+                (Bytes.readU4 4 fields) // CodeSize
+                (Bytes.readU4 8 fields) // InitializedDataSize
+                (Bytes.readU4 12 fields) // UninitializedDataSize
+                (Bytes.readU4 16 fields) // EntryPointRva
+                (Bytes.readU4 20 fields) // BaseOfCode
+                baseOfData
+                ustate
+            |> Ok
+        else Error UnexpectedEndOfFile
+    else Error UnexpectedEndOfFile
 
 let readPE (stream: Stream) (reader: MetadataReader<_>) (start: 'UserState) =
     let src = Reader stream
     let file =
         { Lfanew = Unchecked.defaultof<uint32>
-          OptionalHeaderSize = Unchecked.defaultof<uint16> }
+          OptionalHeaderSize = Unchecked.defaultof<uint16>
+          Magic = Unchecked.defaultof<OptionalHeaderMagic> }
     let rec inner ustate state =
         let inline error err = reader.HandleError src.Offset state err ustate
         let inline moveto target state' =
@@ -121,10 +149,15 @@ let readPE (stream: Stream) (reader: MetadataReader<_>) (start: 'UserState) =
             | len -> InvalidMagic(Magic.PESignature, Bytes.ofSpan len signature) |> error
         | ReadCoffHeader ->
             match readCoffHeader src file reader ustate with
+            | Ok _ when file.OptionalHeaderSize < WritePE.Size.OptionalHeader ->
+                error(OptionalHeaderTooSmall file.OptionalHeaderSize)
             | Ok ustate' -> inner ustate' ReadStandardFields
             | Error err -> error err
-        | ReadStandardFields -> invalidOp "TODO: How to deal with OptionalHeaderSize"
-        // Don't forget to check PE32+
+        | ReadStandardFields ->
+            match readStandardFields src &file.Magic reader ustate with
+            | Ok ustate' -> inner ustate' ReadNTSpecificFields
+            | Error err -> error err
+        // TODO: Don't forget to check PE32+
         | EndRead -> ustate
     inner start ReadPEMagic
 

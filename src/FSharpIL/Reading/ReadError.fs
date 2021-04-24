@@ -7,6 +7,7 @@ open FSharpIL
 [<NoComparison; NoEquality>]
 type ReadError =
     | InvalidMagic of expected: ImmutableArray<byte> * actual: byte[]
+    | OptionalHeaderTooSmall of size: uint16
     | UnexpectedEndOfFile
 
     member this.Message =
@@ -16,6 +17,7 @@ type ReadError =
                 "Expected magic %s, but got %s"
                 (Bytes.print(expected.AsSpan()))
                 (Bytes.print actual)
+        | OptionalHeaderTooSmall size -> sprintf "The specified optional header size (%i) is too small." size
         | UnexpectedEndOfFile -> "The end of the file was unexpectedly reached"
 
 exception ReadException
