@@ -33,6 +33,8 @@ let readU4 offset (bytes: Span<byte>) =
     ||| (uint32 bytes.[offset + 1] <<< 8)
     ||| uint32 bytes.[offset] // LSB
 
+let readU8 offset (bytes: Span<byte>) = invalidOp "TODO: Read U8"
+
 let inline (|ReadOnlySpan|) (bytes: byte[]) = System.ReadOnlySpan<byte> bytes
 
 let inline ofSpan length (bytes: Span<byte>) = bytes.Slice(0, length).ToArray()

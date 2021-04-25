@@ -2,52 +2,28 @@
 
 open FSharpIL.PortableExecutable
 
-type ReadStandardFields<'State> =
-    OptionalHeaderMagic -> StandardFields -> uint32 -> uint32 -> uint32 -> uint32 -> uint32 -> uint32 voption -> 'State -> 'State
+type Reader<'Arg, 'State> = ('Arg -> 'State -> 'State) voption
 
-// TODO: Consider making this a class.
 // TODO: Rename this to something else.
+[<NoComparison; NoEquality>]
 type MetadataReader<'State> =
-    { ReadLfanew: (uint32 -> 'State -> 'State) voption
-      ReadCoffHeader: (CoffHeader -> uint16 -> uint16 -> 'State -> 'State) voption
-      ReadStandardFields: ReadStandardFields<'State> voption
+    { ReadLfanew: Reader<uint32, 'State>
+      ReadCoffHeader: Reader<CoffHeader<uint16, uint16>, 'State>
+      ReadStandardFields: Reader<StandardFields<PEImageKind, uint32, uint32 voption>, 'State>
+      ReadNTSpecificFields: Reader<NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>, 'State>
       HandleError: uint64 -> ReadState -> ReadError -> 'State -> 'State }
 
 [<RequireQualifiedAccess>]
 module MetadataReader =
-    let inline private read reader call =
+    let inline private read reader arg state =
         match reader with
-        | ValueSome reader' -> call reader'
-        | ValueNone -> id
+        | ValueSome reader' -> reader' arg state
+        | ValueNone -> state
 
-    let readLfanew { ReadLfanew = reader } lfanew = read reader (fun reader' -> reader' lfanew)
-
-    let readCoffHeader { ReadCoffHeader = reader } header numberOfSections optionalHeaderSize =
-        read reader (fun reader' -> reader' header numberOfSections optionalHeaderSize)
-
-    let readStandardFields
-        { ReadStandardFields = reader }
-        magic
-        lmajor
-        lminor
-        codeSize
-        initDataSize
-        uninitDataSize
-        entryPointRva
-        baseOfCode
-        baseOfData
-        =
-        fun reader' ->
-            reader'
-                magic
-                { LMajor = lmajor; LMinor = lminor }
-                codeSize
-                initDataSize
-                uninitDataSize
-                entryPointRva
-                baseOfCode
-                baseOfData
-        |> read reader
+    let readLfanew { ReadLfanew = reader } lfanew = read reader lfanew
+    let readCoffHeader { ReadCoffHeader = reader } header = read reader header
+    let readStandardFields { ReadStandardFields = reader } fields = read reader fields
+    let readNTSpecificFields { ReadNTSpecificFields = reader } fields = read reader fields
 
     let inline throwOnError (offset: uint64) (state: ReadState) error (_: 'State): 'State =
         ReadException(offset, state, error) |> raise
@@ -57,4 +33,5 @@ module MetadataReader =
         { ReadLfanew = ValueNone
           ReadCoffHeader = ValueNone
           ReadStandardFields = ValueNone
+          ReadNTSpecificFields = ValueNone
           HandleError = throwOnError }
