@@ -8,6 +8,7 @@ open FSharpIL
 type ReadError =
     | InvalidMagic of expected: ImmutableArray<byte> * actual: byte[]
     | OptionalHeaderTooSmall of size: uint16
+    | TooFewDataDirectories of count: uint32
     | UnexpectedEndOfFile
 
     member this.Message =
@@ -18,6 +19,7 @@ type ReadError =
                 (Bytes.print(expected.AsSpan()))
                 (Bytes.print actual)
         | OptionalHeaderTooSmall size -> sprintf "The specified optional header size (%i) is too small." size
+        | TooFewDataDirectories count -> sprintf "The number of data directories (%i) is too small" count
         | UnexpectedEndOfFile -> "The end of the file was unexpectedly reached"
 
 exception ReadException

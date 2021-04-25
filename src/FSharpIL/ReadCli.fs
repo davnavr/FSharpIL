@@ -4,6 +4,7 @@ module FSharpIL.ReadCli
 
 open System
 open System.IO
+open System.Runtime.CompilerServices
 
 open Microsoft.FSharp.Core.Operators.Checked
 open Microsoft.FSharp.NativeInterop
@@ -69,7 +70,8 @@ type MutableFile =
     { mutable Lfanew: uint32
       mutable CoffHeader: CoffHeader<uint16, uint16>
       mutable StandardFields: StandardFields<PEImageKind, uint32, uint32 voption>
-      mutable NTSpecificFields: NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32> }
+      mutable NTSpecificFields: NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
+      mutable DataDirectories: struct(uint32 * uint32)[] }
 
 let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
     let buffer = arrspan<byte>(int32 WritePE.Size.CoffHeader)
@@ -87,11 +89,11 @@ let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
     else Error UnexpectedEndOfFile
 
 let readStandardFields (src: Reader) (fields: byref<_>) reader ustate =
-    let magic' = allocspan<byte> 2
+    let magic' = allocspan<byte> 2 // TODO Use one buffer only.
     if src.ReadBytes magic' = 2 then
         let magic = LanguagePrimitives.EnumOfValue(Bytes.readU2 0 magic')
         let length = if magic = PEImageKind.PE32 then 26 else 22
-        let fields' = arrspan<byte> length
+        let fields' = allocspan<byte> length
         if src.ReadBytes fields' = length then
             fields <-
                 { Magic = magic
@@ -121,32 +123,45 @@ let readNTSpecificFields (src: Reader) magic (fields: byref<_>) reader ustate =
         | _ -> 68
     let buffer = arrspan<byte> length
     if src.ReadBytes buffer = length then
-        fields <-
-            match magic with
-            | PEImageKind.PE32Plus -> invalidOp "bad"
-            | _ ->
-                { ImageBase = uint64(Bytes.readU4 0 buffer)
-                  // TODO: Validate alignment values, maybe use Alignment type?
-                  Alignment = Bytes.readU4 4 buffer, Bytes.readU4 8 buffer
-                  OSMajor = Bytes.readU2 12 buffer
-                  OSMinor = Bytes.readU2 14 buffer
-                  UserMajor = Bytes.readU2 16 buffer
-                  UserMinor = Bytes.readU2 18 buffer
-                  SubSysMajor = Bytes.readU2 20 buffer
-                  SubSysMinor = Bytes.readU2 22 buffer
-                  Win32VersionValue = Bytes.readU4 24 buffer
-                  ImageSize = Bytes.readU4 28 buffer
-                  HeadersSize = Bytes.readU4 32 buffer
-                  FileChecksum = Bytes.readU4 36 buffer
-                  Subsystem = LanguagePrimitives.EnumOfValue(Bytes.readU2 40 buffer)
-                  DllFlags = LanguagePrimitives.EnumOfValue(Bytes.readU2 42 buffer)
-                  StackReserveSize = uint64(Bytes.readU4 44 buffer)
-                  StackCommitSize = uint64(Bytes.readU4 48 buffer)
-                  HeapReserveSize = uint64(Bytes.readU4 52 buffer)
-                  HeapCommitSize = uint64(Bytes.readU4 56 buffer)
-                  LoaderFlags = Bytes.readU4 60 buffer
-                  NumberOfDataDirectories = Bytes.readU4 64 buffer }
-        MetadataReader.readNTSpecificFields reader fields ustate |> Ok
+        let numdirs = Bytes.readU4 64 buffer
+        if numdirs >= 15u then
+            fields <-
+                match magic with
+                | PEImageKind.PE32Plus -> invalidOp "PE32+ not yet supported"
+                | _ ->
+                    { ImageBase = uint64(Bytes.readU4 0 buffer)
+                      // TODO: Validate alignment values, maybe use Alignment type?
+                      Alignment = Bytes.readU4 4 buffer, Bytes.readU4 8 buffer
+                      OSMajor = Bytes.readU2 12 buffer
+                      OSMinor = Bytes.readU2 14 buffer
+                      UserMajor = Bytes.readU2 16 buffer
+                      UserMinor = Bytes.readU2 18 buffer
+                      SubSysMajor = Bytes.readU2 20 buffer
+                      SubSysMinor = Bytes.readU2 22 buffer
+                      Win32VersionValue = Bytes.readU4 24 buffer
+                      ImageSize = Bytes.readU4 28 buffer
+                      HeadersSize = Bytes.readU4 32 buffer
+                      FileChecksum = Bytes.readU4 36 buffer
+                      Subsystem = LanguagePrimitives.EnumOfValue(Bytes.readU2 40 buffer)
+                      DllFlags = LanguagePrimitives.EnumOfValue(Bytes.readU2 42 buffer)
+                      StackReserveSize = uint64(Bytes.readU4 44 buffer)
+                      StackCommitSize = uint64(Bytes.readU4 48 buffer)
+                      HeapReserveSize = uint64(Bytes.readU4 52 buffer)
+                      HeapCommitSize = uint64(Bytes.readU4 56 buffer)
+                      LoaderFlags = Bytes.readU4 60 buffer
+                      NumberOfDataDirectories = Bytes.readU4 64 buffer }
+            MetadataReader.readNTSpecificFields reader fields ustate |> Ok
+        else Error(TooFewDataDirectories numdirs)
+    else Error UnexpectedEndOfFile
+
+let readDataDirectories (src: Reader) count (directories: byref<_>) reader ustate =
+    let buffer = arrspan<byte>(count * 8)
+    if src.ReadBytes buffer = buffer.Length then
+        directories <- Array.zeroCreate count
+        for i = 0 to count - 1 do
+            let i' = i * 8
+            directories.[i] <- struct(Bytes.readU4 i' buffer, Bytes.readU4 (i' + 4) buffer)
+        MetadataReader.readDataDirectories reader (Unsafe.As<_, _> &directories) ustate |> Ok
     else Error UnexpectedEndOfFile
 
 let readPE (stream: Stream) (reader: MetadataReader<_>) (start: 'UserState) =
@@ -155,7 +170,8 @@ let readPE (stream: Stream) (reader: MetadataReader<_>) (start: 'UserState) =
         { Lfanew = Unchecked.defaultof<uint32>
           CoffHeader = Unchecked.defaultof<_>
           StandardFields = Unchecked.defaultof<_>
-          NTSpecificFields = Unchecked.defaultof<_> }
+          NTSpecificFields = Unchecked.defaultof<_>
+          DataDirectories = Unchecked.defaultof<_> }
     let rec inner ustate state =
         let inline error err = reader.HandleError src.Offset state err ustate
         let inline moveto target state' =
@@ -184,7 +200,7 @@ let readPE (stream: Stream) (reader: MetadataReader<_>) (start: 'UserState) =
             | len -> InvalidMagic(Magic.PESignature, Bytes.ofSpan len signature) |> error
         | ReadCoffHeader ->
             match readCoffHeader src &file.CoffHeader reader ustate with
-            | Ok _ when file.CoffHeader.OptionalHeaderSize < WritePE.Size.OptionalHeader ->
+            | Ok _ when file.CoffHeader.OptionalHeaderSize < WritePE.Size.OptionalHeader -> // TODO: How to stop reading optional fields according to size of optional header?
                 error(OptionalHeaderTooSmall file.CoffHeader.OptionalHeaderSize)
             | Ok ustate' -> inner ustate' ReadStandardFields
             | Error err -> error err
@@ -195,6 +211,10 @@ let readPE (stream: Stream) (reader: MetadataReader<_>) (start: 'UserState) =
         | ReadNTSpecificFields ->
             match readNTSpecificFields src file.StandardFields.Magic &file.NTSpecificFields reader ustate with
             | Ok ustate' -> inner ustate' ReadDataDirectories
+            | Error err -> error err
+        | ReadDataDirectories ->
+            match readDataDirectories src (int32 file.NTSpecificFields.NumberOfDataDirectories) &file.DataDirectories reader ustate with
+            | Ok ustate' -> inner ustate' ReadSectionHeaders
             | Error err -> error err
         | EndRead -> ustate
     inner start ReadPEMagic
