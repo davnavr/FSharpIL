@@ -4,7 +4,7 @@ open System.Collections.Immutable
 
 open FSharpIL.PortableExecutable
 
-// TODO: Allow reading functions to end reading early.
+// TODO: Allow reading functions to end reading early by making the return value a voption.
 type Reader<'Arg, 'State> = ('Arg -> 'State -> 'State) voption
 
 // TODO: Rename this to something else.

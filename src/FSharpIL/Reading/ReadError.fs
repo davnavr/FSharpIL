@@ -26,4 +26,4 @@ exception ReadException
     of offset: uint64 * state: ReadState * error: ReadError
     with
         override this.Message =
-            sprintf "Error occured at offset %i while %s. %s" this.offset this.state.Description this.error.Message
+            sprintf "Error occured while %s at offset %i. %s" this.state.Description this.offset this.error.Message

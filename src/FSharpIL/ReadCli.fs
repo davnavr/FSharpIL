@@ -14,6 +14,12 @@ open FSharpIL.Reading
 
 #nowarn "9"
 
+[<IsReadOnly; Struct>]
+type ReadResult<'T> =
+    | Success of 'T * ReadState
+    | Failure of ReadError
+    | End
+
 /// <summary>Creates a <see cref="System.Span`1"/> from a region of memory allocated on the stack.</summary>
 [<RequiresExplicitTypeArguments>]
 let inline allocspan<'T when 'T : unmanaged> length = Span<'T>(NativePtr.toVoidPtr(NativePtr.stackalloc<'T> length), length)
@@ -85,8 +91,8 @@ let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
               SymbolCount = Bytes.readU4 12 buffer
               OptionalHeaderSize = Bytes.readU2 16 buffer
               Characteristics = LanguagePrimitives.EnumOfValue(Bytes.readU2 18 buffer) }
-        MetadataReader.readCoffHeader reader headers ustate |> Ok
-    else Error UnexpectedEndOfFile
+        Success(MetadataReader.readCoffHeader reader headers ustate, ReadStandardFields)
+    else Failure UnexpectedEndOfFile
 
 let readStandardFields (src: Reader) (fields: byref<_>) reader ustate =
     let magic' = allocspan<byte> 2 // TODO Use one buffer only.
@@ -108,13 +114,9 @@ let readStandardFields (src: Reader) (fields: byref<_>) reader ustate =
                     match magic with
                     | PEImageKind.PE32 -> ValueSome(Bytes.readU4 22 fields')
                     | _ -> ValueNone }
-            MetadataReader.readStandardFields
-                reader
-                fields
-                ustate
-            |> Ok
-        else Error UnexpectedEndOfFile
-    else Error UnexpectedEndOfFile
+            Success(MetadataReader.readStandardFields reader fields ustate, ReadNTSpecificFields)
+        else Failure UnexpectedEndOfFile
+    else Failure UnexpectedEndOfFile
 
 let readNTSpecificFields (src: Reader) magic (fields: byref<_>) reader ustate =
     let length =
@@ -150,21 +152,56 @@ let readNTSpecificFields (src: Reader) magic (fields: byref<_>) reader ustate =
                       HeapCommitSize = uint64(Bytes.readU4 56 buffer)
                       LoaderFlags = Bytes.readU4 60 buffer
                       NumberOfDataDirectories = Bytes.readU4 64 buffer }
-            MetadataReader.readNTSpecificFields reader fields ustate |> Ok
-        else Error(TooFewDataDirectories numdirs)
-    else Error UnexpectedEndOfFile
+            Success(MetadataReader.readNTSpecificFields reader fields ustate, ReadDataDirectories)
+        else Failure(TooFewDataDirectories numdirs)
+    else Failure UnexpectedEndOfFile
 
-let readDataDirectories (src: Reader) count (directories: byref<_>) reader ustate =
-    let buffer = arrspan<byte>(count * 8)
+let readDataDirectories (src: Reader) (count: uint32) (directories: byref<_>) reader ustate =
+    let count' = int32 count
+    let buffer = arrspan<byte>(count' * 8)
     if src.ReadBytes buffer = buffer.Length then
-        directories <- Array.zeroCreate count
-        for i = 0 to count - 1 do
+        directories <- Array.zeroCreate count'
+        for i = 0 to count' - 1 do
             let i' = i * 8
             directories.[i] <- struct(Bytes.readU4 i' buffer, Bytes.readU4 (i' + 4) buffer)
-        MetadataReader.readDataDirectories reader (Unsafe.As<_, _> &directories) ustate |> Ok
-    else Error UnexpectedEndOfFile
+        Success(MetadataReader.readDataDirectories reader (Unsafe.As<_, _> &directories) ustate, ReadSectionHeaders)
+    else Failure UnexpectedEndOfFile
 
-let readPE (stream: Stream) (reader: MetadataReader<_>) (start: 'UserState) =
+let readPE (src: Reader) file reader ustate rstate =
+    let inline moveto target state' =
+        if src.MoveTo target
+        then Success(ustate, state')
+        else Failure UnexpectedEndOfFile
+    match rstate with
+    | ReadPEMagic ->
+        let magic = allocspan<byte> 2
+        match src.ReadBytes magic with
+        | 0 -> Failure UnexpectedEndOfFile
+        | 2 when Magic.matches Magic.MZ magic -> Success(ustate, MoveToLfanew)
+        | len -> InvalidMagic(Magic.MZ, Bytes.ofSpan len magic) |> Failure
+    | MoveToLfanew -> moveto 0x3CUL ReadLfanew
+    | ReadLfanew when src.ReadU4(&file.Lfanew) ->
+        Success(MetadataReader.readLfanew reader file.Lfanew ustate, MoveToPESignature)
+    | MoveToPESignature -> moveto (uint64 file.Lfanew) ReadPESignature
+    | ReadPESignature ->
+        let signature = allocspan<byte> 4
+        match src.ReadBytes signature with
+        | 0 -> Failure UnexpectedEndOfFile
+        | 4 when Magic.matches Magic.PESignature signature -> Success(ustate, ReadCoffHeader)
+        | len -> InvalidMagic(Magic.PESignature, Bytes.ofSpan len signature) |> Failure
+    | ReadCoffHeader ->
+        match readCoffHeader src &file.CoffHeader reader ustate with
+        | Success _ when file.CoffHeader.OptionalHeaderSize < WritePE.Size.OptionalHeader -> // TODO: How to stop reading optional fields according to size of optional header?
+            Failure(OptionalHeaderTooSmall file.CoffHeader.OptionalHeaderSize)
+        | result -> result
+    | ReadStandardFields -> readStandardFields src &file.StandardFields reader ustate
+    | ReadNTSpecificFields -> readNTSpecificFields src file.StandardFields.Magic &file.NTSpecificFields reader ustate
+    | ReadDataDirectories -> readDataDirectories src file.NTSpecificFields.NumberOfDataDirectories &file.DataDirectories reader ustate
+    | ReadLfanew -> Failure UnexpectedEndOfFile
+
+/// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
+/// <exception cref="System.ArgumentException">The <paramref name="stream"/> does not support reading.</exception>
+let fromStream stream state reader =
     let src = Reader stream
     let file =
         { Lfanew = Unchecked.defaultof<uint32>
@@ -172,53 +209,9 @@ let readPE (stream: Stream) (reader: MetadataReader<_>) (start: 'UserState) =
           StandardFields = Unchecked.defaultof<_>
           NTSpecificFields = Unchecked.defaultof<_>
           DataDirectories = Unchecked.defaultof<_> }
-    let rec inner ustate state =
-        let inline error err = reader.HandleError src.Offset state err ustate
-        let inline moveto target state' =
-            if src.MoveTo target
-            then inner ustate state'
-            else error UnexpectedEndOfFile
-        match state with
-        | ReadPEMagic ->
-            let magic = allocspan<byte> 2
-            match src.ReadBytes magic with
-            | 0 -> error UnexpectedEndOfFile
-            | 2 when Magic.matches Magic.MZ magic -> inner ustate MoveToLfanew
-            | len -> InvalidMagic(Magic.MZ, Bytes.ofSpan len magic) |> error
-        | MoveToLfanew -> moveto 0x3CUL ReadLfanew
-        | ReadLfanew ->
-            if src.ReadU4(&file.Lfanew) then
-                let ustate' = MetadataReader.readLfanew reader file.Lfanew ustate
-                inner ustate' MoveToPESignature
-            else error UnexpectedEndOfFile
-        | MoveToPESignature -> moveto (uint64 file.Lfanew) ReadPESignature
-        | ReadPESignature ->
-            let signature = allocspan<byte> 4
-            match src.ReadBytes signature with
-            | 0 -> error UnexpectedEndOfFile
-            | 4 when Magic.matches Magic.PESignature signature -> inner ustate ReadCoffHeader
-            | len -> InvalidMagic(Magic.PESignature, Bytes.ofSpan len signature) |> error
-        | ReadCoffHeader ->
-            match readCoffHeader src &file.CoffHeader reader ustate with
-            | Ok _ when file.CoffHeader.OptionalHeaderSize < WritePE.Size.OptionalHeader -> // TODO: How to stop reading optional fields according to size of optional header?
-                error(OptionalHeaderTooSmall file.CoffHeader.OptionalHeaderSize)
-            | Ok ustate' -> inner ustate' ReadStandardFields
-            | Error err -> error err
-        | ReadStandardFields ->
-            match readStandardFields src &file.StandardFields reader ustate with
-            | Ok ustate' -> inner ustate' ReadNTSpecificFields
-            | Error err -> error err
-        | ReadNTSpecificFields ->
-            match readNTSpecificFields src file.StandardFields.Magic &file.NTSpecificFields reader ustate with
-            | Ok ustate' -> inner ustate' ReadDataDirectories
-            | Error err -> error err
-        | ReadDataDirectories ->
-            match readDataDirectories src (int32 file.NTSpecificFields.NumberOfDataDirectories) &file.DataDirectories reader ustate with
-            | Ok ustate' -> inner ustate' ReadSectionHeaders
-            | Error err -> error err
-        | EndRead -> ustate
-    inner start ReadPEMagic
-
-/// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
-/// <exception cref="System.ArgumentException">The <paramref name="stream"/> does not support reading.</exception>
-let fromStream stream state reader = readPE stream reader state
+    let rec inner ustate rstate =
+        match readPE src file reader ustate rstate with
+        | Success(ustate', rstate') -> inner ustate' rstate'
+        | Failure err -> reader.HandleError src.Offset rstate err ustate
+        | End -> ustate
+    inner state ReadPEMagic

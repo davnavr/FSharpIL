@@ -1,5 +1,7 @@
 ﻿namespace FSharpIL.Reading
 
+open System
+
 [<Struct>]
 type ReadState =
     | ReadPEMagic
@@ -16,14 +18,12 @@ type ReadState =
     | ReadSectionHeaders
     | MoveToCliHeader
     | ReadCliHeader
-    | EndRead
 
     member this.Description =
         match this with
         | ReadPEMagic -> "reading Portable Executable magic"
         | MoveToLfanew -> "moving to lfanew field"
         | ReadLfanew -> "reading lfanew field"
-        | EndRead -> "finishing read"
         | MoveToPESignature -> "moving to PE signature"
         | ReadPESignature -> "reading PE signature"
         | ReadCoffHeader -> "reading COFF header"
