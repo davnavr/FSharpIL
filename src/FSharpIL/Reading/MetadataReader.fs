@@ -14,6 +14,7 @@ type ParsedCoffHeader = CoffHeader<uint16, uint16>
 type ParsedStandardFields = StandardFields<PEImageKind, uint32, uint32 voption>
 type ParsedNTSpecificFields = NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
 type ParsedDataDirectories = ImmutableArray<struct(uint32 * uint32)>
+type ParsedSectionHeaders = ImmutableArray<SectionHeader<SectionLocation>>
 
 // TODO: Rename this to something else.
 [<NoComparison; NoEquality>]
@@ -23,7 +24,7 @@ type MetadataReader<'State> =
       ReadStandardFields: Reader<ParsedStandardFields, 'State>
       ReadNTSpecificFields: Reader<ParsedNTSpecificFields, 'State>
       ReadDataDirectories: Reader<ParsedDataDirectories, 'State>
-      ReadSectionHeaders: Reader<ImmutableArray<SectionHeader<SectionLocation>>, 'State>
+      ReadSectionHeaders: Reader<ParsedSectionHeaders, 'State>
       HandleError: ErrorHandler<'State> }
 
 [<RequireQualifiedAccess>]

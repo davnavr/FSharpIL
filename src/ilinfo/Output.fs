@@ -45,6 +45,12 @@ let inline private writeEnum name (value: 'Enum when 'Enum :> Enum) { WriteField
     let value' = value.ToString "X"
     write name (uint32 size) (sprintf "0x%s%s (%O)" (zeroes size value') value' value)
 
+let inline private writeString name (value: byte[]) { WriteField = write } =
+    Seq.map (sprintf "%02X") value
+    |> String.concat " "
+    |> sprintf "\"%s\" [%s]" (System.Text.Encoding.ASCII.GetString value)
+    |> write name (uint32 value.Length)
+
 let coffHeader (header: ParsedCoffHeader) offset wr =
     wr.WriteHeader offset "COFF Header"
     writeEnum "Machine" header.Machine wr
@@ -126,10 +132,27 @@ let dataDirectories (directories: ParsedDataDirectories) offset wr =
         wr.WriteField name 8u value
     wr
 
+let sectionHeaders (headers: ParsedSectionHeaders) offset wr =
+    for i = 0 to headers.Length - 1 do
+        let header = headers.[i]
+        wr.WriteHeader (offset + (uint64 i * 40UL)) (sprintf "\"%O\" Section Header" header.SectionName)
+        writeString "Name" (SectionName.toArray header.SectionName) wr
+        writeInt "VirtualSize" header.Data.VirtualSize wr
+        writeInt "VirtualAddress" header.Data.VirtualAddress wr
+        writeInt "SizeOfRawData" header.Data.RawDataSize wr
+        writeInt "PointerToRawData" header.Data.RawDataPointer wr
+        writeInt "PointerToRelocations" header.PointerToRelocations wr
+        // PointerToLineNumbers
+        writeInt "NumberOfRelocations" header.NumberOfRelocations wr
+        // NumberOfLineNumbers
+        writeEnum "Characteristics" header.Characteristics wr
+    wr
+
 let write (headers: ISet<FileHeader>) =
     { MetadataReader.empty with
         ReadCoffHeader = header headers FileHeader.Coff coffHeader
         ReadStandardFields = header headers FileHeader.Standard standardFields
         ReadNTSpecificFields = header headers FileHeader.NT_Specific ntSpecificFields
         ReadDataDirectories = header headers FileHeader.Data_Directories dataDirectories
+        ReadSectionHeaders = header headers FileHeader.Section_Headers sectionHeaders
         HandleError = fun state error offset wr -> wr.WriteError state error offset (); wr }
