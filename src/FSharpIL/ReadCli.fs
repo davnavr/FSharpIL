@@ -76,7 +76,7 @@ type MutableFile =
     { mutable Lfanew: uint32
       [<DefaultValue>] mutable CoffHeader: ParsedCoffHeader
       [<DefaultValue>] mutable StandardFields: ParsedStandardFields
-      [<DefaultValue>] mutable NTSpecificFields: NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
+      [<DefaultValue>] mutable NTSpecificFields: ParsedNTSpecificFields
       [<DefaultValue>] mutable DataDirectories: struct(uint32 * uint32)[]
       [<DefaultValue>] mutable SectionHeaders: SectionHeader<SectionLocation>[] }
 

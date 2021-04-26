@@ -61,16 +61,41 @@ let standardFields (fields: ParsedStandardFields) offset (wr: Writer) =
     writeEnum "Magic" fields.Magic wr
     writeInt "MajorLinkerVersion" fields.LMajor wr
     writeInt "MinorLinkerVersion" fields.LMinor wr
-    writeInt "CodeSize" fields.CodeSize wr
-    writeInt "InitializedDataSize" fields.InitializedDataSize wr
-    writeInt "UninitializedDataSize" fields.UninitializedDataSize wr
+    writeInt "SizeOfCode" fields.CodeSize wr
+    writeInt "SizeOfInitializedData" fields.InitializedDataSize wr
+    writeInt "SizeOfUninitializedData" fields.UninitializedDataSize wr
     writeInt "EntryPointRva" fields.EntryPointRva wr
     writeInt "BaseOfCode" fields.BaseOfCode wr
     ValueOption.iter (fun bdata -> writeInt "BaseOfData" bdata wr) fields.BaseOfData
+    wr
+
+let ntSpecificFields (fields: ParsedNTSpecificFields) offset (wr: Writer) =
+    wr.WriteHeader offset "NT Specific Fields"
+    // TODO: Write different size fields if PE32+
+    //ImageBase
+    let (salignment, falignment) = fields.Alignment
+    writeInt "SectionAlignment" salignment wr
+    writeInt "FileAlignment" falignment wr
+    writeInt "MajorOperatingSystemVersion" fields.OSMajor wr
+    writeInt "MinorOperatingSystemVersion" fields.OSMinor wr
+    writeInt "MajorImageVersion" fields.UserMajor wr
+    writeInt "MinorImageVersion" fields.UserMinor wr
+    writeInt "MajorSubsystemVersion" fields.SubSysMajor wr
+    writeInt "MinorSubsystemVersion" fields.SubSysMinor wr
+    writeInt "Win32VersionValue" fields.Win32VersionValue wr
+    writeInt "SizeOfImage" fields.ImageSize wr
+    writeInt "SizeOfHeaders" fields.HeadersSize wr
+    writeInt "FileChecksum" fields.FileChecksum wr
+    writeEnum "Subsystem" fields.Subsystem wr
+    writeEnum "DllCharacteristics" fields.DllFlags wr
+    //StackReserveSize
+    writeInt "LoaderFlags" fields.LoaderFlags wr
+    writeInt "NumberOfDataDirectories" fields.NumberOfDataDirectories wr
     wr
 
 let write (headers: ISet<FileHeader>) =
     { MetadataReader.empty with
         ReadCoffHeader = header headers FileHeader.Coff coffHeader
         ReadStandardFields = header headers FileHeader.Standard standardFields
+        ReadNTSpecificFields = header headers FileHeader.NT_Specific ntSpecificFields
         HandleError = fun state error offset wr -> wr.WriteError state error offset (); wr }

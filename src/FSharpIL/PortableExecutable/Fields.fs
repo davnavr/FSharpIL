@@ -144,8 +144,7 @@ type NTSpecificFields<'ImageBase, 'Alignment, 'ImageSize, 'Size, 'NumDataDirecto
       HeapCommitSize: 'Size
       /// Reserved value that must be set to zero.
       LoaderFlags: uint32
-      NumberOfDataDirectories: 'NumDataDirectories
-      }
+      NumberOfDataDirectories: 'NumDataDirectories }
 
 [<RequireQualifiedAccess>]
 module NTSpecificFields = // TODO: Create a default fields module instead.
