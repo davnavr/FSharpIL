@@ -5,6 +5,7 @@ module FSharpIL.ReadCli
 open System
 open System.IO
 open System.Runtime.CompilerServices
+open System.Text
 
 open Microsoft.FSharp.Core.Operators.Checked
 open Microsoft.FSharp.NativeInterop
@@ -80,9 +81,8 @@ type MutableFile =
       mutable DataDirectories: struct(uint32 * uint32)[] }
 
 let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
-    let buffer = arrspan<byte>(int32 WritePE.Size.CoffHeader)
-    let len = src.ReadBytes buffer
-    if len = buffer.Length then
+    let buffer = allocspan<byte> Size.CoffHeader
+    if src.ReadBytes buffer = buffer.Length then
         headers <-
             { Machine = LanguagePrimitives.EnumOfValue(Bytes.readU2 0 buffer)
               NumberOfSections = Bytes.readU2 2 buffer
@@ -95,11 +95,11 @@ let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
     else Failure UnexpectedEndOfFile
 
 let readStandardFields (src: Reader) (fields: byref<_>) reader ustate =
-    let magic' = allocspan<byte> 2 // TODO Use one buffer only.
-    if src.ReadBytes magic' = 2 then
-        let magic = LanguagePrimitives.EnumOfValue(Bytes.readU2 0 magic')
+    let buffer = allocspan<byte> 28
+    if src.ReadBytes(buffer.Slice(0, 2)) = 2 then
+        let magic = LanguagePrimitives.EnumOfValue(Bytes.readU2 0 buffer)
         let length = if magic = PEImageKind.PE32 then 26 else 22
-        let fields' = allocspan<byte> length
+        let fields' = buffer.Slice(2, length)
         if src.ReadBytes fields' = length then
             fields <-
                 { Magic = magic
@@ -164,7 +164,29 @@ let readDataDirectories (src: Reader) (count: uint32) (directories: byref<_>) re
         for i = 0 to count' - 1 do
             let i' = i * 8
             directories.[i] <- struct(Bytes.readU4 i' buffer, Bytes.readU4 (i' + 4) buffer)
-        Success(MetadataReader.readDataDirectories reader (Unsafe.As<_, _> &directories) ustate, ReadSectionHeaders)
+        Success(MetadataReader.readDataDirectories reader (Unsafe.As &directories) ustate, ReadSectionHeaders)
+    else Failure UnexpectedEndOfFile
+
+let readSectionHeaders (src: Reader) (count: uint16) reader ustate =
+    let count' = int32 count
+    let buffer = arrspan<byte>(count' * Size.SectionHeader)
+    if src.ReadBytes buffer = buffer.Length then
+        let mutable headers = Array.zeroCreate<_> count'
+        for i = 0 to count' - 1 do
+            let i' = i * Size.SectionHeader
+            headers.[i] <-
+                { SectionName = SectionName(buffer.Slice(i', 8).ToArray())
+                  Data =
+                    { VirtualSize = Bytes.readU4 (i' + 8) buffer
+                      VirtualAddress = Bytes.readU4 (i' + 12) buffer
+                      RawDataSize = Bytes.readU4 (i' + 16) buffer
+                      RawDataPointer = Bytes.readU4 (i' + 20) buffer }
+                  PointerToRelocations = Bytes.readU4 (i' + 24) buffer
+                  // PointerToLineNumbers
+                  NumberOfRelocations = Bytes.readU2 (i' + 32) buffer
+                  // NumberOfLineNumbers
+                  Characteristics = LanguagePrimitives.EnumOfValue(Bytes.readU4 (i' + 36) buffer) }
+        Success(MetadataReader.readSectionHeaders reader (Unsafe.As &headers) ustate, ReadSectionData)
     else Failure UnexpectedEndOfFile
 
 let readPE (src: Reader) file reader ustate rstate =
@@ -191,12 +213,13 @@ let readPE (src: Reader) file reader ustate rstate =
         | len -> InvalidMagic(Magic.PESignature, Bytes.ofSpan len signature) |> Failure
     | ReadCoffHeader ->
         match readCoffHeader src &file.CoffHeader reader ustate with
-        | Success _ when file.CoffHeader.OptionalHeaderSize < WritePE.Size.OptionalHeader -> // TODO: How to stop reading optional fields according to size of optional header?
+        | Success _ when file.CoffHeader.OptionalHeaderSize < Size.OptionalHeader -> // TODO: How to stop reading optional fields according to size of optional header?
             Failure(OptionalHeaderTooSmall file.CoffHeader.OptionalHeaderSize)
         | result -> result
     | ReadStandardFields -> readStandardFields src &file.StandardFields reader ustate
     | ReadNTSpecificFields -> readNTSpecificFields src file.StandardFields.Magic &file.NTSpecificFields reader ustate
     | ReadDataDirectories -> readDataDirectories src file.NTSpecificFields.NumberOfDataDirectories &file.DataDirectories reader ustate
+    | ReadSectionHeaders -> readSectionHeaders src file.CoffHeader.NumberOfSections reader ustate
     | ReadLfanew -> Failure UnexpectedEndOfFile
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>

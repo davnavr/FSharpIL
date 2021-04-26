@@ -15,6 +15,7 @@ type MetadataReader<'State> =
       ReadStandardFields: Reader<StandardFields<PEImageKind, uint32, uint32 voption>, 'State>
       ReadNTSpecificFields: Reader<NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>, 'State>
       ReadDataDirectories: Reader<ImmutableArray<struct(uint32 * uint32)>, 'State>
+      ReadSectionHeaders: Reader<ImmutableArray<SectionHeader<SectionLocation>>, 'State>
       HandleError: uint64 -> ReadState -> ReadError -> 'State -> 'State }
 
 [<RequireQualifiedAccess>]
@@ -29,6 +30,7 @@ module MetadataReader =
     let readStandardFields { ReadStandardFields = reader } fields = read reader fields
     let readNTSpecificFields { ReadNTSpecificFields = reader } fields = read reader fields
     let readDataDirectories { ReadDataDirectories = reader } directories = read reader directories
+    let readSectionHeaders { ReadSectionHeaders = reader } headers = read reader headers
 
     let inline throwOnError (offset: uint64) (state: ReadState) error (_: 'State): 'State =
         ReadException(offset, state, error) |> raise
@@ -40,4 +42,5 @@ module MetadataReader =
           ReadStandardFields = ValueNone
           ReadNTSpecificFields = ValueNone
           ReadDataDirectories = ValueNone
+          ReadSectionHeaders = ValueNone
           HandleError = throwOnError }

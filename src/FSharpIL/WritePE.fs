@@ -11,14 +11,6 @@ open Microsoft.FSharp.Core.Operators.Checked
 open FSharpIL.PortableExecutable
 open FSharpIL.Writing
 
-[<RequireQualifiedAccess>]
-module Size =
-    let PEHeader = Magic.DosStub.Length + Magic.PESignature.Length |> uint32
-    let [<Literal>] CoffHeader = 20u
-    let [<Literal>] OptionalHeader = 0xE0us
-    /// The length of a single section header.
-    let [<Literal>] SectionHeader = 40u
-
 [<ReferenceEquality; NoComparison>]
 type PEInfo =
     { File: PEFile
@@ -130,9 +122,9 @@ let sections (info: PEInfo) (writer: ChunkWriter) =
 
     let mutable fileOffset =
         Size.PEHeader
-        + Size.CoffHeader
+        + uint32 Size.CoffHeader
         + uint32 Size.OptionalHeader
-        + (uint32 pe.SectionTable.Length * Size.SectionHeader)
+        + (uint32 pe.SectionTable.Length * uint32 Size.SectionHeader)
         |> Round.upTo falignment
 
     let mutable virtualAddress = salignment

@@ -39,8 +39,3 @@ val toFile : file: FileInfo -> PEFile -> unit
 /// </summary>
 /// <exception cref="T:System.ArgumentNullException">The <paramref name="path"/> is <see langword="null"/>.</exception>
 val toPath : path: string -> PEFile -> unit
-
-module internal Size =
-    [<Literal>] val CoffHeader: uint32 = 20u
-    /// <summary>The value of the <c>SizeOfOptionalHeader</c> field in the COFF file header for a PE32 executable.</summary>
-    [<Literal>] val OptionalHeader: uint16 = 0xE0us

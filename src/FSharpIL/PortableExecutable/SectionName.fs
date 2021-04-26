@@ -2,6 +2,7 @@
 
 open System.Text
 
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type SectionName =
     internal

@@ -2,11 +2,6 @@
 
 open System
 
-/// Indicates that the value of a field cannot be set.
-type Omitted = struct end
-
-[<AutoOpen>] module Omitted = let Omitted = Omitted()
-
 [<Obsolete>]
 type IsDll =
     | [<Obsolete>] IsDll

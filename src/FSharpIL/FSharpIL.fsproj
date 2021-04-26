@@ -99,12 +99,14 @@
     <Compile Include="XmlDoc\DocMember.fs" />
     <Compile Include="XmlDoc\Name.fs" />
     <Compile Include="XmlDoc\Doc.fs" />
+    <Compile Include="PortableExecutable\Omitted.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />
     <Compile Include="PortableExecutable\Fields.fs" />
     <Compile Include="PortableExecutable\PEFile.fs" />
     <Compile Include="WriteCli.fs" />
+    <Compile Include="Size.fs" />
     <Compile Include="WritePE.fsi" />
     <Compile Include="WritePE.fs" />
     <Compile Include="Reading\ReadState.fs" />

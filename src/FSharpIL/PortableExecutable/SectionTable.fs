@@ -22,15 +22,22 @@ type SectionFlags =
     | MemRead = 0x4000_0000u
     | MemWrite = 0x8000_0000u
 
-// II.25.3
-type SectionHeader =
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type SectionLocation =
+    { VirtualSize: uint32
+      VirtualAddress: uint32
+      RawDataSize: uint32
+      RawDataPointer: uint32 }
+
+/// (II.25.3)
+type SectionHeader<'Data> =
     { SectionName: SectionName
       // VirtualSize: uint32
       // VirtualAddress: uint32
 
       // NOTE: SizeOfRawData is "size of the initialized data on disk in bytes" and is a multiple of FileAlignment
       // TODO: PointerToRawData is file offset to the data, rounded up to multiple of file alignment
-      Data: ImmutableArray<SectionData>
+      Data: 'Data
 
       /// Reserved value that should be set to zero.
       PointerToRelocations: uint32

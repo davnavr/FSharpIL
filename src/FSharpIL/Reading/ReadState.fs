@@ -1,7 +1,5 @@
 ﻿namespace FSharpIL.Reading
 
-open System
-
 [<Struct>]
 type ReadState =
     | ReadPEMagic
@@ -16,6 +14,7 @@ type ReadState =
     | ReadNTSpecificFields
     | ReadDataDirectories
     | ReadSectionHeaders
+    | ReadSectionData
     | MoveToCliHeader
     | ReadCliHeader
 
@@ -31,5 +30,6 @@ type ReadState =
         | ReadNTSpecificFields -> "reading NT-specific fields of the PE optional header"
         | ReadDataDirectories -> "reading PE header data directories"
         | ReadSectionHeaders -> "reading section headers"
+        | ReadSectionData -> "reading section data"
         | MoveToCliHeader -> "moving to CLI header"
         | ReadCliHeader -> "reading CLI header"
