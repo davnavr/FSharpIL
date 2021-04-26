@@ -6,25 +6,32 @@ open FSharpIL.PortableExecutable
 
 // TODO: Allow reading functions to end reading early by making the return value a voption.
 // TODO: Allow functions access to current offset by supplying a uint64 parameter.
-type Reader<'Arg, 'State> = ('Arg -> 'State -> 'State) voption
+type Reader<'Arg, 'State> = ('Arg -> uint64 -> 'State -> 'State) voption
+
+type ErrorHandler<'State> = ReadState -> ReadError -> uint64 -> 'State -> 'State
+
+type ParsedCoffHeader = CoffHeader<uint16, uint16>
+type ParsedStandardFields = StandardFields<PEImageKind, uint32, uint32 voption>
 
 // TODO: Rename this to something else.
 [<NoComparison; NoEquality>]
 type MetadataReader<'State> =
     { ReadLfanew: Reader<uint32, 'State>
-      ReadCoffHeader: Reader<CoffHeader<uint16, uint16>, 'State>
-      ReadStandardFields: Reader<StandardFields<PEImageKind, uint32, uint32 voption>, 'State>
+      ReadCoffHeader: Reader<ParsedCoffHeader, 'State>
+      ReadStandardFields: Reader<ParsedStandardFields, 'State>
       ReadNTSpecificFields: Reader<NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>, 'State>
       ReadDataDirectories: Reader<ImmutableArray<struct(uint32 * uint32)>, 'State>
       ReadSectionHeaders: Reader<ImmutableArray<SectionHeader<SectionLocation>>, 'State>
-      HandleError: uint64 -> ReadState -> ReadError -> 'State -> 'State }
+      HandleError: ErrorHandler<'State> }
 
 [<RequireQualifiedAccess>]
 module MetadataReader =
+    let private cont (_: uint64): 'State -> _ = id
+
     let inline private read reader arg =
         match reader with
         | ValueSome reader' -> reader' arg
-        | ValueNone -> id
+        | ValueNone -> cont
 
     let readLfanew { ReadLfanew = reader } lfanew = read reader lfanew
     let readCoffHeader { ReadCoffHeader = reader } header = read reader header
@@ -33,8 +40,8 @@ module MetadataReader =
     let readDataDirectories { ReadDataDirectories = reader } directories = read reader directories
     let readSectionHeaders { ReadSectionHeaders = reader } headers = read reader headers
 
-    let inline throwOnError (offset: uint64) (state: ReadState) error (_: 'State): 'State =
-        ReadException(offset, state, error) |> raise
+    let inline throwOnError (state: ReadState) error (offset: uint64) (_: 'State): 'State =
+        ReadException(state, error, offset) |> raise
 
     [<GeneralizableValue>]
     let empty: MetadataReader<'State> =

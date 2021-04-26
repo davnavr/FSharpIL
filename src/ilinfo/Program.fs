@@ -8,38 +8,11 @@ open Argu
 
 open FSharpIL
 
-[<RequireQualifiedAccess>]
-type OutputKind =
-    | Stdout
-    //| Html
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Stdout -> "the assembly information is directed to standard output"
-
-[<RequireQualifiedAccess>]
-type FileHeader =
-    | [<Unique>] Coff
-    | [<Unique>] Standard
-    | [<Unique>] NT_Specific
-    | [<Unique>] Data_Directories
-    | [<Unique>] Section_Headers
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Coff -> "include the values of the COFF header fields in the output."
-            | Standard -> "includes the values of the optional header standard fields in the output."
-            | NT_Specific -> "includes the values of the optional header NT-specific fields in the output."
-            | Section_Headers -> "includes the values of the section headers' fields in the output."
-            | Data_Directories -> "includes the RVAs and sizes of each data directory in the output."
-
 type Argument =
     | [<ExactlyOnce>] File of string
     | File_Header of FileHeader
     | [<Unique>] Launch_Debugger
-    | [<Unique>] Output of OutputKind
+    | [<Unique>] Output of Output.Kind
 
     interface IArgParserTemplate with
         member this.Usage =
@@ -53,7 +26,7 @@ type ParsedArguments =
     { [<DefaultValue>] mutable File: string
       [<DefaultValue>] mutable LaunchDebugger: bool
       FileHeaders: HashSet<FileHeader>
-      mutable Output: OutputKind }
+      mutable Output: Output.Kind }
 
 let (|ValidFile|NotFound|InvalidPath|UnauthorizedAccess|) path =
     try
@@ -72,7 +45,7 @@ let exitfn format = Printf.kprintf (fun msg -> eprintfn "%s" msg; -1) format
 let main args =
     let parser = ArgumentParser.Create<Argument>(programName = "ilinfo", helpTextMessage = "CLI metadata reader")
     let result = parser.ParseCommandLine(args, raiseOnUsage = false)
-    let args' = { Output = OutputKind.Stdout; FileHeaders = HashSet 5 }
+    let args' = { Output = Output.Stdout; FileHeaders = HashSet 5 }
 
     for arg in result.GetAllResults() do
         match arg with
@@ -86,7 +59,7 @@ let main args =
     match args' with
     | { File = ValidFile file } ->
         use reader = file.OpenRead()
-        ReadCli.fromStream reader () (Output.console true)
+        ReadCli.fromStream reader (Output.create args'.Output) (Output.write args'.FileHeaders) |> ignore
         0
     | { File = NotFound path } -> exitfn "The file \"%s\" does not exist." path
     | { File = InvalidPath path } -> exitfn "The file \"%s\" is invalid." path

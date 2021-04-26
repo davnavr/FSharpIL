@@ -74,8 +74,8 @@ type Reader (src: Stream) =
 [<NoComparison; NoEquality>]
 type MutableFile =
     { mutable Lfanew: uint32
-      [<DefaultValue>] mutable CoffHeader: CoffHeader<uint16, uint16>
-      [<DefaultValue>] mutable StandardFields: StandardFields<PEImageKind, uint32, uint32 voption>
+      [<DefaultValue>] mutable CoffHeader: ParsedCoffHeader
+      [<DefaultValue>] mutable StandardFields: ParsedStandardFields
       [<DefaultValue>] mutable NTSpecificFields: NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
       [<DefaultValue>] mutable DataDirectories: struct(uint32 * uint32)[]
       [<DefaultValue>] mutable SectionHeaders: SectionHeader<SectionLocation>[] }
@@ -91,7 +91,7 @@ let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
               SymbolCount = Bytes.readU4 12 buffer
               OptionalHeaderSize = Bytes.readU2 16 buffer
               Characteristics = LanguagePrimitives.EnumOfValue(Bytes.readU2 18 buffer) }
-        Success(MetadataReader.readCoffHeader reader headers ustate, ReadStandardFields)
+        Success(MetadataReader.readCoffHeader reader headers src.Offset ustate, ReadStandardFields)
     else Failure UnexpectedEndOfFile
 
 let readStandardFields (src: Reader) (fields: byref<_>) reader ustate =
@@ -114,7 +114,7 @@ let readStandardFields (src: Reader) (fields: byref<_>) reader ustate =
                     match magic with
                     | PEImageKind.PE32 -> ValueSome(Bytes.readU4 22 fields')
                     | _ -> ValueNone }
-            Success(MetadataReader.readStandardFields reader fields ustate, ReadNTSpecificFields)
+            Success(MetadataReader.readStandardFields reader fields src.Offset ustate, ReadNTSpecificFields)
         else Failure UnexpectedEndOfFile
     else Failure UnexpectedEndOfFile
 
@@ -152,7 +152,7 @@ let readNTSpecificFields (src: Reader) magic (fields: byref<_>) reader ustate =
                       HeapCommitSize = uint64(Bytes.readU4 56 buffer)
                       LoaderFlags = Bytes.readU4 60 buffer
                       NumberOfDataDirectories = Bytes.readU4 64 buffer }
-            Success(MetadataReader.readNTSpecificFields reader fields ustate, ReadDataDirectories)
+            Success(MetadataReader.readNTSpecificFields reader fields src.Offset ustate, ReadDataDirectories)
         else Failure(TooFewDataDirectories numdirs)
     else Failure UnexpectedEndOfFile
 
@@ -164,7 +164,7 @@ let readDataDirectories (src: Reader) (count: uint32) (directories: byref<_>) re
         for i = 0 to count' - 1 do
             let i' = i * 8
             directories.[i] <- struct(Bytes.readU4 i' buffer, Bytes.readU4 (i' + 4) buffer)
-        Success(MetadataReader.readDataDirectories reader (Unsafe.As &directories) ustate, ReadSectionHeaders)
+        Success(MetadataReader.readDataDirectories reader (Unsafe.As &directories) src.Offset ustate, ReadSectionHeaders)
     else Failure UnexpectedEndOfFile
 
 let readSectionHeaders (src: Reader) (count: uint16) (headers: byref<_>) reader ustate =
@@ -186,7 +186,7 @@ let readSectionHeaders (src: Reader) (count: uint16) (headers: byref<_>) reader 
                   NumberOfRelocations = Bytes.readU2 (i' + 32) buffer
                   // NumberOfLineNumbers
                   Characteristics = LanguagePrimitives.EnumOfValue(Bytes.readU4 (i' + 36) buffer) }
-        Success(MetadataReader.readSectionHeaders reader (Unsafe.As &headers) ustate, ReadSectionData)
+        Success(MetadataReader.readSectionHeaders reader (Unsafe.As &headers) src.Offset ustate, ReadSectionData)
     else Failure UnexpectedEndOfFile
 
 let readPE (src: Reader) file reader ustate rstate =
@@ -203,7 +203,7 @@ let readPE (src: Reader) file reader ustate rstate =
         | len -> InvalidMagic(Magic.MZ, Bytes.ofSpan len magic) |> Failure
     | MoveToLfanew -> moveto 0x3CUL ReadLfanew
     | ReadLfanew when src.ReadU4(&file.Lfanew) ->
-        Success(MetadataReader.readLfanew reader file.Lfanew ustate, MoveToPESignature)
+        Success(MetadataReader.readLfanew reader file.Lfanew src.Offset ustate, MoveToPESignature)
     | MoveToPESignature -> moveto (uint64 file.Lfanew) ReadPESignature
     | ReadPESignature ->
         let signature = allocspan<byte> 4
@@ -230,6 +230,6 @@ let fromStream stream state reader =
     let rec inner ustate rstate =
         match readPE src file reader ustate rstate with
         | Success(ustate', rstate') -> inner ustate' rstate'
-        | Failure err -> reader.HandleError src.Offset rstate err ustate
+        | Failure err -> reader.HandleError rstate err src.Offset ustate
         | End -> ustate
     inner state ReadPEMagic

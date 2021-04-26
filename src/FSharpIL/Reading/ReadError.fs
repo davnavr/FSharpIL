@@ -22,8 +22,11 @@ type ReadError =
         | TooFewDataDirectories count -> sprintf "the number of data directories (%i) is too small" count
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
 
+[<RequireQualifiedAccess>]
+module ReadError =
+    let message (state: ReadState) (error: ReadError) (offset: uint64) =
+        sprintf "Error occured while %s at offset %i: %s" state.Description offset error.Message
+
 exception ReadException
-    of offset: uint64 * state: ReadState * error: ReadError
-    with
-        override this.Message =
-            sprintf "Error occured while %s at offset %i: %s" this.state.Description this.offset this.error.Message
+    of state: ReadState * error: ReadError * offset: uint64
+    with override this.Message = ReadError.message this.state this.error this.offset
