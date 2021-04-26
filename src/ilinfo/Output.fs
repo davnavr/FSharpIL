@@ -45,7 +45,7 @@ let inline private writeEnum name (value: 'Enum when 'Enum :> Enum) { WriteField
     let value' = value.ToString "X"
     write name (uint32 size) (sprintf "0x%s%s (%O)" (zeroes size value') value' value)
 
-let coffHeader (header: ParsedCoffHeader) offset (wr: Writer) =
+let coffHeader (header: ParsedCoffHeader) offset wr =
     wr.WriteHeader offset "COFF Header"
     writeEnum "Machine" header.Machine wr
     writeInt "NumberOfSections" header.NumberOfSections wr
@@ -56,7 +56,7 @@ let coffHeader (header: ParsedCoffHeader) offset (wr: Writer) =
     writeEnum "Characteristics" header.Characteristics wr
     wr
 
-let standardFields (fields: ParsedStandardFields) offset (wr: Writer) =
+let standardFields (fields: ParsedStandardFields) offset wr =
     wr.WriteHeader offset "Standard Fields"
     writeEnum "Magic" fields.Magic wr
     writeInt "MajorLinkerVersion" fields.LMajor wr
@@ -69,7 +69,7 @@ let standardFields (fields: ParsedStandardFields) offset (wr: Writer) =
     ValueOption.iter (fun bdata -> writeInt "BaseOfData" bdata wr) fields.BaseOfData
     wr
 
-let ntSpecificFields (fields: ParsedNTSpecificFields) offset (wr: Writer) =
+let ntSpecificFields (fields: ParsedNTSpecificFields) offset wr =
     wr.WriteHeader offset "NT Specific Fields"
     // TODO: Write different size fields if PE32+
     //ImageBase
@@ -93,9 +93,43 @@ let ntSpecificFields (fields: ParsedNTSpecificFields) offset (wr: Writer) =
     writeInt "NumberOfDataDirectories" fields.NumberOfDataDirectories wr
     wr
 
+let dataDirectories (directories: ParsedDataDirectories) offset wr =
+    wr.WriteHeader offset "Data Directories"
+    let names =
+        [|
+            "Export Table"
+            "Import Table"
+            "Resource Table"
+            "Exception Table"
+            "Certificate Table"
+            "Base Relocation Table"
+            "Debug"
+            "Copyright"
+            "Global Pointer"
+            "TLS Table"
+            "Load Configuration Table"
+            "Bound Import"
+            "Import Address Table"
+            "Delay Import Descriptor"
+            "CLI Header"
+            "Reserved"
+        |]
+    for i = 0 to directories.Length - 1 do
+        let name =
+            if i < names.Length
+            then names.[i]
+            else "Unknown"
+        let value =
+            match directories.[i] with
+            | struct(0u, 0u) -> "<zero>"
+            | struct(rva, size) -> sprintf "(RVA = 0x%08X, Size = 0x%08X (%i))" rva size size
+        wr.WriteField name 8u value
+    wr
+
 let write (headers: ISet<FileHeader>) =
     { MetadataReader.empty with
         ReadCoffHeader = header headers FileHeader.Coff coffHeader
         ReadStandardFields = header headers FileHeader.Standard standardFields
         ReadNTSpecificFields = header headers FileHeader.NT_Specific ntSpecificFields
+        ReadDataDirectories = header headers FileHeader.Data_Directories dataDirectories
         HandleError = fun state error offset wr -> wr.WriteError state error offset (); wr }

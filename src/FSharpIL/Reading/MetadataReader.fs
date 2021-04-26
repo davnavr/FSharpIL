@@ -13,6 +13,7 @@ type ErrorHandler<'State> = ReadState -> ReadError -> uint64 -> 'State -> 'State
 type ParsedCoffHeader = CoffHeader<uint16, uint16>
 type ParsedStandardFields = StandardFields<PEImageKind, uint32, uint32 voption>
 type ParsedNTSpecificFields = NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
+type ParsedDataDirectories = ImmutableArray<struct(uint32 * uint32)>
 
 // TODO: Rename this to something else.
 [<NoComparison; NoEquality>]
@@ -21,7 +22,7 @@ type MetadataReader<'State> =
       ReadCoffHeader: Reader<ParsedCoffHeader, 'State>
       ReadStandardFields: Reader<ParsedStandardFields, 'State>
       ReadNTSpecificFields: Reader<ParsedNTSpecificFields, 'State>
-      ReadDataDirectories: Reader<ImmutableArray<struct(uint32 * uint32)>, 'State>
+      ReadDataDirectories: Reader<ParsedDataDirectories, 'State>
       ReadSectionHeaders: Reader<ImmutableArray<SectionHeader<SectionLocation>>, 'State>
       HandleError: ErrorHandler<'State> }
 
