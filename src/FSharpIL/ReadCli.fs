@@ -5,7 +5,6 @@ module FSharpIL.ReadCli
 open System
 open System.IO
 open System.Runtime.CompilerServices
-open System.Text
 
 open Microsoft.FSharp.Core.Operators.Checked
 open Microsoft.FSharp.NativeInterop
@@ -75,10 +74,11 @@ type Reader (src: Stream) =
 [<NoComparison; NoEquality>]
 type MutableFile =
     { mutable Lfanew: uint32
-      mutable CoffHeader: CoffHeader<uint16, uint16>
-      mutable StandardFields: StandardFields<PEImageKind, uint32, uint32 voption>
-      mutable NTSpecificFields: NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
-      mutable DataDirectories: struct(uint32 * uint32)[] }
+      [<DefaultValue>] mutable CoffHeader: CoffHeader<uint16, uint16>
+      [<DefaultValue>] mutable StandardFields: StandardFields<PEImageKind, uint32, uint32 voption>
+      [<DefaultValue>] mutable NTSpecificFields: NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
+      [<DefaultValue>] mutable DataDirectories: struct(uint32 * uint32)[]
+      [<DefaultValue>] mutable SectionHeaders: SectionHeader<SectionLocation>[] }
 
 let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
     let buffer = allocspan<byte> Size.CoffHeader
@@ -167,11 +167,11 @@ let readDataDirectories (src: Reader) (count: uint32) (directories: byref<_>) re
         Success(MetadataReader.readDataDirectories reader (Unsafe.As &directories) ustate, ReadSectionHeaders)
     else Failure UnexpectedEndOfFile
 
-let readSectionHeaders (src: Reader) (count: uint16) reader ustate =
+let readSectionHeaders (src: Reader) (count: uint16) (headers: byref<_>) reader ustate =
     let count' = int32 count
     let buffer = arrspan<byte>(count' * Size.SectionHeader)
     if src.ReadBytes buffer = buffer.Length then
-        let mutable headers = Array.zeroCreate<_> count'
+        headers <- Array.zeroCreate<_> count'
         for i = 0 to count' - 1 do
             let i' = i * Size.SectionHeader
             headers.[i] <-
@@ -219,19 +219,14 @@ let readPE (src: Reader) file reader ustate rstate =
     | ReadStandardFields -> readStandardFields src &file.StandardFields reader ustate
     | ReadNTSpecificFields -> readNTSpecificFields src file.StandardFields.Magic &file.NTSpecificFields reader ustate
     | ReadDataDirectories -> readDataDirectories src file.NTSpecificFields.NumberOfDataDirectories &file.DataDirectories reader ustate
-    | ReadSectionHeaders -> readSectionHeaders src file.CoffHeader.NumberOfSections reader ustate
+    | ReadSectionHeaders -> readSectionHeaders src file.CoffHeader.NumberOfSections &file.SectionHeaders reader ustate
     | ReadLfanew -> Failure UnexpectedEndOfFile
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
 /// <exception cref="System.ArgumentException">The <paramref name="stream"/> does not support reading.</exception>
 let fromStream stream state reader =
     let src = Reader stream
-    let file =
-        { Lfanew = Unchecked.defaultof<uint32>
-          CoffHeader = Unchecked.defaultof<_>
-          StandardFields = Unchecked.defaultof<_>
-          NTSpecificFields = Unchecked.defaultof<_>
-          DataDirectories = Unchecked.defaultof<_> }
+    let file = { Lfanew = Unchecked.defaultof<uint32> }
     let rec inner ustate rstate =
         match readPE src file reader ustate rstate with
         | Success(ustate', rstate') -> inner ustate' rstate'

@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>ilinfo</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ILInfo</RootNamespace>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Output.fs" />
+    <Compile Include="Program.fs" />
+
+    <PackageReference Include="Argu" Version="6.1.1" />
+
+    <ProjectReference Include="$(RootDirectory)/src/FSharpIL/FSharpIL.fsproj" />
+  </ItemGroup>
+
+</Project>
