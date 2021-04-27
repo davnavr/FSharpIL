@@ -127,8 +127,8 @@ let dataDirectories (directories: ParsedDataDirectories) offset wr =
             else "Unknown"
         let value =
             match directories.[i] with
-            | struct(0u, 0u) -> "<zero>"
-            | struct(rva, size) -> sprintf "(RVA = 0x%08X, Size = 0x%08X (%i))" rva size size
+            | { Rva = 0u; Size = 0u } -> "<zero>"
+            | { Rva = rva; Size = size } -> sprintf "(RVA = 0x%08X, Size = 0x%08X (%i))" rva size size
         wr.WriteField name 8u value
     wr
 

@@ -77,10 +77,12 @@ type MutableFile =
       [<DefaultValue>] mutable CoffHeader: ParsedCoffHeader
       [<DefaultValue>] mutable StandardFields: ParsedStandardFields
       [<DefaultValue>] mutable NTSpecificFields: ParsedNTSpecificFields
-      [<DefaultValue>] mutable DataDirectories: struct(uint32 * uint32)[]
+      [<DefaultValue>] mutable DataDirectories: RvaAndSize[]
       [<DefaultValue>] mutable SectionHeaders: SectionHeader<SectionLocation>[]
       [<DefaultValue>] mutable TextSection: int32
       [<DefaultValue>] mutable TextSectionData: byte[][] }
+
+let inline rvaAndSize i buffer = { Rva = Bytes.readU4 i buffer; Size = Bytes.readU4 (i + 4) buffer }
 
 let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
     let buffer = allocspan<byte> Size.CoffHeader
@@ -165,7 +167,7 @@ let readDataDirectories (src: Reader) (count: uint32) (directories: byref<_>) re
         directories <- Array.zeroCreate count'
         for i = 0 to count' - 1 do
             let i' = i * 8
-            directories.[i] <- struct(Bytes.readU4 i' buffer, Bytes.readU4 (i' + 4) buffer)
+            directories.[i] <- rvaAndSize i' buffer
         Success(MetadataReader.readDataDirectories reader (Unsafe.As &directories) src.Offset ustate, ReadSectionHeaders)
     else Failure UnexpectedEndOfFile
 
@@ -213,6 +215,30 @@ let readTextSection (src: Reader) (file: MutableFile) ustate =
 
     inner 0 vsize
 
+let readMetadata (file: MutableFile) reader ustate =
+    let chunk = ChunkReader file.TextSectionData
+    let mutable size = Unchecked.defaultof<uint32>
+    if chunk.ReadU4 &size then
+        let mutable fields = Span()
+        if chunk.ReadBytes(int32 size, &fields) then
+            // TODO: Get MetaData RVA.
+            MetadataReader.readCliHeader
+                reader
+                { MajorRuntimeVersion = Bytes.readU2 0 fields
+                  MinorRuntimeVersion = Bytes.readU2 2 fields
+                  MetaData = rvaAndSize 4 fields
+                  Flags = LanguagePrimitives.EnumOfValue(Bytes.readU4 12 fields)
+                  EntryPointToken = Bytes.readU4 16 fields
+                  Resources = rvaAndSize 20 fields
+                  StrongNameSignature = Bytes.readU8 28 fields
+                  CodeManagerTable = Bytes.readU8 36 fields
+                  VTableFixups = rvaAndSize 44 fields
+                  ExportAddressTableJumps = Bytes.readU8 52 fields
+                  ManagedNativeHeader = Bytes.readU8 60 fields }
+            invalidOp "read fields"
+        else Failure UnexpectedEndOfFile
+    else Failure UnexpectedEndOfFile
+
 let readPE (src: Reader) file reader ustate rstate =
     let inline moveto target state' =
         if src.MoveTo target
@@ -251,7 +277,7 @@ let readPE (src: Reader) file reader ustate rstate =
     | MoveToTextSectionData -> moveto (uint64 file.SectionHeaders.[file.TextSection].Data.RawDataPointer) ReadTextSectionData
     | ReadTextSectionData -> readTextSection src file ustate
     | MoveToCliHeader ->
-        let struct(rva, _) = file.DataDirectories.[Magic.CliHeaderIndex]
+        let { Rva = rva } = file.DataDirectories.[Magic.CliHeaderIndex]
         // NOTE: src.Offset will point past the end of the .text section, meaning these error messages will be inaccurate.
         if file.SectionHeaders.[file.TextSection].Data.ContainsRva rva
         then Success(ustate, ReadCliHeader)

@@ -2,19 +2,35 @@
 
 open System.Collections.Immutable
 
+open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 
 // TODO: Allow reading functions to end reading early by making the return value a voption.
-// TODO: Allow functions access to current offset by supplying a uint64 parameter.
 type Reader<'Arg, 'State> = ('Arg -> uint64 -> 'State -> 'State) voption
 
 type ErrorHandler<'State> = ReadState -> ReadError -> uint64 -> 'State -> 'State
 
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type RvaAndSize = { Rva: uint32; Size: uint32 }
+
 type ParsedCoffHeader = CoffHeader<uint16, uint16>
 type ParsedStandardFields = StandardFields<PEImageKind, uint32, uint32 voption>
 type ParsedNTSpecificFields = NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
-type ParsedDataDirectories = ImmutableArray<struct(uint32 * uint32)>
+type ParsedDataDirectories = ImmutableArray<RvaAndSize>
 type ParsedSectionHeaders = ImmutableArray<SectionHeader<SectionLocation>>
+
+type ParsedCliHeader =
+    { MajorRuntimeVersion: uint16
+      MinorRuntimeVersion: uint16
+      MetaData: RvaAndSize
+      Flags: CorFlags
+      EntryPointToken: uint32
+      Resources: RvaAndSize
+      StrongNameSignature: uint64
+      CodeManagerTable: uint64
+      VTableFixups: RvaAndSize
+      ExportAddressTableJumps: uint64
+      ManagedNativeHeader: uint64 }
 
 // TODO: Rename this to something else.
 [<NoComparison; NoEquality>]
@@ -25,6 +41,7 @@ type MetadataReader<'State> =
       ReadNTSpecificFields: Reader<ParsedNTSpecificFields, 'State>
       ReadDataDirectories: Reader<ParsedDataDirectories, 'State>
       ReadSectionHeaders: Reader<ParsedSectionHeaders, 'State>
+      ReadCliHeader: Reader<ParsedCliHeader, 'State>
       HandleError: ErrorHandler<'State> }
 
 [<RequireQualifiedAccess>]
@@ -42,6 +59,7 @@ module MetadataReader =
     let readNTSpecificFields { ReadNTSpecificFields = reader } fields = read reader fields
     let readDataDirectories { ReadDataDirectories = reader } directories = read reader directories
     let readSectionHeaders { ReadSectionHeaders = reader } headers = read reader headers
+    let readCliHeader { ReadCliHeader = reader } header = read reader header
 
     let inline throwOnError (state: ReadState) error (offset: uint64) (_: 'State): 'State =
         ReadException(state, error, offset) |> raise
@@ -54,4 +72,5 @@ module MetadataReader =
           ReadNTSpecificFields = ValueNone
           ReadDataDirectories = ValueNone
           ReadSectionHeaders = ValueNone
+          ReadCliHeader = ValueNone
           HandleError = throwOnError }
