@@ -2,7 +2,6 @@
 module ILInfo.Output
 
 open System
-open System.Collections.Generic
 
 open FSharpIL.PortableExecutable
 open FSharpIL.Reading
@@ -28,8 +27,8 @@ let create =
           WriteField = printfn " - %s (%i bytes) = %s"
           WriteError = fun state err offset wr -> stderr.WriteLine(ReadError.message state err offset); wr }
 
-let private header (headers: ISet<FileHeader>) expected writer: Reader<_, _> =
-    if headers.Contains expected
+let private header (flags: IncludedHeaders) (expected: IncludedHeaders) writer: Reader<_, _> =
+    if flags.HasFlag expected
     then ValueSome writer
     else ValueNone
 
@@ -50,6 +49,12 @@ let inline private writeString name (value: byte[]) { WriteField = write } =
     |> String.concat " "
     |> sprintf "\"%s\" [%s]" (System.Text.Encoding.ASCII.GetString value)
     |> write name (uint32 value.Length)
+
+let inline private writeRvaAndSize name rvaAndSize wr =
+    match rvaAndSize with
+    | { Rva = 0u; Size = 0u } -> "<zero>"
+    | { Rva = rva; Size = size } -> sprintf "(RVA = 0x%08X, Size = 0x%08X (%i))" rva size size
+    |> wr.WriteField name 8u
 
 let coffHeader (header: ParsedCoffHeader) offset wr =
     wr.WriteHeader offset "COFF Header"
@@ -125,11 +130,7 @@ let dataDirectories (directories: ParsedDataDirectories) offset wr =
             if i < names.Length
             then names.[i]
             else "Unknown"
-        let value =
-            match directories.[i] with
-            | { Rva = 0u; Size = 0u } -> "<zero>"
-            | { Rva = rva; Size = size } -> sprintf "(RVA = 0x%08X, Size = 0x%08X (%i))" rva size size
-        wr.WriteField name 8u value
+        writeRvaAndSize name directories.[i] wr
     wr
 
 let sectionHeaders (headers: ParsedSectionHeaders) offset wr =
@@ -148,11 +149,28 @@ let sectionHeaders (headers: ParsedSectionHeaders) offset wr =
         writeEnum "Characteristics" header.Characteristics wr
     wr
 
-let write (headers: ISet<FileHeader>) =
+let cliHeader (header: ParsedCliHeader) offset wr =
+    wr.WriteHeader offset "CLI Header"
+    writeInt "Cb" header.Size wr
+    writeInt "MajorRuntimeVersion" header.MajorRuntimeVersion wr
+    writeInt "MinorRuntimeVersion" header.MinorRuntimeVersion wr
+    writeRvaAndSize "MetaData" header.MetaData wr
+    writeEnum "Flags" header.Flags wr
+    writeInt "EntryPointToken" header.EntryPointToken wr // TODO: Show what table the EntryPointToken refers to.
+    writeRvaAndSize "Resources" header.Resources wr
+    writeInt "StrongNameSignature" header.StrongNameSignature wr
+    writeInt "CodeManagerTable" header.CodeManagerTable wr
+    writeRvaAndSize "VTableFixups" header.VTableFixups wr
+    writeInt "ExportAddressTableJumps" header.ExportAddressTableJumps wr
+    writeInt "ManagedNativeHeader" header.ManagedNativeHeader wr
+    wr
+
+let write hflags =
     { MetadataReader.empty with
-        ReadCoffHeader = header headers FileHeader.Coff coffHeader
-        ReadStandardFields = header headers FileHeader.Standard standardFields
-        ReadNTSpecificFields = header headers FileHeader.NT_Specific ntSpecificFields
-        ReadDataDirectories = header headers FileHeader.Data_Directories dataDirectories
-        ReadSectionHeaders = header headers FileHeader.Section_Headers sectionHeaders
+        ReadCoffHeader = header hflags IncludedHeaders.CoffHeader coffHeader
+        ReadStandardFields = header hflags IncludedHeaders.StandardFields standardFields
+        ReadNTSpecificFields = header hflags IncludedHeaders.NTSpecificFields ntSpecificFields
+        ReadDataDirectories = header hflags IncludedHeaders.DataDirectories dataDirectories
+        ReadSectionHeaders = header hflags IncludedHeaders.SectionHeaders sectionHeaders
+        ReadCliHeader = header hflags IncludedHeaders.CliHeader cliHeader
         HandleError = fun state error offset wr -> wr.WriteError state error offset (); wr }

@@ -276,7 +276,8 @@ let readCliHeader (chunk: ChunkReader) (file: MutableFile) reader ustate =
         // TODO: Stop reading early depending on size of header.
         // TODO: Get MetaData RVA.
         file.CliHeader <-
-            { MajorRuntimeVersion = Bytes.readU2 0 fields
+            { Size = size
+              MajorRuntimeVersion = Bytes.readU2 0 fields
               MinorRuntimeVersion = Bytes.readU2 2 fields
               MetaData = rvaAndSize 4 fields
               Flags = LanguagePrimitives.EnumOfValue(Bytes.readU4 12 fields)
@@ -322,7 +323,7 @@ let fromStream stream state reader =
         | End ->
             // NOTE: Don't read CLI metadata if provided reader doesn't provide a function to read any metadata.
             match reader with
-            | { ReadCliHeader = ValueNone }
-            | { ReadMetadataRoot = ValueNone } -> ustate
+            | { ReadCliHeader = ValueNone
+                ReadMetadataRoot = ValueNone } -> ustate
             | _ -> metadata (ChunkReader file.TextSectionData) ustate FindCliHeader
     pe state ReadPEMagic

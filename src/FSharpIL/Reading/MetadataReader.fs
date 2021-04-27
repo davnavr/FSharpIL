@@ -21,7 +21,8 @@ type ParsedSectionHeaders = ImmutableArray<SectionHeader<SectionLocation>>
 
 /// Represents a CLI header in a Portable Executable file that has been parsed (II.25.3.3).
 type ParsedCliHeader =
-    { MajorRuntimeVersion: uint16
+    { Size: uint32
+      MajorRuntimeVersion: uint16
       MinorRuntimeVersion: uint16
       MetaData: RvaAndSize
       Flags: CorFlags
