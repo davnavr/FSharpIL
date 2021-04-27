@@ -42,6 +42,6 @@ let inline ofSpan length (bytes: Span<byte>) = bytes.Slice(0, length).ToArray()
 let print (bytes: ReadOnlySpan<byte>) =
     let sb = StringBuilder(bytes.Length * 5 - 1)
     for i = 0 to bytes.Length - 1 do
-        Printf.bprintf sb "0x%02X" bytes.[i]
         if i > 0 then sb.Append ' ' |> ignore
+        Printf.bprintf sb "0x%02X" bytes.[i]
     sb.ToString()

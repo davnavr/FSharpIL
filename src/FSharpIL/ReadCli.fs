@@ -78,7 +78,9 @@ type MutableFile =
       [<DefaultValue>] mutable StandardFields: ParsedStandardFields
       [<DefaultValue>] mutable NTSpecificFields: ParsedNTSpecificFields
       [<DefaultValue>] mutable DataDirectories: struct(uint32 * uint32)[]
-      [<DefaultValue>] mutable SectionHeaders: SectionHeader<SectionLocation>[] }
+      [<DefaultValue>] mutable SectionHeaders: SectionHeader<SectionLocation>[]
+      [<DefaultValue>] mutable TextSection: int32
+      [<DefaultValue>] mutable TextSectionData: byte[][] }
 
 let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
     let buffer = allocspan<byte> Size.CoffHeader
@@ -167,15 +169,17 @@ let readDataDirectories (src: Reader) (count: uint32) (directories: byref<_>) re
         Success(MetadataReader.readDataDirectories reader (Unsafe.As &directories) src.Offset ustate, ReadSectionHeaders)
     else Failure UnexpectedEndOfFile
 
-let readSectionHeaders (src: Reader) (count: uint16) (headers: byref<_>) reader ustate =
+let readSectionHeaders (src: Reader) (count: uint16) (file: MutableFile) reader ustate =
     let count' = int32 count
     let buffer = arrspan<byte>(count' * Size.SectionHeader)
     if src.ReadBytes buffer = buffer.Length then
-        headers <- Array.zeroCreate<_> count'
+        file.SectionHeaders <- Array.zeroCreate<_> count'
         for i = 0 to count' - 1 do
             let i' = i * Size.SectionHeader
-            headers.[i] <-
-                { SectionName = SectionName(buffer.Slice(i', 8).ToArray())
+            let name = SectionName(buffer.Slice(i', 8).ToArray())
+            if name = SectionName.text then file.TextSection <- i
+            file.SectionHeaders.[i] <-
+                { SectionName = name
                   Data =
                     { VirtualSize = Bytes.readU4 (i' + 8) buffer
                       VirtualAddress = Bytes.readU4 (i' + 12) buffer
@@ -186,8 +190,28 @@ let readSectionHeaders (src: Reader) (count: uint16) (headers: byref<_>) reader 
                   NumberOfRelocations = Bytes.readU2 (i' + 32) buffer
                   // NumberOfLineNumbers
                   Characteristics = LanguagePrimitives.EnumOfValue(Bytes.readU4 (i' + 36) buffer) }
-        Success(MetadataReader.readSectionHeaders reader (Unsafe.As &headers) src.Offset ustate, ReadSectionData)
+        Success(MetadataReader.readSectionHeaders reader (Unsafe.As &file.SectionHeaders) src.Offset ustate, MoveToTextSectionData)
     else Failure UnexpectedEndOfFile
+
+let readTextSection (src: Reader) (file: MutableFile) ustate =
+    let falignment = snd file.NTSpecificFields.Alignment
+    let vsize = file.SectionHeaders.[file.TextSection].Data.VirtualSize
+    let len = vsize / falignment
+    file.TextSectionData <- Array.zeroCreate(if falignment * len < vsize then int32 len + 1 else int32 len)
+
+    let rec inner i size =
+        match size with
+        | 0u -> Success(ustate, MoveToCliHeader)
+        | _ ->
+            let len = min falignment size
+            let len' = int32 len
+            let chunk = Array.zeroCreate len'
+            file.TextSectionData.[i] <- chunk
+            if src.ReadBytes(Span chunk) = len'
+            then inner (i + 1) (size - len)
+            else Failure UnexpectedEndOfFile
+
+    inner 0 vsize
 
 let readPE (src: Reader) file reader ustate rstate =
     let inline moveto target state' =
@@ -216,10 +240,24 @@ let readPE (src: Reader) file reader ustate rstate =
         | Success _ when file.CoffHeader.OptionalHeaderSize < Size.OptionalHeader -> // TODO: How to stop reading optional fields according to size of optional header?
             Failure(OptionalHeaderTooSmall file.CoffHeader.OptionalHeaderSize)
         | result -> result
-    | ReadStandardFields -> readStandardFields src &file.StandardFields reader ustate
-    | ReadNTSpecificFields -> readNTSpecificFields src file.StandardFields.Magic &file.NTSpecificFields reader ustate
-    | ReadDataDirectories -> readDataDirectories src file.NTSpecificFields.NumberOfDataDirectories &file.DataDirectories reader ustate
-    | ReadSectionHeaders -> readSectionHeaders src file.CoffHeader.NumberOfSections &file.SectionHeaders reader ustate
+    | ReadStandardFields ->
+        readStandardFields src &file.StandardFields reader ustate
+    | ReadNTSpecificFields ->
+        readNTSpecificFields src file.StandardFields.Magic &file.NTSpecificFields reader ustate
+    | ReadDataDirectories ->
+        readDataDirectories src file.NTSpecificFields.NumberOfDataDirectories &file.DataDirectories reader ustate
+    | ReadSectionHeaders ->
+        readSectionHeaders src file.CoffHeader.NumberOfSections file reader ustate
+    | MoveToTextSectionData -> moveto (uint64 file.SectionHeaders.[file.TextSection].Data.RawDataPointer) ReadTextSectionData
+    | ReadTextSectionData -> readTextSection src file ustate
+    | MoveToCliHeader ->
+        let struct(rva, _) = file.DataDirectories.[Magic.CliHeaderIndex]
+        // NOTE: src.Offset will point past the end of the .text section, meaning these error messages will be inaccurate.
+        if file.SectionHeaders.[file.TextSection].Data.ContainsRva rva
+        then Success(ustate, ReadCliHeader)
+        else Failure(CliHeaderNotInTextSection rva)
+    | ReadCliHeader ->
+        invalidOp "TODO: Read Size"
     | ReadLfanew -> Failure UnexpectedEndOfFile
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
@@ -231,5 +269,6 @@ let fromStream stream state reader =
         match readPE src file reader ustate rstate with
         | Success(ustate', rstate') -> inner ustate' rstate'
         | Failure err -> reader.HandleError rstate err src.Offset ustate
-        | End -> ustate
+        | End -> ustate // TODO: Call here
+    // TODO: Have other recursive loop for reading CLI metadata in .text section
     inner state ReadPEMagic

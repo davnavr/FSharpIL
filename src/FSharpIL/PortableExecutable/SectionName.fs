@@ -14,6 +14,9 @@ type SectionName =
 
 [<RequireQualifiedAccess>]
 module SectionName =
+    let text = SectionName ".text"B
+    let rsrc = SectionName ".rsrc"B
+    let reloc = SectionName ".reloc"B
     let ofBytes (bytes: byte[]) =
         if bytes.Length <= 8 then
             Array.init

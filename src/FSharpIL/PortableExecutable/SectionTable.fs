@@ -29,6 +29,8 @@ type SectionLocation =
       RawDataSize: uint32
       RawDataPointer: uint32 }
 
+    member this.ContainsRva rva = rva >= this.VirtualAddress && rva < (this.VirtualAddress + this.VirtualSize)
+
 /// (II.25.3)
 type SectionHeader<'Data> =
     { SectionName: SectionName
@@ -65,12 +67,12 @@ type Section =
         let name, flags =
             match this.Kind with
             | TextSection ->
-                ".text"B, SectionFlags.CntCode ||| SectionFlags.MemExecute ||| SectionFlags.MemRead
+                SectionName.text, SectionFlags.CntCode ||| SectionFlags.MemExecute ||| SectionFlags.MemRead
             | RsrcSection ->
-                ".rsrc"B, SectionFlags.CntInitializedData ||| SectionFlags.MemRead
+                SectionName.rsrc, SectionFlags.CntInitializedData ||| SectionFlags.MemRead
             | RelocSection ->
-                ".reloc"B, SectionFlags.CntInitializedData ||| SectionFlags.MemRead ||| SectionFlags.MemDiscardable
-        { SectionName = SectionName.ofBytes name |> Option.get
+                SectionName.reloc, SectionFlags.CntInitializedData ||| SectionFlags.MemRead ||| SectionFlags.MemDiscardable
+        { SectionName = name
           Data = this.Data
           PointerToRelocations = 0u
           NumberOfRelocations = 0us

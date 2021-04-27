@@ -4,7 +4,7 @@
 type ReadState =
     | ReadPEMagic
     | MoveToLfanew
-    /// Indicates that the <c>lfanew</c> field pointing to the PE signature is being read (II.25.2.1).
+    /// <summary>Indicates that the <c>lfanew</c> field pointing to the PE signature is being read (II.25.2.1).</summary>
     | ReadLfanew
     | MoveToPESignature
     | ReadPESignature
@@ -14,8 +14,10 @@ type ReadState =
     | ReadNTSpecificFields
     | ReadDataDirectories
     | ReadSectionHeaders
-    | ReadSectionData
+    | MoveToTextSectionData
+    | ReadTextSectionData
     | MoveToCliHeader
+    /// Indicates that the CLI header is being read (II.25.3.3).
     | ReadCliHeader
 
     member this.Description =
@@ -30,6 +32,7 @@ type ReadState =
         | ReadNTSpecificFields -> "reading NT-specific fields of the PE optional header"
         | ReadDataDirectories -> "reading PE header data directories"
         | ReadSectionHeaders -> "reading section headers"
-        | ReadSectionData -> "reading section data"
+        | MoveToTextSectionData -> "moving to text section data"
+        | ReadTextSectionData -> "reading text section data"
         | MoveToCliHeader -> "moving to CLI header"
         | ReadCliHeader -> "reading CLI header"

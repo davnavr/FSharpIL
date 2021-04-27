@@ -8,6 +8,8 @@ open Argu
 
 open FSharpIL
 
+let [<Literal>] private description = "CLI metadata reader powered by FSharpIL (https://github.com/davnavr/FSharpIL)"
+
 type Argument =
     | [<ExactlyOnce>] File of string
     | File_Header of FileHeader
@@ -43,7 +45,7 @@ let exitfn format = Printf.kprintf (fun msg -> eprintfn "%s" msg; -1) format
 
 [<EntryPoint>]
 let main args =
-    let parser = ArgumentParser.Create<Argument>(programName = "ilinfo", helpTextMessage = "CLI metadata reader")
+    let parser = ArgumentParser.Create<Argument>(programName = "ilinfo", helpTextMessage = description)
     let result = parser.ParseCommandLine(args, raiseOnUsage = false)
     let args' = { Output = Output.Stdout; FileHeaders = HashSet 5 }
 
