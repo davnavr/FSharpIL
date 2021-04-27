@@ -19,6 +19,7 @@ type ParsedNTSpecificFields = NTSpecificFields<uint64, uint32 * uint32, uint32, 
 type ParsedDataDirectories = ImmutableArray<RvaAndSize>
 type ParsedSectionHeaders = ImmutableArray<SectionHeader<SectionLocation>>
 
+/// Represents a CLI header in a Portable Executable file that has been parsed (II.25.3.3).
 type ParsedCliHeader =
     { MajorRuntimeVersion: uint16
       MinorRuntimeVersion: uint16
@@ -32,6 +33,15 @@ type ParsedCliHeader =
       ExportAddressTableJumps: uint64
       ManagedNativeHeader: uint64 }
 
+/// (II.24.2.1)
+type ParsedMetadataRoot =
+    { MajorVersion: uint16
+      MinorVersion: uint16
+      Reserved: uint32
+      Version: ImmutableArray<byte>
+      Flags: uint16
+      Streams: uint16 }
+
 // TODO: Rename this to something else.
 [<NoComparison; NoEquality>]
 type MetadataReader<'State> =
@@ -42,6 +52,7 @@ type MetadataReader<'State> =
       ReadDataDirectories: Reader<ParsedDataDirectories, 'State>
       ReadSectionHeaders: Reader<ParsedSectionHeaders, 'State>
       ReadCliHeader: Reader<ParsedCliHeader, 'State>
+      ReadMetadataRoot: Reader<ParsedMetadataRoot, 'State>
       HandleError: ErrorHandler<'State> }
 
 [<RequireQualifiedAccess>]
@@ -73,4 +84,5 @@ module MetadataReader =
           ReadDataDirectories = ValueNone
           ReadSectionHeaders = ValueNone
           ReadCliHeader = ValueNone
+          ReadMetadataRoot = ValueNone
           HandleError = throwOnError }

@@ -15,8 +15,8 @@ open FSharpIL.Reading
 #nowarn "9"
 
 [<IsReadOnly; Struct>]
-type ReadResult<'T> =
-    | Success of 'T * ReadState
+type ReadResult<'State, 'T when 'State : struct> =
+    | Success of 'T * 'State
     | Failure of ReadError
     | End
 
@@ -80,12 +80,20 @@ type MutableFile =
       [<DefaultValue>] mutable DataDirectories: RvaAndSize[]
       [<DefaultValue>] mutable SectionHeaders: SectionHeader<SectionLocation>[]
       [<DefaultValue>] mutable TextSection: int32
-      [<DefaultValue>] mutable TextSectionData: byte[][] }
+      [<DefaultValue>] mutable TextSectionData: byte[][]
+      /// File offset from start of section to the CLI header (II.25.3.3).
+      [<DefaultValue>] mutable CliHeaderOffset: uint64
+      [<DefaultValue>] mutable CliHeader: ParsedCliHeader }
+
+    /// <summary>File offset to the first byte of the <c>.text</c> section.</summary>
+    member this.TextSectionOffset = uint64 this.SectionHeaders.[this.TextSection].Data.RawDataPointer
 
 let inline rvaAndSize i buffer = { Rva = Bytes.readU4 i buffer; Size = Bytes.readU4 (i + 4) buffer }
 
+// TODO: Fix, offset will always point after the end of the structure.
 let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
     let buffer = allocspan<byte> Size.CoffHeader
+    let offset = src.Offset
     if src.ReadBytes buffer = buffer.Length then
         headers <-
             { Machine = LanguagePrimitives.EnumOfValue(Bytes.readU2 0 buffer)
@@ -95,11 +103,12 @@ let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
               SymbolCount = Bytes.readU4 12 buffer
               OptionalHeaderSize = Bytes.readU2 16 buffer
               Characteristics = LanguagePrimitives.EnumOfValue(Bytes.readU2 18 buffer) }
-        Success(MetadataReader.readCoffHeader reader headers src.Offset ustate, ReadStandardFields)
+        Success(MetadataReader.readCoffHeader reader headers offset ustate, ReadStandardFields)
     else Failure UnexpectedEndOfFile
 
 let readStandardFields (src: Reader) (fields: byref<_>) reader ustate =
     let buffer = allocspan<byte> 28
+    let offset = src.Offset
     if src.ReadBytes(buffer.Slice(0, 2)) = 2 then
         let magic = LanguagePrimitives.EnumOfValue(Bytes.readU2 0 buffer)
         let length = if magic = PEImageKind.PE32 then 26 else 22
@@ -118,7 +127,7 @@ let readStandardFields (src: Reader) (fields: byref<_>) reader ustate =
                     match magic with
                     | PEImageKind.PE32 -> ValueSome(Bytes.readU4 22 fields')
                     | _ -> ValueNone }
-            Success(MetadataReader.readStandardFields reader fields src.Offset ustate, ReadNTSpecificFields)
+            Success(MetadataReader.readStandardFields reader fields offset ustate, ReadNTSpecificFields)
         else Failure UnexpectedEndOfFile
     else Failure UnexpectedEndOfFile
 
@@ -128,6 +137,7 @@ let readNTSpecificFields (src: Reader) magic (fields: byref<_>) reader ustate =
         | PEImageKind.PE32Plus -> 88
         | _ -> 68
     let buffer = arrspan<byte> length
+    let offset = src.Offset
     if src.ReadBytes buffer = length then
         let numdirs = Bytes.readU4 64 buffer
         if numdirs >= 15u then
@@ -156,24 +166,26 @@ let readNTSpecificFields (src: Reader) magic (fields: byref<_>) reader ustate =
                       HeapCommitSize = uint64(Bytes.readU4 56 buffer)
                       LoaderFlags = Bytes.readU4 60 buffer
                       NumberOfDataDirectories = Bytes.readU4 64 buffer }
-            Success(MetadataReader.readNTSpecificFields reader fields src.Offset ustate, ReadDataDirectories)
+            Success(MetadataReader.readNTSpecificFields reader fields offset ustate, ReadDataDirectories)
         else Failure(TooFewDataDirectories numdirs)
     else Failure UnexpectedEndOfFile
 
 let readDataDirectories (src: Reader) (count: uint32) (directories: byref<_>) reader ustate =
     let count' = int32 count
     let buffer = arrspan<byte>(count' * 8)
+    let offset = src.Offset
     if src.ReadBytes buffer = buffer.Length then
         directories <- Array.zeroCreate count'
         for i = 0 to count' - 1 do
             let i' = i * 8
             directories.[i] <- rvaAndSize i' buffer
-        Success(MetadataReader.readDataDirectories reader (Unsafe.As &directories) src.Offset ustate, ReadSectionHeaders)
+        Success(MetadataReader.readDataDirectories reader (Unsafe.As &directories) offset ustate, ReadSectionHeaders)
     else Failure UnexpectedEndOfFile
 
 let readSectionHeaders (src: Reader) (count: uint16) (file: MutableFile) reader ustate =
     let count' = int32 count
     let buffer = arrspan<byte>(count' * Size.SectionHeader)
+    let offset = src.Offset
     if src.ReadBytes buffer = buffer.Length then
         file.SectionHeaders <- Array.zeroCreate<_> count'
         for i = 0 to count' - 1 do
@@ -192,10 +204,10 @@ let readSectionHeaders (src: Reader) (count: uint16) (file: MutableFile) reader 
                   NumberOfRelocations = Bytes.readU2 (i' + 32) buffer
                   // NumberOfLineNumbers
                   Characteristics = LanguagePrimitives.EnumOfValue(Bytes.readU4 (i' + 36) buffer) }
-        Success(MetadataReader.readSectionHeaders reader (Unsafe.As &file.SectionHeaders) src.Offset ustate, MoveToTextSectionData)
+        Success(MetadataReader.readSectionHeaders reader (Unsafe.As &file.SectionHeaders) offset ustate, MoveToTextSectionData)
     else Failure UnexpectedEndOfFile
 
-let readTextSection (src: Reader) (file: MutableFile) ustate =
+let readTextSection (src: Reader) (file: MutableFile) =
     let falignment = snd file.NTSpecificFields.Alignment
     let vsize = file.SectionHeaders.[file.TextSection].Data.VirtualSize
     let len = vsize / falignment
@@ -203,7 +215,7 @@ let readTextSection (src: Reader) (file: MutableFile) ustate =
 
     let rec inner i size =
         match size with
-        | 0u -> Success(ustate, MoveToCliHeader)
+        | 0u -> End
         | _ ->
             let len = min falignment size
             let len' = int32 len
@@ -214,30 +226,6 @@ let readTextSection (src: Reader) (file: MutableFile) ustate =
             else Failure UnexpectedEndOfFile
 
     inner 0 vsize
-
-let readMetadata (file: MutableFile) reader ustate =
-    let chunk = ChunkReader file.TextSectionData
-    let mutable size = Unchecked.defaultof<uint32>
-    if chunk.ReadU4 &size then
-        let mutable fields = Span()
-        if chunk.ReadBytes(int32 size, &fields) then
-            // TODO: Get MetaData RVA.
-            MetadataReader.readCliHeader
-                reader
-                { MajorRuntimeVersion = Bytes.readU2 0 fields
-                  MinorRuntimeVersion = Bytes.readU2 2 fields
-                  MetaData = rvaAndSize 4 fields
-                  Flags = LanguagePrimitives.EnumOfValue(Bytes.readU4 12 fields)
-                  EntryPointToken = Bytes.readU4 16 fields
-                  Resources = rvaAndSize 20 fields
-                  StrongNameSignature = Bytes.readU8 28 fields
-                  CodeManagerTable = Bytes.readU8 36 fields
-                  VTableFixups = rvaAndSize 44 fields
-                  ExportAddressTableJumps = Bytes.readU8 52 fields
-                  ManagedNativeHeader = Bytes.readU8 60 fields }
-            invalidOp "read fields"
-        else Failure UnexpectedEndOfFile
-    else Failure UnexpectedEndOfFile
 
 let readPE (src: Reader) file reader ustate rstate =
     let inline moveto target state' =
@@ -252,8 +240,11 @@ let readPE (src: Reader) file reader ustate rstate =
         | 2 when Magic.matches Magic.MZ magic -> Success(ustate, MoveToLfanew)
         | len -> InvalidMagic(Magic.MZ, Bytes.ofSpan len magic) |> Failure
     | MoveToLfanew -> moveto 0x3CUL ReadLfanew
-    | ReadLfanew when src.ReadU4(&file.Lfanew) ->
-        Success(MetadataReader.readLfanew reader file.Lfanew src.Offset ustate, MoveToPESignature)
+    | ReadLfanew ->
+        let offset = src.Offset
+        if src.ReadU4(&file.Lfanew) then
+            Success(MetadataReader.readLfanew reader file.Lfanew offset ustate, MoveToPESignature)
+        else Failure UnexpectedEndOfFile
     | MoveToPESignature -> moveto (uint64 file.Lfanew) ReadPESignature
     | ReadPESignature ->
         let signature = allocspan<byte> 4
@@ -275,26 +266,63 @@ let readPE (src: Reader) file reader ustate rstate =
     | ReadSectionHeaders ->
         readSectionHeaders src file.CoffHeader.NumberOfSections file reader ustate
     | MoveToTextSectionData -> moveto (uint64 file.SectionHeaders.[file.TextSection].Data.RawDataPointer) ReadTextSectionData
-    | ReadTextSectionData -> readTextSection src file ustate
-    | MoveToCliHeader ->
+    | ReadTextSectionData -> readTextSection src file
+
+let readCliHeader (chunk: ChunkReader) (file: MutableFile) reader ustate =
+    let offset = file.TextSectionOffset + chunk.BytesRead
+    let mutable size = Unchecked.defaultof<uint32>
+    let mutable fields = Span()
+    if chunk.ReadU4 &size && chunk.ReadBytes(int32 size, &fields) then
+        // TODO: Stop reading early depending on size of header.
+        // TODO: Get MetaData RVA.
+        file.CliHeader <-
+            { MajorRuntimeVersion = Bytes.readU2 0 fields
+              MinorRuntimeVersion = Bytes.readU2 2 fields
+              MetaData = rvaAndSize 4 fields
+              Flags = LanguagePrimitives.EnumOfValue(Bytes.readU4 12 fields)
+              EntryPointToken = Bytes.readU4 16 fields
+              Resources = rvaAndSize 20 fields
+              StrongNameSignature = Bytes.readU8 28 fields
+              CodeManagerTable = Bytes.readU8 36 fields
+              VTableFixups = rvaAndSize 44 fields
+              ExportAddressTableJumps = Bytes.readU8 52 fields
+              ManagedNativeHeader = Bytes.readU8 60 fields }
+        Success(MetadataReader.readCliHeader reader file.CliHeader offset ustate, MoveToMetadataRoot)
+    else Failure UnexpectedEndOfFile
+
+let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
+    let text = &file.SectionHeaders.[file.TextSection].Data
+    match rstate with
+    | FindCliHeader ->
         let { Rva = rva } = file.DataDirectories.[Magic.CliHeaderIndex]
-        // NOTE: src.Offset will point past the end of the .text section, meaning these error messages will be inaccurate.
-        if file.SectionHeaders.[file.TextSection].Data.ContainsRva rva
-        then Success(ustate, ReadCliHeader)
+        if text.ContainsRva rva then
+            file.CliHeaderOffset <- uint64 rva - uint64 text.VirtualAddress
+            Success(ustate, MoveToCliHeader)
         else Failure(CliHeaderNotInTextSection rva)
-    | ReadCliHeader ->
-        invalidOp "TODO: Read Size"
-    | ReadLfanew -> Failure UnexpectedEndOfFile
+    | MoveToCliHeader ->
+        if chunk.Advance(int32 file.CliHeaderOffset) then
+            Success(ustate, ReadCliHeader)
+        else Failure UnexpectedEndOfFile
+    | ReadCliHeader -> readCliHeader chunk file reader ustate
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
 /// <exception cref="System.ArgumentException">The <paramref name="stream"/> does not support reading.</exception>
 let fromStream stream state reader =
     let src = Reader stream
     let file = { Lfanew = Unchecked.defaultof<uint32> }
-    let rec inner ustate rstate =
+    let rec metadata chunk ustate rstate =
+        match readMetadata chunk file reader ustate rstate with
+        | Success(ustate', rstate') -> metadata chunk ustate' rstate'
+        | Failure err -> reader.HandleError (ReadState.Metadata rstate) err (file.TextSectionOffset + chunk.BytesRead) ustate
+        | End -> ustate
+    let rec pe ustate rstate =
         match readPE src file reader ustate rstate with
-        | Success(ustate', rstate') -> inner ustate' rstate'
-        | Failure err -> reader.HandleError rstate err src.Offset ustate
-        | End -> ustate // TODO: Call here
-    // TODO: Have other recursive loop for reading CLI metadata in .text section
-    inner state ReadPEMagic
+        | Success(ustate', rstate') -> pe ustate' rstate'
+        | Failure err -> reader.HandleError (ReadState.File rstate) err src.Offset ustate
+        | End ->
+            // NOTE: Don't read CLI metadata if provided reader doesn't provide a function to read any metadata.
+            match reader with
+            | { ReadCliHeader = ValueNone }
+            | { ReadMetadataRoot = ValueNone } -> ustate
+            | _ -> metadata (ChunkReader file.TextSectionData) ustate FindCliHeader
+    pe state ReadPEMagic

@@ -12,14 +12,20 @@ type internal ChunkReader (chunks: byte[][]) =
 
     member private _.FreeBytes = chunks.[chunki].Length - pos
 
-    member private _.Advance count =
-        let current = chunks.[chunki]
-        let remaining = count
-        while remaining > 0 do
-            if pos >= current.Length then
-                pos <- 0
-                chunki <- chunki + 1
-            pos <- pos + (min current.Length remaining)
+    member this.Advance count =
+        if this.FreeBytes >= count then
+            let current = chunks.[chunki]
+            let mutable remaining = count
+            while remaining > 0 do
+                let moved = min current.Length remaining
+                if pos >= current.Length then
+                    pos <- 0
+                    chunki <- chunki + 1
+                pos <- pos + moved
+                remaining <- remaining - moved
+            read <- read + uint64 count
+            true
+        else false
 
     member this.ReadU1() =
         let value = chunks.[chunki].[pos]
@@ -27,8 +33,9 @@ type internal ChunkReader (chunks: byte[][]) =
         value
 
     member this.ReadBytes(count, buffer: byref<Span<byte>>) =
-        if this.FreeBytes = count then
+        if this.FreeBytes >= count then
             buffer <- Span(chunks.[chunki], pos, count)
+            this.Advance count
             true
         elif this.FreeBytes = 0 then false
         else

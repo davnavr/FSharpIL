@@ -1,7 +1,24 @@
 ﻿namespace FSharpIL.Reading
 
-[<Struct>]
-type ReadState =
+open System.Runtime.CompilerServices
+
+[<IsReadOnly; Struct>]
+type MetadataReadState =
+    | FindCliHeader
+    | MoveToCliHeader
+    /// Indicates that the CLI header is being read (II.25.3.3).
+    | ReadCliHeader
+    | MoveToMetadataRoot
+
+    member this.Description =
+        match this with
+        | FindCliHeader -> "searching for CLI header"
+        | MoveToCliHeader -> "moving to CLI header"
+        | ReadCliHeader -> "reading CLI header"
+        | MoveToMetadataRoot -> "moving to CLI metadata root"
+
+[<IsReadOnly; Struct>]
+type FileReadState =
     | ReadPEMagic
     | MoveToLfanew
     /// <summary>Indicates that the <c>lfanew</c> field pointing to the PE signature is being read (II.25.2.1).</summary>
@@ -16,9 +33,6 @@ type ReadState =
     | ReadSectionHeaders
     | MoveToTextSectionData
     | ReadTextSectionData
-    | MoveToCliHeader
-    /// Indicates that the CLI header is being read (II.25.3.3).
-    | ReadCliHeader
 
     member this.Description =
         match this with
@@ -34,5 +48,13 @@ type ReadState =
         | ReadSectionHeaders -> "reading section headers"
         | MoveToTextSectionData -> "moving to text section data"
         | ReadTextSectionData -> "reading text section data"
-        | MoveToCliHeader -> "moving to CLI header"
-        | ReadCliHeader -> "reading CLI header"
+
+[<RequireQualifiedAccess>]
+type ReadState =
+    | File of FileReadState
+    | Metadata of MetadataReadState
+
+    member this.Description =
+        match this with
+        | File state -> state.Description
+        | Metadata state -> state.Description
