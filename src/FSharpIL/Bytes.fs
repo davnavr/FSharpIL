@@ -33,7 +33,15 @@ let readU4 offset (bytes: Span<byte>) =
     ||| (uint32 bytes.[offset + 1] <<< 8)
     ||| uint32 bytes.[offset] // LSB
 
-let readU8 offset (bytes: Span<byte>) = invalidOp "TODO: Read U8"
+let readU8 offset (bytes: Span<byte>) =
+    (uint64 bytes.[offset + 7] <<< 56) // MSB
+    ||| (uint64 bytes.[offset + 6] <<< 48)
+    ||| (uint64 bytes.[offset + 5] <<< 40)
+    ||| (uint64 bytes.[offset + 4] <<< 32)
+    ||| (uint64 bytes.[offset + 3] <<< 24)
+    ||| (uint64 bytes.[offset + 2] <<< 16)
+    ||| (uint64 bytes.[offset + 1] <<< 8)
+    ||| uint64 bytes.[offset] // LSB
 
 let inline (|ReadOnlySpan|) (bytes: byte[]) = System.ReadOnlySpan<byte> bytes
 
