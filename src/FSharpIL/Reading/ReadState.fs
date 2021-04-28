@@ -5,17 +5,21 @@ open System.Runtime.CompilerServices
 [<IsReadOnly; Struct>]
 type MetadataReadState =
     | FindCliHeader
-    | MoveToCliHeader
     /// Indicates that the CLI header is being read (II.25.3.3).
     | ReadCliHeader
-    | MoveToMetadataRoot
+    | FindMetadataRoot
+    | ReadMetadataSignature
+    | ReadMetadataRoot
+    | ReadStreamHeaders
 
     member this.Description =
         match this with
         | FindCliHeader -> "searching for CLI header"
-        | MoveToCliHeader -> "moving to CLI header"
         | ReadCliHeader -> "reading CLI header"
-        | MoveToMetadataRoot -> "moving to CLI metadata root"
+        | FindMetadataRoot -> "searching for CLI metadata root"
+        | ReadMetadataSignature -> "reading CLI metadata root signature"
+        | ReadMetadataRoot -> "reading CLI metadata root"
+        | ReadStreamHeaders -> "reading metadata stream headers"
 
 [<IsReadOnly; Struct>]
 type FileReadState =

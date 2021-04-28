@@ -7,7 +7,7 @@ open FSharpIL
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type MetadataVersion = // TODO: Make this a record.
-    private
+    internal
     | MetadataVersion of byte * byte[]
 
     override this.ToString() =

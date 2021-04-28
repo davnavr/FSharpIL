@@ -7,25 +7,17 @@ open System.IO
 open System.Runtime.CompilerServices
 
 open Microsoft.FSharp.Core.Operators.Checked
-open Microsoft.FSharp.NativeInterop
 
+open FSharpIL
+open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 open FSharpIL.Reading
 
-#nowarn "9"
-
 [<IsReadOnly; Struct>]
-type ReadResult<'State, 'T when 'State : struct> =
+type ReadResult<'State, 'T, 'Error when 'State : struct> =
     | Success of 'T * 'State
-    | Failure of ReadError
+    | Failure of 'Error
     | End
-
-/// <summary>Creates a <see cref="System.Span`1"/> from a region of memory allocated on the stack.</summary>
-[<RequiresExplicitTypeArguments>]
-let inline allocspan<'T when 'T : unmanaged> length = Span<'T>(NativePtr.toVoidPtr(NativePtr.stackalloc<'T> length), length)
-
-[<RequiresExplicitTypeArguments>]
-let inline arrspan<'T> length = Span<'T>(Array.zeroCreate<'T> length)
 
 [<Sealed>]
 type Reader (src: Stream) =
@@ -44,7 +36,7 @@ type Reader (src: Stream) =
         read
 
     member _.SkipBytes(count: uint64) =
-        let buf = allocspan<byte> 1
+        let buf = Span.stackalloc<byte> 1
         let mutable cont, skipped = true, 0UL
         while cont && skipped < count do
             match src.Read buf with
@@ -64,7 +56,7 @@ type Reader (src: Stream) =
 
     /// Reads an unsigned, little-endian, 4-byte integer.
     member inline this.ReadU4(value: outref<uint32>) =
-        let bytes = allocspan<byte> 4
+        let bytes = Span.stackalloc<byte> 4
         match this.ReadBytes bytes with
         | 4 ->
             value <- Bytes.readU4 0 bytes
@@ -80,10 +72,13 @@ type MutableFile =
       [<DefaultValue>] mutable DataDirectories: RvaAndSize[]
       [<DefaultValue>] mutable SectionHeaders: SectionHeader<SectionLocation>[]
       [<DefaultValue>] mutable TextSection: int32
-      [<DefaultValue>] mutable TextSectionData: byte[][]
+      [<DefaultValue>] mutable TextSectionData: ChunkReader
       /// File offset from start of section to the CLI header (II.25.3.3).
       [<DefaultValue>] mutable CliHeaderOffset: uint64
-      [<DefaultValue>] mutable CliHeader: ParsedCliHeader }
+      [<DefaultValue>] mutable CliHeader: ParsedCliHeader
+      /// File offset from start of section to the CLI metadata root (II.24.2.1).
+      [<DefaultValue>] mutable MetadataRootOffset: uint64
+      [<DefaultValue>] mutable MetadataRoot: ParsedMetadataRoot }
 
     /// <summary>File offset to the first byte of the <c>.text</c> section.</summary>
     member this.TextSectionOffset = uint64 this.SectionHeaders.[this.TextSection].Data.RawDataPointer
@@ -92,7 +87,7 @@ let inline rvaAndSize i buffer = { Rva = Bytes.readU4 i buffer; Size = Bytes.rea
 
 // TODO: Fix, offset will always point after the end of the structure.
 let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
-    let buffer = allocspan<byte> Size.CoffHeader
+    let buffer = Span.stackalloc<byte> Size.CoffHeader
     let offset = src.Offset
     if src.ReadBytes buffer = buffer.Length then
         headers <-
@@ -107,7 +102,7 @@ let readCoffHeader (src: Reader) (headers: byref<_>) reader ustate =
     else Failure UnexpectedEndOfFile
 
 let readStandardFields (src: Reader) (fields: byref<_>) reader ustate =
-    let buffer = allocspan<byte> 28
+    let buffer = Span.stackalloc<byte> 28
     let offset = src.Offset
     if src.ReadBytes(buffer.Slice(0, 2)) = 2 then
         let magic = LanguagePrimitives.EnumOfValue(Bytes.readU2 0 buffer)
@@ -136,7 +131,7 @@ let readNTSpecificFields (src: Reader) magic (fields: byref<_>) reader ustate =
         match magic with
         | PEImageKind.PE32Plus -> 88
         | _ -> 68
-    let buffer = arrspan<byte> length
+    let buffer = Span.heapalloc<byte> length
     let offset = src.Offset
     if src.ReadBytes buffer = length then
         let numdirs = Bytes.readU4 64 buffer
@@ -172,7 +167,7 @@ let readNTSpecificFields (src: Reader) magic (fields: byref<_>) reader ustate =
 
 let readDataDirectories (src: Reader) (count: uint32) (directories: byref<_>) reader ustate =
     let count' = int32 count
-    let buffer = arrspan<byte>(count' * 8)
+    let buffer = Span.heapalloc<byte>(count' * 8)
     let offset = src.Offset
     if src.ReadBytes buffer = buffer.Length then
         directories <- Array.zeroCreate count'
@@ -184,7 +179,7 @@ let readDataDirectories (src: Reader) (count: uint32) (directories: byref<_>) re
 
 let readSectionHeaders (src: Reader) (count: uint16) (file: MutableFile) reader ustate =
     let count' = int32 count
-    let buffer = arrspan<byte>(count' * Size.SectionHeader)
+    let buffer = Span.heapalloc<byte>(count' * Size.SectionHeader)
     let offset = src.Offset
     if src.ReadBytes buffer = buffer.Length then
         file.SectionHeaders <- Array.zeroCreate<_> count'
@@ -210,8 +205,13 @@ let readSectionHeaders (src: Reader) (count: uint16) (file: MutableFile) reader 
 let readTextSection (src: Reader) (file: MutableFile) =
     let falignment = snd file.NTSpecificFields.Alignment
     let vsize = file.SectionHeaders.[file.TextSection].Data.VirtualSize
-    let len = vsize / falignment
-    file.TextSectionData <- Array.zeroCreate(if falignment * len < vsize then int32 len + 1 else int32 len)
+    let len =
+        let length = vsize / falignment
+        if falignment * length < vsize
+        then int32 length + 1
+        else int32 length
+    let data = Array.zeroCreate len
+    file.TextSectionData <- ChunkReader(int32 falignment, data)
 
     let rec inner i size =
         match size with
@@ -220,7 +220,7 @@ let readTextSection (src: Reader) (file: MutableFile) =
             let len = min falignment size
             let len' = int32 len
             let chunk = Array.zeroCreate len'
-            file.TextSectionData.[i] <- chunk
+            data.[i] <- chunk
             if src.ReadBytes(Span chunk) = len'
             then inner (i + 1) (size - len)
             else Failure UnexpectedEndOfFile
@@ -234,7 +234,7 @@ let readPE (src: Reader) file reader ustate rstate =
         else Failure UnexpectedEndOfFile
     match rstate with
     | ReadPEMagic ->
-        let magic = allocspan<byte> 2
+        let magic = Span.stackalloc<byte> 2
         match src.ReadBytes magic with
         | 0 -> Failure UnexpectedEndOfFile
         | 2 when Magic.matches Magic.MZ magic -> Success(ustate, MoveToLfanew)
@@ -247,7 +247,7 @@ let readPE (src: Reader) file reader ustate rstate =
         else Failure UnexpectedEndOfFile
     | MoveToPESignature -> moveto (uint64 file.Lfanew) ReadPESignature
     | ReadPESignature ->
-        let signature = allocspan<byte> 4
+        let signature = Span.stackalloc<byte> 4
         match src.ReadBytes signature with
         | 0 -> Failure UnexpectedEndOfFile
         | 4 when Magic.matches Magic.PESignature signature -> Success(ustate, ReadCoffHeader)
@@ -268,43 +268,88 @@ let readPE (src: Reader) file reader ustate rstate =
     | MoveToTextSectionData -> moveto (uint64 file.SectionHeaders.[file.TextSection].Data.RawDataPointer) ReadTextSectionData
     | ReadTextSectionData -> readTextSection src file
 
+let findTextOffset (text: inref<SectionLocation>) { Rva = rva } (offset: byref<uint64>) rstate ustate =
+    if text.ContainsRva rva then
+        offset <- uint64 rva - uint64 text.VirtualAddress
+        Success(ustate, rstate)
+    else Failure(uint64 rva, RvaNotInTextSection rva)
+
 let readCliHeader (chunk: ChunkReader) (file: MutableFile) reader ustate =
-    let offset = file.TextSectionOffset + chunk.BytesRead
-    let mutable size = Unchecked.defaultof<uint32>
-    let mutable fields = Span()
-    if chunk.ReadU4 &size && chunk.ReadBytes(int32 size, &fields) then
-        // TODO: Stop reading early depending on size of header.
-        // TODO: Get MetaData RVA.
-        file.CliHeader <-
-            { Size = size
-              MajorRuntimeVersion = Bytes.readU2 0 fields
-              MinorRuntimeVersion = Bytes.readU2 2 fields
-              MetaData = rvaAndSize 4 fields
-              Flags = LanguagePrimitives.EnumOfValue(Bytes.readU4 12 fields)
-              EntryPointToken = Bytes.readU4 16 fields
-              Resources = rvaAndSize 20 fields
-              StrongNameSignature = Bytes.readU8 28 fields
-              CodeManagerTable = Bytes.readU8 36 fields
-              VTableFixups = rvaAndSize 44 fields
-              ExportAddressTableJumps = Bytes.readU8 52 fields
-              ManagedNativeHeader = Bytes.readU8 60 fields }
-        Success(MetadataReader.readCliHeader reader file.CliHeader offset ustate, MoveToMetadataRoot)
-    else Failure UnexpectedEndOfFile
+    match chunk.Parse<ByteParser.U4, _> file.CliHeaderOffset with
+    | ValueSome size when size < Size.CliHeader -> Failure(file.CliHeaderOffset, CliHeaderTooSmall size)
+    | ValueSome size ->
+        let fields = Span.heapalloc<byte>(int32 size)
+        let offset = file.CliHeaderOffset + 4UL
+        if chunk.ReadBytes(offset, fields) then
+            file.CliHeader <-
+                { Size = size
+                  MajorRuntimeVersion = Bytes.readU2 0 fields
+                  MinorRuntimeVersion = Bytes.readU2 2 fields
+                  MetaData = rvaAndSize 4 fields
+                  Flags = LanguagePrimitives.EnumOfValue(Bytes.readU4 12 fields)
+                  EntryPointToken = Bytes.readU4 16 fields
+                  Resources = rvaAndSize 20 fields
+                  StrongNameSignature = Bytes.readU8 28 fields
+                  CodeManagerTable = Bytes.readU8 36 fields
+                  VTableFixups = rvaAndSize 44 fields
+                  ExportAddressTableJumps = Bytes.readU8 52 fields
+                  ManagedNativeHeader = Bytes.readU8 60 fields }
+            Success(MetadataReader.readCliHeader reader file.CliHeader file.CliHeaderOffset ustate, FindMetadataRoot)
+        else Failure(offset, UnexpectedEndOfFile)
+    | _ -> Failure(file.CliHeaderOffset, UnexpectedEndOfFile)
+
+let readMetadataVersion (version: byte[]) =
+    let mutable cont, i = true, version.Length - 1
+    while cont && i >= 0 do
+        if version.[i] > 0uy
+        then cont <- false
+        else i <- i - 1
+    if cont
+    then ValueNone
+    else ValueSome(MetadataVersion(uint8 i + 1uy, version.[..i]))
+
+let readMetadataRoot (chunk: ChunkReader) (file: MutableFile) reader ustate =
+    // First 12 bytes are for MajorVersion, MinorVersion, Reserved and Length
+    // Last 4 bytes are for Flags and Streams
+    let buffer = Span.stackalloc<byte> 16
+    let offset = file.MetadataRootOffset + 4UL
+    if chunk.ReadBytes(offset, buffer.Slice(0, 12)) then
+        let length = Bytes.readU4 8 buffer
+        let version = Array.zeroCreate(int32 length)
+        let offset' = offset + 12UL
+        if chunk.ReadBytes(offset', Span version) then
+            match readMetadataVersion version with
+            | ValueSome version' when chunk.ReadBytes(offset', buffer.Slice 12) ->
+                file.MetadataRoot <-
+                    { MajorVersion = Bytes.readU2 0 buffer
+                      MinorVersion = Bytes.readU2 2 buffer
+                      Reserved = Bytes.readU4 4 buffer
+                      Version = version'
+                      Flags = Bytes.readU2 8 buffer
+                      Streams = Bytes.readU2 10 buffer }
+                Success(MetadataReader.readMetadataRoot reader file.MetadataRoot 0UL ustate, ReadStreamHeaders)
+            | ValueSome _ -> Failure(offset' + uint64 length, UnexpectedEndOfFile)
+            | ValueNone -> Failure(offset', MetadataVersionHasNoNullTerminator version)
+        else Failure(offset', UnexpectedEndOfFile)
+    else Failure(offset, UnexpectedEndOfFile)
 
 let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
     let text = &file.SectionHeaders.[file.TextSection].Data
     match rstate with
     | FindCliHeader ->
-        let { Rva = rva } = file.DataDirectories.[Magic.CliHeaderIndex]
-        if text.ContainsRva rva then
-            file.CliHeaderOffset <- uint64 rva - uint64 text.VirtualAddress
-            Success(ustate, MoveToCliHeader)
-        else Failure(CliHeaderNotInTextSection rva)
-    | MoveToCliHeader ->
-        if chunk.Advance(int32 file.CliHeaderOffset) then
-            Success(ustate, ReadCliHeader)
-        else Failure UnexpectedEndOfFile
+        findTextOffset &text file.DataDirectories.[Magic.CliHeaderIndex] &file.CliHeaderOffset ReadCliHeader ustate
     | ReadCliHeader -> readCliHeader chunk file reader ustate
+    | FindMetadataRoot ->
+        findTextOffset &text file.CliHeader.MetaData &file.MetadataRootOffset ReadMetadataSignature ustate
+    | ReadMetadataSignature ->
+        let magic = Span.stackalloc<byte> 4
+        if chunk.ReadBytes(file.MetadataRootOffset, magic) then
+            if Magic.matches Magic.CliSignature magic
+            then Success(ustate, ReadMetadataRoot)
+            else Failure(file.MetadataRootOffset, InvalidMagic(Magic.CliSignature, Bytes.ofSpan 4 magic))
+        else Failure(file.MetadataRootOffset, UnexpectedEndOfFile)
+    | ReadMetadataRoot -> readMetadataRoot chunk file reader ustate
+    | ReadStreamHeaders -> invalidOp "TODO: Read stream headers"
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
 /// <exception cref="System.ArgumentException">The <paramref name="stream"/> does not support reading.</exception>
@@ -314,7 +359,7 @@ let fromStream stream state reader =
     let rec metadata chunk ustate rstate =
         match readMetadata chunk file reader ustate rstate with
         | Success(ustate', rstate') -> metadata chunk ustate' rstate'
-        | Failure err -> reader.HandleError (ReadState.Metadata rstate) err (file.TextSectionOffset + chunk.BytesRead) ustate
+        | Failure(offset, err) -> reader.HandleError (ReadState.Metadata rstate) err (file.TextSectionOffset + offset) ustate
         | End -> ustate
     let rec pe ustate rstate =
         match readPE src file reader ustate rstate with
@@ -325,5 +370,5 @@ let fromStream stream state reader =
             match reader with
             | { ReadCliHeader = ValueNone
                 ReadMetadataRoot = ValueNone } -> ustate
-            | _ -> metadata (ChunkReader file.TextSectionData) ustate FindCliHeader
+            | _ -> metadata file.TextSectionData ustate FindCliHeader
     pe state ReadPEMagic

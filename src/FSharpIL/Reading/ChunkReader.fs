@@ -5,54 +5,55 @@ open System
 open FSharpIL
 
 [<Sealed>]
-type internal ChunkReader (chunks: byte[][]) =
-    let mutable chunki, pos, read = 0, 0, 0UL
+type internal ChunkReader (csize: int32, chunks: byte[][]) =
+    member _.GetIndex(offset: uint64) =
+        let csize' = uint64 csize
+        let chunki = offset / csize'
+        let i = int32(offset - chunki * csize')
+        struct(int32 chunki, i)
 
-    member _.BytesRead = read
+    member this.ValidOffset offset =
+        let struct(chunki, i) = this.GetIndex offset
+        chunki < chunks.Length && i < chunks.[chunki].Length
 
-    member private _.FreeBytes = chunks.[chunki].Length - pos
+    member inline this.HasFreeBytes(offset: uint64, length) = this.ValidOffset(offset + length)
 
-    member this.Advance count =
-        if this.FreeBytes >= count then
-            let current = chunks.[chunki]
-            let mutable remaining = count
-            while remaining > 0 do
-                let moved = min current.Length remaining
-                if pos >= current.Length then
-                    pos <- 0
-                    chunki <- chunki + 1
-                pos <- pos + moved
-                remaining <- remaining - moved
-            read <- read + uint64 count
+    member this.ReadU1 offset =
+        let struct(chunki, i) = this.GetIndex offset
+        chunks.[chunki].[i]
+
+    member this.ReadBytes(offset, buffer: Span<byte>) =
+        if buffer.IsEmpty
+        then true
+        elif this.HasFreeBytes(offset, uint64 buffer.Length) then
+            let struct(chunki, i) = this.GetIndex offset
+            let chunk = chunks.[chunki]
+            if i + buffer.Length <= chunk.Length then
+                // Copy without having to loop
+                Span(chunk, i, buffer.Length).CopyTo buffer
+            else
+                for bufferi = 0 to buffer.Length - 1 do
+                    buffer.[bufferi] <- this.ReadU1(offset + uint64 bufferi)
             true
         else false
 
-    member this.ReadU1() =
-        let value = chunks.[chunki].[pos]
-        this.Advance 1
-        value
+    member this.Parse<'Parser, 'T when 'Parser : struct and 'Parser :> IByteParser<'T>> offset =
+        let parser = Unchecked.defaultof<'Parser>
+        let buffer = Span.stackalloc<byte> parser.Length
+        if this.ReadBytes(offset, buffer)
+        then ValueSome(parser.Parse buffer)
+        else ValueNone
 
-    member this.ReadBytes(count, buffer: byref<Span<byte>>) =
-        if this.FreeBytes >= count then
-            buffer <- Span(chunks.[chunki], pos, count)
-            this.Advance count
-            true
-        elif this.FreeBytes = 0 then false
-        else
-            let buffer' = Array.zeroCreate count
-            for i = 0 to count - 1 do
-                buffer'.[i] <- this.ReadU1()
-            buffer <- Span buffer'
-            true
+    [<Obsolete>]
+    member this.ReadU2 offset =
+        let buffer = Span.stackalloc<byte> 2
+        if this.ReadBytes(offset, buffer)
+        then ValueSome(Bytes.readU2 0 buffer)
+        else ValueNone
 
-    member this.ReadU2(value: byref<uint16>) =
-        let mutable buffer = Span()
-        let parsed = this.ReadBytes(2, &buffer)
-        if parsed then value <- Bytes.readU2 0 buffer
-        parsed
-
-    member this.ReadU4(value: byref<uint32>) =
-        let mutable buffer = Span()
-        let parsed = this.ReadBytes(4, &buffer)
-        if parsed then value <- Bytes.readU4 0 buffer
-        parsed
+    [<Obsolete>]
+    member this.ReadU4 offset =
+        let buffer = Span.stackalloc<byte> 4
+        if this.ReadBytes(offset, buffer)
+        then ValueSome(Bytes.readU4 0 buffer)
+        else ValueNone

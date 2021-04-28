@@ -13,6 +13,7 @@
     <Compile Include="InternalException.fs" />
     <Compile Include="Magic.fs" />
     <Compile Include="Round.fs" />
+    <Compile Include="Span.fs" />
     <Compile Include="Writing\ChunkWriter.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\Index.fs" />
@@ -105,13 +106,14 @@
     <Compile Include="PortableExecutable\SectionTable.fs" />
     <Compile Include="PortableExecutable\Fields.fs" />
     <Compile Include="PortableExecutable\PEFile.fs" />
-    <Compile Include="WriteCli.fs" />
     <Compile Include="Size.fs" />
+    <Compile Include="WriteCli.fs" />
     <Compile Include="WritePE.fsi" />
     <Compile Include="WritePE.fs" />
     <Compile Include="Reading\ReadState.fs" />
     <Compile Include="Reading\ReadError.fs" />
     <Compile Include="Reading\MetadataReader.fs" />
+    <Compile Include="Reading\ByteParser.fs" />
     <Compile Include="Reading\ChunkReader.fs" />
     <Compile Include="ReadCli.fsi" />
     <Compile Include="ReadCli.fs" />

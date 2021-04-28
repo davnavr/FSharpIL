@@ -39,7 +39,7 @@ type ParsedMetadataRoot =
     { MajorVersion: uint16
       MinorVersion: uint16
       Reserved: uint32
-      Version: ImmutableArray<byte>
+      Version: MetadataVersion
       Flags: uint16
       Streams: uint16 }
 
@@ -72,6 +72,7 @@ module MetadataReader =
     let readDataDirectories { ReadDataDirectories = reader } directories = read reader directories
     let readSectionHeaders { ReadSectionHeaders = reader } headers = read reader headers
     let readCliHeader { ReadCliHeader = reader } header = read reader header
+    let readMetadataRoot { ReadMetadataRoot = reader } root = read reader root
 
     let inline throwOnError (state: ReadState) error (offset: uint64) (_: 'State): 'State =
         ReadException(state, error, offset) |> raise

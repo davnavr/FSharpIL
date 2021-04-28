@@ -11,16 +11,6 @@ open FSharpIL.Metadata
 open FSharpIL.Metadata.Heaps
 open FSharpIL.Writing
 
-[<RequireQualifiedAccess>]
-module Size =
-    /// The length of the CLI header, in bytes.
-    [<Literal>]
-    let CliHeader = 0x48u
-
-    /// The size of a fat method body header, as a number of 4-byte integers (II.25.4.3).
-    [<Literal>]
-    let FatFormat = 3us
-
 [<IsReadOnly; IsByRefLike; Struct>]
 type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * uint32) =
     member _.LargeIndices = count > (65535 <<< n)
