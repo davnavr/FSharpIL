@@ -168,7 +168,6 @@ let cliHeader (header: ParsedCliHeader) offset wr =
 
 let metadataRoot (root: ParsedMetadataRoot) offset wr =
     wr.WriteHeader offset "CLI Metadata Root"
-    // Signature
     writeInt "MajorVersion" root.MajorVersion wr
     writeInt "MinorVersion" root.MinorVersion wr
     writeInt "Reserved" root.Reserved wr

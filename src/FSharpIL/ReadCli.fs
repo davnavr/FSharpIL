@@ -294,7 +294,9 @@ let readCliHeader (chunk: ChunkReader) (file: MutableFile) reader ustate =
                   VTableFixups = rvaAndSize 44 fields
                   ExportAddressTableJumps = Bytes.readU8 52 fields
                   ManagedNativeHeader = Bytes.readU8 60 fields }
-            Success(MetadataReader.readCliHeader reader file.CliHeader file.CliHeaderOffset ustate, FindMetadataRoot)
+            let ustate' =
+                MetadataReader.readCliHeader reader file.CliHeader (file.TextSectionOffset + file.CliHeaderOffset) ustate
+            Success(ustate', FindMetadataRoot)
         else Failure(offset, UnexpectedEndOfFile)
     | _ -> Failure(file.CliHeaderOffset, UnexpectedEndOfFile)
 
@@ -327,7 +329,8 @@ let readMetadataRoot (chunk: ChunkReader) (file: MutableFile) reader ustate =
                       Version = version'
                       Flags = Bytes.readU2 8 buffer
                       Streams = Bytes.readU2 10 buffer }
-                Success(MetadataReader.readMetadataRoot reader file.MetadataRoot 0UL ustate, ReadStreamHeaders)
+                let ustate' = MetadataReader.readMetadataRoot reader file.MetadataRoot (file.TextSectionOffset + offset) ustate
+                Success(ustate', ReadStreamHeaders)
             | ValueSome _ -> Failure(offset' + uint64 length, UnexpectedEndOfFile)
             | ValueNone -> Failure(offset', MetadataVersionHasNoNullTerminator version)
         else Failure(offset', UnexpectedEndOfFile)
