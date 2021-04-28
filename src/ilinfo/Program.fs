@@ -16,6 +16,7 @@ type Argument =
     | Data_Directories
     | Section_Headers
     | Cli_Header
+    | Metadata_Root
     | [<ExactlyOnce>] File of string
     | [<Unique>] Launch_Debugger
     | [<Unique>] Output of Output.Kind
@@ -29,6 +30,7 @@ type Argument =
             | Section_Headers -> "includes the values of the section headers' fields in the output."
             | Data_Directories -> "includes the RVAs and sizes of each data directory in the output."
             | Cli_Header -> "includes the contents of the CLI header in the output."
+            | Metadata_Root -> "includes the contents of the CLI metadata root in the output."
             | File _ -> "specifies the file containing the metadata to read."
             | Launch_Debugger -> "launches the debugger."
             | Output _ -> "specifies how the assembly information is outputted."
@@ -68,6 +70,7 @@ let main args =
         | Section_Headers -> args'.AddHeader IncludedHeaders.SectionHeaders
         | Data_Directories -> args'.AddHeader IncludedHeaders.DataDirectories
         | Cli_Header -> args'.AddHeader IncludedHeaders.CliHeader
+        | Metadata_Root -> args'.AddHeader IncludedHeaders.MetadataRoot
         | File file -> args'.File <- file
         | Launch_Debugger -> args'.LaunchDebugger <- true
         | Output output -> args'.Output <- output

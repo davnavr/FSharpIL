@@ -3,6 +3,7 @@ module ILInfo.Output
 
 open System
 
+open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 open FSharpIL.Reading
 
@@ -165,6 +166,18 @@ let cliHeader (header: ParsedCliHeader) offset wr =
     writeInt "ManagedNativeHeader" header.ManagedNativeHeader wr
     wr
 
+let metadataRoot (root: ParsedMetadataRoot) offset wr =
+    wr.WriteHeader offset "CLI Metadata Root"
+    // Signature
+    writeInt "MajorVersion" root.MajorVersion wr
+    writeInt "MinorVersion" root.MinorVersion wr
+    writeInt "Reserved" root.Reserved wr
+    writeInt "Length" root.Version.Length wr
+    writeString "Version" (MetadataVersion.toArray root.Version) wr
+    writeInt "Flags" root.Flags wr
+    writeInt "Streams" root.Streams wr
+    wr
+
 let write hflags =
     { MetadataReader.empty with
         ReadCoffHeader = header hflags IncludedHeaders.CoffHeader coffHeader
@@ -173,4 +186,5 @@ let write hflags =
         ReadDataDirectories = header hflags IncludedHeaders.DataDirectories dataDirectories
         ReadSectionHeaders = header hflags IncludedHeaders.SectionHeaders sectionHeaders
         ReadCliHeader = header hflags IncludedHeaders.CliHeader cliHeader
+        ReadMetadataRoot = header hflags IncludedHeaders.MetadataRoot metadataRoot
         HandleError = fun state error offset wr -> wr.WriteError state error offset (); wr }

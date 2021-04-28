@@ -110,7 +110,7 @@ let dataDirectories info (writer: ChunkWriter) =
     | Some _ ->
         info.CliHeaderRva <- writer.CreateWriter()
         writer.SkipBytes 4u
-        writer.WriteU4 WriteCli.Size.CliHeader
+        writer.WriteU4 Size.CliHeader
     | None -> writer.WriteU8 0UL
 
     writer.WriteU8 0UL // Reserved

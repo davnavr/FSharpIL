@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Reading
 
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
@@ -10,7 +11,7 @@ type Reader<'Arg, 'State> = ('Arg -> uint64 -> 'State -> 'State) voption
 
 type ErrorHandler<'State> = ReadState -> ReadError -> uint64 -> 'State -> 'State
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<IsReadOnly; Struct>]
 type RvaAndSize = { Rva: uint32; Size: uint32 }
 
 type ParsedCoffHeader = CoffHeader<uint16, uint16>
@@ -42,6 +43,15 @@ type ParsedMetadataRoot =
       Version: MetadataVersion
       Flags: uint16
       Streams: uint16 }
+
+/// (II.24.2.2)
+[<IsReadOnly; Struct>]
+type ParsedStreamHeader =
+    { /// Offset to the start of these stream from the beginning of the CLI metadata root.
+      Offset: uint32
+      /// The size of the stream in bytes, rounded up to a multiple of four.
+      Size: uint32
+      Name: string }
 
 // TODO: Rename this to something else.
 [<NoComparison; NoEquality>]
