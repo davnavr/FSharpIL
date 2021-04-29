@@ -14,6 +14,8 @@ type ReadError =
     | RvaNotInTextSection of rva: uint32
     | CliHeaderTooSmall of size: uint32
     | MetadataVersionHasNoNullTerminator of version: byte[]
+    | StreamHeaderOutOfBounds of index: int32
+    | StreamNameHasNoNullTerminator of name: byte[]
     | UnexpectedEndOfFile
 
     member this.Message =
@@ -33,6 +35,10 @@ type ReadError =
             sprintf
                 "the metadata version in the CLI metadata root \"%s\" does not end in a null terminator"
                 (Encoding.UTF8.GetString version)
+        | StreamHeaderOutOfBounds i ->
+            sprintf "the CLI metadata stream header at index %i does not fit within in the current section" i
+        | StreamNameHasNoNullTerminator name ->
+            sprintf "the stream name \"%s\" does not end in a null terminator" (Encoding.ASCII.GetString name)
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
 
 [<RequireQualifiedAccess>]

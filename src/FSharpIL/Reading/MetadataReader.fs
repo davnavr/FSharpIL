@@ -51,7 +51,7 @@ type ParsedStreamHeader =
       Offset: uint32
       /// The size of the stream in bytes, rounded up to a multiple of four.
       Size: uint32
-      Name: string }
+      Name: ImmutableArray<byte> }
 
 // TODO: Rename this to something else.
 [<NoComparison; NoEquality>]
@@ -64,6 +64,7 @@ type MetadataReader<'State> =
       ReadSectionHeaders: Reader<ParsedSectionHeaders, 'State>
       ReadCliHeader: Reader<ParsedCliHeader, 'State>
       ReadMetadataRoot: Reader<ParsedMetadataRoot, 'State>
+      ReadStreamHeader: (ParsedStreamHeader -> int32 -> uint64 -> 'State -> 'State) voption
       HandleError: ErrorHandler<'State> }
 
 [<RequireQualifiedAccess>]
@@ -83,6 +84,10 @@ module MetadataReader =
     let readSectionHeaders { ReadSectionHeaders = reader } headers = read reader headers
     let readCliHeader { ReadCliHeader = reader } header = read reader header
     let readMetadataRoot { ReadMetadataRoot = reader } root = read reader root
+    let readStreamHeader { ReadStreamHeader = reader } header i offset =
+        match reader with
+        | ValueSome reader' -> reader' header i offset
+        | ValueNone -> id
 
     let inline throwOnError (state: ReadState) error (offset: uint64) (_: 'State): 'State =
         ReadException(state, error, offset) |> raise
@@ -97,4 +102,5 @@ module MetadataReader =
           ReadSectionHeaders = ValueNone
           ReadCliHeader = ValueNone
           ReadMetadataRoot = ValueNone
+          ReadStreamHeader = ValueNone
           HandleError = throwOnError }

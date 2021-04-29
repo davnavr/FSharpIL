@@ -78,7 +78,9 @@ type MutableFile =
       [<DefaultValue>] mutable CliHeader: ParsedCliHeader
       /// File offset from start of section to the CLI metadata root (II.24.2.1).
       [<DefaultValue>] mutable MetadataRootOffset: uint64
-      [<DefaultValue>] mutable MetadataRoot: ParsedMetadataRoot }
+      [<DefaultValue>] mutable MetadataRoot: ParsedMetadataRoot
+      [<DefaultValue>] mutable StreamHeadersOffset: uint64
+      [<DefaultValue>] mutable StreamHeaders: ParsedStreamHeader[] }
 
     /// <summary>File offset to the first byte of the <c>.text</c> section.</summary>
     member this.TextSectionOffset = uint64 this.SectionHeaders.[this.TextSection].Data.RawDataPointer
@@ -274,6 +276,7 @@ let findTextOffset (text: inref<SectionLocation>) { Rva = rva } (offset: byref<u
         Success(ustate, rstate)
     else Failure(uint64 rva, RvaNotInTextSection rva)
 
+// TODO: For functions that read for ChunkReader, don't use UnexpectedEndOfFile, make new error called UnexpectedEndOfSection or something.
 let readCliHeader (chunk: ChunkReader) (file: MutableFile) reader ustate =
     match chunk.Parse<ByteParser.U4, _> file.CliHeaderOffset with
     | ValueSome size when size < Size.CliHeader -> Failure(file.CliHeaderOffset, CliHeaderTooSmall size)
@@ -310,6 +313,8 @@ let readMetadataVersion (version: byte[]) =
     then ValueNone
     else ValueSome(MetadataVersion(uint8 i + 1uy, version.[..i]))
 
+// TODO: Optimize reading of metadata root and streams, by using the Size part of the MetaData RVA and Size.
+
 let readMetadataRoot (chunk: ChunkReader) (file: MutableFile) reader ustate =
     // First 12 bytes are for MajorVersion, MinorVersion, Reserved and Length
     // Last 4 bytes are for Flags and Streams
@@ -321,20 +326,56 @@ let readMetadataRoot (chunk: ChunkReader) (file: MutableFile) reader ustate =
         let offset' = offset + 12UL
         if chunk.ReadBytes(offset', Span version) then
             match readMetadataVersion version with
-            | ValueSome version' when chunk.ReadBytes(offset', buffer.Slice 12) ->
+            | ValueSome version' when chunk.ReadBytes(offset' + uint64 length, buffer.Slice 12) ->
+                let scount = Bytes.readU2 14 buffer
+                file.StreamHeadersOffset <- offset' + uint64 length + 4UL
+                file.StreamHeaders <- Array.zeroCreate(int32 scount)
                 file.MetadataRoot <-
                     { MajorVersion = Bytes.readU2 0 buffer
                       MinorVersion = Bytes.readU2 2 buffer
                       Reserved = Bytes.readU4 4 buffer
                       Version = version'
-                      Flags = Bytes.readU2 8 buffer
-                      Streams = Bytes.readU2 10 buffer }
+                      Flags = Bytes.readU2 12 buffer
+                      Streams = scount }
                 let ustate' = MetadataReader.readMetadataRoot reader file.MetadataRoot (file.TextSectionOffset + offset) ustate
                 Success(ustate', ReadStreamHeaders)
             | ValueSome _ -> Failure(offset' + uint64 length, UnexpectedEndOfFile)
             | ValueNone -> Failure(offset', MetadataVersionHasNoNullTerminator version)
         else Failure(offset', UnexpectedEndOfFile)
     else Failure(offset, UnexpectedEndOfFile)
+
+let readStreamName (chunk: ChunkReader) offset = // TODO: Make this recursive instead.
+    let name = Span.stackalloc<byte> 32 // According to (II.24.2.2), the name of the stream is limited to 32 characters.
+    let mutable cont, i = true, 0
+    while cont && i < name.Length do
+        let name' = name.Slice(i, 4)
+        if chunk.ReadBytes(offset + uint64 i, name') then
+            i <- i + 4
+            if name'.[3] = 0uy then cont <- false
+        else cont <- false
+    if cont
+    then Error(name.ToArray())
+    else Ok(name.Slice(0, Round.upTo 4 i).ToArray())
+
+let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span<byte>) i offset reader ustate =
+    if chunk.ReadBytes(offset, fields) then
+        let offset' = offset + 8UL
+        match readStreamName chunk offset' with
+        | Ok name ->
+            let mutable name' = name
+            let header =
+                { Offset = Bytes.readU4 0 fields
+                  Size = Bytes.readU4 4 fields
+                  Name = Unsafe.As &name' }
+            let ustate' = MetadataReader.readStreamHeader reader header i (file.TextSectionOffset + offset) ustate
+            
+            file.StreamHeaders.[i] <- header
+            
+            if i >= file.StreamHeaders.Length - 1
+            then Success(ustate', FindMetadataTables)
+            else readStreamHeaders chunk file fields (i + 1) (offset' + uint64 name.Length) reader ustate'
+        | Error err -> Failure(offset, StreamNameHasNoNullTerminator err)
+    else Failure(offset, StreamHeaderOutOfBounds i)
 
 let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
     let text = &file.SectionHeaders.[file.TextSection].Data
@@ -352,7 +393,12 @@ let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
             else Failure(file.MetadataRootOffset, InvalidMagic(Magic.CliSignature, Bytes.ofSpan 4 magic))
         else Failure(file.MetadataRootOffset, UnexpectedEndOfFile)
     | ReadMetadataRoot -> readMetadataRoot chunk file reader ustate
-    | ReadStreamHeaders -> invalidOp "TODO: Read stream headers"
+    | ReadStreamHeaders ->
+        match file.MetadataRoot.Streams with
+        | 0us -> End
+        | _ ->
+            let fields = Span.stackalloc<byte> 8
+            readStreamHeaders chunk file fields 0 file.StreamHeadersOffset reader ustate
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
 /// <exception cref="System.ArgumentException">The <paramref name="stream"/> does not support reading.</exception>
@@ -372,6 +418,7 @@ let fromStream stream state reader =
             // NOTE: Don't read CLI metadata if provided reader doesn't provide a function to read any metadata.
             match reader with
             | { ReadCliHeader = ValueNone
-                ReadMetadataRoot = ValueNone } -> ustate
+                ReadMetadataRoot = ValueNone
+                ReadStreamHeader = ValueNone } -> ustate
             | _ -> metadata file.TextSectionData ustate FindCliHeader
     pe state ReadPEMagic

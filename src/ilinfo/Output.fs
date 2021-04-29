@@ -2,6 +2,7 @@
 module ILInfo.Output
 
 open System
+open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
@@ -138,7 +139,7 @@ let sectionHeaders (headers: ParsedSectionHeaders) offset wr =
     for i = 0 to headers.Length - 1 do
         let header = headers.[i]
         wr.WriteHeader (offset + (uint64 i * 40UL)) (sprintf "\"%O\" Section Header" header.SectionName)
-        writeString "Name" (SectionName.toArray header.SectionName) wr
+        writeString "Name" (SectionName.toArray header.SectionName) wr // TODO: Make sure length includes padding
         writeInt "VirtualSize" header.Data.VirtualSize wr
         writeInt "VirtualAddress" header.Data.VirtualAddress wr
         writeInt "SizeOfRawData" header.Data.RawDataSize wr
@@ -172,9 +173,17 @@ let metadataRoot (root: ParsedMetadataRoot) offset wr =
     writeInt "MinorVersion" root.MinorVersion wr
     writeInt "Reserved" root.Reserved wr
     writeInt "Length" root.Version.Length wr
-    writeString "Version" (MetadataVersion.toArray root.Version) wr
+    writeString "Version" (MetadataVersion.toArray root.Version) wr // TODO: Make sure length includes padding
     writeInt "Flags" root.Flags wr
     writeInt "Streams" root.Streams wr
+    wr
+
+let streamHeader (header: ParsedStreamHeader) (_: int32) offset wr =
+    let mutable name = header.Name
+    wr.WriteHeader offset "Stream Header" // TODO: Include stream name
+    writeInt "Offset" header.Offset wr
+    writeInt "Size" header.Size wr
+    writeString "Name" (Unsafe.As &name) wr
     wr
 
 let write hflags =
@@ -186,4 +195,8 @@ let write hflags =
         ReadSectionHeaders = header hflags IncludedHeaders.SectionHeaders sectionHeaders
         ReadCliHeader = header hflags IncludedHeaders.CliHeader cliHeader
         ReadMetadataRoot = header hflags IncludedHeaders.MetadataRoot metadataRoot
+        ReadStreamHeader =
+            if hflags.HasFlag IncludedHeaders.StreamHeaders
+            then ValueSome streamHeader
+            else ValueNone
         HandleError = fun state error offset wr -> wr.WriteError state error offset (); wr }

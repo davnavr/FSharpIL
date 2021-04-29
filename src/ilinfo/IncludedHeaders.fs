@@ -10,3 +10,4 @@ type IncludedHeaders =
     | SectionHeaders = 0x10uy
     | CliHeader = 0x20uy
     | MetadataRoot = 0x40uy
+    | StreamHeaders = 0x80uy

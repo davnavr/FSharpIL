@@ -17,6 +17,7 @@ type Argument =
     | Section_Headers
     | Cli_Header
     | Metadata_Root
+    | Stream_Headers
     | [<ExactlyOnce>] File of string
     | [<Unique>] Launch_Debugger
     | [<Unique>] Output of Output.Kind
@@ -31,6 +32,7 @@ type Argument =
             | Data_Directories -> "includes the RVAs and sizes of each data directory in the output."
             | Cli_Header -> "includes the contents of the CLI header in the output."
             | Metadata_Root -> "includes the contents of the CLI metadata root in the output."
+            | Stream_Headers -> "includes the contents of each stream header in the output."
             | File _ -> "specifies the file containing the metadata to read."
             | Launch_Debugger -> "launches the debugger."
             | Output _ -> "specifies how the assembly information is outputted."
@@ -71,6 +73,7 @@ let main args =
         | Data_Directories -> args'.AddHeader IncludedHeaders.DataDirectories
         | Cli_Header -> args'.AddHeader IncludedHeaders.CliHeader
         | Metadata_Root -> args'.AddHeader IncludedHeaders.MetadataRoot
+        | Stream_Headers -> args'.AddHeader IncludedHeaders.StreamHeaders
         | File file -> args'.File <- file
         | Launch_Debugger -> args'.LaunchDebugger <- true
         | Output output -> args'.Output <- output
