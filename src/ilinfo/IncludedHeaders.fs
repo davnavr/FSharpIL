@@ -2,12 +2,14 @@
 
 [<System.Flags>]
 type IncludedHeaders =
-    | NoHeaders = 0uy
-    | CoffHeader = 1uy
-    | StandardFields = 2uy
-    | NTSpecificFields = 4uy
-    | DataDirectories = 8uy
-    | SectionHeaders = 0x10uy
-    | CliHeader = 0x20uy
-    | MetadataRoot = 0x40uy
-    | StreamHeaders = 0x80uy
+    | None = 0us
+    | CoffHeader = 1us
+    | StandardFields = 2us
+    | NTSpecificFields = 4us
+    | DataDirectories = 8us
+    | SectionHeaders = 0x10us
+    | CliHeader = 0x20us
+    | MetadataRoot = 0x40us
+    | StreamHeaders = 0x80us
+    | MetadataTables = 0x100us
+    | All = 0xFFFFus

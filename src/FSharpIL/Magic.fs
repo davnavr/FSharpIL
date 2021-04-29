@@ -34,7 +34,13 @@ let PESignature = ImmutableArray.Create<byte> "PE\000\000"B
 let [<Literal>] CliHeaderIndex = 14
 
 /// The signature of the CLI metadata root.
-let CliSignature = ImmutableArray.CreateRange [| 0x42uy; 0x53uy; 0x4Auy; 0x42uy; |]
+let CliSignature = ImmutableArray.Create<byte> [| 0x42uy; 0x53uy; 0x4Auy; 0x42uy; |]
+
+let MetadataStream = "#~\000\000"B
+let StringStream =  "#Strings\000\000\000\000"B
+let UserStringStream = "#US\000"B
+let GuidStream = "#GUID\000\000\000"B
+let BlobStream = "#Blob\000\000\000"B
 
 let matches (expected: ImmutableArray<byte>) (actual: Span<byte>) =
     if expected.Length <> actual.Length then

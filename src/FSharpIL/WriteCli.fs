@@ -5,6 +5,7 @@ open FSharp.Core.Operators.Checked
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
@@ -147,10 +148,10 @@ let tables (info: CliInfo) (writer: ChunkWriter) =
     writer.WriteU1 0uy // MinorVersion
 
     do // HeapSizes
-        let mutable bits = 0uy
-        if info.StringsStream.IndexSize = 4 then bits <- bits ||| 1uy
-        if info.GuidStream.IndexSize = 4 then bits <- bits ||| 2uy
-        if info.BlobStream.IndexSize = 4 then bits <- bits ||| 4uy
+        let mutable bits = HeapSizes.None
+        if info.StringsStream.IndexSize = 4 then bits <- bits ||| HeapSizes.String
+        if info.GuidStream.IndexSize = 4 then bits <- bits ||| HeapSizes.Guid
+        if info.BlobStream.IndexSize = 4 then bits <- bits ||| HeapSizes.Blob
         writer.WriteU1 bits
 
     writer.WriteU1 1uy // Reserved
@@ -540,8 +541,8 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     let mutable offset = writer.Size
 
     // Stream headers
-    let inline streamHeader name =
-        if Array.length name % 4 <> 0 then
+    let inline streamHeader (name: byte[]) =
+        if name.Length % 4 <> 0 then
             invalidArg (nameof name) "The length of the stream header name must be a multiple of four."
         let header = writer.CreateWriter()
         let name' = header.CreateWriter()
@@ -552,16 +553,16 @@ let root (info: CliInfo) (writer: ChunkWriter) =
         offset <- offset + size
         header
 
-    let metadata = streamHeader "#~\000\000"B
-    let strings = streamHeader "#Strings\000\000\000\000"B
+    let metadata = streamHeader Magic.MetadataStream
+    let strings = streamHeader Magic.StringStream
     let us =
         if info.UserStringStream.StringCount > 0
-        then streamHeader "#US\000"B
+        then streamHeader Magic.UserStringStream
         else Unchecked.defaultof<ChunkWriter>
-    let guid = streamHeader "#GUID\000\000\000"B
+    let guid = streamHeader Magic.GuidStream
     let blob =
         if info.BlobStream.SignatureCount > 0
-        then streamHeader "#Blob\000\000\000"B
+        then streamHeader Magic.BlobStream
         else Unchecked.defaultof<ChunkWriter>
 
     let inline stream (header: ChunkWriter) content =

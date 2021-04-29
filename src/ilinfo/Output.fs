@@ -3,6 +3,7 @@ module ILInfo.Output
 
 open System
 open System.Runtime.CompilerServices
+open System.Text
 
 open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
@@ -49,7 +50,7 @@ let inline private writeEnum name (value: 'Enum when 'Enum :> Enum) { WriteField
 let inline private writeString name (value: byte[]) { WriteField = write } =
     Seq.map (sprintf "%02X") value
     |> String.concat " "
-    |> sprintf "\"%s\" [%s]" (System.Text.Encoding.ASCII.GetString value)
+    |> sprintf "\"%s\" [%s]" (Encoding.ASCII.GetString value)
     |> write name (uint32 value.Length)
 
 let inline private writeRvaAndSize name rvaAndSize wr =
@@ -173,17 +174,38 @@ let metadataRoot (root: ParsedMetadataRoot) offset wr =
     writeInt "MinorVersion" root.MinorVersion wr
     writeInt "Reserved" root.Reserved wr
     writeInt "Length" root.Version.Length wr
-    writeString "Version" (MetadataVersion.toArray root.Version) wr // TODO: Make sure length includes padding
+    writeString "Version" (MetadataVersion.toArray root.Version) wr // TODO: Make sure length includes padding // TODO: Should printed version string use UTF-8?
     writeInt "Flags" root.Flags wr
     writeInt "Streams" root.Streams wr
     wr
 
 let streamHeader (header: ParsedStreamHeader) (_: int32) offset wr =
     let mutable name = header.Name
-    wr.WriteHeader offset "Stream Header" // TODO: Include stream name
+
+    Encoding.ASCII.GetString(name.AsSpan())
+    |> sprintf "\"%s\" Stream Header"
+    |> wr.WriteHeader offset
+
     writeInt "Offset" header.Offset wr
     writeInt "Size" header.Size wr
     writeString "Name" (Unsafe.As &name) wr
+    wr
+
+let metadataTablesHeader (header: ParsedMetadataTablesHeader) offset wr =
+    wr.WriteHeader offset "Metadata Tables Header"
+    writeInt "Reserved" header.Reserved1 wr
+    writeInt "MajorVersion" header.MajorVersion wr
+    writeInt "MinorVersion" header.MinorVersion wr
+    writeEnum "HeapSizes" header.HeapSizes wr
+    writeInt "Reserved" header.Reserved2 wr
+    writeEnum "Valid" header.Valid wr
+    writeEnum "Sorted" header.Sorted wr
+    
+    Seq.map (sprintf "0x%08X") header.Rows
+    |> String.concat ", "
+    |> sprintf "[%s]"
+    |> wr.WriteField "Rows" (4u * uint32 header.Rows.Length)
+
     wr
 
 let write hflags =
@@ -199,4 +221,5 @@ let write hflags =
             if hflags.HasFlag IncludedHeaders.StreamHeaders
             then ValueSome streamHeader
             else ValueNone
+        ReadMetadataTablesHeader = header hflags IncludedHeaders.MetadataTables metadataTablesHeader
         HandleError = fun state error offset wr -> wr.WriteError state error offset (); wr }

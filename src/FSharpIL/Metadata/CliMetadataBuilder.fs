@@ -30,6 +30,19 @@ type CliHeaderFields =
           CodeManagerTable = 0UL
           VTableFixups = () }
 
+/// <summary>
+/// Specifies the sizes of indices into the <c>#Strings</c>, <c>#GUID</c>, and <c>#Blob</c> streams (II.24.2.6).
+/// </summary>
+[<Flags>]
+type HeapSizes =
+    | None = 0uy
+    /// <summary>Specifies that indices into the <c>#Strings</c> stream should be 4 bytes wide.</summary>
+    | String = 0x1uy
+    /// <summary>Specifies that indices into the <c>#GUID</c> stream should be 4 bytes wide.</summary>
+    | Guid = 0x2uy
+    /// <summary>Specifies that indices into the <c>#Blob</c> stream should be 4 bytes wide.</summary>
+    | Blob = 0x4uy
+
 /// (II.25.3.3.1)
 [<Flags>]
 type CorFlags =

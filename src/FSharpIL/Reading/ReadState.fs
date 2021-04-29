@@ -11,7 +11,8 @@ type MetadataReadState =
     | ReadMetadataSignature
     | ReadMetadataRoot
     | ReadStreamHeaders
-    | FindMetadataTables
+    | ReadMetadataTablesHeader
+    | ReadModuleTableRow
 
     member this.Description =
         match this with
@@ -21,7 +22,8 @@ type MetadataReadState =
         | ReadMetadataSignature -> "reading CLI metadata root signature"
         | ReadMetadataRoot -> "reading CLI metadata root"
         | ReadStreamHeaders -> "reading metadata stream headers"
-        | FindMetadataTables -> "searching for metadata tables"
+        | ReadMetadataTablesHeader -> "reading metadata tables header"
+        | ReadModuleTableRow -> "reading module table row"
 
 [<IsReadOnly; Struct>]
 type FileReadState =

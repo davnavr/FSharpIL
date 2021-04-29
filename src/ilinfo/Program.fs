@@ -10,6 +10,7 @@ open FSharpIL
 let [<Literal>] private description = "CLI metadata reader powered by FSharpIL (https://github.com/davnavr/FSharpIL)"
 
 type Argument =
+    | All
     | Coff_Header
     | Standard_Fields
     | NT_Specific_Fields
@@ -18,6 +19,7 @@ type Argument =
     | Cli_Header
     | Metadata_Root
     | Stream_Headers
+    | Metadata_Tables_Header
     | [<ExactlyOnce>] File of string
     | [<Unique>] Launch_Debugger
     | [<Unique>] Output of Output.Kind
@@ -25,6 +27,7 @@ type Argument =
     interface IArgParserTemplate with
         member this.Usage =
             match this with
+            | All -> "include all information that is read from the file in the output."
             | Coff_Header -> "include the values of the COFF header fields in the output."
             | Standard_Fields -> "includes the values of the optional header standard fields in the output."
             | NT_Specific_Fields -> "includes the values of the optional header NT-specific fields in the output."
@@ -33,6 +36,7 @@ type Argument =
             | Cli_Header -> "includes the contents of the CLI header in the output."
             | Metadata_Root -> "includes the contents of the CLI metadata root in the output."
             | Stream_Headers -> "includes the contents of each stream header in the output."
+            | Metadata_Tables_Header -> "includes the values of the metadata header fields in the output."
             | File _ -> "specifies the file containing the metadata to read."
             | Launch_Debugger -> "launches the debugger."
             | Output _ -> "specifies how the assembly information is outputted."
@@ -66,6 +70,7 @@ let main args =
 
     for arg in result.GetAllResults() do
         match arg with
+        | All -> args'.IncludedHeaders <- IncludedHeaders.All
         | Coff_Header -> args'.AddHeader IncludedHeaders.CoffHeader
         | Standard_Fields -> args'.AddHeader IncludedHeaders.StandardFields
         | NT_Specific_Fields -> args'.AddHeader IncludedHeaders.NTSpecificFields
@@ -74,6 +79,7 @@ let main args =
         | Cli_Header -> args'.AddHeader IncludedHeaders.CliHeader
         | Metadata_Root -> args'.AddHeader IncludedHeaders.MetadataRoot
         | Stream_Headers -> args'.AddHeader IncludedHeaders.StreamHeaders
+        | Metadata_Tables_Header -> args'.AddHeader IncludedHeaders.MetadataTables
         | File file -> args'.File <- file
         | Launch_Debugger -> args'.LaunchDebugger <- true
         | Output output -> args'.Output <- output

@@ -8,6 +8,7 @@ open FSharpIL
 [<NoComparison; NoEquality>]
 type ReadError =
     | InvalidMagic of expected: ImmutableArray<byte> * actual: byte[]
+    | CannotMoveToPreviousOffset of offset: uint64
     | OptionalHeaderTooSmall of size: uint16
     | TooFewDataDirectories of count: uint32
     | NoCliMetadata
@@ -16,6 +17,9 @@ type ReadError =
     | MetadataVersionHasNoNullTerminator of version: byte[]
     | StreamHeaderOutOfBounds of index: int32
     | StreamNameHasNoNullTerminator of name: byte[]
+    | CannotFindMetadataTables
+    | MissingModuleTable
+    | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile
 
     member this.Message =
@@ -25,7 +29,8 @@ type ReadError =
                 "expected magic %s, but got %s"
                 (Bytes.print(expected.AsSpan()))
                 (Bytes.print actual)
-        | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small." size
+        | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset 0x%016X" offset
+        | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
         | TooFewDataDirectories count -> sprintf "the number of data directories (%i) is too small" count
         | NoCliMetadata -> "the Portable Executable file does not contain any CLI metadata"
         | RvaNotInTextSection rva ->
@@ -39,6 +44,9 @@ type ReadError =
             sprintf "the CLI metadata stream header at index %i does not fit within in the current section" i
         | StreamNameHasNoNullTerminator name ->
             sprintf "the stream name \"%s\" does not end in a null terminator" (Encoding.ASCII.GetString name)
+        | CannotFindMetadataTables -> "the stream containing the metadata tables \"#~\" could not be found"
+        | MissingModuleTable -> "the Module table (0x00) is missing"
+        | CannotReadDebugTables -> "the metadata tables contain debugging metadata, which is currently not supported by FSharpIL"
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
 
 [<RequireQualifiedAccess>]
