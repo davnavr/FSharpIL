@@ -22,6 +22,7 @@ type internal ChunkReader (csize: int32, chunks: byte[][]) =
         let struct(chunki, i) = this.GetIndex offset
         chunks.[chunki].[i]
 
+    // TODO: Rename to TryReadBytes
     member this.ReadBytes(offset, buffer: Span<byte>) =
         if buffer.IsEmpty
         then true
@@ -37,6 +38,8 @@ type internal ChunkReader (csize: int32, chunks: byte[][]) =
             true
         else false
 
+    // TODO: Remove this method, since Bytes functions are used to read from Span instead.
+    // TODO: Rename to TryParse
     member this.Parse<'Parser, 'T when 'Parser : struct and 'Parser :> IByteParser<'T>> offset =
         let parser = Unchecked.defaultof<'Parser>
         let buffer = Span.stackalloc<byte> parser.Length
@@ -44,16 +47,3 @@ type internal ChunkReader (csize: int32, chunks: byte[][]) =
         then ValueSome(parser.Parse buffer)
         else ValueNone
 
-    [<Obsolete>]
-    member this.ReadU2 offset =
-        let buffer = Span.stackalloc<byte> 2
-        if this.ReadBytes(offset, buffer)
-        then ValueSome(Bytes.readU2 0 buffer)
-        else ValueNone
-
-    [<Obsolete>]
-    member this.ReadU4 offset =
-        let buffer = Span.stackalloc<byte> 4
-        if this.ReadBytes(offset, buffer)
-        then ValueSome(Bytes.readU4 0 buffer)
-        else ValueNone

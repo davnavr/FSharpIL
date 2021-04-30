@@ -1,5 +1,6 @@
 ﻿namespace FSharpIL.Reading
 
+open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
@@ -71,6 +72,17 @@ type ParsedMetadataTablesHeader =
       /// Specifies the number of rows in each present metadata table.
       Rows: ImmutableArray<uint32> }
 
+    member this.StringIndexSize = if this.HeapSizes.HasFlag HeapSizes.String then 4 else 2
+    member this.GuidIndexSize = if this.HeapSizes.HasFlag HeapSizes.Guid then 4 else 2
+
+[<NoComparison; StructuralEquality>]
+type ParsedModuleRow = // TODO: Allow Generation, EncId, and EncBaseId to be set to allow its usage in FSharpIL.Reading
+    { Generation: uint16
+      Name: RawIndex<string>
+      Mvid: RawIndex<Guid>
+      EncId: RawIndex<Guid>
+      EncBaseId: RawIndex<Guid> }
+
 // TODO: Rename this to something else.
 [<NoComparison; NoEquality>]
 type MetadataReader<'State> =
@@ -84,17 +96,19 @@ type MetadataReader<'State> =
       ReadMetadataRoot: Reader<ParsedMetadataRoot, 'State>
       ReadStreamHeader: (ParsedStreamHeader -> int32 -> uint64 -> 'State -> 'State) voption
       ReadMetadataTablesHeader: Reader<ParsedMetadataTablesHeader, 'State>
+      ReadModuleTable: Reader<ParsedModuleRow, 'State>
       HandleError: ErrorHandler<'State> }
 
 [<RequireQualifiedAccess>]
 module MetadataReader =
     let private cont (_: uint64): 'State -> _ = id
 
-    let inline private read reader arg =
+    let inline internal read reader arg =
         match reader with
         | ValueSome reader' -> reader' arg
         | ValueNone -> cont
 
+    // TODO: Mark most of these functions obsolete.
     let readLfanew { ReadLfanew = reader } lfanew = read reader lfanew
     let readCoffHeader { ReadCoffHeader = reader } header = read reader header
     let readStandardFields { ReadStandardFields = reader } fields = read reader fields
@@ -124,4 +138,5 @@ module MetadataReader =
           ReadMetadataRoot = ValueNone
           ReadStreamHeader = ValueNone
           ReadMetadataTablesHeader = ValueNone
+          ReadModuleTable = ValueNone
           HandleError = throwOnError }

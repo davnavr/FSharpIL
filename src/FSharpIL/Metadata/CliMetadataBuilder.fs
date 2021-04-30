@@ -55,12 +55,12 @@ type CorFlags =
 
 /// <summary>(0x00) Represents the single row of the <c>Module</c> table (II.22.30).</summary>
 [<Struct; IsReadOnly>]
-type ModuleTable =
-    { // Generation
+type ModuleTable = // TODO: Allow Generation, EncId, and EncBaseId to be set to allow its usage in FSharpIL.Reading
+    { // Generation: uint64
       Name: Identifier
       Mvid: Guid
-      // EncId
-      // EncBaseId
+      // EncId: Guid
+      // EncBaseId: Guid
       }
 
 /// <summary>(0x29) Represents a row in the <c>NestedClass</c> table (II.22.32).</summary>

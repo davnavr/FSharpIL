@@ -6,6 +6,7 @@ open System.IO
 open Argu
 
 open FSharpIL
+open FSharpIL.Metadata
 
 let [<Literal>] private description = "CLI metadata reader powered by FSharpIL (https://github.com/davnavr/FSharpIL)"
 
@@ -20,6 +21,7 @@ type Argument =
     | Metadata_Root
     | Stream_Headers
     | Metadata_Tables_Header
+    | Module_Table
     | [<ExactlyOnce>] File of string
     | [<Unique>] Launch_Debugger
     | [<Unique>] Output of Output.Kind
@@ -37,6 +39,7 @@ type Argument =
             | Metadata_Root -> "includes the contents of the CLI metadata root in the output."
             | Stream_Headers -> "includes the contents of each stream header in the output."
             | Metadata_Tables_Header -> "includes the values of the metadata header fields in the output."
+            | Module_Table -> "includes the fields of the module table row in the output."
             | File _ -> "specifies the file containing the metadata to read."
             | Launch_Debugger -> "launches the debugger."
             | Output _ -> "specifies how the assembly information is outputted."
@@ -44,10 +47,12 @@ type Argument =
 type ParsedArguments =
     { [<DefaultValue>] mutable File: string
       [<DefaultValue>] mutable IncludedHeaders: IncludedHeaders
+      [<DefaultValue>] mutable IncludedTables: MetadataTableFlags
       [<DefaultValue>] mutable LaunchDebugger: bool
       mutable Output: Output.Kind }
 
     member this.AddHeader header = this.IncludedHeaders <- this.IncludedHeaders ||| header
+    member this.AddTable table = this.IncludedTables <- this.IncludedTables ||| table
 
 let (|ValidFile|NotFound|InvalidPath|UnauthorizedAccess|) path =
     try
@@ -70,7 +75,9 @@ let main args =
 
     for arg in result.GetAllResults() do
         match arg with
-        | All -> args'.IncludedHeaders <- IncludedHeaders.All
+        | All ->
+            args'.IncludedHeaders <- IncludedHeaders.All
+            args'.IncludedTables <- LanguagePrimitives.EnumOfValue(UInt64.MaxValue)
         | Coff_Header -> args'.AddHeader IncludedHeaders.CoffHeader
         | Standard_Fields -> args'.AddHeader IncludedHeaders.StandardFields
         | NT_Specific_Fields -> args'.AddHeader IncludedHeaders.NTSpecificFields
@@ -80,6 +87,7 @@ let main args =
         | Metadata_Root -> args'.AddHeader IncludedHeaders.MetadataRoot
         | Stream_Headers -> args'.AddHeader IncludedHeaders.StreamHeaders
         | Metadata_Tables_Header -> args'.AddHeader IncludedHeaders.MetadataTables
+        | Module_Table -> args'.AddTable MetadataTableFlags.Module
         | File file -> args'.File <- file
         | Launch_Debugger -> args'.LaunchDebugger <- true
         | Output output -> args'.Output <- output
@@ -89,7 +97,11 @@ let main args =
     match args' with
     | { File = ValidFile file } ->
         use reader = file.OpenRead()
-        ReadCli.fromStream reader (Output.create args'.Output) (Output.write args'.IncludedHeaders) |> ignore
+        ReadCli.fromStream
+            reader
+            (Output.create args'.Output)
+            (Output.write args'.IncludedHeaders args'.IncludedTables)
+            |> ignore
         0
     | { File = NotFound path } -> exitfn "The file \"%s\" does not exist." path
     | { File = InvalidPath path } -> exitfn "The file \"%s\" is invalid." path

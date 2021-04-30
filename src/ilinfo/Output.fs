@@ -30,7 +30,7 @@ let create =
           WriteField = printfn " - %s (%i bytes) = %s"
           WriteError = fun state err offset wr -> stderr.WriteLine(ReadError.message state err offset); wr }
 
-let private header (flags: IncludedHeaders) (expected: IncludedHeaders) writer: Reader<_, _> =
+let private header (flags: 'Flags when 'Flags :> Enum) (expected: 'Flags) writer: Reader<_, _> =
     if flags.HasFlag expected
     then ValueSome writer
     else ValueNone
@@ -208,7 +208,16 @@ let metadataTablesHeader (header: ParsedMetadataTablesHeader) offset wr =
 
     wr
 
-let write hflags =
+let writeIndex name (size: int32) (index: RawIndex<_>) wr =
+    wr.WriteField name (uint32 size) (sprintf "0x%04x" index.Value)
+
+let moduleRow (row: ParsedModuleRow) offset wr =
+    wr.WriteHeader offset "Module (0x00)"
+    writeInt "Generation" row.Generation wr
+    //writeIndex "Name" () row.Name wr // TODO: How to get size?
+    wr
+
+let write hflags tflags =
     { MetadataReader.empty with
         ReadCoffHeader = header hflags IncludedHeaders.CoffHeader coffHeader
         ReadStandardFields = header hflags IncludedHeaders.StandardFields standardFields
@@ -222,4 +231,5 @@ let write hflags =
             then ValueSome streamHeader
             else ValueNone
         ReadMetadataTablesHeader = header hflags IncludedHeaders.MetadataTables metadataTablesHeader
+        ReadModuleTable = header tflags MetadataTableFlags.Module moduleRow
         HandleError = fun state error offset wr -> wr.WriteError state error offset (); wr }

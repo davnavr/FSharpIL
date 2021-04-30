@@ -12,7 +12,7 @@ type MetadataReadState =
     | ReadMetadataRoot
     | ReadStreamHeaders
     | ReadMetadataTablesHeader
-    | ReadModuleTableRow
+    | ReadModuleTable
 
     member this.Description =
         match this with
@@ -23,7 +23,7 @@ type MetadataReadState =
         | ReadMetadataRoot -> "reading CLI metadata root"
         | ReadStreamHeaders -> "reading metadata stream headers"
         | ReadMetadataTablesHeader -> "reading metadata tables header"
-        | ReadModuleTableRow -> "reading module table row"
+        | ReadModuleTable -> "reading module table"
 
 [<IsReadOnly; Struct>]
 type FileReadState =
