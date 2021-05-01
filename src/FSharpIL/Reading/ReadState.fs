@@ -13,6 +13,7 @@ type MetadataReadState =
     | ReadStreamHeaders
     | ReadMetadataTablesHeader
     | ReadModuleTable
+    | ReadTypeRefTable
 
     member this.Description =
         match this with
@@ -23,7 +24,8 @@ type MetadataReadState =
         | ReadMetadataRoot -> "reading CLI metadata root"
         | ReadStreamHeaders -> "reading metadata stream headers"
         | ReadMetadataTablesHeader -> "reading metadata tables header"
-        | ReadModuleTable -> "reading module table"
+        | ReadModuleTable -> "reading Module table"
+        | ReadTypeRefTable -> "reading TypeRef table"
 
 [<IsReadOnly; Struct>]
 type FileReadState =

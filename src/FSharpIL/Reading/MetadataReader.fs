@@ -96,7 +96,7 @@ type MetadataReader<'State> =
       ReadMetadataRoot: Reader<ParsedMetadataRoot, 'State>
       ReadStreamHeader: (ParsedStreamHeader -> int32 -> uint64 -> 'State -> 'State) voption
       ReadMetadataTablesHeader: Reader<ParsedMetadataTablesHeader, 'State>
-      ReadModuleTable: Reader<ParsedModuleRow, 'State>
+      ReadModuleTable: Reader<ParsedModuleRow, 'State> // TODO: Consider providing the GUIDs and strings read from both heaps, since it should be easy to read them.
       HandleError: ErrorHandler<'State> }
 
 [<RequireQualifiedAccess>]

@@ -84,6 +84,7 @@ type MutableFile =
       [<DefaultValue>] mutable StreamHeadersOffset: uint64
       [<DefaultValue>] mutable StreamHeaders: ParsedStreamHeader[]
       [<DefaultValue>] mutable MetadataTablesIndex: int32 voption
+      //[<DefaultValue>] mutable StringStreamIndex: int32 voption
       [<DefaultValue>] mutable MetadataTablesHeader: ParsedMetadataTablesHeader
       /// File offset from start of section to the start of the metadata tables (II22.1).
       [<DefaultValue>] mutable MetadataTablesOffset: uint64 }
@@ -377,8 +378,8 @@ let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span
                     Unsafe.As &name' }
             let ustate' = MetadataReader.readStreamHeader reader header i (file.TextSectionOffset + offset) ustate
 
-            // TODO: Use Magic module to avoid duplicating things.
             if name = Magic.MetadataStream then file.MetadataTablesIndex <- ValueSome i
+            //if name = Magic.StringStream then file.StringStreamIndex <- ValueSome i
 
             file.StreamHeaders.[i] <- header
             
@@ -437,8 +438,8 @@ let readIndex<'T> large offset (buffer: Span<byte>) =
 let inline readHeapIndex<'T> (expected: HeapSizes) (hsizes: HeapSizes) offset buffer =
     readIndex<'T> (hsizes.HasFlag expected) offset buffer
 
-let inline readString hsizes offset buffer = readHeapIndex<string> HeapSizes.String hsizes offset buffer
-let inline readGuid hsizes offset buffer = readHeapIndex<Guid> HeapSizes.Guid hsizes offset buffer
+let inline readStringIndex hsizes offset buffer = readHeapIndex<string> HeapSizes.String hsizes offset buffer
+let inline readGuidIndex hsizes offset buffer = readHeapIndex<Guid> HeapSizes.Guid hsizes offset buffer
 
 let rec readModuleTable (chunk: ChunkReader) (file: MutableFile) i offset reader ustate =
     let header = file.MetadataTablesHeader
@@ -453,10 +454,10 @@ let rec readModuleTable (chunk: ChunkReader) (file: MutableFile) i offset reader
                     MetadataReader.read
                         reader.ReadModuleTable
                         { Generation = Bytes.readU2 0 buffer
-                          Name = readString header.HeapSizes 2 buffer
-                          Mvid = readGuid header.HeapSizes (2 + header.StringIndexSize) buffer
-                          EncId = readGuid header.HeapSizes (2 + header.StringIndexSize + header.GuidIndexSize) buffer
-                          EncBaseId = readGuid header.HeapSizes (2 + header.StringIndexSize + (2 * header.GuidIndexSize)) buffer }
+                          Name = readStringIndex header.HeapSizes 2 buffer
+                          Mvid = readGuidIndex header.HeapSizes (2 + header.StringIndexSize) buffer
+                          EncId = readGuidIndex header.HeapSizes (2 + header.StringIndexSize + header.GuidIndexSize) buffer
+                          EncBaseId = readGuidIndex header.HeapSizes (2 + header.StringIndexSize + (2 * header.GuidIndexSize)) buffer }
                         offset
                         ustate
                 readModuleTable chunk file (i + 1) offset' reader ustate'
@@ -465,7 +466,7 @@ let rec readModuleTable (chunk: ChunkReader) (file: MutableFile) i offset reader
             if chunk.HasFreeBytes(offset, uint64 length) then
                 readModuleTable chunk file (i + 1) offset' reader ustate
             else Failure(offset, invalidOp "error module out of bounds")
-    else Success(ustate, invalidOp "read typerefs")
+    else Success(ustate, ReadTypeRefTable)
 
 let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
     let text = &file.SectionHeaders.[file.TextSectionIndex].Data

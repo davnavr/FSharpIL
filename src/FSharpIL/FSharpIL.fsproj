@@ -115,6 +115,7 @@
     <Compile Include="Reading\MetadataReader.fs" />
     <Compile Include="Reading\ByteParser.fs" />
     <Compile Include="Reading\ChunkReader.fs" />
+    <Compile Include="Reading\StringReader.fs" />
     <Compile Include="ReadCli.fsi" />
     <Compile Include="ReadCli.fs" />
 
