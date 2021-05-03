@@ -9,7 +9,7 @@ open FSharpIL
 
 /// <summary>Represents an offset into the <c>#Strings</c> metadata heap (II.24.2.3).</summary>
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-type ParsedString (offset: uint64) =
+type ParsedString (offset: uint32) =
     member _.Offset = offset
 
 [<AutoOpen>]
@@ -31,11 +31,11 @@ type ParsedStringsHeap =
             this.StringBuffer <- buffer'
         this.StringBuffer.[i] <- value
 
-    member this.IsValidOffset(offset) = this.Chunk.IsValidOffset offset && offset < this.Size
+    member this.IsValidOffset(Convert.U8 offset) = this.Chunk.IsValidOffset offset && offset < this.Size
 
     member private this.TryGet(ParsedString offset) =
         let rec inner i =
-            let offset' = offset + uint64 i
+            let offset' = uint64 offset + uint64 i
             if offset' >= this.Size
             then Error(MissingNullTerminator(Encoding.UTF8.GetString this.StringBuffer))
             else

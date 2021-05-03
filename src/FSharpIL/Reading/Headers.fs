@@ -57,6 +57,3 @@ type ParsedMetadataTablesHeader =
       Sorted: MetadataTableFlags
       /// Specifies the number of rows in each present metadata table.
       Rows: ImmutableArray<uint32> }
-
-    member this.StringIndexSize = if this.HeapSizes.HasFlag HeapSizes.String then 4 else 2
-    member this.GuidIndexSize = if this.HeapSizes.HasFlag HeapSizes.Guid then 4 else 2

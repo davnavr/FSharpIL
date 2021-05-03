@@ -117,6 +117,7 @@
     <Compile Include="Reading\ChunkReader.fs" />
     <Compile Include="Reading\Headers.fs" />
     <Compile Include="Reading\ParsedStringsHeap.fs" />
+    <Compile Include="Reading\ParsedGuidHeap.fs" />
     <Compile Include="Reading\ParsedMetadataTables.fs" />
     <Compile Include="Reading\MetadataReader.fs" />
     <Compile Include="ReadCli.fsi" />

@@ -17,3 +17,8 @@ type [<Struct>] internal ParseU4 =
     interface IByteParser<uint32> with
         member _.Length = 4
         member _.Parse buffer = Bytes.readU4 0 buffer
+
+module internal ByteParser =
+    // TODO: This might replace Bytes.readU* functions.
+    let parse<'Parser, 'Result when 'Parser :> IByteParser<'Result>> offset (buffer: Span<byte>) (parser: 'Parser) =
+        parser.Parse(buffer.Slice(offset, parser.Length))

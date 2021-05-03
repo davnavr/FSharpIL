@@ -18,7 +18,7 @@ type ReadError =
     | StreamHeaderOutOfBounds of index: int32
     | MissingNullTerminator of string
     | CannotFindMetadataTables
-    | InvalidStringIndex of offset: uint64 * size: uint64
+    | InvalidStringIndex of offset: uint32 * size: uint64
     | MissingModuleTable
     | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile
@@ -46,7 +46,7 @@ type ReadError =
         | MissingNullTerminator name -> sprintf "the string \"%s\" does not end in a null terminator" name
         | CannotFindMetadataTables -> "the stream containing the metadata tables \"#~\" could not be found"
         | InvalidStringIndex(offset, size) ->
-            sprintf "Invalid offset into the \"#Strings\" heap (0x%016X), maximum valid offset is (0x%016X)" offset (size - 1UL)
+            sprintf "Invalid offset into the \"#Strings\" heap (0x%08X), maximum valid offset is (0x%08X)" offset (size - 1UL)
         | MissingModuleTable -> "the Module table (0x00) is missing"
         | CannotReadDebugTables -> "the metadata tables contain debugging metadata, which is currently not supported by FSharpIL"
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
