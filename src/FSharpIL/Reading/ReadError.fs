@@ -16,8 +16,9 @@ type ReadError =
     | CliHeaderTooSmall of size: uint32
     | MetadataVersionHasNoNullTerminator of version: byte[]
     | StreamHeaderOutOfBounds of index: int32
-    | StreamNameHasNoNullTerminator of name: byte[]
+    | MissingNullTerminator of string
     | CannotFindMetadataTables
+    | InvalidStringIndex of offset: uint64 * size: uint64
     | MissingModuleTable
     | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile
@@ -42,9 +43,10 @@ type ReadError =
                 (Encoding.UTF8.GetString version)
         | StreamHeaderOutOfBounds i ->
             sprintf "the CLI metadata stream header at index %i does not fit within in the current section" i
-        | StreamNameHasNoNullTerminator name ->
-            sprintf "the stream name \"%s\" does not end in a null terminator" (Encoding.ASCII.GetString name)
+        | MissingNullTerminator name -> sprintf "the string \"%s\" does not end in a null terminator" name
         | CannotFindMetadataTables -> "the stream containing the metadata tables \"#~\" could not be found"
+        | InvalidStringIndex(offset, size) ->
+            sprintf "Invalid offset into the \"#Strings\" heap (0x%016X), maximum valid offset is (0x%016X)" offset (size - 1UL)
         | MissingModuleTable -> "the Module table (0x00) is missing"
         | CannotReadDebugTables -> "the metadata tables contain debugging metadata, which is currently not supported by FSharpIL"
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"

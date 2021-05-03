@@ -2,6 +2,7 @@
 
 open System.Collections.Immutable
 
+// TODO: Rename to ValidTableFlags.
 [<System.Flags>]
 type MetadataTableFlags =
     | None = 0UL
