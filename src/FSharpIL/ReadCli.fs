@@ -448,7 +448,7 @@ let rec readModuleTable (chunk: ChunkReader) (file: MutableFile) i offset reader
         let offset' = offset + uint64 length
         match i with
         | 0 ->
-            let buffer = Span.stackalloc<byte> length
+            let buffer = Span.stackalloc<byte> length // NOTE: Stackalloc here will cause too many bytes to be allocated.
             if chunk.ReadBytes(offset, buffer) then
                 let ustate' =
                     MetadataReader.read

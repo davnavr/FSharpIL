@@ -7,6 +7,7 @@ open FSharpIL.Metadata
 
 /// <summary>Reads strings from the <c>#Strings</c> metadata heap (II.24.2.3).</summary>
 // TODO: Might be able to make reading more optimized if size: uint64 field is provided, since we can check how many bytes before end of stream.
+// TODO: Rename to ParsedStringsHeap
 [<Sealed>]
 type StringReader internal (chunk: ChunkReader, offset: uint64) =
     let mutable buffer = Array.zeroCreate<byte> 32;

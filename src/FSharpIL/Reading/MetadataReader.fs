@@ -78,7 +78,7 @@ type ParsedMetadataTablesHeader =
 [<NoComparison; StructuralEquality>]
 type ParsedModuleRow = // TODO: Allow Generation, EncId, and EncBaseId to be set to allow its usage in FSharpIL.Reading
     { Generation: uint16
-      Name: RawIndex<string>
+      Name: RawIndex<string> // TODO: Use Blob`1 type.
       Mvid: RawIndex<Guid>
       EncId: RawIndex<Guid>
       EncBaseId: RawIndex<Guid> }
