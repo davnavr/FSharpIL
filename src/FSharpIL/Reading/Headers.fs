@@ -44,6 +44,8 @@ type ParsedStreamHeader =
       Size: uint32
       Name: ImmutableArray<byte> }
 
+type MetadataTableCounts = System.Collections.Generic.IReadOnlyDictionary<MetadataTableFlags, uint32>
+
 /// (II.24.2.6)
 [<NoComparison; StructuralEquality>]
 type ParsedMetadataTablesHeader =
@@ -56,4 +58,4 @@ type ParsedMetadataTablesHeader =
       Valid: MetadataTableFlags
       Sorted: MetadataTableFlags
       /// Specifies the number of rows in each present metadata table.
-      Rows: ImmutableArray<uint32> }
+      Rows: MetadataTableCounts }

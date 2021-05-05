@@ -3,6 +3,7 @@
 module FSharpIL.ReadCli
 
 open System
+open System.Collections.Generic
 open System.IO
 open System.Runtime.CompilerServices
 open System.Text
@@ -394,7 +395,8 @@ let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span
         | Error err -> Failure(offset, MissingNullTerminator err)
     else Failure(offset, StreamHeaderOutOfBounds i)
 
-let rec tablesRowCount (valid: MetadataTableFlags) count =
+/// Calculates the number of row counts for the valid metadata tables.
+let rec tableRowsCount (valid: MetadataTableFlags) count =
     match valid with
     | MetadataTableFlags.None -> count
     | _ ->
@@ -402,14 +404,25 @@ let rec tablesRowCount (valid: MetadataTableFlags) count =
             if valid.HasFlag MetadataTableFlags.Module
             then count + 1
             else count
-        tablesRowCount (valid >>> 1) count'
+        tableRowsCount (valid >>> 1) count'
+
+let rec readTableCounts lookup (valid: MetadataTableFlags) (counts: uint32[]) counti validi =
+    match valid with
+    | MetadataTableFlags.None -> System.Collections.ObjectModel.ReadOnlyDictionary lookup
+    | _ ->
+        let counti' =
+            if valid.HasFlag MetadataTableFlags.Module then
+                lookup.[valid &&& (MetadataTableFlags.Module <<< validi)] <- counts.[counti] // TODO: Check that this works
+                counti + 1
+            else counti
+        readTableCounts lookup (valid >>> 1) counts counti' (validi + 1)
 
 let readTablesHeader (chunk: ChunkReader) file offset =
     let fields = Span.stackalloc<byte> 24
     if chunk.TryReadBytes(offset, fields) then
         let valid: MetadataTableFlags = LanguagePrimitives.EnumOfValue(Bytes.readU8 8 fields)
         //invalidOp "TODO: Check that specified tables are supported."
-        let tablen = tablesRowCount valid 0
+        let tablen = tableRowsCount valid 0
         let rcounts = Span.stackalloc<byte>(tablen * 4)
         if chunk.TryReadBytes(offset + uint64 fields.Length, rcounts) then
             let mutable rows = Array.zeroCreate tablen
@@ -425,7 +438,7 @@ let readTablesHeader (chunk: ChunkReader) file offset =
                   Reserved2 = fields.[7]
                   Valid = valid
                   Sorted = LanguagePrimitives.EnumOfValue(Bytes.readU8 16 fields)
-                  Rows = Unsafe.As &rows }
+                  Rows = readTableCounts (Dictionary tablen) valid rows 0 0 }
 
             file.MetadataTablesOffset <- offset + 24UL + uint64 rcounts.Length
 
@@ -433,6 +446,7 @@ let readTablesHeader (chunk: ChunkReader) file offset =
         else invalidOp ""
     else Error(offset, UnexpectedEndOfFile) // TODO: Use out of bounds error instead.
 
+[<Obsolete>]
 let readIndex<'T> large offset (buffer: Span<byte>) =
     let index =
         if large
@@ -440,10 +454,14 @@ let readIndex<'T> large offset (buffer: Span<byte>) =
         else uint32(Bytes.readU2 offset buffer)
     RawIndex<'T> index
 
+[<Obsolete>]
 let inline readHeapIndex<'T> (expected: HeapSizes) (hsizes: HeapSizes) offset buffer =
     readIndex<'T> (hsizes.HasFlag expected) offset buffer
 
+[<Obsolete>]
 let inline readStringIndex hsizes offset buffer = readHeapIndex<string> HeapSizes.String hsizes offset buffer
+
+[<Obsolete>]
 let inline readGuidIndex hsizes offset buffer = readHeapIndex<Guid> HeapSizes.Guid hsizes offset buffer
 
 [<Obsolete>]

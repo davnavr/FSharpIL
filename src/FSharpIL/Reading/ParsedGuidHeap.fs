@@ -6,3 +6,4 @@ open Microsoft.FSharp.Core.Operators.Checked
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type ParsedGuid (offset: uint32) =
     member _.Offset = offset
+    member _.IsNull = offset = 0u

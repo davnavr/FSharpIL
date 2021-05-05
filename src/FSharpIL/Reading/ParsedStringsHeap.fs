@@ -11,6 +11,7 @@ open FSharpIL
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type ParsedString (offset: uint32) =
     member _.Offset = offset
+    member _.IsNull = offset = 0u
 
 [<AutoOpen>]
 module ParsedString = let inline (|ParsedString|) (offset: ParsedString) = offset.Offset

@@ -5,7 +5,6 @@ open FSharp.Core.Operators.Checked
 
 open System
 open System.Collections.Generic
-open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
@@ -14,7 +13,7 @@ open FSharpIL.Writing
 
 [<IsReadOnly; IsByRefLike; Struct>]
 type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * uint32) =
-    member _.LargeIndices = count > (65535 <<< n)
+    member _.LargeIndices = count > (65535 >>> n)
 
     member _.IndexOf (item: 'T) =
         let index, tag = indexer item
