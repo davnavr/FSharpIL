@@ -104,23 +104,26 @@ type TypeRefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
               TypeNamespace = parse (rscope.Length + sizes.StringSize) buffer str }
         member _.Length = (CodedIndex.resolutionScopeParser counts).Length + (2 * sizes.StringSize)
 
-[<Sealed>]
-type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> internal
-    (
-        chunk: ChunkReader,
-        offset: uint64,
-        parser: 'Parser,
-        count: uint32
-    ) =
-    member _.Count = count
+[<NoComparison; ReferenceEquality>]
+type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
+    internal
+        { Chunk: ChunkReader
+          TableOffset: uint64
+          TableParser: 'Parser
+          TableCount: uint32 }
+
+    member this.RowCount = this.TableCount
+    /// The length of this metadata table in bytes.
+    member this.Length = uint64 this.TableCount * uint64 this.TableParser.Length
+
     /// <exception cref="System.ArgumentOutOfRangeException">
     /// Thrown when the index is negative or when the table does not contain enough rows.
     /// </exception>
-    member _.Item with get(i: int32) =
-        if i < 0 || uint32 i >= count then raise(IndexOutOfRangeException())
-        let buffer = Span.stackalloc<Byte> parser.Length
-        chunk.ReadBytes(offset + (uint64 i * uint64 parser.Length), buffer)
-        parser.Parse buffer
+    member this.Item with get(i: int32) =
+        if i < 0 || uint32 i >= this.RowCount then raise(IndexOutOfRangeException())
+        let buffer = Span.stackalloc<Byte> this.TableParser.Length
+        this.Chunk.ReadBytes(this.TableOffset + (uint64 i * uint64 this.TableParser.Length), buffer)
+        this.TableParser.Parse buffer
 
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTables =
@@ -128,11 +131,12 @@ type ParsedMetadataTables =
         { Chunk: ChunkReader
           TablesHeader: ParsedMetadataTablesHeader
           TablesOffset: uint64
+          [<DefaultValue>] mutable TablesLength: uint64
           [<DefaultValue>] mutable ModuleTable: ParsedMetadataTable<ModuleParser, ParsedModuleRow>
           [<DefaultValue>] mutable TypeRefTable: ParsedMetadataTable<TypeRefParser, ParsedTypeRefRow> voption }
 
     member this.Header = this.TablesHeader
-
+    member this.Length = this.TablesLength
     /// Offset from start of section containing the CLI metadata to the first byte of the first row of the first table.
     member this.Offset = this.TablesOffset
 
@@ -144,16 +148,26 @@ type ParsedMetadataTables =
 
 [<RequireQualifiedAccess>]
 module ParsedMetadataTables =
-    let internal create header =
+    let internal create chunk header offset =
         let tables =
-            { Chunk = failwith ""
+            { Chunk = chunk
               TablesHeader = header
-              TablesOffset = failwith "" }
+              TablesOffset = offset }
         for KeyValue(table, count) in header.Rows do
+            let offset' = offset + tables.TablesLength
             match table with
             | MetadataTableFlags.Module ->
-                tables.ModuleTable <- ParsedMetadataTable(failwith "", failwith "", ModuleParser header.HeapSizes, count)
+                tables.ModuleTable <-
+                    { Chunk = chunk
+                      TableOffset = offset'
+                      TableParser = ModuleParser header.HeapSizes
+                      TableCount = count }
+                tables.TablesLength <- tables.TablesLength + tables.ModuleTable.Length
             | MetadataTableFlags.TypeRef ->
-                tables.TypeRefTable <-
-                    ValueSome(ParsedMetadataTable(failwith "", failwith "", TypeRefParser(header.HeapSizes, header.Rows), count))
+                tables.TypeRefTable <- ValueSome
+                    { Chunk = chunk
+                      TableOffset = offset'
+                      TableParser = TypeRefParser(header.HeapSizes, header.Rows)
+                      TableCount = count }
+                tables.TablesLength <- tables.TablesLength + tables.TypeRefTable.Value.Length
         tables

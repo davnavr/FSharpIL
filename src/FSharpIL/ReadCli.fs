@@ -89,7 +89,8 @@ type MutableFile =
       //[<DefaultValue>] mutable StringStreamIndex: int32 voption
       [<DefaultValue>] mutable MetadataTablesHeader: ParsedMetadataTablesHeader
       /// File offset from start of section to the start of the metadata tables (II22.1).
-      [<DefaultValue>] mutable MetadataTablesOffset: uint64 }
+      [<DefaultValue>] mutable MetadataTablesOffset: uint64
+      [<DefaultValue>] mutable MetadataTables: ParsedMetadataTables }
 
     /// <summary>File offset to the first byte of the <c>.text</c> section.</summary>
     member this.TextSectionOffset = uint64 this.SectionHeaders.[this.TextSectionIndex].Data.RawDataPointer
@@ -446,56 +447,11 @@ let readTablesHeader (chunk: ChunkReader) file offset =
         else invalidOp ""
     else Error(offset, UnexpectedEndOfFile) // TODO: Use out of bounds error instead.
 
-[<Obsolete>]
-let readIndex<'T> large offset (buffer: Span<byte>) =
-    let index =
-        if large
-        then Bytes.readU4 offset buffer
-        else uint32(Bytes.readU2 offset buffer)
-    RawIndex<'T> index
-
-[<Obsolete>]
-let inline readHeapIndex<'T> (expected: HeapSizes) (hsizes: HeapSizes) offset buffer =
-    readIndex<'T> (hsizes.HasFlag expected) offset buffer
-
-[<Obsolete>]
-let inline readStringIndex hsizes offset buffer = readHeapIndex<string> HeapSizes.String hsizes offset buffer
-
-[<Obsolete>]
-let inline readGuidIndex hsizes offset buffer = readHeapIndex<Guid> HeapSizes.Guid hsizes offset buffer
-
-[<Obsolete>]
-let rec readModuleTable (chunk: ChunkReader) file i offset reader ustate =
-    let header = file.MetadataTablesHeader
-    let length = 2 + header.StringIndexSize + (3 * header.GuidIndexSize) // TODO: Move this outside loop, since size should never change.
-    if uint32 i < header.Rows.[0] then
-        let offset' = offset + uint64 length
-        match i with
-        | 0 ->
-            let buffer = Span.stackalloc<byte> length // NOTE: Stackalloc here will cause too many bytes to be allocated.
-            if chunk.TryReadBytes(offset, buffer) then
-                let ustate' =
-                    MetadataReader.read
-                        reader.ReadModuleTable
-                        { Generation = Bytes.readU2 0 buffer
-                          Name = readStringIndex header.HeapSizes 2 buffer
-                          Mvid = readGuidIndex header.HeapSizes (2 + header.StringIndexSize) buffer
-                          EncId = readGuidIndex header.HeapSizes (2 + header.StringIndexSize + header.GuidIndexSize) buffer
-                          EncBaseId = readGuidIndex header.HeapSizes (2 + header.StringIndexSize + (2 * header.GuidIndexSize)) buffer }
-                        offset
-                        ustate
-                readModuleTable chunk file (i + 1) offset' reader ustate'
-            else Failure(offset, invalidOp "error for module out of bounds")
-        | _ ->
-            if chunk.HasFreeBytes(offset, uint64 length) then
-                readModuleTable chunk file (i + 1) offset' reader ustate
-            else Failure(offset, invalidOp "error module out of bounds")
-    else Success(ustate, ReadTypeRefTable)
-
 let readMetadataTables (chunk: ChunkReader) file reader ustate =
-    if chunk.HasFreeBytes(file.MetadataTablesOffset, invalidOp "GET EXPECTED SIZE OF ALL TABLES") then
-        ()
-    ()
+    file.MetadataTables <- ParsedMetadataTables.create chunk file.MetadataTablesHeader file.MetadataRootOffset
+    if chunk.HasFreeBytes(file.MetadataTablesOffset, file.MetadataTables.Length) then
+        Success(MetadataReader.read reader.ReadMetadataTables file.MetadataTables file.MetadataTablesOffset ustate, invalidOp "End reading?")
+    else Failure(file.MetadataTablesOffset, (invalidOp "Error for metadata tables out of bounds": ReadError))
 
 let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
     let text = &file.SectionHeaders.[file.TextSectionIndex].Data
@@ -526,10 +482,7 @@ let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
             | Ok rstate' -> Success(ustate, rstate')
             | Error err -> Failure err
         | ValueNone -> Failure(file.StreamHeadersOffset, CannotFindMetadataTables)
-    | ReadModuleTable ->
-        if file.MetadataTablesHeader.Valid.HasFlag MetadataTableFlags.Module && file.MetadataTablesHeader.Rows.[0] > 0u then
-            readModuleTable chunk file 0 file.MetadataTablesOffset reader ustate
-        else Failure(file.MetadataTablesOffset, MissingModuleTable)
+    | ReadMetadataTables -> readMetadataTables chunk file reader ustate
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
 /// <exception cref="System.ArgumentException">The <paramref name="stream"/> does not support reading.</exception>
