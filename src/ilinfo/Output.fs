@@ -201,35 +201,28 @@ let metadataTablesHeader (header: ParsedMetadataTablesHeader) offset wr =
     writeEnum "Valid" header.Valid wr
     writeEnum "Sorted" header.Sorted wr
     
-    Seq.map (sprintf "0x%08X") header.Rows
+    Seq.map (fun (KeyValue(_, i)) -> sprintf "0x%08X" i) header.Rows
     |> String.concat ", "
     |> sprintf "[%s]"
-    |> wr.WriteField "Rows" (4u * uint32 header.Rows.Length)
+    |> wr.WriteField "Rows" (4u * uint32 header.Rows.Count)
 
     wr
 
-let writeIndex name (size: int32) (index: RawIndex<_>) wr =
-    wr.WriteField name (uint32 size) (sprintf "0x%04x" index.Value)
-
-let moduleRow (row: ParsedModuleRow) offset wr =
-    wr.WriteHeader offset "Module (0x00)"
-    writeInt "Generation" row.Generation wr
-    //writeIndex "Name" () row.Name wr // TODO: How to get size?
-    wr
+let metadataTables (tables: ParsedMetadataTables) =
+    metadataTablesHeader tables.Header
 
 let write hflags tflags =
     { MetadataReader.empty with
-        ReadCoffHeader = header hflags IncludedHeaders.CoffHeader coffHeader
-        ReadStandardFields = header hflags IncludedHeaders.StandardFields standardFields
-        ReadNTSpecificFields = header hflags IncludedHeaders.NTSpecificFields ntSpecificFields
-        ReadDataDirectories = header hflags IncludedHeaders.DataDirectories dataDirectories
-        ReadSectionHeaders = header hflags IncludedHeaders.SectionHeaders sectionHeaders
-        ReadCliHeader = header hflags IncludedHeaders.CliHeader cliHeader
-        ReadMetadataRoot = header hflags IncludedHeaders.MetadataRoot metadataRoot
-        ReadStreamHeader =
-            if hflags.HasFlag IncludedHeaders.StreamHeaders
-            then ValueSome streamHeader
-            else ValueNone
-        ReadMetadataTablesHeader = header hflags IncludedHeaders.MetadataTables metadataTablesHeader
-        ReadModuleTable = header tflags MetadataTableFlags.Module moduleRow
-        HandleError = fun state error offset wr -> wr.WriteError state error offset (); wr }
+       ReadCoffHeader = header hflags IncludedHeaders.CoffHeader coffHeader
+       ReadStandardFields = header hflags IncludedHeaders.StandardFields standardFields
+       ReadNTSpecificFields = header hflags IncludedHeaders.NTSpecificFields ntSpecificFields
+       ReadDataDirectories = header hflags IncludedHeaders.DataDirectories dataDirectories
+       ReadSectionHeaders = header hflags IncludedHeaders.SectionHeaders sectionHeaders
+       ReadCliHeader = header hflags IncludedHeaders.CliHeader cliHeader
+       ReadMetadataRoot = header hflags IncludedHeaders.MetadataRoot metadataRoot
+       ReadStreamHeader =
+           if hflags.HasFlag IncludedHeaders.StreamHeaders
+           then ValueSome streamHeader
+           else ValueNone
+       ReadMetadataTables = ValueSome metadataTables
+       HandleError = fun state error offset wr -> wr.WriteError state error offset (); wr }

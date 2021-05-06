@@ -67,6 +67,7 @@ let (|ValidFile|NotFound|InvalidPath|UnauthorizedAccess|) path =
 
 let exitfn format = Printf.kprintf (fun msg -> eprintfn "%s" msg; -1) format
 
+// TODO: Rename to fsdasm
 [<EntryPoint>]
 let main args =
     let parser = ArgumentParser.Create<Argument>(programName = "ilinfo", helpTextMessage = description)

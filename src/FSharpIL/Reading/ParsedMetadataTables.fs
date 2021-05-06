@@ -170,4 +170,5 @@ module ParsedMetadataTables =
                       TableParser = TypeRefParser(header.HeapSizes, header.Rows)
                       TableCount = count }
                 tables.TablesLength <- tables.TablesLength + tables.TypeRefTable.Value.Length
+            | _ -> () // Temporary to get printing to work
         tables
