@@ -4,6 +4,7 @@ open System.Collections.Immutable
 open System.Text
 
 open FSharpIL
+open FSharpIL.Metadata
 
 [<NoComparison; NoEquality>]
 type ReadError =
@@ -20,6 +21,8 @@ type ReadError =
     | CannotFindMetadataTables
     | InvalidStringIndex of offset: uint32 * size: uint64
     | MissingModuleTable
+    | MetadataRowOutOfBounds of table: MetadataTableFlags * index: uint32 * count: uint32
+    | MetadataRowOutOfSection of table: MetadataTableFlags * index: uint32
     | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile
 
@@ -48,6 +51,16 @@ type ReadError =
         | InvalidStringIndex(offset, size) ->
             sprintf "Invalid offset into the \"#Strings\" heap (0x%08X), maximum valid offset is (0x%08X)" offset (size - 1UL)
         | MissingModuleTable -> "the Module table (0x00) is missing"
+        | MetadataRowOutOfBounds(table, index, count) ->
+            sprintf
+                "the %A metadata row at index %i (0x%08x) is out of bounds, the table only contains %i (0x%08x) items"
+                table
+                index
+                index
+                count
+                count
+        | MetadataRowOutOfSection(table, index) ->
+            sprintf "the %A metadata row at index %i (0x%08x) is outside of the section" table index index
         | CannotReadDebugTables -> "the metadata tables contain debugging metadata, which is currently not supported by FSharpIL"
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
 

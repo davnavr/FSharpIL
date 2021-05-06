@@ -447,12 +447,6 @@ let readTablesHeader (chunk: ChunkReader) file offset =
         else invalidOp ""
     else Error(offset, UnexpectedEndOfFile) // TODO: Use out of bounds error instead.
 
-let readMetadataTables (chunk: ChunkReader) file reader ustate =
-    file.MetadataTables <- ParsedMetadataTables.create chunk file.MetadataTablesHeader file.MetadataRootOffset
-    if chunk.HasFreeBytes(file.MetadataTablesOffset, file.MetadataTables.Length) then
-        Success(MetadataReader.read reader.ReadMetadataTables file.MetadataTables file.MetadataTablesOffset ustate, invalidOp "End reading?")
-    else Failure(file.MetadataTablesOffset, (invalidOp "Error for metadata tables out of bounds": ReadError))
-
 let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
     let text = &file.SectionHeaders.[file.TextSectionIndex].Data
     match rstate with
@@ -482,7 +476,10 @@ let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
             | Ok rstate' -> Success(ustate, rstate')
             | Error err -> Failure err
         | ValueNone -> Failure(file.StreamHeadersOffset, CannotFindMetadataTables)
-    | ReadMetadataTables -> readMetadataTables chunk file reader ustate
+    // TODO: Read Strings, GUID, UserString, and Blob before reading metadata.
+    | ReadMetadataTables ->
+        file.MetadataTables <- ParsedMetadataTables.create chunk file.MetadataTablesHeader file.MetadataRootOffset
+        Success(MetadataReader.read reader.ReadMetadataTables file.MetadataTables file.MetadataTablesOffset ustate, invalidOp "End reading?")
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
 /// <exception cref="System.ArgumentException">The <paramref name="stream"/> does not support reading.</exception>

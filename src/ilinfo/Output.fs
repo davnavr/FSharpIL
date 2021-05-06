@@ -208,8 +208,13 @@ let metadataTablesHeader (header: ParsedMetadataTablesHeader) offset wr =
 
     wr
 
-let metadataTables (tables: ParsedMetadataTables) =
-    metadataTablesHeader tables.Header
+let metadataTables (tables: ParsedMetadataTables) offset wr =
+    metadataTablesHeader tables.Header offset wr |> ignore // TODO: Fix, offset is for ParsedMetadataTables, not for header.
+
+    for i = 0 to int32 tables.Module.RowCount - 1 do
+        printfn ".module "
+
+    wr
 
 let write hflags tflags =
     { MetadataReader.empty with

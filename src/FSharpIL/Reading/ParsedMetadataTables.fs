@@ -108,22 +108,33 @@ type TypeRefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
 type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
     internal
         { Chunk: ChunkReader
+          Table: MetadataTableFlags
           TableOffset: uint64
           TableParser: 'Parser
           TableCount: uint32 }
 
     member this.RowCount = this.TableCount
-    /// The length of this metadata table in bytes.
-    member this.Length = uint64 this.TableCount * uint64 this.TableParser.Length
+    /// The size of this metadata table in bytes.
+    member this.Size = uint64 this.TableCount * uint64 this.TableParser.Length
+
+    member this.TryGetRow(i: uint32) =
+        if i >= this.RowCount then Error(MetadataRowOutOfBounds(this.Table, i, this.TableCount))
+        else
+            let buffer = Span.stackalloc<Byte> this.TableParser.Length
+            if this.Chunk.TryReadBytes(this.TableOffset + (uint64 i * uint64 this.TableParser.Length), buffer)
+            then Ok(this.TableParser.Parse buffer)
+            else Error(MetadataRowOutOfSection(this.Table, i))
 
     /// <exception cref="System.ArgumentOutOfRangeException">
-    /// Thrown when the index is negative or when the table does not contain enough rows.
+    /// Thrown when the index is negative or the table does not contain enough rows.
     /// </exception>
     member this.Item with get(i: int32) =
-        if i < 0 || uint32 i >= this.RowCount then raise(IndexOutOfRangeException())
-        let buffer = Span.stackalloc<Byte> this.TableParser.Length
-        this.Chunk.ReadBytes(this.TableOffset + (uint64 i * uint64 this.TableParser.Length), buffer)
-        this.TableParser.Parse buffer
+        if i < 0 then raise(IndexOutOfRangeException())
+        else
+            match this.TryGetRow(uint32 i) with
+            | Error(MetadataRowOutOfBounds _) -> raise(IndexOutOfRangeException())
+            | Error err -> failwithf "Error occured while retrieving row at index %i, %O" i err
+            | Ok row -> row
 
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTables =
@@ -131,12 +142,13 @@ type ParsedMetadataTables =
         { Chunk: ChunkReader
           TablesHeader: ParsedMetadataTablesHeader
           TablesOffset: uint64
-          [<DefaultValue>] mutable TablesLength: uint64
+          [<DefaultValue>] mutable TablesSize: uint64
           [<DefaultValue>] mutable ModuleTable: ParsedMetadataTable<ModuleParser, ParsedModuleRow>
           [<DefaultValue>] mutable TypeRefTable: ParsedMetadataTable<TypeRefParser, ParsedTypeRefRow> voption }
 
     member this.Header = this.TablesHeader
-    member this.Length = this.TablesLength
+    /// The size of the metadata tables in bytes.
+    member this.Size = this.TablesSize
     /// Offset from start of section containing the CLI metadata to the first byte of the first row of the first table.
     member this.Offset = this.TablesOffset
 
@@ -154,21 +166,22 @@ module ParsedMetadataTables =
               TablesHeader = header
               TablesOffset = offset }
         for KeyValue(table, count) in header.Rows do
-            let offset' = offset + tables.TablesLength
             match table with
             | MetadataTableFlags.Module ->
                 tables.ModuleTable <-
                     { Chunk = chunk
-                      TableOffset = offset'
+                      Table = table
+                      TableOffset = tables.TablesSize
                       TableParser = ModuleParser header.HeapSizes
                       TableCount = count }
-                tables.TablesLength <- tables.TablesLength + tables.ModuleTable.Length
+                tables.TablesSize <- tables.TablesSize + tables.ModuleTable.Size
             | MetadataTableFlags.TypeRef ->
                 tables.TypeRefTable <- ValueSome
                     { Chunk = chunk
-                      TableOffset = offset'
+                      Table = table
+                      TableOffset = tables.TablesSize
                       TableParser = TypeRefParser(header.HeapSizes, header.Rows)
                       TableCount = count }
-                tables.TablesLength <- tables.TablesLength + tables.TypeRefTable.Value.Length
+                tables.TablesSize <- tables.TablesSize + tables.TypeRefTable.Value.Size
             | _ -> () // Temporary to get printing to work
         tables
