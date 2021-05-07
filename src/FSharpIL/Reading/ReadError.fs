@@ -9,19 +9,25 @@ open FSharpIL.Metadata
 [<NoComparison; NoEquality>]
 [<RequireQualifiedAccess>]
 type ParsedStructure =
+    | CliHeader
+    | CliMetadataRoot
     | StreamHeader of index: int32
     | StringHeap of size: uint64
     | GuidHeap of size: uint64
     | UserStringHeap of size: uint64
     | BlobHeap of size: uint64
+    | MetadataRow of table: MetadataTableFlags * index: uint32
 
     override this.ToString() =
         match this with
+        | CliHeader -> "the CLI metadata header"
+        | CliMetadataRoot -> "the CLI metadata root"
         | StreamHeader i -> sprintf "the CLI metadata stream header at index %i" i
         | StringHeap size -> sprintf "the \"#Strings\" metadata heap (%i bytes)" size
         | GuidHeap size -> sprintf "the \"#GUID\" metadata heap (%i bytes)" size
         | UserStringHeap size -> sprintf "the \"#US\" metadata heap (%i bytes)" size
         | BlobHeap size -> sprintf "the \"#Blob\" metadata heap (%i bytes)" size
+        | MetadataRow(table, index) -> sprintf "the %A metadata row at index %i (0x%08x)" table index index
 
 [<NoComparison; NoEquality>]
 type ReadError =
@@ -34,14 +40,11 @@ type ReadError =
     | CliHeaderTooSmall of size: uint32
     | MetadataVersionHasNoNullTerminator of version: byte[]
     | StructureOutsideOfCurrentSection of ParsedStructure
-    | [<System.Obsolete>] StreamHeaderOutOfSection of index: int32
     | MissingNullTerminator of string
-    | [<System.Obsolete>] StringHeapOutOfSection of size: uint64
     | InvalidStringIndex of offset: uint32 * size: uint64
     | CannotFindMetadataTables
     | MissingModuleTable
     | MetadataRowOutOfBounds of table: MetadataTableFlags * index: uint32 * count: uint32
-    | [<System.Obsolete>] MetadataRowOutOfSection of table: MetadataTableFlags * index: uint32
     | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile
 
@@ -67,10 +70,7 @@ type ReadError =
             sprintf
                 "%O does not fit within the current section, check that the offset to the structure or the size of the section is correct"
                 structure
-        | StreamHeaderOutOfSection i ->
-            sprintf "the CLI metadata stream header at index %i does not fit within in the current section" i
         | MissingNullTerminator name -> sprintf "the string \"%s\" does not end in a null terminator" name
-        | StringHeapOutOfSection size -> sprintf "the \"#Strings\" metadata heap (%i bytes) does not fit within the current section" size
         | InvalidStringIndex(offset, size) ->
             sprintf "Invalid offset into the \"#Strings\" heap (0x%08X), maximum valid offset is (0x%08X)" offset (size - 1UL)
         | CannotFindMetadataTables -> "the stream containing the metadata tables \"#~\" could not be found"
@@ -83,8 +83,6 @@ type ReadError =
                 index
                 count
                 count
-        | MetadataRowOutOfSection(table, index) ->
-            sprintf "the %A metadata row at index %i (0x%08x) is outside of the section" table index index
         | CannotReadDebugTables -> "the metadata tables contain debugging metadata, which is currently not supported by FSharpIL"
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
 

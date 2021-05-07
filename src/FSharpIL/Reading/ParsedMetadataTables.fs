@@ -124,7 +124,7 @@ type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
             let buffer = Span.stackalloc<Byte> this.TableParser.Length
             if this.Chunk.TryReadBytes(this.TableOffset + (uint64 i * uint64 this.TableParser.Length), buffer)
             then Ok(this.TableParser.Parse buffer)
-            else Error(MetadataRowOutOfSection(this.Table, i))
+            else Error(StructureOutsideOfCurrentSection(ParsedStructure.MetadataRow(this.Table, i)))
 
     /// <exception cref="System.ArgumentOutOfRangeException">
     /// Thrown when the index is negative or the table does not contain enough rows.

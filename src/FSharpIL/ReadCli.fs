@@ -296,8 +296,8 @@ let findTextOffset (text: inref<SectionLocation>) { Rva = rva } (offset: byref<u
         Success(ustate, rstate)
     else Failure(uint64 rva, RvaNotInTextSection rva)
 
-// TODO: For functions that read for ChunkReader, don't use UnexpectedEndOfFile, make new error called UnexpectedEndOfSection or something.
 let readCliHeader (chunk: ChunkReader) file reader ustate =
+    let foffset = file.CliHeaderOffset + file.TextSectionOffset
     match chunk.TryParse<ParseU4, _> file.CliHeaderOffset with
     | ValueSome size when size < Size.CliHeader -> Failure(file.CliHeaderOffset, CliHeaderTooSmall size)
     | ValueSome size ->
@@ -318,11 +318,11 @@ let readCliHeader (chunk: ChunkReader) file reader ustate =
                   ExportAddressTableJumps = Bytes.readU8 52 fields
                   ManagedNativeHeader = Bytes.readU8 60 fields }
             Success (
-                MetadataReader.read reader.ReadCliHeader file.CliHeader (file.TextSectionOffset + file.CliHeaderOffset) ustate,
+                MetadataReader.read reader.ReadCliHeader file.CliHeader foffset ustate,
                 FindMetadataRoot
             )
-        else Failure(offset, UnexpectedEndOfFile)
-    | _ -> Failure(file.CliHeaderOffset, UnexpectedEndOfFile)
+        else Failure(file.TextSectionOffset + offset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
+    | _ -> Failure(file.CliHeaderOffset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
 
 let readMetadataVersion (version: byte[]) =
     let mutable cont, i = true, version.Length - 1
@@ -341,10 +341,12 @@ let readMetadataRoot (chunk: ChunkReader) file reader ustate =
     // Last 4 bytes are for Flags and Streams
     let buffer = Span.stackalloc<byte> 16
     let offset = file.MetadataRootOffset + 4UL
+    let foffset = file.TextSectionOffset + offset
     if chunk.TryReadBytes(offset, buffer.Slice(0, 12)) then
         let length = Bytes.readU4 8 buffer
         let version = Array.zeroCreate(int32 length)
         let offset' = offset + 12UL
+        let foffset' = file.TextSectionOffset + offset'
         if chunk.TryReadBytes(offset', Span version) then
             match readMetadataVersion version with
             | ValueSome version' when chunk.TryReadBytes(offset' + uint64 length, buffer.Slice 12) ->
@@ -359,13 +361,13 @@ let readMetadataRoot (chunk: ChunkReader) file reader ustate =
                       Flags = Bytes.readU2 12 buffer
                       Streams = scount }
                 Success (
-                    MetadataReader.read reader.ReadMetadataRoot file.MetadataRoot (file.TextSectionOffset + offset) ustate,
+                    MetadataReader.read reader.ReadMetadataRoot file.MetadataRoot foffset ustate,
                     ReadStreamHeaders
                 )
-            | ValueSome _ -> Failure(offset' + uint64 length, UnexpectedEndOfFile) // TODO: Use out of bounds error instead.
-            | ValueNone -> Failure(offset', MetadataVersionHasNoNullTerminator version)
-        else Failure(offset', UnexpectedEndOfFile) // TODO: Use out of bounds error instead.
-    else Failure(offset, UnexpectedEndOfFile) // TODO: Use out of bounds error instead.
+            | ValueSome _ -> Failure(foffset' + uint64 length, UnexpectedEndOfFile)
+            | ValueNone -> Failure(foffset', MetadataVersionHasNoNullTerminator version)
+        else Failure(foffset', UnexpectedEndOfFile)
+    else Failure(foffset, UnexpectedEndOfFile)
 
 let readStreamName (chunk: ChunkReader) offset = // TODO: Make this recursive instead.
     let name = Span.stackalloc<byte> 32 // According to (II.24.2.2), the name of the stream is limited to 32 characters.
@@ -405,7 +407,7 @@ let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span
             then Success(ustate', ReadStringsStream)
             else readStreamHeaders chunk file fields (i + 1) (offset' + uint64 name.Length) reader ustate'
         | Error err -> Failure(offset, MissingNullTerminator err)
-    else Failure(offset, StreamHeaderOutOfSection i)
+    else Failure(offset, StructureOutsideOfCurrentSection(ParsedStructure.StreamHeader i))
 
 let readMetadataHeap i chunk file (heap: outref<_>) =
     let header: inref<_> = &file.StreamHeaders.[i]
