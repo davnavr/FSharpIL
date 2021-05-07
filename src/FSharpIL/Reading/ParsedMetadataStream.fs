@@ -24,7 +24,16 @@ type internal ParsedMetadataStream =
 module internal ParsedMetadataStream =
     let [<Literal>] DefaultBufferSize = 32;
 
-    let ofHeader (chunk: ChunkReader) { ParsedStreamHeader.Offset = Convert.U8 offset; Size = Convert.U8 size } =
+    let ofHeader
+        roffset
+        (chunk: ChunkReader)
+        { ParsedStreamHeader.Offset = Convert.U8 offset; Size = Convert.U8 size }
+        (stream: outref<_>) =
         if chunk.HasFreeBytes(offset, size) then
-            Ok { Chunk = chunk; StreamOffset = offset; StreamSize = size; Buffer = Array.zeroCreate DefaultBufferSize }
-        else Error size
+            stream <-
+                { Chunk = chunk
+                  StreamOffset = roffset + offset
+                  StreamSize = size
+                  Buffer = Array.zeroCreate DefaultBufferSize }
+            true
+        else false

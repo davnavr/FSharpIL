@@ -29,6 +29,8 @@ type MetadataReader<'State> =
       ReadStreamHeader: (ParsedStreamHeader -> int32 -> uint64 -> 'State -> 'State) voption
       ReadStringsStream: Reader<ParsedStringsStream, 'State>
       ReadGuidStream: Reader<ParsedGuidStream, 'State>
+      ReadUserStringStream: Reader<ParsedUserStringStream, 'State>
+      ReadBlobStream: Reader<ParsedBlobStream, 'State>
       ReadMetadataTables: Reader<ParsedMetadataTables, 'State>
       HandleError: ErrorHandler<'State> }
 
@@ -62,5 +64,7 @@ module MetadataReader =
           ReadStreamHeader = ValueNone
           ReadStringsStream = ValueNone
           ReadGuidStream = ValueNone
+          ReadUserStringStream = ValueNone
+          ReadBlobStream = ValueNone
           ReadMetadataTables = ValueNone
           HandleError = throwOnError }

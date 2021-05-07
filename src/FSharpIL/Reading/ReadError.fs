@@ -7,6 +7,23 @@ open FSharpIL
 open FSharpIL.Metadata
 
 [<NoComparison; NoEquality>]
+[<RequireQualifiedAccess>]
+type ParsedStructure =
+    | StreamHeader of index: int32
+    | StringHeap of size: uint64
+    | GuidHeap of size: uint64
+    | UserStringHeap of size: uint64
+    | BlobHeap of size: uint64
+
+    override this.ToString() =
+        match this with
+        | StreamHeader i -> sprintf "the CLI metadata stream header at index %i" i
+        | StringHeap size -> sprintf "the \"#Strings\" metadata heap (%i bytes)" size
+        | GuidHeap size -> sprintf "the \"#GUID\" metadata heap (%i bytes)" size
+        | UserStringHeap size -> sprintf "the \"#US\" metadata heap (%i bytes)" size
+        | BlobHeap size -> sprintf "the \"#Blob\" metadata heap (%i bytes)" size
+
+[<NoComparison; NoEquality>]
 type ReadError =
     | InvalidMagic of expected: ImmutableArray<byte> * actual: byte[]
     | CannotMoveToPreviousOffset of offset: uint64
@@ -16,14 +33,15 @@ type ReadError =
     | RvaNotInTextSection of rva: uint32
     | CliHeaderTooSmall of size: uint32
     | MetadataVersionHasNoNullTerminator of version: byte[]
-    | StreamHeaderOutOfSection of index: int32
+    | StructureOutsideOfCurrentSection of ParsedStructure
+    | [<System.Obsolete>] StreamHeaderOutOfSection of index: int32
     | MissingNullTerminator of string
-    | StringHeapOutOfSection of size: uint64
+    | [<System.Obsolete>] StringHeapOutOfSection of size: uint64
     | InvalidStringIndex of offset: uint32 * size: uint64
     | CannotFindMetadataTables
     | MissingModuleTable
     | MetadataRowOutOfBounds of table: MetadataTableFlags * index: uint32 * count: uint32
-    | MetadataRowOutOfSection of table: MetadataTableFlags * index: uint32
+    | [<System.Obsolete>] MetadataRowOutOfSection of table: MetadataTableFlags * index: uint32
     | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile
 
@@ -45,6 +63,10 @@ type ReadError =
             sprintf
                 "the metadata version in the CLI metadata root \"%s\" does not end in a null terminator"
                 (Encoding.UTF8.GetString version)
+        | StructureOutsideOfCurrentSection structure ->
+            sprintf
+                "%O does not fit within the current section, check that the offset to the structure or the size of the section is correct"
+                structure
         | StreamHeaderOutOfSection i ->
             sprintf "the CLI metadata stream header at index %i does not fit within in the current section" i
         | MissingNullTerminator name -> sprintf "the string \"%s\" does not end in a null terminator" name

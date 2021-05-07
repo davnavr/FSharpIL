@@ -9,19 +9,17 @@ open FSharpIL
 
 /// <summary>Represents an offset into the <c>#Strings</c> metadata heap (II.24.2.3).</summary>
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-type ParsedString (offset: uint32) =
-    member _.Offset = offset
-    member _.IsNull = offset = 0u
-
-[<AutoOpen>]
-module ParsedString = let inline (|ParsedString|) (offset: ParsedString) = offset.Offset
+type ParsedString =
+    internal { StringOffset: uint32 }
+    static member op_Implicit { StringOffset = offset } = offset
 
 /// <summary>Represents the <c>#Strings</c> metadata heap, which contains null-terminated UTF-8 strings (II.24.2.3).</summary>
 [<Sealed>]
 type ParsedStringsStream internal (stream: ParsedMetadataStream) =
+    member _.Size = stream.StreamSize
     member _.IsValidOffset offset = stream.IsValidOffset offset
 
-    member private _.TryGet(ParsedString offset) =
+    member private _.TryGet { StringOffset = offset } =
         let rec inner i =
             let offset' = uint64 offset + uint64 i
             if offset' >= stream.StreamSize
@@ -54,10 +52,3 @@ type ParsedStringsStream internal (stream: ParsedMetadataStream) =
         match this.TryGetSpan(offset, &buffer) with
         | Ok() -> Ok(Encoding.UTF8.GetString(Span.asReadOnly buffer))
         | Error err -> Error err
-
-[<RequireQualifiedAccess>]
-module internal ParsedStringsStream =
-    let ofHeader chunk header =
-        match ParsedMetadataStream.ofHeader chunk header with
-        | Ok stream -> Ok(ParsedStringsStream stream)
-        | Error size -> Error(StringHeapOutOfSection size)

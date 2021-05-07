@@ -19,13 +19,13 @@ module internal OffsetParser =
 [<IsReadOnly; Struct>]
 type StringParser (sizes: HeapSizes) =
     interface IByteParser<ParsedString> with
-        member _.Parse buffer = ParsedString(OffsetParser.read buffer)
+        member _.Parse buffer = { ParsedString.StringOffset = OffsetParser.read buffer }
         member _.Length = sizes.StringSize
 
 [<IsReadOnly; Struct>]
 type GuidParser (sizes: HeapSizes) =
     interface IByteParser<ParsedGuid> with
-        member _.Parse buffer = ParsedGuid(OffsetParser.read buffer)
+        member _.Parse buffer = { ParsedGuid.GuidOffset = OffsetParser.read buffer }
         member _.Length = sizes.GuidSize
 
 // TODO: Allow usage of existing types in FSharpIL.Metadata by using generic parameters and remove "string" and GUID and using some sort of index and builder system just like with Blobs.

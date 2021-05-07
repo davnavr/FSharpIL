@@ -8,12 +8,10 @@ open FSharpIL
 
 /// <summary>Represents an index into the <c>#GUID</c> metadata heap (II.24.2.5).</summary>
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-type ParsedGuid (offset: uint32) =
-    member _.Offset = offset
-    member _.IsNull = offset = 0u
-
-[<AutoOpen>]
-module ParsedGuid = let inline (|ParsedGuid|) (index: ParsedGuid) = index.Offset
+type ParsedGuid =
+    internal { GuidOffset: uint32 }
+    member this.IsZero = this.GuidOffset = 0u
+    static member op_Implicit { GuidOffset = offset } = offset
 
 [<NoComparison; NoEquality>]
 type ParsedGuidStream =
@@ -22,7 +20,7 @@ type ParsedGuidStream =
           GuidOffset: uint64
           GuidSize: uint64 }
     member this.IsValidOffset offset = this.Chunk.IsValidOffset(uint64 offset + 15UL)
-    member this.TryGetGuid(ParsedGuid i) =
+    member this.TryGetGuid { ParsedGuid.GuidOffset = i } =
         match i with
         | 0u -> Ok Guid.Empty
         | _ when this.IsValidOffset i ->

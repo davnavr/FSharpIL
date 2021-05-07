@@ -86,13 +86,13 @@ type MutableFile =
       [<DefaultValue>] mutable StreamHeadersOffset: uint64
       [<DefaultValue>] mutable StreamHeaders: ParsedStreamHeader[]
       [<DefaultValue>] mutable StringsStreamIndex: int32 voption
-      [<DefaultValue>] mutable StringsHeap: ParsedStringsStream
+      [<DefaultValue>] mutable StringsStream: ParsedStringsStream
       [<DefaultValue>] mutable GuidStreamIndex: int32 voption
       [<DefaultValue>] mutable GuidStream: ParsedGuidStream
       [<DefaultValue>] mutable UserStringStreamIndex: int32 voption
-      [<DefaultValue>] mutable UserStringStream: unit
+      [<DefaultValue>] mutable UserStringStream: ParsedUserStringStream
       [<DefaultValue>] mutable BlobStreamIndex: int32 voption
-      [<DefaultValue>] mutable BlobStream: unit
+      [<DefaultValue>] mutable BlobStream: ParsedBlobStream
       [<DefaultValue>] mutable MetadataTablesIndex: int32 voption
       //[<DefaultValue>] mutable StringStreamIndex: int32 voption
       [<DefaultValue>] mutable MetadataTablesHeader: ParsedMetadataTablesHeader
@@ -407,46 +407,78 @@ let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span
         | Error err -> Failure(offset, MissingNullTerminator err)
     else Failure(offset, StreamHeaderOutOfSection i)
 
+let readMetadataHeap i chunk file (heap: outref<_>) =
+    let header: inref<_> = &file.StreamHeaders.[i]
+    let offset = file.TextSectionOffset + file.MetadataRootOffset + uint64 header.Offset
+    let success = ParsedMetadataStream.ofHeader file.MetadataRootOffset chunk header &heap
+    struct(success, offset, uint64 header.Size)
+
 let readStringsHeap chunk file reader ustate =
     match file.StringsStreamIndex with
     | ValueSome i ->
-        let header: inref<_> = &file.StreamHeaders.[i]
-        let offset = file.TextSectionOffset + file.MetadataRootOffset + uint64 header.Offset
-        match ParsedStringsStream.ofHeader chunk header with
-        | Ok strings ->
-            file.StringsHeap <- strings
+        let mutable heap = Unchecked.defaultof<_>
+        match readMetadataHeap i chunk file &heap with
+        | true, offset, _ ->
+            file.StringsStream <- ParsedStringsStream heap
             Success (
                 MetadataReader.read
                     reader.ReadStringsStream
-                    strings
+                    file.StringsStream
                     offset
                     ustate,
                 ReadGuidStream
             )
-        | Error err -> Failure(offset, err)
+        | false, offset, size -> Failure(offset, StructureOutsideOfCurrentSection(ParsedStructure.StringHeap size))
     | ValueNone -> Success(ustate, ReadGuidStream)
 
 let readGuidHeap (chunk: ChunkReader) file reader ustate =
     match file.GuidStreamIndex with
     | ValueSome i ->
         let header: inref<_> = &file.StreamHeaders.[i]
-        let offset = file.MetadataRootOffset + uint64 header.Offset // TODO: Don't duplicate code for getting stream header and file offset
-        if chunk.HasFreeBytes(offset, uint64 header.Size) then
-            file.GuidStream <-
-                { Chunk = chunk
-                  GuidOffset = offset
-                  GuidSize = uint64 header.Size }
-            Success(MetadataReader.read reader.ReadGuidStream file.GuidStream (file.TextSectionOffset + offset) ustate, ReadUserStringStream)
-        else invalidOp ""
+        let offset = file.MetadataRootOffset + uint64 header.Offset
+        let foffset = file.TextSectionOffset + offset
+        let size = uint64 header.Size
+        if chunk.HasFreeBytes(offset, size) then
+            file.GuidStream <- { Chunk = chunk; GuidOffset = offset; GuidSize = uint64 header.Size }
+            Success(MetadataReader.read reader.ReadGuidStream file.GuidStream foffset ustate, ReadUserStringStream)
+        else Failure(foffset, StructureOutsideOfCurrentSection(ParsedStructure.GuidHeap size))
     | ValueNone -> Success(ustate, ReadUserStringStream)
 
 let readUserStringHeap chunk file reader ustate =
     match file.StringsStreamIndex with
     | ValueSome i ->
-        let header: inref<_> = &file.StreamHeaders.[i]
-        let offset = file.TextSectionOffset + file.MetadataRootOffset + uint64 header.Offset
-        failwith "Read US heap"
+        let mutable heap = Unchecked.defaultof<_>
+        match readMetadataHeap i chunk file &heap with
+        | true, offset, _ ->
+            file.UserStringStream <- ParsedUserStringStream heap
+            Success (
+                MetadataReader.read
+                    reader.ReadUserStringStream
+                    file.UserStringStream
+                    offset
+                    ustate,
+                ReadBlobStream
+            )
+        | false, offset, size -> Failure(offset, StructureOutsideOfCurrentSection(ParsedStructure.UserStringHeap size))
     | ValueNone -> Success(ustate, ReadBlobStream)
+
+let readBlobHeap chunk file reader ustate =
+    match file.BlobStreamIndex with
+    | ValueSome i ->
+        let mutable heap = Unchecked.defaultof<_>
+        match readMetadataHeap i chunk file &heap with
+        | true, offset, _ ->
+            file.BlobStream <- ParsedBlobStream heap
+            Success (
+                MetadataReader.read
+                    reader.ReadBlobStream
+                    file.BlobStream
+                    offset
+                    ustate,
+                ReadMetadataTablesHeader
+            )
+        | false, offset, size -> Failure(offset, StructureOutsideOfCurrentSection(ParsedStructure.BlobHeap size))
+    | ValueNone -> Success(ustate, ReadMetadataTablesHeader)
 
 /// Calculates the number of row counts for the valid metadata tables.
 let rec tableRowsCount (valid: MetadataTableFlags) count =
@@ -523,8 +555,8 @@ let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
             readStreamHeaders chunk file fields 0 file.StreamHeadersOffset reader ustate
     | ReadStringsStream -> readStringsHeap chunk file reader ustate
     | ReadGuidStream -> readGuidHeap chunk file reader ustate
-    | ReadUserStringStream -> invalidOp ""
-    | ReadBlobStream -> invalidOp "" // ReadMetadataTablesHeader
+    | ReadUserStringStream -> readUserStringHeap chunk file reader ustate
+    | ReadBlobStream -> readBlobHeap chunk file reader ustate
     | ReadMetadataTablesHeader ->
         match file.MetadataTablesIndex with
         | ValueSome i ->
