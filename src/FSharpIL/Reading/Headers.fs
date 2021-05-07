@@ -38,7 +38,7 @@ type ParsedMetadataRoot =
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
 type ParsedStreamHeader =
-    { /// Offset to the start of these stream from the beginning of the CLI metadata root.
+    { /// Offset to the start of this stream from the beginning of the CLI metadata root.
       Offset: uint32
       /// The size of the stream in bytes, rounded up to a multiple of four.
       Size: uint32

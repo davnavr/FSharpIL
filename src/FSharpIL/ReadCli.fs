@@ -85,6 +85,14 @@ type MutableFile =
       [<DefaultValue>] mutable MetadataRoot: ParsedMetadataRoot
       [<DefaultValue>] mutable StreamHeadersOffset: uint64
       [<DefaultValue>] mutable StreamHeaders: ParsedStreamHeader[]
+      [<DefaultValue>] mutable StringsStreamIndex: int32 voption
+      [<DefaultValue>] mutable StringsHeap: ParsedStringsStream
+      [<DefaultValue>] mutable GuidStreamIndex: int32 voption
+      [<DefaultValue>] mutable GuidStream: ParsedGuidStream
+      [<DefaultValue>] mutable UserStringStreamIndex: int32 voption
+      [<DefaultValue>] mutable UserStringStream: unit
+      [<DefaultValue>] mutable BlobStreamIndex: int32 voption
+      [<DefaultValue>] mutable BlobStream: unit
       [<DefaultValue>] mutable MetadataTablesIndex: int32 voption
       //[<DefaultValue>] mutable StringStreamIndex: int32 voption
       [<DefaultValue>] mutable MetadataTablesHeader: ParsedMetadataTablesHeader
@@ -386,15 +394,59 @@ let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span
             let ustate' = MetadataReader.readStreamHeader reader header i (file.TextSectionOffset + offset) ustate
 
             if name = Magic.MetadataStream then file.MetadataTablesIndex <- ValueSome i
-            //if name = Magic.StringStream then file.StringStreamIndex <- ValueSome i
+            if name = Magic.StringStream then file.StringsStreamIndex <- ValueSome i
+            if name = Magic.GuidStream then file.GuidStreamIndex <- ValueSome i
+            if name = Magic.UserStringStream then file.UserStringStreamIndex <- ValueSome i
+            if name = Magic.BlobStream then file.BlobStreamIndex <- ValueSome i
 
             file.StreamHeaders.[i] <- header
             
             if i >= file.StreamHeaders.Length - 1
-            then Success(ustate', ReadMetadataTablesHeader)
+            then Success(ustate', ReadStringsStream)
             else readStreamHeaders chunk file fields (i + 1) (offset' + uint64 name.Length) reader ustate'
         | Error err -> Failure(offset, MissingNullTerminator err)
-    else Failure(offset, StreamHeaderOutOfBounds i)
+    else Failure(offset, StreamHeaderOutOfSection i)
+
+let readStringsHeap chunk file reader ustate =
+    match file.StringsStreamIndex with
+    | ValueSome i ->
+        let header: inref<_> = &file.StreamHeaders.[i]
+        let offset = file.TextSectionOffset + file.MetadataRootOffset + uint64 header.Offset
+        match ParsedStringsStream.ofHeader chunk header with
+        | Ok strings ->
+            file.StringsHeap <- strings
+            Success (
+                MetadataReader.read
+                    reader.ReadStringsStream
+                    strings
+                    offset
+                    ustate,
+                ReadGuidStream
+            )
+        | Error err -> Failure(offset, err)
+    | ValueNone -> Success(ustate, ReadGuidStream)
+
+let readGuidHeap (chunk: ChunkReader) file reader ustate =
+    match file.GuidStreamIndex with
+    | ValueSome i ->
+        let header: inref<_> = &file.StreamHeaders.[i]
+        let offset = file.MetadataRootOffset + uint64 header.Offset // TODO: Don't duplicate code for getting stream header and file offset
+        if chunk.HasFreeBytes(offset, uint64 header.Size) then
+            file.GuidStream <-
+                { Chunk = chunk
+                  GuidOffset = offset
+                  GuidSize = uint64 header.Size }
+            Success(MetadataReader.read reader.ReadGuidStream file.GuidStream (file.TextSectionOffset + offset) ustate, ReadUserStringStream)
+        else invalidOp ""
+    | ValueNone -> Success(ustate, ReadUserStringStream)
+
+let readUserStringHeap chunk file reader ustate =
+    match file.StringsStreamIndex with
+    | ValueSome i ->
+        let header: inref<_> = &file.StreamHeaders.[i]
+        let offset = file.TextSectionOffset + file.MetadataRootOffset + uint64 header.Offset
+        failwith "Read US heap"
+    | ValueNone -> Success(ustate, ReadBlobStream)
 
 /// Calculates the number of row counts for the valid metadata tables.
 let rec tableRowsCount (valid: MetadataTableFlags) count =
@@ -469,6 +521,10 @@ let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
         | _ ->
             let fields = Span.stackalloc<byte> 8
             readStreamHeaders chunk file fields 0 file.StreamHeadersOffset reader ustate
+    | ReadStringsStream -> readStringsHeap chunk file reader ustate
+    | ReadGuidStream -> readGuidHeap chunk file reader ustate
+    | ReadUserStringStream -> invalidOp ""
+    | ReadBlobStream -> invalidOp "" // ReadMetadataTablesHeader
     | ReadMetadataTablesHeader ->
         match file.MetadataTablesIndex with
         | ValueSome i ->
@@ -476,10 +532,16 @@ let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
             | Ok rstate' -> Success(ustate, rstate')
             | Error err -> Failure err
         | ValueNone -> Failure(file.StreamHeadersOffset, CannotFindMetadataTables)
-    // TODO: Read Strings, GUID, UserString, and Blob before reading metadata.
     | ReadMetadataTables ->
         file.MetadataTables <- ParsedMetadataTables.create chunk file.MetadataTablesHeader file.MetadataRootOffset
-        Success(MetadataReader.read reader.ReadMetadataTables file.MetadataTables file.MetadataTablesOffset ustate, invalidOp "End reading?")
+        Success (
+            MetadataReader.read
+                reader.ReadMetadataTables
+                file.MetadataTables
+                (file.TextSectionOffset + file.MetadataTablesOffset)
+                ustate,
+            invalidOp "End reading?"
+        )
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
 /// <exception cref="System.ArgumentException">The <paramref name="stream"/> does not support reading.</exception>

@@ -11,6 +11,10 @@ type MetadataReadState =
     | ReadMetadataSignature
     | ReadMetadataRoot
     | ReadStreamHeaders
+    | ReadStringsStream
+    | ReadGuidStream
+    | ReadUserStringStream
+    | ReadBlobStream
     | ReadMetadataTablesHeader
     | ReadMetadataTables
 
@@ -22,6 +26,10 @@ type MetadataReadState =
         | ReadMetadataSignature -> "reading CLI metadata root signature"
         | ReadMetadataRoot -> "reading CLI metadata root"
         | ReadStreamHeaders -> "reading metadata stream headers"
+        | ReadStringsStream -> "reading metadata strings stream"
+        | ReadGuidStream -> "reading metadata GUID stream"
+        | ReadUserStringStream -> "reading metadata user strings stream"
+        | ReadBlobStream -> "reading metadata blob stream"
         | ReadMetadataTablesHeader -> "reading metadata tables header"
         | ReadMetadataTables -> "reading metadata tables"
 

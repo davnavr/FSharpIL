@@ -117,6 +117,7 @@ type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
     /// The size of this metadata table in bytes.
     member this.Size = uint64 this.TableCount * uint64 this.TableParser.Length
 
+    // TODO: Consider having reader functions for each table instead, for better error handling and reporting that includes offset and other information
     member this.TryGetRow(i: uint32) =
         if i >= this.RowCount then Error(MetadataRowOutOfBounds(this.Table, i, this.TableCount))
         else

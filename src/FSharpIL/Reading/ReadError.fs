@@ -16,10 +16,11 @@ type ReadError =
     | RvaNotInTextSection of rva: uint32
     | CliHeaderTooSmall of size: uint32
     | MetadataVersionHasNoNullTerminator of version: byte[]
-    | StreamHeaderOutOfBounds of index: int32
+    | StreamHeaderOutOfSection of index: int32
     | MissingNullTerminator of string
-    | CannotFindMetadataTables
+    | StringHeapOutOfSection of size: uint64
     | InvalidStringIndex of offset: uint32 * size: uint64
+    | CannotFindMetadataTables
     | MissingModuleTable
     | MetadataRowOutOfBounds of table: MetadataTableFlags * index: uint32 * count: uint32
     | MetadataRowOutOfSection of table: MetadataTableFlags * index: uint32
@@ -44,12 +45,13 @@ type ReadError =
             sprintf
                 "the metadata version in the CLI metadata root \"%s\" does not end in a null terminator"
                 (Encoding.UTF8.GetString version)
-        | StreamHeaderOutOfBounds i ->
+        | StreamHeaderOutOfSection i ->
             sprintf "the CLI metadata stream header at index %i does not fit within in the current section" i
         | MissingNullTerminator name -> sprintf "the string \"%s\" does not end in a null terminator" name
-        | CannotFindMetadataTables -> "the stream containing the metadata tables \"#~\" could not be found"
+        | StringHeapOutOfSection size -> sprintf "the \"#Strings\" metadata heap (%i bytes) does not fit within the current section" size
         | InvalidStringIndex(offset, size) ->
             sprintf "Invalid offset into the \"#Strings\" heap (0x%08X), maximum valid offset is (0x%08X)" offset (size - 1UL)
+        | CannotFindMetadataTables -> "the stream containing the metadata tables \"#~\" could not be found"
         | MissingModuleTable -> "the Module table (0x00) is missing"
         | MetadataRowOutOfBounds(table, index, count) ->
             sprintf
