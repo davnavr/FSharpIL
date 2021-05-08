@@ -14,21 +14,18 @@ type Writer =
       WriteField: string -> uint32 -> string -> unit
       WriteError: ErrorHandler<unit> }
 
-type Kind =
-    | Stdout
-    //| Html
-
-    interface Argu.IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Stdout -> "the assembly information is directed to standard output"
+[<IsReadOnly; Struct>]
+type Format =
+    | IL
+    | Html
 
 let create =
     function
-    | Stdout ->
+    | IL ->
         { WriteHeader = fun offset -> printfn "(0x%X) %s" (uint64 offset)
           WriteField = printfn " - %s (%i bytes) = %s"
           WriteError = fun state err offset wr -> stderr.WriteLine(ReadError.message state err offset); wr }
+    | Html -> invalidOp "HTML output is not yet supported"
 
 let private header (flags: 'Flags when 'Flags :> Enum) (expected: 'Flags) writer: Reader<_, _> =
     if flags.HasFlag expected
