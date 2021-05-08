@@ -10,7 +10,7 @@ open FSharpIL.PortableExecutable
 open FSharpIL.Reading
 
 type Writer =
-    { WriteHeader: uint64 -> string -> unit
+    { WriteHeader: FileOffset -> string -> unit
       WriteField: string -> uint32 -> string -> unit
       WriteError: ErrorHandler<unit> }
 
@@ -26,7 +26,7 @@ type Kind =
 let create =
     function
     | Stdout ->
-        { WriteHeader = printfn "(0x%X) %s"
+        { WriteHeader = fun offset -> printfn "(0x%X) %s" (uint64 offset)
           WriteField = printfn " - %s (%i bytes) = %s"
           WriteError = fun state err offset wr -> stderr.WriteLine(ReadError.message state err offset); wr }
 
@@ -136,7 +136,7 @@ let dataDirectories (directories: ParsedDataDirectories) offset wr =
         writeRvaAndSize name directories.[i] wr
     wr
 
-let sectionHeaders (headers: ParsedSectionHeaders) offset wr =
+let sectionHeaders (headers: ParsedSectionHeaders) (offset: FileOffset) wr =
     for i = 0 to headers.Length - 1 do
         let header = headers.[i]
         wr.WriteHeader (offset + (uint64 i * 40UL)) (sprintf "\"%O\" Section Header" header.SectionName)

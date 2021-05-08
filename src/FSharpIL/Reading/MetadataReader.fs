@@ -5,9 +5,9 @@ open System.Collections.Immutable
 open FSharpIL.PortableExecutable
 
 // TODO: Allow reading functions to end reading early by making the return value a voption.
-type Reader<'Arg, 'State> = ('Arg -> uint64 -> 'State -> 'State) voption
+type Reader<'Arg, 'State> = ('Arg -> FileOffset -> 'State -> 'State) voption
 
-type ErrorHandler<'State> = ReadState -> ReadError -> uint64 -> 'State -> 'State
+type ErrorHandler<'State> = ReadState -> ReadError -> FileOffset -> 'State -> 'State
 
 type ParsedCoffHeader = CoffHeader<uint16, uint16>
 type ParsedStandardFields = StandardFields<PEImageKind, uint32, uint32 voption>
@@ -26,7 +26,7 @@ type MetadataReader<'State> =
       ReadSectionHeaders: Reader<ParsedSectionHeaders, 'State>
       ReadCliHeader: Reader<ParsedCliHeader, 'State>
       ReadMetadataRoot: Reader<ParsedMetadataRoot, 'State>
-      ReadStreamHeader: (ParsedStreamHeader -> int32 -> uint64 -> 'State -> 'State) voption
+      ReadStreamHeader: (ParsedStreamHeader -> int32 -> FileOffset -> 'State -> 'State) voption
       ReadStringsStream: Reader<ParsedStringsStream, 'State>
       ReadGuidStream: Reader<ParsedGuidStream, 'State>
       ReadUserStringStream: Reader<ParsedUserStringStream, 'State>
@@ -36,7 +36,7 @@ type MetadataReader<'State> =
 
 [<RequireQualifiedAccess>]
 module MetadataReader =
-    let skip (_: uint64): 'State -> _ = id
+    let skip (_: FileOffset): 'State -> _ = id
 
     let inline read reader arg =
         match reader with
@@ -48,7 +48,7 @@ module MetadataReader =
         | ValueSome reader' -> reader' header i offset
         | ValueNone -> id
 
-    let inline throwOnError (state: ReadState) error (offset: uint64) (_: 'State): 'State =
+    let inline throwOnError (state: ReadState) error offset (_: 'State): 'State =
         ReadException(state, error, offset) |> raise
 
     [<GeneralizableValue>]

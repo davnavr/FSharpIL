@@ -16,6 +16,9 @@ type ParsedStructure =
     | GuidHeap of size: uint64
     | UserStringHeap of size: uint64
     | BlobHeap of size: uint64
+    | MetadataSignature
+    | MetadataTablesHeader
+    | MetadataTableRowCounts
     | MetadataRow of table: MetadataTableFlags * index: uint32
 
     override this.ToString() =
@@ -27,6 +30,9 @@ type ParsedStructure =
         | GuidHeap size -> sprintf "the \"#GUID\" metadata heap (%i bytes)" size
         | UserStringHeap size -> sprintf "the \"#US\" metadata heap (%i bytes)" size
         | BlobHeap size -> sprintf "the \"#Blob\" metadata heap (%i bytes)" size
+        | MetadataSignature -> "the CLI metadata signature"
+        | MetadataTablesHeader -> "the CLI metadata tables header"
+        | MetadataTableRowCounts -> "the CLI metadata table row counts"
         | MetadataRow(table, index) -> sprintf "the %A metadata row at index %i (0x%08x)" table index index
 
 [<NoComparison; NoEquality>]
@@ -88,9 +94,9 @@ type ReadError =
 
 [<RequireQualifiedAccess>]
 module ReadError =
-    let message (state: ReadState) (error: ReadError) (offset: uint64) =
+    let message (state: ReadState) (error: ReadError) { FileOffset = offset } =
         sprintf "Error occured while %s at offset 0x%X: %s" state.Description offset error.Message
 
 exception ReadException
-    of state: ReadState * error: ReadError * offset: uint64
+    of state: ReadState * error: ReadError * offset: FileOffset
     with override this.Message = ReadError.message this.state this.error this.offset

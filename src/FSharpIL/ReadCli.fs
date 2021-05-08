@@ -26,7 +26,7 @@ type Reader (src: Stream) =
     let mutable pos = 0UL
     do if not src.CanRead then invalidArg "src" "The stream must support reading"
 
-    member _.Offset = pos
+    member _.Offset = { FileOffset = pos }
 
     member _.ReadByte() =
         pos <- pos + 1UL
@@ -47,7 +47,7 @@ type Reader (src: Stream) =
         pos <- pos + skipped
         skipped
 
-    member this.MoveTo(offset: uint64) =
+    member this.MoveTo { FileOffset = offset } =
         if offset < pos then
             Error(CannotMoveToPreviousOffset offset)
         elif offset = pos then
@@ -77,12 +77,13 @@ type MutableFile =
       [<DefaultValue>] mutable SectionHeaders: SectionHeader<SectionLocation>[]
       [<DefaultValue>] mutable TextSectionIndex: int32
       [<DefaultValue>] mutable TextSectionData: ChunkReader
-      /// File offset from start of section to the CLI header (II.25.3.3).
+      /// Offset from start of section to the CLI header (II.25.3.3).
       [<DefaultValue>] mutable CliHeaderOffset: uint64
       [<DefaultValue>] mutable CliHeader: ParsedCliHeader
-      /// File offset from start of section to the CLI metadata root (II.24.2.1).
+      /// Offset from start of section to the CLI metadata root (II.24.2.1).
       [<DefaultValue>] mutable MetadataRootOffset: uint64
       [<DefaultValue>] mutable MetadataRoot: ParsedMetadataRoot
+      /// Offset from start of section to the first byte of the CLI metadata stream headers (II.24.2.2).
       [<DefaultValue>] mutable StreamHeadersOffset: uint64
       [<DefaultValue>] mutable StreamHeaders: ParsedStreamHeader[]
       [<DefaultValue>] mutable StringsStreamIndex: int32 voption
@@ -96,12 +97,12 @@ type MutableFile =
       [<DefaultValue>] mutable MetadataTablesIndex: int32 voption
       //[<DefaultValue>] mutable StringStreamIndex: int32 voption
       [<DefaultValue>] mutable MetadataTablesHeader: ParsedMetadataTablesHeader
-      /// File offset from start of section to the start of the metadata tables (II22.1).
+      /// Offset from start of section to the start of the metadata tables (II.22.1).
       [<DefaultValue>] mutable MetadataTablesOffset: uint64
       [<DefaultValue>] mutable MetadataTables: ParsedMetadataTables }
 
     /// <summary>File offset to the first byte of the <c>.text</c> section.</summary>
-    member this.TextSectionOffset = uint64 this.SectionHeaders.[this.TextSectionIndex].Data.RawDataPointer
+    member this.TextSectionOffset = { FileOffset = uint64 this.SectionHeaders.[this.TextSectionIndex].Data.RawDataPointer }
 
 let inline rvaAndSize i buffer = { Rva = Bytes.readU4 i buffer; Size = Bytes.readU4 (i + 4) buffer }
 
@@ -250,7 +251,7 @@ let readTextSection (src: Reader) (file: MutableFile) =
 
 let readPE (src: Reader) file reader ustate rstate =
     let inline moveto target state' =
-        match src.MoveTo target with
+        match src.MoveTo { FileOffset = uint64 target } with
         | Ok() -> Success(ustate, state')
         | Error err -> Failure err
     match rstate with
@@ -266,7 +267,7 @@ let readPE (src: Reader) file reader ustate rstate =
         if src.ReadU4(&file.Lfanew) then
             Success(MetadataReader.read reader.ReadLfanew file.Lfanew offset ustate, MoveToPESignature)
         else Failure UnexpectedEndOfFile
-    | MoveToPESignature -> moveto (uint64 file.Lfanew) ReadPESignature
+    | MoveToPESignature -> moveto file.Lfanew ReadPESignature
     | ReadPESignature ->
         let signature = Span.stackalloc<byte> 4
         match src.ReadBytes signature with
@@ -286,7 +287,7 @@ let readPE (src: Reader) file reader ustate rstate =
         readDataDirectories src file.NTSpecificFields.NumberOfDataDirectories &file.DataDirectories reader ustate
     | ReadSectionHeaders ->
         readSectionHeaders src file.CoffHeader.NumberOfSections file reader ustate
-    | MoveToTextSectionData -> moveto (uint64 file.SectionHeaders.[file.TextSectionIndex].Data.RawDataPointer) ReadTextSectionData
+    | MoveToTextSectionData -> moveto file.SectionHeaders.[file.TextSectionIndex].Data.RawDataPointer ReadTextSectionData
     | ReadTextSectionData -> readTextSection src file
 
 /// <summary>Calculates a file offset from an RVA pointing to a location within the <c>.text</c> section.</summary>
@@ -294,12 +295,12 @@ let findTextOffset (text: inref<SectionLocation>) { Rva = rva } (offset: byref<u
     if text.ContainsRva rva then
         offset <- uint64 rva - uint64 text.VirtualAddress
         Success(ustate, rstate)
-    else Failure(uint64 rva, RvaNotInTextSection rva)
+    else Failure({ FileOffset = uint64 rva }, RvaNotInTextSection rva)
 
 let readCliHeader (chunk: ChunkReader) file reader ustate =
     let foffset = file.CliHeaderOffset + file.TextSectionOffset
     match chunk.TryParse<ParseU4, _> file.CliHeaderOffset with
-    | ValueSome size when size < Size.CliHeader -> Failure(file.CliHeaderOffset, CliHeaderTooSmall size)
+    | ValueSome size when size < Size.CliHeader -> Failure(foffset, CliHeaderTooSmall size)
     | ValueSome size ->
         let fields = Span.heapalloc<byte>(int32 size)
         let offset = file.CliHeaderOffset + 4UL
@@ -322,7 +323,7 @@ let readCliHeader (chunk: ChunkReader) file reader ustate =
                 FindMetadataRoot
             )
         else Failure(file.TextSectionOffset + offset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
-    | _ -> Failure(file.CliHeaderOffset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
+    | _ -> Failure(foffset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
 
 let readMetadataVersion (version: byte[]) =
     let mutable cont, i = true, version.Length - 1
@@ -334,8 +335,16 @@ let readMetadataVersion (version: byte[]) =
     then ValueNone
     else ValueSome(MetadataVersion(uint8 i + 1uy, version.[..i]))
 
-// TODO: Optimize reading of metadata root and streams, by using the Size part of the MetaData RVA and Size.
+let readMetadataSignature (chunk: ChunkReader) file ustate =
+    let magic = Span.stackalloc<byte> 4
+    let foffset = file.MetadataRootOffset + file.TextSectionOffset
+    if chunk.TryReadBytes(file.MetadataRootOffset, magic) then
+        if Magic.matches Magic.CliSignature magic
+        then Success(ustate, ReadMetadataRoot)
+        else Failure(foffset, InvalidMagic(Magic.CliSignature, Bytes.ofSpan 4 magic))
+    else Failure(foffset, StructureOutsideOfCurrentSection ParsedStructure.MetadataSignature)
 
+// TODO: Optimize reading of metadata root and streams, by using the Size part of the MetaData RVA and Size.
 let readMetadataRoot (chunk: ChunkReader) file reader ustate =
     // First 12 bytes are for MajorVersion, MinorVersion, Reserved and Length
     // Last 4 bytes are for Flags and Streams
@@ -383,6 +392,7 @@ let readStreamName (chunk: ChunkReader) offset = // TODO: Make this recursive in
     else Ok(name.Slice(0, Round.upTo 4 i).ToArray())
 
 let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span<byte>) i offset reader ustate =
+    let foffset = file.TextSectionOffset + offset
     if chunk.TryReadBytes(offset, fields) then
         let offset' = offset + 8UL
         match readStreamName chunk offset' with
@@ -393,7 +403,7 @@ let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span
                   Name =
                     let mutable name' = name
                     Unsafe.As &name' }
-            let ustate' = MetadataReader.readStreamHeader reader header i (file.TextSectionOffset + offset) ustate
+            let ustate' = MetadataReader.readStreamHeader reader header i foffset ustate
 
             if name = Magic.MetadataStream then file.MetadataTablesIndex <- ValueSome i
             if name = Magic.StringStream then file.StringsStreamIndex <- ValueSome i
@@ -406,8 +416,8 @@ let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span
             if i >= file.StreamHeaders.Length - 1
             then Success(ustate', ReadStringsStream)
             else readStreamHeaders chunk file fields (i + 1) (offset' + uint64 name.Length) reader ustate'
-        | Error err -> Failure(offset, MissingNullTerminator err)
-    else Failure(offset, StructureOutsideOfCurrentSection(ParsedStructure.StreamHeader i))
+        | Error err -> Failure(foffset, MissingNullTerminator err)
+    else Failure(foffset, StructureOutsideOfCurrentSection(ParsedStructure.StreamHeader i))
 
 let readMetadataHeap i chunk file (heap: outref<_>) =
     let header: inref<_> = &file.StreamHeaders.[i]
@@ -504,8 +514,9 @@ let rec readTableCounts lookup (valid: MetadataTableFlags) (counts: uint32[]) co
             else counti
         readTableCounts lookup (valid >>> 1) counts counti' (validi + 1)
 
-let readTablesHeader (chunk: ChunkReader) file offset =
+let readTablesHeader (chunk: ChunkReader) (file: MutableFile) offset =
     let fields = Span.stackalloc<byte> 24
+    let offset' = offset + file.TextSectionOffset
     if chunk.TryReadBytes(offset, fields) then
         let valid: MetadataTableFlags = LanguagePrimitives.EnumOfValue(Bytes.readU8 8 fields)
         //invalidOp "TODO: Check that specified tables are supported."
@@ -530,10 +541,10 @@ let readTablesHeader (chunk: ChunkReader) file offset =
             file.MetadataTablesOffset <- offset + 24UL + uint64 rcounts.Length
 
             Ok ReadMetadataTables
-        else invalidOp ""
-    else Error(offset, UnexpectedEndOfFile) // TODO: Use out of bounds error instead.
+        else Error(offset', StructureOutsideOfCurrentSection ParsedStructure.MetadataTableRowCounts)
+    else Error(offset', StructureOutsideOfCurrentSection ParsedStructure.MetadataTablesHeader)
 
-let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
+let readMetadata chunk file reader ustate rstate =
     let text = &file.SectionHeaders.[file.TextSectionIndex].Data
     match rstate with
     | FindCliHeader ->
@@ -541,13 +552,7 @@ let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
     | ReadCliHeader -> readCliHeader chunk file reader ustate
     | FindMetadataRoot ->
         findTextOffset &text file.CliHeader.MetaData &file.MetadataRootOffset ReadMetadataSignature ustate
-    | ReadMetadataSignature ->
-        let magic = Span.stackalloc<byte> 4
-        if chunk.TryReadBytes(file.MetadataRootOffset, magic) then
-            if Magic.matches Magic.CliSignature magic
-            then Success(ustate, ReadMetadataRoot)
-            else Failure(file.MetadataRootOffset, InvalidMagic(Magic.CliSignature, Bytes.ofSpan 4 magic))
-        else Failure(file.MetadataRootOffset, UnexpectedEndOfFile)
+    | ReadMetadataSignature -> readMetadataSignature chunk file ustate
     | ReadMetadataRoot -> readMetadataRoot chunk file reader ustate
     | ReadStreamHeaders ->
         match file.MetadataRoot.Streams with
@@ -565,7 +570,7 @@ let readMetadata (chunk: ChunkReader) (file: MutableFile) reader ustate rstate =
             match readTablesHeader chunk file (file.MetadataRootOffset + uint64 file.StreamHeaders.[i].Offset) with
             | Ok rstate' -> Success(ustate, rstate')
             | Error err -> Failure err
-        | ValueNone -> Failure(file.StreamHeadersOffset, CannotFindMetadataTables)
+        | ValueNone -> Failure(file.TextSectionOffset + file.StreamHeadersOffset, CannotFindMetadataTables)
     | ReadMetadataTables ->
         file.MetadataTables <- ParsedMetadataTables.create chunk file.MetadataTablesHeader file.MetadataRootOffset
         Success (
