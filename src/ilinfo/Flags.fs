@@ -7,6 +7,11 @@ type IncludeHeaders =
     | NoHeaders
     | IncludeHeaders
 
+[<IsReadOnly; Struct>]
+type IncludeIL =
+    | IncludeIL
+    | NoIL
+
 [<RequireQualifiedAccess>]
 type OutputKind =
     | Console

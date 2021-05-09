@@ -14,6 +14,7 @@ type ParsedStandardFields = StandardFields<PEImageKind, uint32, uint32 voption>
 type ParsedNTSpecificFields = NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
 type ParsedDataDirectories = ImmutableArray<RvaAndSize>
 type ParsedSectionHeaders = ImmutableArray<SectionHeader<SectionLocation>>
+type MetadataTableReader<'State> = ParsedStringsStream voption -> ParsedGuidStream voption -> ParsedMetadataTables -> FileOffset -> 'State -> 'State
 
 // TODO: Rename this to something else.
 [<NoComparison; NoEquality>]
@@ -31,7 +32,7 @@ type MetadataReader<'State> =
       ReadGuidStream: Reader<ParsedGuidStream, 'State>
       ReadUserStringStream: Reader<ParsedUserStringStream, 'State>
       ReadBlobStream: Reader<ParsedBlobStream, 'State>
-      ReadMetadataTables: Reader<ParsedMetadataTables, 'State>
+      ReadMetadataTables: MetadataTableReader<'State> voption
       HandleError: ErrorHandler<'State> }
 
 [<RequireQualifiedAccess>]

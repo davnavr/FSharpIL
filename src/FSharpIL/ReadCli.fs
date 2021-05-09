@@ -544,6 +544,21 @@ let readTablesHeader (chunk: ChunkReader) (file: MutableFile) offset =
         else Error(offset', StructureOutsideOfCurrentSection ParsedStructure.MetadataTableRowCounts)
     else Error(offset', StructureOutsideOfCurrentSection ParsedStructure.MetadataTablesHeader)
 
+let readMetadataTables file reader ustate =
+    match reader.ReadMetadataTables with
+    | ValueSome reader' ->
+        let inline stream index stream =
+            match index with
+            | ValueSome _ -> ValueSome stream
+            | ValueNone -> ValueNone
+        reader'
+            (stream file.StringsStreamIndex file.StringsStream)
+            (stream file.GuidStreamIndex file.GuidStream)
+            file.MetadataTables
+            (file.TextSectionOffset + file.MetadataTablesOffset)
+            ustate
+    | ValueNone -> ustate
+
 let readMetadata chunk file reader ustate rstate =
     let text = &file.SectionHeaders.[file.TextSectionIndex].Data
     match rstate with
@@ -573,14 +588,7 @@ let readMetadata chunk file reader ustate rstate =
         | ValueNone -> Failure(file.TextSectionOffset + file.StreamHeadersOffset, CannotFindMetadataTables)
     | ReadMetadataTables ->
         file.MetadataTables <- ParsedMetadataTables.create chunk file.MetadataTablesHeader file.MetadataRootOffset
-        Success (
-            MetadataReader.read
-                reader.ReadMetadataTables
-                file.MetadataTables
-                (file.TextSectionOffset + file.MetadataTablesOffset)
-                ustate,
-            invalidOp "End reading?"
-        )
+        Success(readMetadataTables file reader ustate, invalidOp "End reading?")
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>
 /// <exception cref="System.ArgumentException">The <paramref name="stream"/> does not support reading.</exception>

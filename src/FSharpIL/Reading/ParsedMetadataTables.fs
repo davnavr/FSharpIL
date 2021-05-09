@@ -19,7 +19,7 @@ module internal OffsetParser =
 [<IsReadOnly; Struct>]
 type StringParser (sizes: HeapSizes) =
     interface IByteParser<ParsedString> with
-        member _.Parse buffer = { ParsedString.StringOffset = OffsetParser.read buffer }
+        member _.Parse buffer = { ParsedString.StringOffset = OffsetParser.read(buffer.Slice(0, sizes.StringSize)) }
         member _.Length = sizes.StringSize
 
 [<IsReadOnly; Struct>]

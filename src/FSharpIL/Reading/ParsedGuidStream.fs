@@ -11,6 +11,7 @@ open FSharpIL
 type ParsedGuid =
     internal { GuidOffset: uint32 }
     member this.IsZero = this.GuidOffset = 0u
+    override this.ToString() = sprintf "0x%08X" this.GuidOffset
     static member op_Implicit { GuidOffset = offset } = offset
 
 [<NoComparison; NoEquality>]
@@ -28,3 +29,6 @@ type ParsedGuidStream =
             this.Chunk.ReadBytes(this.GuidOffset + (uint64 i * 16UL), buffer)
             Ok(Guid(Span.asReadOnly buffer))
         | _ -> Error(invalidOp "error")
+    member this.GetGuid guid =
+        match this.TryGetGuid guid with
+        | Ok guid' -> guid'

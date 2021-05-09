@@ -8,6 +8,7 @@ open Argu
 type Argument =
     | Headers
     | Heaps
+    | No_IL
     | [<ExactlyOnce>] File of path: string
     | [<Unique>] Format of Output.Format
     | Launch_Debugger
@@ -18,6 +19,7 @@ type Argument =
             match this with
             | Headers -> "Include fields of file headers in the output."
             | Heaps -> "Include the raw metadata heaps in the output."
+            | No_IL -> "Exclude IL output."
             | File _ -> "Read input from the specified file."
             | Format _ -> "Output in the specified format."
             | Launch_Debugger -> "Launch the debugger."
@@ -25,6 +27,7 @@ type Argument =
 
 type ParsedArguments =
     { [<DefaultValue>] mutable IncludeHeaders: IncludeHeaders
+      [<DefaultValue>] mutable IncludeIL: IncludeIL
       [<DefaultValue>] mutable InputFile: string
       [<DefaultValue>] mutable LaunchDebugger: bool
       mutable Format: Output.Format
@@ -54,6 +57,8 @@ let main args =
         for arg in result.GetAllResults() do
             match arg with
             | Headers -> args'.IncludeHeaders <- IncludeHeaders
+            //| Heaps
+            | No_IL -> args'.IncludeIL <- NoIL
             | File file -> args'.InputFile <- file
             | Format format -> args'.Format <- format
             | Launch_Debugger -> args'.LaunchDebugger <- true
@@ -74,7 +79,7 @@ let main args =
                 match output with
                 | OutputKind.Console -> stdout
                 | OutputKind.File path -> new StreamWriter(path) :> TextWriter
-            Output.write args'.Format args'.IncludeHeaders
+            Output.write args'.Format args'.IncludeHeaders args'.IncludeIL
             |> FSharpIL.ReadCli.fromStream reader output'
             |> ignore
             0

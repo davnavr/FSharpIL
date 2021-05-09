@@ -11,6 +11,7 @@ open FSharpIL
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type ParsedString =
     internal { StringOffset: uint32 }
+    override this.ToString() = sprintf "0x%08X" this.StringOffset
     static member op_Implicit { StringOffset = offset } = offset
 
 /// <summary>Represents the <c>#Strings</c> metadata heap, which contains null-terminated UTF-8 strings (II.24.2.3).</summary>
@@ -52,3 +53,8 @@ type ParsedStringsStream internal (stream: ParsedMetadataStream) =
         match this.TryGetSpan(offset, &buffer) with
         | Ok() -> Ok(Encoding.UTF8.GetString(Span.asReadOnly buffer))
         | Error err -> Error err
+
+    member this.GetString offset =
+        match this.TryGetString offset with
+        | Ok str -> str
+        | Error err -> invalidArg "offset" (sprintf "Error, %s" err.Message)
