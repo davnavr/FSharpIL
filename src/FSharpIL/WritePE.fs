@@ -212,9 +212,9 @@ let write pe =
             let header' = writer.CreateWriter()
             writer.SkipBytes 16u
             writer.WriteU4 header.PointerToRelocations
-            writer.WriteU4 0u // PointerToLineNumbers
+            writer.WriteU4 header.PointerToLineNumbers
             writer.WriteU2 header.NumberOfRelocations
-            writer.WriteU2 0us // NumberOfLineNumbers
+            writer.WriteU2 header.NumberOfLineNumbers
             writer.WriteU4 header.Characteristics
             info.Sections.[i] <- header'
 

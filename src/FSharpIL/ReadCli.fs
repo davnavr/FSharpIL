@@ -217,9 +217,9 @@ let readSectionHeaders (src: Reader) (count: uint16) (file: MutableFile) reader 
                       RawDataSize = Bytes.readU4 (i' + 16) buffer
                       RawDataPointer = Bytes.readU4 (i' + 20) buffer }
                   PointerToRelocations = Bytes.readU4 (i' + 24) buffer
-                  // PointerToLineNumbers
+                  PointerToLineNumbers = Bytes.readU4 (i' + 28) buffer
                   NumberOfRelocations = Bytes.readU2 (i' + 32) buffer
-                  // NumberOfLineNumbers
+                  NumberOfLineNumbers = Bytes.readU2 (i' + 34) buffer
                   Characteristics = LanguagePrimitives.EnumOfValue(Bytes.readU4 (i' + 36) buffer) }
         Success(MetadataReader.read reader.ReadSectionHeaders (Unsafe.As &file.SectionHeaders) offset ustate, MoveToTextSectionData)
     else Failure UnexpectedEndOfFile

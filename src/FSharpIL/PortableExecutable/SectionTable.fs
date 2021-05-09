@@ -43,10 +43,9 @@ type SectionHeader<'Data> =
 
       /// Reserved value that should be set to zero.
       PointerToRelocations: uint32
-      //PointerToLineNumbers: uint32
-      /// Reserved value that should be set to zero.
+      PointerToLineNumbers: uint32
       NumberOfRelocations: uint16
-      //NumberOfLineNumbers: uint16
+      NumberOfLineNumbers: uint16
       Characteristics: SectionFlags }
 
 // TODO: Should custom sections be allowed? It would mean that the section name would have to be checked when looking for the .text or .rsrc section.
@@ -75,7 +74,9 @@ type Section =
         { SectionName = name
           Data = this.Data
           PointerToRelocations = 0u
+          PointerToLineNumbers = 0u
           NumberOfRelocations = 0us
+          NumberOfLineNumbers = 0us
           Characteristics = flags }
 
 // II.25.2.3.3
