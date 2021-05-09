@@ -17,10 +17,12 @@ type private Enumeration<'Enum when 'Enum :> Enum and 'Enum : equality> () =
             let cache = Dictionary<'Enum, string>()
             for field in fields do
                 let value = field.GetRawConstantValue()
-                //let value' = value :?> uint64 // TODO: Check if it is a signed or unsigned integer.
                 // If value is multiple by two, then add it
                 // TODO: Check if value is multiple by two
-                cache.[value :?> 'Enum] <- field.Name
+                // TODO: Check if it is a signed or unsigned integer.
+                match (value :?> IConvertible).ToUInt64 null with
+                | 0UL -> ()
+                | _ -> cache.[value :?> 'Enum] <- field.Name
             cache
 
 let inline integer wr (value: 'Integer) = fprintf wr "0x%0*X" (2 * sizeof<'Integer>) value

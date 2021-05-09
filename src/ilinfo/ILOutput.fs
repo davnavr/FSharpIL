@@ -1,8 +1,11 @@
 ﻿[<RequireQualifiedAccess>]
 module ILInfo.ILOutput
 
+open System.Text
+
 open Microsoft.FSharp.Core.Printf
 
+open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 open FSharpIL.Reading
 
@@ -10,9 +13,11 @@ let inline heading name (offset: FileOffset) wr =
     fprintfn wr "// ----- %s (0x%016X)" name (uint64 offset)
     wr
 
-let inline field name printer (value: 'Value) wr =
-    fprintfn wr "// %s (%i bytes) = %a" name sizeof<'Value> printer value
+let inline fieldf name size printer value wr =
+    fprintfn wr "// %s (%i bytes) = %a" name size printer value
     wr
+
+let inline field name printer (value: 'Value) wr = fieldf name sizeof<'Value> printer value wr
 
 let optional printer value wr =
     match value with
@@ -102,13 +107,14 @@ let dataDirectories (directories: ParsedDataDirectories) offset =
     heading "Data Directories" offset >> inner (directories.Length - 1)
 
 let sectionHeaders (headers: ParsedSectionHeaders) (offset: FileOffset) =
+    // TODO: Use Seq.fold instead.
     let rec inner i wr =
         match i with
         | -1 -> wr
         | _ ->
             let header = headers.[i]
             heading (sprintf "\"%O\" Section Header" header.SectionName) (offset + (uint64 i * 40UL)) wr
-            |> field "Name" (fun wr () -> wr.Write header.SectionName) () // TODO: Make sure length includes padding
+            |> field "Name" (fun wr () -> wr.Write header.SectionName) () // TODO: Make sure length includes padding // TODO: Fix length
             |> field "VirtualSize" Print.integer header.Data.VirtualSize
             |> field "VirtualAddress" Print.integer header.Data.VirtualAddress
             |> field "SizeOfRawData" Print.integer header.Data.RawDataSize
@@ -121,6 +127,63 @@ let sectionHeaders (headers: ParsedSectionHeaders) (offset: FileOffset) =
             |> ignore
             inner (i - 1) wr
     inner (headers.Length - 1)
+
+let cliHeader (header: ParsedCliHeader) offset =
+    heading "CLI Header" offset
+    >> field "Cb" Print.integer header.Size
+    >> field "MajorRuntimeVersion" Print.integer header.MajorRuntimeVersion
+    >> field "MinorRuntimeVersion" Print.integer header.MinorRuntimeVersion
+    >> field "MetaData" Print.rvaAndSize header.MetaData
+    >> field "Flags" Print.bitfield header.Flags
+    >> field "EntryPointToken" Print.integer header.EntryPointToken // TODO: Show what table the EntryPointToken refers to.
+    >> field "Resources" Print.rvaAndSize header.Resources
+    >> field "StrongNameSignature" Print.integer header.StrongNameSignature
+    >> field "CodeManagerTable" Print.integer header.CodeManagerTable
+    >> field "VTableFixups" Print.rvaAndSize header.VTableFixups
+    >> field "ExportAddressTableJumps" Print.integer header.ExportAddressTableJumps
+    >> field "ManagedNativeHeader" Print.integer header.ManagedNativeHeader
+
+let metadataRoot (root: ParsedMetadataRoot) offset =
+    heading "CLI Metadata Root" offset
+    >> field "MajorVersion" Print.integer root.MajorVersion
+    >> field "MinorVersion" Print.integer root.MinorVersion
+    >> field "Reserved" Print.integer root.Reserved
+    >> field "Length" Print.integer root.Version.Length
+    // TODO: Make sure length includes padding
+    >> fieldf "Version" root.Version.Length (fun wr () -> fprintf wr "\"%O\"" root.Version) ()
+    >> field "Flags" Print.integer root.Flags
+    >> field "Streams" Print.integer root.Streams
+
+let streamHeader (header: ParsedStreamHeader) _ _ =
+    field "Offset" Print.integer header.Offset
+    >> field "Size" Print.integer header.Size
+    >> fieldf
+        "StreamName"
+        header.Name.Length
+        (fun wr () ->
+            let name = header.Name.AsSpan()
+            fprintf wr "\"%s\"" (Encoding.ASCII.GetString name))
+        ()
+
+let metadataTablesHeader header offset =
+    let rec rows wr flags =
+        match flags with
+        | MetadataTableFlags.None -> ()
+        | _ ->
+            let flags' = flags >>> 1
+            match header.Rows.TryGetValue(flags &&& MetadataTableFlags.Module) with
+            | true, count -> invalidOp ""
+            | false, _ -> ()
+            rows wr flags'
+    heading "Metadata Tables Header" offset
+    >> field "Reserved" Print.integer header.Reserved1
+    >> field "MajorVersion" Print.integer header.MajorVersion
+    >> field "MinorVersion" Print.integer header.MinorVersion
+    >> field "HeapSizes" Print.bitfield header.HeapSizes
+    >> field "Reserved" Print.integer header.Reserved2
+    >> field "Valid" Print.bitfield header.Valid
+    >> field "Sorted" Print.bitfield header.Sorted
+    >> fieldf "Rows" (4 * header.Rows.Count) rows header.Valid // TODO: Add brackets for list thing.
 
 let handleError state error offset wr =
     eprintfn "error : %s" (ReadError.message state error offset)
@@ -137,4 +200,7 @@ let write headers =
        ReadNTSpecificFields = header ntSpecificFields
        ReadDataDirectories = header dataDirectories
        ReadSectionHeaders = header sectionHeaders
+       ReadCliHeader = header cliHeader
+       ReadMetadataRoot = header metadataRoot
+       ReadStreamHeader = header streamHeader
        HandleError = handleError }
