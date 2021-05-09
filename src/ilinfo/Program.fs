@@ -5,11 +5,7 @@ open System.IO
 
 open Argu
 
-open FSharpIL
-open FSharpIL.Metadata
-
 type Argument =
-    | All
     | Headers
     | Heaps
     | [<ExactlyOnce>] File of path: string
@@ -20,7 +16,6 @@ type Argument =
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | All -> "Include all information in the output."
             | Headers -> "Include fields of file headers in the output."
             | Heaps -> "Include the raw metadata heaps in the output."
             | File _ -> "Read input from the specified file."
@@ -28,13 +23,9 @@ type Argument =
             | Launch_Debugger -> "Launch the debugger."
             | Output _ -> "Direct output to the specified file instead of to standard output."
 
-[<RequireQualifiedAccess>]
-type OutputKind =
-    | Console
-    | File of string
-
 type ParsedArguments =
-    { [<DefaultValue>] mutable InputFile: string
+    { [<DefaultValue>] mutable IncludeHeaders: IncludeHeaders
+      [<DefaultValue>] mutable InputFile: string
       [<DefaultValue>] mutable LaunchDebugger: bool
       mutable Format: Output.Format
       mutable OutputKind: OutputKind }
@@ -62,6 +53,7 @@ let main args =
 
         for arg in result.GetAllResults() do
             match arg with
+            | Headers -> args'.IncludeHeaders <- IncludeHeaders
             | File file -> args'.InputFile <- file
             | Format format -> args'.Format <- format
             | Launch_Debugger -> args'.LaunchDebugger <- true
@@ -82,6 +74,9 @@ let main args =
                 match output with
                 | OutputKind.Console -> stdout
                 | OutputKind.File path -> new StreamWriter(path) :> TextWriter
+            Output.write args'.Format args'.IncludeHeaders
+            |> FSharpIL.ReadCli.fromStream reader output'
+            |> ignore
             0
     with
     | :? ArguException as e ->

@@ -7,6 +7,8 @@ open System.Reflection
 
 open Microsoft.FSharp.Core.Printf
 
+open FSharpIL.Reading
+
 [<AbstractClass; Sealed>]
 type private Enumeration<'Enum when 'Enum :> Enum and 'Enum : equality> () =
     static member val Cache =
@@ -23,9 +25,13 @@ type private Enumeration<'Enum when 'Enum :> Enum and 'Enum : equality> () =
 
 let inline integer wr (value: 'Integer) = fprintf wr "0x%0*X" (2 * sizeof<'Integer>) value
 
+// TODO: List enum flags that are set vertically
+let inline enumeration wr (value: 'Flag when 'Flag : enum<'Integer>) =
+    fprintf wr "0x%0*X (%O)" sizeof<'Flag> (LanguagePrimitives.EnumToValue<_, 'Integer> value) value
+
 let bitfield (wr: System.IO.TextWriter) (value: 'Enum when 'Enum :> Enum) =
-    value.ToString("X")
-    |> fprintf wr "0x%s "
+    fprintf wr "0x%s " (value.ToString "X")
+
     Seq.choose
         (fun (KeyValue(flag, name)) ->
             if value.HasFlag flag
@@ -34,3 +40,5 @@ let bitfield (wr: System.IO.TextWriter) (value: 'Enum when 'Enum :> Enum) =
         Enumeration<'Enum>.Cache.Value
     |> String.concat ", "
     |> fprintf wr "[ %s ]"
+
+let inline rvaAndSize wr { Rva = rva; Size = size } = fprintf wr "(RVA = 0x%08X, Size = 0x%08X)" rva size

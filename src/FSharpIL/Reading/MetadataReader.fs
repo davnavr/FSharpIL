@@ -52,7 +52,7 @@ module MetadataReader =
         ReadException(state, error, offset) |> raise
 
     [<GeneralizableValue>]
-    let empty: MetadataReader<'State> =
+    let empty<'State> =
         { ReadLfanew = ValueNone
           ReadCoffHeader = ValueNone
           ReadStandardFields = ValueNone
@@ -68,3 +68,4 @@ module MetadataReader =
           ReadBlobStream = ValueNone
           ReadMetadataTables = ValueNone
           HandleError = throwOnError }
+        : MetadataReader<'State>
