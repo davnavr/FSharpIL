@@ -1,5 +1,6 @@
 ﻿namespace FSharpIL.Reading
 
+open System
 open System.Collections.Immutable
 open System.Text
 
@@ -51,6 +52,8 @@ type ReadError =
     | CannotFindMetadataTables
     | MissingModuleTable
     | MetadataRowOutOfBounds of table: MetadataTableFlags * index: uint32 * count: uint32
+    | InvalidUnsignedCompressedInteger of uint8
+    | BlobOutOfBounds of offset: uint64 * size: uint64
     | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile
 
@@ -89,6 +92,13 @@ type ReadError =
                 index
                 count
                 count
+        | InvalidUnsignedCompressedInteger value ->
+            Convert.ToString(value, 2) |> sprintf "the first byte of the compressed integer (0b%s) is invalid"
+        | BlobOutOfBounds(offset, size) ->
+            sprintf
+                "the offset into the \"#Blob\" heap (0x%016X) points to a blob with an invalid size (0x%016X), the blob extends outside of the heap"
+                offset
+                size
         | CannotReadDebugTables -> "the metadata tables contain debugging metadata, which is currently not supported by FSharpIL"
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
 

@@ -20,7 +20,7 @@ type ParsedStringsStream internal (stream: ParsedMetadataStream) =
     member _.Size = stream.StreamSize
     member _.IsValidOffset offset = stream.IsValidOffset offset
 
-    member private _.TryGet { StringOffset = offset } =
+    member private _.TryRead { StringOffset = offset } =
         let rec inner i =
             let offset' = uint64 offset + uint64 i
             if offset' >= stream.StreamSize
@@ -37,7 +37,7 @@ type ParsedStringsStream internal (stream: ParsedMetadataStream) =
         else Error(InvalidStringIndex(offset, stream.StreamSize))
 
     member private this.TryGetSpan(offset, buffer: outref<Span<byte>>) =
-        match this.TryGet offset with
+        match this.TryRead offset with
         | Ok i ->
             buffer <- Span(stream.Buffer).Slice(0, i - 1)
             Ok()
