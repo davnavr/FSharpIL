@@ -52,37 +52,33 @@ type ModuleParser (sizes: HeapSizes) =
         member _.Length = 2 + sizes.StringSize + (3 * sizes.GuidSize)
 
 [<IsReadOnly; Struct>]
-type ParsedTypeRefRow =
-    { ResolutionScope: ResolutionScope
-      TypeName: ParsedString
-      TypeNamespace: ParsedString }
-
-[<IsReadOnly; Struct>]
 type internal ParsedCodedIndex =
-    { Tag: uint32
+    { Tag: uint8
       Index: uint32 }
 
 [<RequireQualifiedAccess>]
-module internal CodedIndex =
+module CodedIndex =
     [<IsReadOnly; IsByRefLike; Struct>]
     type Parser = struct
+        /// Gets a value indicating whether this coded index would occupy four bytes.
         val IsLarge: bool
         val EncodingBits: int32
-        new (count: uint32, n: int32) = { IsLarge = count > (0xFFFFu >>> n); EncodingBits = n }
+        internal new (count: uint32, n: int32) = { IsLarge = count > (0xFFFFu >>> n); EncodingBits = n }
+        /// The number of bytes that this coded index would occupy.
         member this.Length = if this.IsLarge then 4 else 2
-        member this.Parse(buffer: Span<byte>) =
+        member internal this.Parse(buffer: Span<byte>) =
             if this.IsLarge then
                 let index = Bytes.readU4 0 buffer
-                { Tag = index >>> (32 - this.EncodingBits)
+                { Tag = uint8(index >>> (32 - this.EncodingBits))
                   Index = index &&& (UInt32.MaxValue >>> this.EncodingBits) }
             else
                 let index = Bytes.readU2 0 buffer
-                { Tag = uint32(index >>> (16 - this.EncodingBits))
+                { Tag = uint8(index >>> (16 - this.EncodingBits))
                   Index = uint32(index &&& (UInt16.MaxValue >>> this.EncodingBits)) }
-        member inline this.Parse(offset, buffer: Span<byte>) = this.Parse(buffer.Slice offset)
+        member inline internal this.Parse(offset, buffer: Span<byte>) = this.Parse(buffer.Slice offset)
     end
 
-    let inline resolutionScopeParser (counts: MetadataTableCounts) =
+    let resolutionScopeParser (counts: MetadataTableCounts) =
         Parser (
             counts.GetValueOrDefault MetadataTableFlags.Module
             + (counts.GetValueOrDefault MetadataTableFlags.ModuleRef)
@@ -91,15 +87,37 @@ module internal CodedIndex =
             2
         )
 
+// TODO: Have constants that store the tags for coded indices instead of duplicating them with the writing code.
+[<IsReadOnly; Struct>]
+type ParsedResolutionScope =
+    private { ResolutionScope: ParsedCodedIndex }
+
+// TODO: Use RawIndex<'T> type instead of uint32.
+
+[<RequireQualifiedAccess>]
+module ParsedResolutionScope =
+    let (|Null|Module|ModuleRef|AssemblyRef|TypeRef|Unknown|) { ResolutionScope = rscope } =
+        match rscope with
+        | { Index = 0u } -> Null
+        | { Tag = 0uy } -> Module rscope.Index
+        | { Tag = 1uy } -> ModuleRef rscope.Index
+        | { Tag = 2uy } -> AssemblyRef rscope.Index
+        | { Tag = 3uy } -> TypeRef rscope.Index
+        | { Tag = unknown } -> Unknown unknown
+
+[<IsReadOnly; Struct>]
+type ParsedTypeRefRow =
+    { ResolutionScope: ParsedResolutionScope
+      TypeName: ParsedString
+      TypeNamespace: ParsedString }
+
 [<IsReadOnly; Struct>]
 type TypeRefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
     interface IByteParser<ParsedTypeRefRow> with
         member _.Parse buffer =
             let str = StringParser sizes
             let rscope = CodedIndex.resolutionScopeParser counts
-            { ResolutionScope =
-                let rscope' = rscope.Parse buffer
-                ResolutionScope(LanguagePrimitives.EnumOfValue(uint8 rscope'.Tag), int32 rscope'.Index)
+            { ResolutionScope = { ResolutionScope = rscope.Parse buffer }
               TypeName = parse rscope.Length buffer str
               TypeNamespace = parse (rscope.Length + sizes.StringSize) buffer str }
         member _.Length = (CodedIndex.resolutionScopeParser counts).Length + (2 * sizes.StringSize)

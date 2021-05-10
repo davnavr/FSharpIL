@@ -145,17 +145,12 @@ let metadataRoot (root: ParsedMetadataRoot) offset wr =
     field "Streams" Print.integer wr root.Streams
     wr
 
-let streamHeader (header: ParsedStreamHeader) _ _ wr =
+let streamHeader (header: ParsedStreamHeader) _ offset wr =
+    let name = Encoding.ASCII.GetString(header.Name.AsSpan())
+    heading (sprintf "\"%s\" Stream Header" name) offset wr
     field "Offset" Print.integer wr header.Offset
     field "Size" Print.integer wr header.Size
-    fieldf
-        "StreamName"
-        header.Name.Length
-        (fun wr () ->
-            let name = header.Name.AsSpan()
-            fprintf wr "\"%s\"" (Encoding.ASCII.GetString name))
-        wr
-        ()
+    fieldf "Name" header.Name.Length (fun wr -> fprintf wr "\"%s\"") wr name
     wr
 
 let metadataTablesHeader header offset wr =
@@ -189,8 +184,7 @@ let metadataTablesHeader header offset wr =
 let moduleTable (tables: ParsedMetadataTables) strings guid (wr: TextWriter) =
     wr.WriteLine()
     wr.WriteLine "// Module (0x00)"
-    // Module
-    for i = 0 to int32 tables.Module.Size - 1 do
+    for i = 0 to int32 tables.Module.RowCount - 1 do
         let row = tables.Module.[i]
         let inline fguid name id = fieldf name tables.Header.HeapSizes.GuidSize (Print.guid guid) wr id
         field "Generation" Print.integer wr row.Generation
@@ -200,6 +194,32 @@ let moduleTable (tables: ParsedMetadataTables) strings guid (wr: TextWriter) =
         fguid "Mvid" row.Mvid
         fguid "GenerationId" row.EncId
         fguid "BaseGenerationId" row.EncBaseId
+
+let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
+    match tables.TypeRef with
+    | ValueSome table ->
+        wr.WriteLine()
+        wr.WriteLine "// TypeRef"
+        for i = 0 to int32 table.RowCount - 1 do
+            let row = table.[i]
+            fprintfn wr "// (0x%08X)" i
+            fieldf
+                "ResolutionScope"
+                (CodedIndex.resolutionScopeParser(tables.Header.Rows).Length)
+                (fun wr { ParsedTypeRefRow.ResolutionScope = rscope } ->
+                    match rscope with
+                    | ParsedResolutionScope.Null -> "Null"
+                    | ParsedResolutionScope.Unknown _ -> "Unknown"
+                    | ParsedResolutionScope.Module i -> sprintf "Module (0x%08X)" i
+                    | ParsedResolutionScope.ModuleRef i -> sprintf "ModuleRef (0x%08X)" i
+                    | ParsedResolutionScope.AssemblyRef i -> sprintf "AssemblyRef (0x%08X)" i
+                    | ParsedResolutionScope.TypeRef i -> sprintf "TypeRef (0x%08X)" i
+                    |> wr.Write)
+                wr
+                row
+            fieldf "TypeName" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeName
+            fieldf "TypeNamespace" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeNamespace
+    | ValueNone -> ()
 
 let metadataTables headers il strings guid (tables: ParsedMetadataTables) offset wr =
     match headers with
@@ -212,6 +232,7 @@ let metadataTables headers il strings guid (tables: ParsedMetadataTables) offset
     | NoIL, _, _ -> ()
     | IncludeIL, ValueSome strings', ValueSome guid' ->
         moduleTable tables strings' guid' wr
+        typeRefTable tables strings' wr
     wr
 
 let handleError state error offset wr =
