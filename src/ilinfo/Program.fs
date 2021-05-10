@@ -9,6 +9,8 @@ type Argument =
     | Headers
     | Heaps
     | No_IL
+    | Public_Only
+    | Visibility of VisibilityFilter list
     | [<ExactlyOnce>] File of path: string
     | [<Unique>] Format of Output.Format
     | Launch_Debugger
@@ -20,6 +22,8 @@ type Argument =
             | Headers -> "Include fields of file headers in the output."
             | Heaps -> "Include the raw metadata heaps in the output."
             | No_IL -> "Exclude IL output."
+            | Public_Only -> "Only include items with public visibility in the output."
+            | Visibility _ -> "Only include items with the specified visibility."
             | File _ -> "Read input from the specified file."
             | Format _ -> "Output in the specified format."
             | Launch_Debugger -> "Launch the debugger."
@@ -31,7 +35,8 @@ type ParsedArguments =
       [<DefaultValue>] mutable InputFile: string
       [<DefaultValue>] mutable LaunchDebugger: bool
       mutable Format: Output.Format
-      mutable OutputKind: OutputKind }
+      mutable OutputKind: OutputKind
+      mutable VisibilityFilter: VisibilityFilter }
 
 let (|ValidFile|NotFound|InvalidPath|UnauthorizedAccess|) path =
     try
@@ -52,13 +57,15 @@ let main args =
     let parser = ArgumentParser.Create<Argument>()
     try
         let result = parser.ParseCommandLine args
-        let args' = { Format = Output.IL; OutputKind = OutputKind.Console }
+        let args' = { Format = Output.IL; OutputKind = OutputKind.Console; VisibilityFilter = VisibilityFilter.Public }
 
         for arg in result.GetAllResults() do
             match arg with
             | Headers -> args'.IncludeHeaders <- IncludeHeaders
-            //| Heaps
+            | Heaps -> failwith "TODO: Allow printing of raw metadata heaps"
             | No_IL -> args'.IncludeIL <- NoIL
+            | Public_Only -> args'.VisibilityFilter <- VisibilityFilter.Public
+            | Visibility vis -> args'.VisibilityFilter <- List.reduce (|||) vis
             | File file -> args'.InputFile <- file
             | Format format -> args'.Format <- format
             | Launch_Debugger -> args'.LaunchDebugger <- true
@@ -79,7 +86,7 @@ let main args =
                 match output with
                 | OutputKind.Console -> stdout
                 | OutputKind.File path -> new StreamWriter(path) :> TextWriter
-            Output.write args'.Format args'.IncludeHeaders args'.IncludeIL
+            Output.write args'.Format args'.IncludeHeaders args'.IncludeIL args'.VisibilityFilter
             |> FSharpIL.ReadCli.fromStream reader output'
             |> ignore
             0

@@ -234,79 +234,80 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
             fieldf "TypeNamespace" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeNamespace
     | ValueNone -> ()
 
-let typeDefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) (wr: TextWriter) =
+let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsStream) (wr: TextWriter) =
     match tables.TypeDef with
     | ValueSome table ->
         for i = 0 to int32 table.RowCount - 1 do
             let row = table.[i]
-            wr.WriteLine()
-            rowIndex wr i
-            field "Flags" Print.bitfield wr row.Flags
-            //field "TypeName"
-            //field "TypeNamespace"
-            //field "Extends"
-            field "FieldList" Print.integer wr row.FieldList
-            field "MethodList" Print.integer wr row.MethodList
-
-            // TODO: Print this differently for nested classes.
-            wr.Write ".class "
-
-            if row.Flags.HasFlag TypeAttributes.Interface then wr.Write "interface "
-            if row.Flags &&& TypeAttributes.VisibilityMask > TypeAttributes.Public then wr.Write "nested "
-
-            match row.Flags &&& TypeAttributes.VisibilityMask with
-            | TypeAttributes.NestedPublic 
-            | TypeAttributes.Public -> "public "
-            | TypeAttributes.NestedFamily -> "family "
-            | TypeAttributes.NestedAssembly -> "assembly "
-            | TypeAttributes.NestedFamANDAssem -> "famandassem "
-            | TypeAttributes.NestedFamORAssem -> "famorassem "
-            | TypeAttributes.NestedPrivate
-            | TypeAttributes.NotPublic
-            | _ -> "private "
-            |> wr.Write
-
-            match row.Flags &&& TypeAttributes.LayoutMask with
-            | TypeAttributes.SequentialLayout -> "sequential "
-            | TypeAttributes.ExplicitLayout -> "explicit "
-            | TypeAttributes.AutoLayout
-            | _ -> "auto "
-            |> wr.Write
-
-            match row.Flags &&& TypeAttributes.StringFormatMask with
-            | TypeAttributes.AnsiClass -> wr.Write "ansi "
-            | TypeAttributes.UnicodeClass -> wr.Write "unicode "
-            | TypeAttributes.AutoClass -> wr.Write "autochar "
-            | _ -> ()
-
-            if row.Flags.HasFlag TypeAttributes.Abstract then wr.Write "abstract "
-            if row.Flags.HasFlag TypeAttributes.Sealed then wr.Write "sealed "
-            if row.Flags.HasFlag TypeAttributes.SpecialName then wr.Write "specialname "
-            if row.Flags.HasFlag TypeAttributes.RTSpecialName then wr.Write "rtspecialname "
-            if row.Flags.HasFlag TypeAttributes.Serializable then wr.Write "serializable "
-            if row.Flags.HasFlag TypeAttributes.BeforeFieldInit then wr.Write "beforefieldinit "
-
-            wr.Write '''
-            let ns = strings.GetString row.TypeNamespace 
-            if ns.Length > 0 then
-                wr.Write ns
-                wr.Write '.'
-            wr.Write(strings.GetString row.TypeName)
-            wr.WriteLine '''
-
-            match ParsedExtends.toTypeDefOrRefOrSpec row.Extends with
-            | ValueNone -> ()
-            | ValueSome extends ->
-                wr.Write "    extends "
-                TypeName.ofTypeDefOrRefOrSpec extends wr
+            if VisibilityFilter.typeDef vfilter row.Flags then
                 wr.WriteLine()
+                rowIndex wr i
+                field "Flags" Print.bitfield wr row.Flags
+                //field "TypeName"
+                //field "TypeNamespace"
+                //field "Extends"
+                field "FieldList" Print.integer wr row.FieldList
+                field "MethodList" Print.integer wr row.MethodList
 
-            wr.WriteLine '{'
-            // TODO: Write members
-            wr.WriteLine '}'
+                // TODO: Print this differently for nested classes.
+                wr.Write ".class "
+
+                if row.Flags.HasFlag TypeAttributes.Interface then wr.Write "interface "
+                if row.Flags &&& TypeAttributes.VisibilityMask > TypeAttributes.Public then wr.Write "nested "
+
+                match row.Flags &&& TypeAttributes.VisibilityMask with
+                | TypeAttributes.NestedPublic 
+                | TypeAttributes.Public -> "public "
+                | TypeAttributes.NestedFamily -> "family "
+                | TypeAttributes.NestedAssembly -> "assembly "
+                | TypeAttributes.NestedFamANDAssem -> "famandassem "
+                | TypeAttributes.NestedFamORAssem -> "famorassem "
+                | TypeAttributes.NestedPrivate
+                | TypeAttributes.NotPublic
+                | _ -> "private "
+                |> wr.Write
+
+                match row.Flags &&& TypeAttributes.LayoutMask with
+                | TypeAttributes.SequentialLayout -> "sequential "
+                | TypeAttributes.ExplicitLayout -> "explicit "
+                | TypeAttributes.AutoLayout
+                | _ -> "auto "
+                |> wr.Write
+
+                match row.Flags &&& TypeAttributes.StringFormatMask with
+                | TypeAttributes.AnsiClass -> wr.Write "ansi "
+                | TypeAttributes.UnicodeClass -> wr.Write "unicode "
+                | TypeAttributes.AutoClass -> wr.Write "autochar "
+                | _ -> ()
+
+                if row.Flags.HasFlag TypeAttributes.Abstract then wr.Write "abstract "
+                if row.Flags.HasFlag TypeAttributes.Sealed then wr.Write "sealed "
+                if row.Flags.HasFlag TypeAttributes.SpecialName then wr.Write "specialname "
+                if row.Flags.HasFlag TypeAttributes.RTSpecialName then wr.Write "rtspecialname "
+                if row.Flags.HasFlag TypeAttributes.Serializable then wr.Write "serializable "
+                if row.Flags.HasFlag TypeAttributes.BeforeFieldInit then wr.Write "beforefieldinit "
+
+                wr.Write '''
+                let ns = strings.GetString row.TypeNamespace 
+                if ns.Length > 0 then
+                    wr.Write ns
+                    wr.Write '.'
+                wr.Write(strings.GetString row.TypeName)
+                wr.WriteLine '''
+
+                match ParsedExtends.toTypeDefOrRefOrSpec row.Extends with
+                | ValueNone -> ()
+                | ValueSome extends ->
+                    wr.Write "    extends "
+                    TypeName.ofTypeDefOrRefOrSpec extends wr
+                    wr.WriteLine()
+
+                wr.WriteLine '{'
+                // TODO: Write members
+                wr.WriteLine '}'
     | ValueNone -> ()
 
-let metadataTables headers il strings guid (tables: ParsedMetadataTables) offset wr =
+let metadataTables headers il vfilter strings guid (tables: ParsedMetadataTables) offset wr =
     match headers with
     | NoHeaders -> ()
     | IncludeHeaders ->
@@ -318,14 +319,14 @@ let metadataTables headers il strings guid (tables: ParsedMetadataTables) offset
     | IncludeIL, ValueSome strings', ValueSome guid' ->
         moduleTable tables strings' guid' wr
         typeRefTable tables strings' wr
-        typeDefTable tables strings' wr
+        typeDefTable tables vfilter strings' wr
     wr
 
 let handleError state error offset wr =
     eprintfn "error : %s" (ReadError.message state error offset)
     wr
 
-let write headers il =
+let write headers il vfilter =
     let inline header printer =
         match headers with
         | IncludeHeaders -> ValueSome printer
@@ -340,5 +341,5 @@ let write headers il =
        ReadMetadataRoot = header metadataRoot
        ReadStreamHeader = header streamHeader
        //ReadString
-       ReadMetadataTables = ValueSome(metadataTables headers il)
+       ReadMetadataTables = ValueSome(metadataTables headers il vfilter)
        HandleError = handleError }
