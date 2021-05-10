@@ -69,6 +69,12 @@ let ntSpecificFields fields offset wr =
     field "SizeOfHeapCommit" Print.integer wr (uint32 fields.HeapCommitSize) // NOTE: This is 8 bytes long instead for PE32+
     field "LoaderFlags" Print.integer wr fields.LoaderFlags
     field "NumberOfDataDirectories" Print.integer wr fields.NumberOfDataDirectories
+    wr.WriteLine()
+    fprintfn wr ".imagebase 0x%08X" fields.ImageBase
+    fprintfn wr ".file alignment 0x%08X" falignment
+    fprintfn wr ".stackreserve 0x%08X" fields.StackReserveSize
+    fprintfn wr ".subsystem 0x%04X" (uint16 fields.Subsystem)
+    wr.WriteLine()
     wr
 
 let dataDirectoryNames =
@@ -131,6 +137,9 @@ let cliHeader (header: ParsedCliHeader) offset wr =
     field "VTableFixups" Print.rvaAndSize wr header.VTableFixups
     field "ExportAddressTableJumps" Print.integer wr header.ExportAddressTableJumps
     field "ManagedNativeHeader" Print.integer wr header.ManagedNativeHeader
+    wr.WriteLine()
+    fprintfn wr ".corflags 0x%08X" (uint32 header.Flags)
+    wr.WriteLine()
     wr
 
 let metadataRoot (root: ParsedMetadataRoot) offset wr =
