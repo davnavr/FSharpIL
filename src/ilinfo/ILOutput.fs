@@ -191,6 +191,8 @@ let metadataTablesHeader header offset wr =
         wr
         ()
 
+let rowIndex wr i = fprintfn wr "// (0x%08X)" (i + 1)
+
 let moduleTable (tables: ParsedMetadataTables) strings guid (wr: TextWriter) =
     wr.WriteLine()
     wr.WriteLine "// Module (0x00)"
@@ -212,7 +214,8 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
         wr.WriteLine "// TypeRef (0x01)"
         for i = 0 to int32 table.RowCount - 1 do
             let row = table.[i]
-            fprintfn wr "// (0x%08X)" i
+            wr.WriteLine()
+            rowIndex wr i
             fieldf
                 "ResolutionScope"
                 (CodedIndex.resolutionScopeParser(tables.Header.Rows).Length)
@@ -234,12 +237,10 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
 let typeDefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) (wr: TextWriter) =
     match tables.TypeDef with
     | ValueSome table ->
-        wr.WriteLine()
-        wr.WriteLine "// TypeDef (0x02)"
         for i = 0 to int32 table.RowCount - 1 do
             let row = table.[i]
             wr.WriteLine()
-            fprintfn wr "// (0x%08X)" i
+            rowIndex wr i
             field "Flags" Print.bitfield wr row.Flags
             //field "TypeName"
             //field "TypeNamespace"
@@ -296,8 +297,9 @@ let typeDefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) (
             match ParsedExtends.toTypeDefOrRefOrSpec row.Extends with
             | ValueNone -> ()
             | ValueSome extends ->
-                wr.WriteLine "extends "
+                wr.Write "    extends "
                 TypeName.ofTypeDefOrRefOrSpec extends wr
+                wr.WriteLine()
 
             wr.WriteLine '{'
             // TODO: Write members

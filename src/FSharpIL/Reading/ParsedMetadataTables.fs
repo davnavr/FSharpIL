@@ -37,16 +37,22 @@ module internal Offset =
         | bad -> invalidArg "buffer" (sprintf "Invalid buffer length %i, expected length of 2 or 4" bad)
 
 [<IsReadOnly; Struct>]
-type StringParser (sizes: HeapSizes) =
+type internal StringParser (sizes: HeapSizes) =
     interface IByteParser<ParsedString> with
         member _.Parse buffer = { ParsedString.StringOffset = Offset.parse buffer }
         member _.Length = sizes.StringSize
 
 [<IsReadOnly; Struct>]
-type GuidParser (sizes: HeapSizes) =
+type internal GuidParser (sizes: HeapSizes) =
     interface IByteParser<ParsedGuid> with
         member _.Parse buffer = { ParsedGuid.GuidOffset = Offset.parse buffer }
         member _.Length = sizes.GuidSize
+
+[<IsReadOnly; Struct>]
+type internal BlobParser (sizes: HeapSizes) =
+    interface IByteParser<ParsedBlob> with
+        member _.Parse buffer = { BlobOffset = Offset.parse buffer }
+        member _.Length = sizes.BlobSize
 
 // TODO: Allow usage of existing types in FSharpIL.Metadata by using generic parameters and remove "string" and GUID and using some sort of index and builder system just like with Blobs.
 
@@ -215,6 +221,20 @@ type TypeDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
             + (IndexParser.length MetadataTableFlags.Field counts)
             + (IndexParser.length MetadataTableFlags.MethodDef counts)
 
+[<IsReadOnly; Struct>]
+type ParsedFieldRow =
+    { Flags: FieldAttributes
+      Name: ParsedString
+      Signature: ParsedFieldSig }
+
+type FieldParser (sizes: HeapSizes) =
+    interface IByteParser<ParsedFieldRow> with
+        member _.Parse buffer =
+            { Flags = LanguagePrimitives.EnumOfValue(int32(Bytes.readU2 0 buffer))
+              Name = parse 2 buffer (StringParser sizes)
+              Signature = { FieldSig = parse (2 + sizes.StringSize) buffer (BlobParser sizes) } }
+        member _.Length = 2 + sizes.StringSize + sizes.BlobSize
+
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
     internal
@@ -257,7 +277,8 @@ type ParsedMetadataTables =
           [<DefaultValue>] mutable TablesSize: uint64
           [<DefaultValue>] mutable ModuleTable: ParsedMetadataTable<ModuleParser, ParsedModuleRow>
           [<DefaultValue>] mutable TypeRefTable: ParsedMetadataTable<TypeRefParser, ParsedTypeRefRow> voption
-          [<DefaultValue>] mutable TypeDefTable: ParsedMetadataTable<TypeDefParser, ParsedTypeDefRow> voption }
+          [<DefaultValue>] mutable TypeDefTable: ParsedMetadataTable<TypeDefParser, ParsedTypeDefRow> voption
+          [<DefaultValue>] mutable FieldTable: ParsedMetadataTable<FieldParser, ParsedFieldRow> voption }
 
     member this.Header = this.TablesHeader
     /// The size of the metadata tables in bytes.
@@ -270,6 +291,7 @@ type ParsedMetadataTables =
         this.ModuleTable
     member this.TypeRef = this.TypeRefTable
     member this.TypeDef = this.TypeDefTable
+    member this.Field = this.FieldTable
 
 [<RequireQualifiedAccess>]
 module ParsedMetadataTables =
@@ -296,5 +318,8 @@ module ParsedMetadataTables =
             | MetadataTableFlags.TypeDef ->
                 tables.TypeDefTable <- TypeDefParser(header.HeapSizes, header.Rows) |> createOptionalTable
                 tables.TablesSize <- tables.TablesSize + tables.TypeDefTable.Value.Size
+            | MetadataTableFlags.Field ->
+                tables.FieldTable <- createOptionalTable(FieldParser header.HeapSizes)
+                tables.TablesSize <- tables.TablesSize + tables.FieldTable.Value.Size
             | _ -> () // Temporary to get printing to work
         tables

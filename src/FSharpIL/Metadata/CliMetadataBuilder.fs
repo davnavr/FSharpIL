@@ -45,9 +45,11 @@ type HeapSizes =
 
 [<AutoOpen>]
 module HeapSizes =
+    let inline private isLarge (flags: HeapSizes) heap = if flags.HasFlag heap then 4 else 2
     type HeapSizes with
-        member this.StringSize = if this.HasFlag HeapSizes.String then 4 else 2
-        member this.GuidSize = if this.HasFlag HeapSizes.Guid then 4 else 2
+        member this.StringSize = isLarge this HeapSizes.String
+        member this.GuidSize = isLarge this HeapSizes.Guid
+        member this.BlobSize = isLarge this HeapSizes.Blob
 
 /// (II.25.3.3.1)
 [<Flags>]
