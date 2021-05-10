@@ -26,11 +26,12 @@ type ParsedStringsStream internal (stream: ParsedMetadataStream) =
             if offset' >= stream.StreamSize
             then Error(MissingNullTerminator(Encoding.UTF8.GetString stream.Buffer))
             else
+                let i' = i + 1
                 match stream.Chunk.ReadU1(stream.StreamOffset + offset') with
-                | 0uy -> Ok i
+                | 0uy -> Ok i'
                 | value ->
                     stream.AppendByte(i, value)
-                    inner(i + 1)
+                    inner i'
         if stream.IsValidOffset offset
         then inner 0
         else Error(InvalidStringIndex(offset, stream.StreamSize))

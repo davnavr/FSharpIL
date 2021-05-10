@@ -17,6 +17,7 @@ type MetadataReadState =
     | ReadBlobStream
     | ReadMetadataTablesHeader
     | ReadMetadataTables
+    | MoveToEnd
 
     member this.Description =
         match this with
@@ -32,6 +33,7 @@ type MetadataReadState =
         | ReadBlobStream -> "reading metadata blob stream"
         | ReadMetadataTablesHeader -> "reading metadata tables header"
         | ReadMetadataTables -> "reading metadata tables"
+        | MoveToEnd -> "moving to end of metadata"
 
 [<IsReadOnly; Struct>]
 type FileReadState =
