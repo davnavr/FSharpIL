@@ -9,8 +9,10 @@ type ParsedBlob =
     static member op_Implicit { BlobOffset = offset } = offset
 
 [<IsReadOnly; Struct>]
-type ParsedFieldSig =
-    internal { FieldSig: ParsedBlob }
+type ParsedFieldSig = internal { FieldSig: ParsedBlob }
+
+[<IsReadOnly; Struct>]
+type ParsedMethodDefSig = internal { MethodDefSig: ParsedBlob }
 
 [<RequireQualifiedAccess>]
 module ParsedBlob =

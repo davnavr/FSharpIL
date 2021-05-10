@@ -235,6 +235,27 @@ type FieldParser (sizes: HeapSizes) =
               Signature = { FieldSig = parse (2 + sizes.StringSize) buffer (BlobParser sizes) } }
         member _.Length = 2 + sizes.StringSize + sizes.BlobSize
 
+[<IsReadOnly; Struct>]
+type ParsedMethodRow =
+    { Rva: uint32
+      ImplFlags: MethodImplAttributes
+      Flags: MethodAttributes
+      Name: ParsedString
+      Signature: ParsedMethodDefSig
+      ParamList: uint32 }
+
+[<IsReadOnly; Struct>]
+type MethodDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
+    interface IByteParser<ParsedMethodRow> with
+        member _.Parse buffer =
+            { Rva = Bytes.readU4 0 buffer
+              ImplFlags = LanguagePrimitives.EnumOfValue(int32(Bytes.readU2 4 buffer))
+              Flags = LanguagePrimitives.EnumOfValue(int32(Bytes.readU2 6 buffer))
+              Name = parse 8 buffer (StringParser sizes)
+              Signature = { MethodDefSig = parse (8 + sizes.StringSize) buffer (BlobParser sizes) }
+              ParamList = IndexParser.parse MetadataTableFlags.Param counts (8 + sizes.StringSize + sizes.BlobSize) buffer }
+        member _.Length = 8 + sizes.StringSize + sizes.BlobSize + (IndexParser.length MetadataTableFlags.Param counts)
+
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
     internal
