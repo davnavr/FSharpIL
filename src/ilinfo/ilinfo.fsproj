@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="Flags.fs" />
     <Compile Include="Print.fs" />
+    <Compile Include="TypeName.fs" />
     <Compile Include="ILOutput.fs" />
     <Compile Include="Output.fs" />
     <Compile Include="Program.fs" />

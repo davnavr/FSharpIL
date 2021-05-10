@@ -2,6 +2,7 @@
 module ILInfo.ILOutput
 
 open System.IO
+open System.Reflection
 open System.Text
 
 open Microsoft.FSharp.Core.Printf
@@ -246,7 +247,44 @@ let typeDefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) (
             field "FieldList" Print.integer wr row.FieldList
             field "MethodList" Print.integer wr row.MethodList
 
+            // TODO: Print this differently for nested classes.
             wr.Write ".class "
+
+            if row.Flags.HasFlag TypeAttributes.Interface then wr.Write "interface "
+            if row.Flags &&& TypeAttributes.VisibilityMask > TypeAttributes.Public then wr.Write "nested "
+
+            match row.Flags &&& TypeAttributes.VisibilityMask with
+            | TypeAttributes.NestedPublic 
+            | TypeAttributes.Public -> "public "
+            | TypeAttributes.NestedFamily -> "family "
+            | TypeAttributes.NestedAssembly -> "assembly "
+            | TypeAttributes.NestedFamANDAssem -> "famandassem "
+            | TypeAttributes.NestedFamORAssem -> "famorassem "
+            | TypeAttributes.NestedPrivate
+            | TypeAttributes.NotPublic
+            | _ -> "private "
+            |> wr.Write
+
+            match row.Flags &&& TypeAttributes.LayoutMask with
+            | TypeAttributes.SequentialLayout -> "sequential "
+            | TypeAttributes.ExplicitLayout -> "explicit "
+            | TypeAttributes.AutoLayout
+            | _ -> "auto "
+            |> wr.Write
+
+            match row.Flags &&& TypeAttributes.StringFormatMask with
+            | TypeAttributes.AnsiClass -> wr.Write "ansi "
+            | TypeAttributes.UnicodeClass -> wr.Write "unicode "
+            | TypeAttributes.AutoClass -> wr.Write "autochar "
+            | _ -> ()
+
+            if row.Flags.HasFlag TypeAttributes.Abstract then wr.Write "abstract "
+            if row.Flags.HasFlag TypeAttributes.Sealed then wr.Write "sealed "
+            if row.Flags.HasFlag TypeAttributes.SpecialName then wr.Write "specialname "
+            if row.Flags.HasFlag TypeAttributes.RTSpecialName then wr.Write "rtspecialname "
+            if row.Flags.HasFlag TypeAttributes.Serializable then wr.Write "serializable "
+            if row.Flags.HasFlag TypeAttributes.BeforeFieldInit then wr.Write "beforefieldinit "
+
             wr.Write '''
             let ns = strings.GetString row.TypeNamespace 
             if ns.Length > 0 then
@@ -254,7 +292,15 @@ let typeDefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) (
                 wr.Write '.'
             wr.Write(strings.GetString row.TypeName)
             wr.WriteLine '''
+
+            match ParsedExtends.toTypeDefOrRefOrSpec row.Extends with
+            | ValueNone -> ()
+            | ValueSome extends ->
+                wr.WriteLine "extends "
+                TypeName.ofTypeDefOrRefOrSpec extends wr
+
             wr.WriteLine '{'
+            // TODO: Write members
             wr.WriteLine '}'
     | ValueNone -> ()
 

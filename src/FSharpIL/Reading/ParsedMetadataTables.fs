@@ -73,8 +73,8 @@ type ModuleParser (sizes: HeapSizes) =
 
 [<IsReadOnly; Struct>]
 type internal ParsedCodedIndex =
-    { Tag: uint8
-      Index: uint32 }
+    { Tag: uint8; Index: uint32 }
+    member this.IsNull = this.Index = 0u
 
 [<RequireQualifiedAccess>]
 module CodedIndex =
@@ -130,7 +130,7 @@ module ParsedResolutionScope =
         | { Tag = 1uy } -> ModuleRef rscope.Index
         | { Tag = 2uy } -> AssemblyRef rscope.Index
         | { Tag = 3uy } -> TypeRef rscope.Index
-        | { Tag = unknown } -> Unknown unknown
+        | { Tag = unknown } -> Unknown(unknown, rscope.Index)
 
 [<IsReadOnly; Struct>]
 type ParsedTypeRefRow =
@@ -151,7 +151,36 @@ type TypeRefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
         member this.Length = this.ResolutionScope.Length + (2 * sizes.StringSize)
 
 [<IsReadOnly; Struct>]
-type ParsedExtends = private { Extends: ParsedCodedIndex }
+type ParsedExtends =
+    private { Extends: ParsedCodedIndex }
+    member this.Null = this.Extends.IsNull
+
+[<IsReadOnly; Struct>]
+type ParsedTypeDefOrRefOrSpec =
+    private { Tag: TypeDefOrRefOrSpecTag; TypeIndex: uint32 }
+
+[<RequireQualifiedAccess>]
+module ParsedTypeDefOrRefOrSpec =
+    let (|TypeDef|TypeRef|TypeSpec|Unknown|) { Tag = tag; TypeIndex = i } =
+        match tag with
+        | TypeDefOrRefOrSpecTag.Def -> TypeDef i
+        | TypeDefOrRefOrSpecTag.Ref -> TypeRef i
+        | TypeDefOrRefOrSpecTag.Spec -> TypeSpec i
+        | _ -> Unknown(tag, i)
+
+[<RequireQualifiedAccess>]
+module ParsedExtends =
+    let (|Null|TypeDef|TypeRef|TypeSpec|Unknown|) { ParsedExtends.Extends = extends } =
+        match extends with
+        | { Index = 0u } -> Null
+        | { Tag = 0uy } -> TypeDef extends.Index
+        | { Tag = 1uy } -> TypeRef extends.Index
+        | { Tag = 2uy } -> TypeSpec extends.Index
+        | { Tag = unknown } -> Unknown(unknown, extends.Index)
+    let toTypeDefOrRefOrSpec extends =
+        match extends with
+        | Null -> ValueNone
+        | { Extends = { Tag = tag; Index = index } } -> ValueSome { Tag = LanguagePrimitives.EnumOfValue tag; TypeIndex = index }
 
 [<IsReadOnly; Struct>]
 type ParsedTypeDefRow =
@@ -249,7 +278,7 @@ module ParsedMetadataTables =
             { Chunk = chunk
               TablesHeader = header
               TablesOffset = offset }
-        for KeyValue(table, count) in header.Rows do
+        for KeyValue(table, count) in header.Rows do // TODO: How to ensure that keys are in order?
             let inline createTable parser =
                 { Chunk = chunk
                   Table = table
