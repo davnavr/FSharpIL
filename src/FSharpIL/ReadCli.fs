@@ -95,9 +95,8 @@ type MutableFile =
       [<DefaultValue>] mutable BlobStreamIndex: int32 voption
       [<DefaultValue>] mutable BlobStream: ParsedBlobStream
       [<DefaultValue>] mutable MetadataTablesIndex: int32 voption
-      //[<DefaultValue>] mutable StringStreamIndex: int32 voption
       [<DefaultValue>] mutable MetadataTablesHeader: ParsedMetadataTablesHeader
-      /// Offset from start of section to the start of the metadata tables (II.22.1).
+      /// Offset from start of section to the first byte of the physical representation of the metadata tables (II.22.1).
       [<DefaultValue>] mutable MetadataTablesOffset: uint64
       [<DefaultValue>] mutable MetadataTables: ParsedMetadataTables }
 
@@ -538,7 +537,7 @@ let readTablesHeader (chunk: ChunkReader) (file: MutableFile) offset =
                   Sorted = LanguagePrimitives.EnumOfValue(Bytes.readU8 16 fields)
                   Rows = readTableCounts (Dictionary tablen) valid rows 0 0 }
 
-            file.MetadataTablesOffset <- offset + 24UL + uint64 rcounts.Length
+            file.MetadataTablesOffset <- offset + uint64(fields.Length + rcounts.Length)
 
             Ok ReadMetadataTables
         else Error(offset', StructureOutsideOfCurrentSection ParsedStructure.MetadataTableRowCounts)
@@ -555,7 +554,8 @@ let readMetadataTables file reader ustate =
             (stream file.StringsStreamIndex file.StringsStream)
             (stream file.GuidStreamIndex file.GuidStream)
             file.MetadataTables
-            (file.TextSectionOffset + file.MetadataTablesOffset)
+            //(file.TextSectionOffset + file.MetadataTablesOffset) // This points to the first byte of the tables.
+            (file.TextSectionOffset + file.MetadataRootOffset + file.StreamHeaders.[file.MetadataTablesIndex.Value].Offset) // NOTE: This points to the tables header.
             ustate
     | ValueNone -> ustate
 
@@ -587,7 +587,8 @@ let readMetadata chunk file reader ustate rstate =
             | Error err -> Failure err
         | ValueNone -> Failure(file.TextSectionOffset + file.StreamHeadersOffset, CannotFindMetadataTables)
     | ReadMetadataTables ->
-        file.MetadataTables <- ParsedMetadataTables.create chunk file.MetadataTablesHeader file.MetadataRootOffset
+        file.MetadataTables <-
+            ParsedMetadataTables.create chunk file.MetadataTablesHeader file.MetadataTablesOffset
         Success(readMetadataTables file reader ustate, invalidOp "End reading?")
 
 /// <remarks>The <paramref name="stream"/> is not disposed after reading is finished.</remarks>

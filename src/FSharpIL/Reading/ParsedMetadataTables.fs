@@ -167,22 +167,18 @@ module ParsedMetadataTables =
               TablesHeader = header
               TablesOffset = offset }
         for KeyValue(table, count) in header.Rows do
+            let inline createTable parser =
+                { Chunk = chunk
+                  Table = table
+                  TableOffset = tables.TablesSize + offset
+                  TableParser = parser
+                  TableCount = count }
             match table with
             | MetadataTableFlags.Module ->
-                tables.ModuleTable <-
-                    { Chunk = chunk
-                      Table = table
-                      TableOffset = tables.TablesSize
-                      TableParser = ModuleParser header.HeapSizes
-                      TableCount = count }
+                tables.ModuleTable <- createTable(ModuleParser header.HeapSizes)
                 tables.TablesSize <- tables.TablesSize + tables.ModuleTable.Size
             | MetadataTableFlags.TypeRef ->
-                tables.TypeRefTable <- ValueSome
-                    { Chunk = chunk
-                      Table = table
-                      TableOffset = tables.TablesSize
-                      TableParser = TypeRefParser(header.HeapSizes, header.Rows)
-                      TableCount = count }
+                tables.TypeRefTable <- TypeRefParser(header.HeapSizes, header.Rows) |> createTable |> ValueSome
                 tables.TablesSize <- tables.TablesSize + tables.TypeRefTable.Value.Size
             | _ -> () // Temporary to get printing to work
         tables

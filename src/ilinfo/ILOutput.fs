@@ -190,7 +190,7 @@ let moduleTable (tables: ParsedMetadataTables) strings guid (wr: TextWriter) =
     wr.WriteLine()
     wr.WriteLine "// Module (0x00)"
     // Module
-    for i = 0 to int32 tables.Module.Size do
+    for i = 0 to int32 tables.Module.Size - 1 do
         let row = tables.Module.[i]
         let inline fguid name id = fieldf name tables.Header.HeapSizes.GuidSize (Print.guid guid) wr id
         field "Generation" Print.integer wr row.Generation
