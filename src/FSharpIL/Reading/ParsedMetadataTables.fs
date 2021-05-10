@@ -256,6 +256,21 @@ type MethodDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
               ParamList = IndexParser.parse MetadataTableFlags.Param counts (8 + sizes.StringSize + sizes.BlobSize) buffer }
         member _.Length = 8 + sizes.StringSize + sizes.BlobSize + (IndexParser.length MetadataTableFlags.Param counts)
 
+[<IsReadOnly; Struct>]
+type ParsedParamRow =
+    { Flags: ParameterAttributes
+      Sequence: uint16
+      Name: ParsedString }
+
+[<IsReadOnly; Struct>]
+type ParamParser (sizes: HeapSizes) =
+    interface IByteParser<ParsedParamRow> with
+        member _.Parse buffer =
+            { Flags = LanguagePrimitives.EnumOfValue(int32(Bytes.readU2 0 buffer))
+              Sequence = Bytes.readU2 2 buffer
+              Name = parse 4 buffer (StringParser sizes) }
+        member _.Length = 4 + sizes.StringSize
+
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
     internal
@@ -299,7 +314,9 @@ type ParsedMetadataTables =
           [<DefaultValue>] mutable ModuleTable: ParsedMetadataTable<ModuleParser, ParsedModuleRow>
           [<DefaultValue>] mutable TypeRefTable: ParsedMetadataTable<TypeRefParser, ParsedTypeRefRow> voption
           [<DefaultValue>] mutable TypeDefTable: ParsedMetadataTable<TypeDefParser, ParsedTypeDefRow> voption
-          [<DefaultValue>] mutable FieldTable: ParsedMetadataTable<FieldParser, ParsedFieldRow> voption }
+          [<DefaultValue>] mutable FieldTable: ParsedMetadataTable<FieldParser, ParsedFieldRow> voption
+          [<DefaultValue>] mutable MethodDefTable: ParsedMetadataTable<MethodDefParser, ParsedMethodRow> voption
+          [<DefaultValue>] mutable ParamTable: ParsedMetadataTable<ParamParser, ParsedParamRow> voption }
 
     member this.Header = this.TablesHeader
     /// The size of the metadata tables in bytes.
@@ -313,6 +330,8 @@ type ParsedMetadataTables =
     member this.TypeRef = this.TypeRefTable
     member this.TypeDef = this.TypeDefTable
     member this.Field = this.FieldTable
+    member this.MethodDef = this.MethodDefTable
+    member this.Param = this.ParamTable
 
 [<RequireQualifiedAccess>]
 module ParsedMetadataTables =
@@ -342,5 +361,11 @@ module ParsedMetadataTables =
             | MetadataTableFlags.Field ->
                 tables.FieldTable <- createOptionalTable(FieldParser header.HeapSizes)
                 tables.TablesSize <- tables.TablesSize + tables.FieldTable.Value.Size
+            | MetadataTableFlags.MethodDef ->
+                tables.MethodDefTable <- MethodDefParser(header.HeapSizes, header.Rows) |> createOptionalTable
+                tables.TablesSize <- tables.TablesSize + tables.MethodDefTable.Value.Size
+            | MetadataTableFlags.Param ->
+                tables.ParamTable <- createOptionalTable(ParamParser header.HeapSizes)
+                tables.TablesSize <- tables.TablesSize + tables.ParamTable.Value.Size
             | _ -> () // Temporary to get printing to work
         tables
