@@ -3,29 +3,49 @@
 open System
 open System.Collections.Generic
 open System.Runtime.CompilerServices
+open System.Reflection
 
 open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Reading.ByteParser
 
+// TODO: Make this a struct instead.
+[<IsReadOnly; IsByRefLike; Struct>]
+type internal IndexParser (table: MetadataTableFlags) =
+    member _.Length(counts: MetadataTableCounts) =
+        if counts.[table] <= 0xFFFFu
+        then 2
+        else 4
+    member this.Parse(counts, offset, buffer: Span<byte>) =
+        let buffer' = buffer.Slice(offset, this.Length counts)
+        match buffer'.Length with
+        | 2 -> uint32(Bytes.readU2 0 buffer)
+        | 4
+        | _ -> Bytes.readU4 0 buffer
+
 [<RequireQualifiedAccess>]
-module internal OffsetParser =
-    let read (buffer: Span<byte>) =
+module internal IndexParser =
+    let inline length table counts = IndexParser(table).Length counts
+    let inline parse table counts offset buffer = IndexParser(table).Parse(counts, offset, buffer)
+
+[<RequireQualifiedAccess>]
+module internal Offset =
+    let parse (buffer: Span<byte>) =
         match buffer.Length with
         | 4 -> Bytes.readU4 0 buffer
         | 2 -> uint32(Bytes.readU2 0 buffer)
-        | bad -> invalidArg "buffer" (sprintf "Invalid heap offset size %i" bad)
+        | bad -> invalidArg "buffer" (sprintf "Invalid buffer length %i, expected length of 2 or 4" bad)
 
 [<IsReadOnly; Struct>]
 type StringParser (sizes: HeapSizes) =
     interface IByteParser<ParsedString> with
-        member _.Parse buffer = { ParsedString.StringOffset = OffsetParser.read(buffer.Slice(0, sizes.StringSize)) }
+        member _.Parse buffer = { ParsedString.StringOffset = Offset.parse buffer }
         member _.Length = sizes.StringSize
 
 [<IsReadOnly; Struct>]
 type GuidParser (sizes: HeapSizes) =
     interface IByteParser<ParsedGuid> with
-        member _.Parse buffer = { ParsedGuid.GuidOffset = OffsetParser.read buffer }
+        member _.Parse buffer = { ParsedGuid.GuidOffset = Offset.parse buffer }
         member _.Length = sizes.GuidSize
 
 // TODO: Allow usage of existing types in FSharpIL.Metadata by using generic parameters and remove "string" and GUID and using some sort of index and builder system just like with Blobs.
@@ -87,10 +107,17 @@ module CodedIndex =
             2
         )
 
+    let extends (counts: MetadataTableCounts) =
+        Parser (
+            counts.GetValueOrDefault MetadataTableFlags.TypeDef
+            + (counts.GetValueOrDefault MetadataTableFlags.TypeRef)
+            + (counts.GetValueOrDefault MetadataTableFlags.TypeSpec),
+            2
+        )
+
 // TODO: Have constants that store the tags for coded indices instead of duplicating them with the writing code.
 [<IsReadOnly; Struct>]
-type ParsedResolutionScope =
-    private { ResolutionScope: ParsedCodedIndex }
+type ParsedResolutionScope = private { ResolutionScope: ParsedCodedIndex }
 
 // TODO: Use RawIndex<'T> type instead of uint32.
 
@@ -113,14 +140,51 @@ type ParsedTypeRefRow =
 
 [<IsReadOnly; Struct>]
 type TypeRefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
+    member inline private _.ResolutionScope = CodedIndex.resolutionScopeParser counts
     interface IByteParser<ParsedTypeRefRow> with
-        member _.Parse buffer =
+        member this.Parse buffer =
             let str = StringParser sizes
-            let rscope = CodedIndex.resolutionScopeParser counts
+            let rscope = this.ResolutionScope
             { ResolutionScope = { ResolutionScope = rscope.Parse buffer }
               TypeName = parse rscope.Length buffer str
               TypeNamespace = parse (rscope.Length + sizes.StringSize) buffer str }
-        member _.Length = (CodedIndex.resolutionScopeParser counts).Length + (2 * sizes.StringSize)
+        member this.Length = this.ResolutionScope.Length + (2 * sizes.StringSize)
+
+[<IsReadOnly; Struct>]
+type ParsedExtends = private { Extends: ParsedCodedIndex }
+
+[<IsReadOnly; Struct>]
+type ParsedTypeDefRow =
+    { Flags: TypeAttributes
+      TypeName: ParsedString
+      TypeNamespace: ParsedString
+      Extends: ParsedExtends
+      FieldList: uint32
+      MethodList: uint32 }
+
+[<IsReadOnly; Struct>]
+type TypeDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
+    member inline private _.Extends = CodedIndex.extends counts
+    interface IByteParser<ParsedTypeDefRow> with
+        member this.Parse buffer =
+            let str = StringParser sizes
+            let extends = this.Extends
+            let eoffset = 4 + (2 * sizes.StringSize)
+            let field = IndexParser MetadataTableFlags.Field
+            { Flags = LanguagePrimitives.EnumOfValue(int32(Bytes.readU4 0 buffer))
+              TypeName = parse 4 buffer str
+              TypeNamespace = parse (4 + sizes.StringSize) buffer str
+              Extends = { Extends = extends.Parse(eoffset, buffer) }
+              FieldList = field.Parse(counts, eoffset + extends.Length, buffer)
+              MethodList =
+                IndexParser.parse
+                    MetadataTableFlags.MethodDef
+                    counts
+                    (eoffset + extends.Length + field.Length counts) buffer }
+        member this.Length =
+            4 + (2 * sizes.StringSize) + this.Extends.Length
+            + (IndexParser.length MetadataTableFlags.Field counts)
+            + (IndexParser.length MetadataTableFlags.MethodDef counts)
 
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
@@ -163,7 +227,8 @@ type ParsedMetadataTables =
           TablesOffset: uint64
           [<DefaultValue>] mutable TablesSize: uint64
           [<DefaultValue>] mutable ModuleTable: ParsedMetadataTable<ModuleParser, ParsedModuleRow>
-          [<DefaultValue>] mutable TypeRefTable: ParsedMetadataTable<TypeRefParser, ParsedTypeRefRow> voption }
+          [<DefaultValue>] mutable TypeRefTable: ParsedMetadataTable<TypeRefParser, ParsedTypeRefRow> voption
+          [<DefaultValue>] mutable TypeDefTable: ParsedMetadataTable<TypeDefParser, ParsedTypeDefRow> voption }
 
     member this.Header = this.TablesHeader
     /// The size of the metadata tables in bytes.
@@ -174,8 +239,8 @@ type ParsedMetadataTables =
     member this.Module =
         if this.ModuleTable = Unchecked.defaultof<_> then invalidOp "Unable to find module table"
         this.ModuleTable
-
     member this.TypeRef = this.TypeRefTable
+    member this.TypeDef = this.TypeDefTable
 
 [<RequireQualifiedAccess>]
 module ParsedMetadataTables =
@@ -191,12 +256,16 @@ module ParsedMetadataTables =
                   TableOffset = tables.TablesSize + offset
                   TableParser = parser
                   TableCount = count }
+            let inline createOptionalTable parser = ValueSome(createTable parser)
             match table with
             | MetadataTableFlags.Module ->
                 tables.ModuleTable <- createTable(ModuleParser header.HeapSizes)
                 tables.TablesSize <- tables.TablesSize + tables.ModuleTable.Size
             | MetadataTableFlags.TypeRef ->
-                tables.TypeRefTable <- TypeRefParser(header.HeapSizes, header.Rows) |> createTable |> ValueSome
+                tables.TypeRefTable <- TypeRefParser(header.HeapSizes, header.Rows) |> createOptionalTable
                 tables.TablesSize <- tables.TablesSize + tables.TypeRefTable.Value.Size
+            | MetadataTableFlags.TypeDef ->
+                tables.TypeDefTable <- TypeDefParser(header.HeapSizes, header.Rows) |> createOptionalTable
+                tables.TablesSize <- tables.TablesSize + tables.TypeDefTable.Value.Size
             | _ -> () // Temporary to get printing to work
         tables

@@ -208,7 +208,7 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
     match tables.TypeRef with
     | ValueSome table ->
         wr.WriteLine()
-        wr.WriteLine "// TypeRef"
+        wr.WriteLine "// TypeRef (0x01)"
         for i = 0 to int32 table.RowCount - 1 do
             let row = table.[i]
             fprintfn wr "// (0x%08X)" i
@@ -230,6 +230,34 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
             fieldf "TypeNamespace" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeNamespace
     | ValueNone -> ()
 
+let typeDefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) (wr: TextWriter) =
+    match tables.TypeDef with
+    | ValueSome table ->
+        wr.WriteLine()
+        wr.WriteLine "// TypeDef (0x02)"
+        for i = 0 to int32 table.RowCount - 1 do
+            let row = table.[i]
+            wr.WriteLine()
+            fprintfn wr "// (0x%08X)" i
+            field "Flags" Print.bitfield wr row.Flags
+            //field "TypeName"
+            //field "TypeNamespace"
+            //field "Extends"
+            field "FieldList" Print.integer wr row.FieldList
+            field "MethodList" Print.integer wr row.MethodList
+
+            wr.Write ".class "
+            wr.Write '''
+            let ns = strings.GetString row.TypeNamespace 
+            if ns.Length > 0 then
+                wr.Write ns
+                wr.Write '.'
+            wr.Write(strings.GetString row.TypeName)
+            wr.WriteLine '''
+            wr.WriteLine '{'
+            wr.WriteLine '}'
+    | ValueNone -> ()
+
 let metadataTables headers il strings guid (tables: ParsedMetadataTables) offset wr =
     match headers with
     | NoHeaders -> ()
@@ -242,6 +270,7 @@ let metadataTables headers il strings guid (tables: ParsedMetadataTables) offset
     | IncludeIL, ValueSome strings', ValueSome guid' ->
         moduleTable tables strings' guid' wr
         typeRefTable tables strings' wr
+        typeDefTable tables strings' wr
     wr
 
 let handleError state error offset wr =
