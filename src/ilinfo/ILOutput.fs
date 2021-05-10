@@ -191,7 +191,7 @@ let metadataTablesHeader header offset wr =
         wr
         ()
 
-let rowIndex wr i = fprintfn wr "// (0x%08X)" (i + 1)
+let inline rowIndex wr i = fprintfn wr "// (0x%08X)" (i + 1)
 
 let moduleTable (tables: ParsedMetadataTables) strings guid (wr: TextWriter) =
     wr.WriteLine()
@@ -232,6 +232,53 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
                 row
             fieldf "TypeName" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeName
             fieldf "TypeNamespace" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeNamespace
+    | ValueNone -> ()
+
+let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) (wr: TextWriter) =
+    let row = table.[i]
+    if VisibilityFilter.field vfilter row.Flags then
+        wr.Write ".field "
+
+        match row.Flags &&& FieldAttributes.FieldAccessMask with
+        | FieldAttributes.Public -> "public "
+        | FieldAttributes.Assembly -> "assembly "
+        | FieldAttributes.FamORAssem -> "famorassem "
+        | FieldAttributes.FamANDAssem -> "famandassem "
+        | FieldAttributes.Family -> "family "
+        | FieldAttributes.Private -> "private "
+        | FieldAttributes.PrivateScope
+        | _ -> "compilercontrolled "
+        |> wr.Write
+
+        if row.Flags.HasFlag FieldAttributes.Static then wr.Write "static "
+        if row.Flags.HasFlag FieldAttributes.InitOnly then wr.Write "initonly "
+        if row.Flags.HasFlag FieldAttributes.Literal then wr.Write "literal "
+        if row.Flags.HasFlag FieldAttributes.NotSerialized then wr.Write "notserialized "
+        if row.Flags.HasFlag FieldAttributes.SpecialName then wr.Write "specialname "
+        if row.Flags.HasFlag FieldAttributes.RTSpecialName then wr.Write "rtspecialname "
+        if row.Flags.HasFlag FieldAttributes.HasFieldMarshal then
+            wr.Write "marshal ("
+            // TODO: Write field marshalling information.
+            wr.Write ") "
+
+        // TODO: Write type of field after reading signature.
+
+        fprintfn wr " '%s' " (strings.GetString row.Name)
+        rowIndex wr i
+
+let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings wr =
+    match tables.Field with
+    | ValueSome ftable when row.FieldList > 0u ->
+        let ttable = tables.TypeDef.Value // TODO: Fix, fieldi is invalid.
+        let max =
+            if i = int32 ttable.RowCount - 1
+            then tables.Header.Rows.[MetadataTableFlags.Field]
+            else ttable.[i + 1].FieldList
+        let mutable fieldi = row.FieldList
+        while fieldi < max do
+            fieldRow ftable (int32 fieldi) vfilter strings wr
+            fieldi <- fieldi + 1u
+    | ValueSome _
     | ValueNone -> ()
 
 let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsStream) (wr: TextWriter) =
@@ -303,7 +350,9 @@ let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsS
                     wr.WriteLine()
 
                 wr.WriteLine '{'
-                // TODO: Write members
+                // TODO: Add indentation.
+                typeDefFields tables i &row vfilter strings wr
+                // TODO: Write other members.
                 wr.WriteLine '}'
     | ValueNone -> ()
 

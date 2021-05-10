@@ -13,15 +13,15 @@ open FSharpIL.Reading.ByteParser
 [<IsReadOnly; IsByRefLike; Struct>]
 type internal IndexParser (table: MetadataTableFlags) =
     member _.Length(counts: MetadataTableCounts) =
-        if counts.[table] <= 0xFFFFu
+        if counts.GetValueOrDefault table <= 0xFFFFu
         then 2
         else 4
     member this.Parse(counts, offset, buffer: Span<byte>) =
         let buffer' = buffer.Slice(offset, this.Length counts)
         match buffer'.Length with
-        | 2 -> uint32(Bytes.readU2 0 buffer)
+        | 2 -> uint32(Bytes.readU2 0 buffer')
         | 4
-        | _ -> Bytes.readU4 0 buffer
+        | _ -> Bytes.readU4 0 buffer'
 
 [<RequireQualifiedAccess>]
 module internal IndexParser =
@@ -206,6 +206,7 @@ type TypeDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
             let extends = this.Extends
             let eoffset = 4 + (2 * sizes.StringSize)
             let field = IndexParser MetadataTableFlags.Field
+            let f = field.Parse(counts, eoffset + extends.Length, buffer)
             { Flags = LanguagePrimitives.EnumOfValue(int32(Bytes.readU4 0 buffer))
               TypeName = parse 4 buffer str
               TypeNamespace = parse (4 + sizes.StringSize) buffer str
@@ -304,6 +305,10 @@ type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
             | Error err -> failwithf "Error occured while retrieving row at index %i, %O" i err
             | Ok row -> row
 
+type ParsedTypeDefTable = ParsedMetadataTable<TypeDefParser, ParsedTypeDefRow>
+type ParsedFieldTable = ParsedMetadataTable<FieldParser, ParsedFieldRow>
+type ParsedMethodDefTable = ParsedMetadataTable<MethodDefParser, ParsedMethodRow>
+
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTables =
     private
@@ -313,9 +318,9 @@ type ParsedMetadataTables =
           [<DefaultValue>] mutable TablesSize: uint64
           [<DefaultValue>] mutable ModuleTable: ParsedMetadataTable<ModuleParser, ParsedModuleRow>
           [<DefaultValue>] mutable TypeRefTable: ParsedMetadataTable<TypeRefParser, ParsedTypeRefRow> voption
-          [<DefaultValue>] mutable TypeDefTable: ParsedMetadataTable<TypeDefParser, ParsedTypeDefRow> voption
-          [<DefaultValue>] mutable FieldTable: ParsedMetadataTable<FieldParser, ParsedFieldRow> voption
-          [<DefaultValue>] mutable MethodDefTable: ParsedMetadataTable<MethodDefParser, ParsedMethodRow> voption
+          [<DefaultValue>] mutable TypeDefTable: ParsedTypeDefTable voption
+          [<DefaultValue>] mutable FieldTable: ParsedFieldTable voption
+          [<DefaultValue>] mutable MethodDefTable: ParsedMethodDefTable voption
           [<DefaultValue>] mutable ParamTable: ParsedMetadataTable<ParamParser, ParsedParamRow> voption }
 
     member this.Header = this.TablesHeader

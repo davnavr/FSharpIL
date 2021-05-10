@@ -290,7 +290,7 @@ let readPE (src: Reader) file reader ustate rstate =
     | ReadTextSectionData -> readTextSection src file
 
 /// <summary>Calculates a file offset from an RVA pointing to a location within the <c>.text</c> section.</summary>
-let findTextOffset (text: inref<SectionLocation>) { Rva = rva } (offset: byref<uint64>) rstate ustate =
+let findTextOffset (text: inref<SectionLocation>) { RvaAndSize.Rva = rva } (offset: byref<uint64>) rstate ustate =
     if text.ContainsRva rva then
         offset <- uint64 rva - uint64 text.VirtualAddress
         Success(ustate, rstate)

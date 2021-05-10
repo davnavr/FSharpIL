@@ -10,6 +10,7 @@ type VisibilityFilter =
     | FamAndAssem = 0x10uy
     | FamOrAssem = 0x20uy
     | CompilerControlled = 0x40uy
+    | All = 0x7Fuy
 
 [<RequireQualifiedAccess>]
 module VisibilityFilter =
