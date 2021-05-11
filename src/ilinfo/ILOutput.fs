@@ -267,8 +267,9 @@ let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) 
             TypeName.encoded signature.FieldType wr
         | Error err -> fprintfn wr "Error reading type %O" err
 
-        fprintfn wr " '%s' " (strings.GetString row.Name)
+        fprintf wr " '%s' " (strings.GetString row.Name)
         rowIndex wr i
+        wr.WriteLine()
 
 let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings (blobs: _ voption) wr =
     match tables.Field with
@@ -351,7 +352,7 @@ let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsS
                 | ValueNone -> ()
                 | ValueSome extends ->
                     wr.Write "    extends "
-                    TypeName.ofTypeDefOrRefOrSpec extends wr
+                    TypeName.ofTypeDefOrRefOrSpec extends tables strings wr
                     wr.WriteLine()
 
                 wr.WriteLine '{'

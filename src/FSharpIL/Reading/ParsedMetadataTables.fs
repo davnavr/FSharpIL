@@ -96,12 +96,14 @@ module CodedIndex =
         member internal this.Parse(buffer: Span<byte>) =
             if this.IsLarge then
                 let index = Bytes.readU4 0 buffer
-                { Tag = uint8(index >>> (32 - this.EncodingBits))
-                  Index = index &&& (UInt32.MaxValue >>> this.EncodingBits) }
+                let filter = UInt32.MaxValue <<< this.EncodingBits
+                { Tag = uint8(index &&& ~~~filter)
+                  Index = (index &&& filter) >>> this.EncodingBits } // TODO: Shift index
             else
                 let index = Bytes.readU2 0 buffer
-                { Tag = uint8(index >>> (16 - this.EncodingBits))
-                  Index = uint32(index &&& (UInt16.MaxValue >>> this.EncodingBits)) }
+                let filter = UInt16.MaxValue <<< this.EncodingBits
+                { Tag = uint8(index &&& ~~~filter)
+                  Index = uint32(index &&& filter) >>> this.EncodingBits }
         member inline internal this.Parse(offset, buffer: Span<byte>) = this.Parse(buffer.Slice offset)
     end
 
