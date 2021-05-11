@@ -688,7 +688,6 @@ module ParsedMetadataTables =
                   TableCount = count }
             let inline createOptionalTable parser = ValueSome(createTable parser)
             match table with
-            | MetadataTableFlags.None -> () // Temporary work around since for some reason, None has entries.
             | MetadataTableFlags.Module ->
                 tables.ModuleTable <- createTable(ModuleParser header.HeapSizes)
                 tables.TablesSize <- tables.TablesSize + tables.ModuleTable.Size

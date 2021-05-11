@@ -502,13 +502,13 @@ let rec tableRowsCount (valid: MetadataTableFlags) count =
             else count
         tableRowsCount (valid >>> 1) count'
 
-let rec readTableCounts lookup (valid: MetadataTableFlags) (counts: uint32[]) counti validi =
+let rec readTableCounts (lookup: 'Lookup) (valid: MetadataTableFlags) (counts: uint32[]) counti validi =
     match valid with
     | MetadataTableFlags.None -> System.Collections.ObjectModel.ReadOnlyDictionary lookup
     | _ ->
         let counti' =
             if valid.HasFlag MetadataTableFlags.Module then
-                lookup.[valid &&& (MetadataTableFlags.Module <<< validi)] <- counts.[counti] // TODO: Check that this works
+                lookup.[MetadataTableFlags.Module <<< validi] <- counts.[counti]
                 counti + 1
             else counti
         readTableCounts lookup (valid >>> 1) counts counti' (validi + 1)
