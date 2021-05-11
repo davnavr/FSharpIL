@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open System.Configuration.Assemblies
 open System.Runtime.CompilerServices
 open System.Reflection
 
@@ -121,9 +122,71 @@ module CodedIndex =
             2
         )
 
+    let memberRefParent (counts: MetadataTableCounts) =
+        Parser (
+            counts.GetValueOrDefault MetadataTableFlags.TypeDef
+            + (counts.GetValueOrDefault MetadataTableFlags.TypeRef)
+            + (counts.GetValueOrDefault MetadataTableFlags.ModuleRef)
+            + (counts.GetValueOrDefault MetadataTableFlags.MethodDef)
+            + (counts.GetValueOrDefault MetadataTableFlags.TypeSpec),
+            3
+        )
+
+    let hasConstant (counts: MetadataTableCounts) =
+        Parser (
+            counts.GetValueOrDefault MetadataTableFlags.Field
+            + (counts.GetValueOrDefault MetadataTableFlags.Param)
+            + (counts.GetValueOrDefault MetadataTableFlags.Property),
+            2
+        )
+
+    let hasCustomAttribute (counts: MetadataTableCounts) =
+        Parser (
+            counts.GetValueOrDefault MetadataTableFlags.MethodDef
+            + (counts.GetValueOrDefault MetadataTableFlags.Field)
+            + (counts.GetValueOrDefault MetadataTableFlags.TypeRef)
+            + (counts.GetValueOrDefault MetadataTableFlags.TypeDef)
+            + (counts.GetValueOrDefault MetadataTableFlags.Param)
+            + (counts.GetValueOrDefault MetadataTableFlags.InterfaceImpl)
+            + (counts.GetValueOrDefault MetadataTableFlags.MemberRef)
+            + (counts.GetValueOrDefault MetadataTableFlags.Module)
+            //+ (counts.GetValueOrDefault MetadataTableFlags.Permission)
+            + (counts.GetValueOrDefault MetadataTableFlags.Property)
+            + (counts.GetValueOrDefault MetadataTableFlags.Event)
+            + (counts.GetValueOrDefault MetadataTableFlags.StandAloneSig)
+            + (counts.GetValueOrDefault MetadataTableFlags.ModuleRef)
+            + (counts.GetValueOrDefault MetadataTableFlags.TypeSpec)
+            + (counts.GetValueOrDefault MetadataTableFlags.Assembly)
+            + (counts.GetValueOrDefault MetadataTableFlags.AssemblyRef)
+            + (counts.GetValueOrDefault MetadataTableFlags.File)
+            //+ (counts.GetValueOrDefault MetadataTableFlags.ExportedType)
+            //+ (counts.GetValueOrDefault MetadataTableFlags.ManifestResource)
+            + (counts.GetValueOrDefault MetadataTableFlags.GenericParam)
+            + (counts.GetValueOrDefault MetadataTableFlags.GenericParamConstraint)
+            + (counts.GetValueOrDefault MetadataTableFlags.MethodSpec),
+            5
+        )
+
+    let customAttributeType (counts: MetadataTableCounts) =
+        Parser (
+            counts.GetValueOrDefault MetadataTableFlags.MethodDef + (counts.GetValueOrDefault MetadataTableFlags.MemberRef),
+            3
+        )
+
+    let hasSemantics (counts: MetadataTableCounts) =
+        Parser (
+            counts.GetValueOrDefault MetadataTableFlags.Event + (counts.GetValueOrDefault MetadataTableFlags.Property),
+            1
+        )
+
+    let methodDefOrRef (counts: MetadataTableCounts) =
+        Parser (
+            counts.GetValueOrDefault MetadataTableFlags.MethodDef + (counts.GetValueOrDefault MetadataTableFlags.MemberRef),
+            1
+        )
+
 // TODO: Have constants that store the tags for coded indices instead of duplicating them with the writing code.
-[<IsReadOnly; Struct>]
-type ParsedResolutionScope = private { ResolutionScope: ParsedCodedIndex }
+type [<IsReadOnly; Struct>] ParsedResolutionScope = private { ResolutionScope: ParsedCodedIndex }
 
 // TODO: Use RawIndex<'T> type instead of uint32.
 
@@ -161,9 +224,7 @@ type ParsedExtends =
     private { Extends: ParsedCodedIndex }
     member this.Null = this.Extends.IsNull
 
-[<IsReadOnly; Struct>]
-type ParsedTypeDefOrRefOrSpec =
-    private { Tag: TypeDefOrRefOrSpecTag; TypeIndex: uint32 }
+type [<IsReadOnly; Struct>] ParsedTypeDefOrRefOrSpec = private { Tag: TypeDefOrRefOrSpecTag; TypeIndex: uint32 }
 
 [<RequireQualifiedAccess>]
 module ParsedTypeDefOrRefOrSpec =
@@ -281,10 +342,227 @@ type InterfaceImplParser (counts: MetadataTableCounts) =
     member inline private _.Interface = CodedIndex.typeDefOrRefOrSpec counts
     interface IByteParser<ParsedInterfaceImpl> with
         member this.Parse buffer =
-            let { Tag = tag; Index = i } = this.Interface.Parse(this.Class.Length counts, buffer)
-            { Class = this.Class.Parse(counts, 0, buffer)
+            let parent = this.Class
+            let { Tag = tag; Index = i } = this.Interface.Parse(parent.Length counts, buffer)
+            { Class = parent.Parse(counts, 0, buffer)
               Interface = { TypeIndex = i; Tag = LanguagePrimitives.EnumOfValue tag } }
         member this.Length = this.Class.Length counts + this.Interface.Length
+
+type [<IsReadOnly; Struct>] ParsedMemberRefParent = private { MemberRefParent: ParsedCodedIndex }
+
+[<IsReadOnly; Struct>]
+type ParsedMemberRef =
+    { Class: ParsedMemberRefParent
+      Name: ParsedString
+      Signature: ParsedMemberRefSig }
+
+[<IsReadOnly; Struct>]
+type MemberRefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
+    member inline private _.Class = CodedIndex.memberRefParent counts
+    interface IByteParser<ParsedMemberRef> with
+        member this.Parse buffer =
+            let parent = this.Class
+            { Class = { MemberRefParent = parent.Parse buffer }
+              Name = parse parent.Length buffer (StringParser sizes)
+              Signature = { MemberRefSig = parse (parent.Length + sizes.StringSize) buffer (BlobParser sizes) } }
+        member this.Length = this.Class.Length + sizes.StringSize + sizes.BlobSize
+
+type [<IsReadOnly; Struct>] ParsedConstantParent = private { HasConstant: ParsedCodedIndex }
+
+[<IsReadOnly; Struct>]
+type ParsedConstant =
+    { Type: ElementType
+      Parent: ParsedConstantParent
+      Value: ParsedBlob } // TODO: Make ParsedConstantBlob type.
+
+[<IsReadOnly; Struct>]
+type ConstantParser (sizes: HeapSizes, counts: MetadataTableCounts) =
+    member inline private _.Parent = CodedIndex.hasConstant counts
+    interface IByteParser<ParsedConstant> with
+        member this.Parse buffer =
+            if buffer.[1] <> 0uy then failwith "TODO: Handle invalid padding byte error more elegantly."
+            let parent = this.Parent
+            { Type = LanguagePrimitives.EnumOfValue buffer.[0]
+              Parent = { HasConstant = parent.Parse(2, buffer) }
+              Value = parse (2 + parent.Length) buffer (BlobParser sizes) }
+        member this.Length = 2 + this.Parent.Length + sizes.BlobSize
+
+type [<IsReadOnly; Struct>] ParsedAttributeParent = private { HasCustomAttribute: ParsedCodedIndex }
+type [<IsReadOnly; Struct>] ParsedAttributeType = private { CustomAttributeType: ParsedCodedIndex }
+
+[<IsReadOnly; Struct>]
+type ParsedCustomAttribute =
+    { Parent: ParsedAttributeParent
+      Type: ParsedAttributeType
+      Value: ParsedAttributeSig }
+
+[<IsReadOnly; Struct>]
+type CustomAttributeParser (sizes: HeapSizes, counts: MetadataTableCounts) =
+    member inline private _.Parent = CodedIndex.hasCustomAttribute counts
+    member inline private _.Type = CodedIndex.customAttributeType counts
+    interface IByteParser<ParsedCustomAttribute> with
+        member this.Parse buffer =
+            let parent = this.Parent
+            let ctor = this.Type
+            { Parent = { HasCustomAttribute = parent.Parse buffer }
+              Type = { CustomAttributeType = ctor.Parse(parent.Length, buffer) }
+              Value = { CustomAttrib = parse (parent.Length + ctor.Length) buffer (BlobParser sizes) } }
+        member this.Length = this.Parent.Length + this.Type.Length + sizes.BlobSize
+
+[<IsReadOnly; Struct>]
+type StandaloneSigParser (sizes: HeapSizes) =
+    interface IByteParser<ParsedStandaloneSig> with
+        member _.Parse buffer = { StandaloneSig = parse 0 buffer (BlobParser sizes) }
+        member _.Length = sizes.BlobSize
+
+
+
+type [<IsReadOnly; Struct>] ParsedPropertyMap = { Parent: uint32; PropertyList: uint32 }
+
+[<IsReadOnly; Struct>]
+type PropertyMapParser (counts: MetadataTableCounts) =
+    member inline private _.Parent = IndexParser MetadataTableFlags.TypeDef
+    member inline private _.PropertyList = IndexParser MetadataTableFlags.Property
+    interface IByteParser<ParsedPropertyMap> with
+        member this.Parse buffer =
+            let parent = this.Parent
+            { Parent = parent.Parse(counts, 0, buffer)
+              PropertyList = this.PropertyList.Parse(counts, parent.Length counts, buffer) }
+        member this.Length = this.Parent.Length counts + this.PropertyList.Length counts
+
+[<IsReadOnly; Struct>]
+type ParsedProperty =
+    { Flags: PropertyAttributes
+      Name: ParsedString
+      Type: ParsedPropertySig }
+
+[<IsReadOnly; Struct>]
+type PropertyParser (sizes: HeapSizes) =
+    interface IByteParser<ParsedProperty> with
+        member _.Parse buffer =
+            { Flags = LanguagePrimitives.EnumOfValue(int32(Bytes.readU2 0 buffer))
+              Name = parse 2 buffer (StringParser sizes)
+              Type = { PropertySig = parse (2 + sizes.StringSize) buffer (BlobParser sizes) } }
+        member _.Length = 2 + sizes.StringSize + sizes.BlobSize
+
+type [<IsReadOnly; Struct>] ParsedPropertyAssociation = private { HasSemantics: ParsedCodedIndex }
+
+[<IsReadOnly; Struct>]
+type ParsedMethodSemantics =
+    { Semantics: MethodSemanticsFlags
+      Method: uint32
+      Association: ParsedPropertyAssociation }
+
+[<IsReadOnly; Struct>]
+type MethodSemanticsParser (counts: MetadataTableCounts) =
+    member inline private _.Method = IndexParser MetadataTableFlags.MethodDef
+    member inline private _.Association = CodedIndex.hasSemantics counts
+    interface IByteParser<ParsedMethodSemantics> with
+        member this.Parse buffer =
+            let method = this.Method
+            { Semantics = LanguagePrimitives.EnumOfValue(Bytes.readU2 0 buffer)
+              Method = method.Parse(counts, 2, buffer)
+              Association = { HasSemantics = this.Association.Parse(2 + method.Length counts, buffer) } }
+        member this.Length = 2 + this.Method.Length counts + this.Association.Length
+
+type [<IsReadOnly; Struct>] ParsedMethodDefOrRef = private { MethodDefOrRef: ParsedCodedIndex }
+
+[<IsReadOnly; Struct>]
+type ParsedMethodImpl =
+    { Class: uint32
+      MethodBody: ParsedMethodDefOrRef
+      MethodDeclaration: ParsedMethodDefOrRef }
+
+[<IsReadOnly; Struct>]
+type MethodImplParser (counts: MetadataTableCounts) =
+    member inline private _.Class = IndexParser MetadataTableFlags.TypeDef
+    member inline private _.Method = CodedIndex.methodDefOrRef counts
+    interface IByteParser<ParsedMethodImpl> with
+        member this.Parse buffer =
+            let owner = this.Class
+            let method = this.Method
+            let moffset = owner.Length counts
+            { Class = owner.Parse(counts, 0, buffer)
+              MethodBody = { MethodDefOrRef = method.Parse(moffset, buffer) }
+              MethodDeclaration = { MethodDefOrRef = method.Parse(moffset + method.Length, buffer) } }
+        member this.Length = this.Class.Length counts + (2 * this.Method.Length)
+
+
+
+[<IsReadOnly; Struct>]
+type TypeSpecParser (sizes: HeapSizes) =
+    interface IByteParser<ParsedTypeSpec> with
+        member _.Parse buffer = { TypeSpec = parse 0 buffer (BlobParser sizes) }
+        member _.Length = sizes.BlobSize
+
+[<IsReadOnly; Struct>]
+type ParsedAssembly =
+    { HashAlgId: AssemblyHashAlgorithm
+      MajorVersion: uint16
+      MinorVersion: uint16
+      BuildNumber: uint16
+      RevisionNumber: uint16
+      Flags: AssemblyNameFlags
+      PublicKey: ParsedBlob
+      Name: ParsedString }
+
+    member this.Version =
+        Version(int32 this.MajorVersion, int32 this.MinorVersion, int32 this.BuildNumber, int32 this.RevisionNumber)
+
+[<IsReadOnly; Struct>]
+type AssemblyParser (sizes: HeapSizes) =
+    interface IByteParser<ParsedAssembly> with
+        member _.Parse buffer =
+            { HashAlgId = LanguagePrimitives.EnumOfValue(int32(Bytes.readU4 0 buffer))
+              MajorVersion = Bytes.readU2 4 buffer
+              MinorVersion = Bytes.readU2 6 buffer
+              BuildNumber = Bytes.readU2 8 buffer
+              RevisionNumber = Bytes.readU2 10 buffer
+              Flags = LanguagePrimitives.EnumOfValue(int32(Bytes.readU4 12 buffer))
+              PublicKey = parse 16 buffer (BlobParser sizes)
+              Name = parse (16 + sizes.BlobSize) buffer (StringParser sizes) }
+        member _.Length = 16 + sizes.BlobSize + sizes.StringSize
+
+[<IsReadOnly; Struct>]
+type ParsedAssemblyRef =
+    { MajorVersion: uint16
+      MinorVersion: uint16
+      BuildNumber: uint16
+      RevisionNumber: uint16
+      Flags: AssemblyNameFlags
+      PublicKeyOrToken: ParsedBlob
+      Name: ParsedString
+      Culture: ParsedString
+      HashValue: ParsedBlob }
+
+    member this.Version =
+        Version(int32 this.MajorVersion, int32 this.MinorVersion, int32 this.BuildNumber, int32 this.RevisionNumber)
+
+[<IsReadOnly; Struct>]
+type AssemblyRefParser (sizes: HeapSizes) =
+    interface IByteParser<ParsedAssemblyRef> with
+        member _.Parse buffer =
+            let blob = BlobParser sizes
+            let str = StringParser sizes
+            { MajorVersion = Bytes.readU2 0 buffer
+              MinorVersion = Bytes.readU2 2 buffer
+              BuildNumber = Bytes.readU2 4 buffer
+              RevisionNumber = Bytes.readU2 6 buffer
+              Flags = LanguagePrimitives.EnumOfValue(int32(Bytes.readU4 8 buffer))
+              PublicKeyOrToken = parse 12 buffer blob
+              Name = parse (12 + sizes.BlobSize) buffer str
+              Culture = parse (12 + sizes.BlobSize + sizes.StringSize) buffer str
+              HashValue = parse (12 + sizes.BlobSize + (2 * sizes.StringSize)) buffer blob }
+        member _.Length = 8 + (2 * sizes.StringSize) + (2 * sizes.BlobSize)
+
+(*
+[<IsReadOnly; Struct>]
+type TemporarySomethingParser (sizes: HeapSizes, counts: MetadataTableCounts) =
+    interface IByteParser<Object> with
+        member _.Parse buffer =
+            failwith "parsing not implemented"
+        member _.Length = 0
+*)
 
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
@@ -323,6 +601,19 @@ type ParsedTypeDefTable = ParsedMetadataTable<TypeDefParser, ParsedTypeDefRow>
 type ParsedFieldTable = ParsedMetadataTable<FieldParser, ParsedFieldRow>
 type ParsedMethodDefTable = ParsedMetadataTable<MethodDefParser, ParsedMethodRow>
 type ParsedInterfaceImplTable = ParsedMetadataTable<InterfaceImplParser, ParsedInterfaceImpl>
+type ParsedMemberRefTable = ParsedMetadataTable<MemberRefParser, ParsedMemberRef>
+type ParsedConstantTable = ParsedMetadataTable<ConstantParser, ParsedConstant>
+type CustomAttributeTable = ParsedMetadataTable<CustomAttributeParser, ParsedCustomAttribute>
+type StandaloneSigTable = ParsedMetadataTable<StandaloneSigParser, ParsedStandaloneSig>
+
+type PropertyMapTable = ParsedMetadataTable<PropertyMapParser, ParsedPropertyMap>
+type PropertyTable = ParsedMetadataTable<PropertyParser, ParsedProperty>
+type MethodSemanticsTable = ParsedMetadataTable<MethodSemanticsParser, ParsedMethodSemantics>
+type MethodImplTable = ParsedMetadataTable<MethodImplParser, ParsedMethodImpl>
+type TypeSpecTable = ParsedMetadataTable<TypeSpecParser, ParsedTypeSpec>
+type AssemblyTable = ParsedMetadataTable<AssemblyParser, ParsedAssembly>
+type AssemblyRefTable = ParsedMetadataTable<AssemblyRefParser, ParsedAssemblyRef>
+//type TemporarySomethingTable = ParsedMetadataTable<unit, unit>
 
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTables =
@@ -337,7 +628,21 @@ type ParsedMetadataTables =
           [<DefaultValue>] mutable FieldTable: ParsedFieldTable voption
           [<DefaultValue>] mutable MethodDefTable: ParsedMethodDefTable voption
           [<DefaultValue>] mutable ParamTable: ParsedMetadataTable<ParamParser, ParsedParamRow> voption
-          [<DefaultValue>] mutable InterfaceImplTable: ParsedInterfaceImplTable voption }
+          [<DefaultValue>] mutable InterfaceImplTable: ParsedInterfaceImplTable voption
+          [<DefaultValue>] mutable MemberRefTable: ParsedMemberRefTable voption
+          [<DefaultValue>] mutable ConstantTable: ParsedConstantTable voption
+          [<DefaultValue>] mutable CustomAttributeTable: CustomAttributeTable voption
+          [<DefaultValue>] mutable StandaloneSigTable: StandaloneSigTable voption
+
+          [<DefaultValue>] mutable PropertyMapTable: PropertyMapTable voption
+          [<DefaultValue>] mutable PropertyTable: PropertyTable voption
+          [<DefaultValue>] mutable MethodSemanticsTable: MethodSemanticsTable voption
+          [<DefaultValue>] mutable MethodImplTable: MethodImplTable voption
+          [<DefaultValue>] mutable TypeSpecTable: TypeSpecTable voption
+          [<DefaultValue>] mutable AssemblyTable: AssemblyTable voption
+          [<DefaultValue>] mutable AssemblyRefTable: AssemblyRefTable voption
+          //[<DefaultValue>] mutable TemporarySomethingTable: unit voption
+          }
 
     member this.Header = this.TablesHeader
     /// The size of the metadata tables in bytes.
@@ -354,6 +659,18 @@ type ParsedMetadataTables =
     member this.MethodDef = this.MethodDefTable
     member this.Param = this.ParamTable
     member this.InterfaceImpl = this.InterfaceImplTable
+    member this.MemberRef = this.MemberRefTable
+    member this.Constant = this.ConstantTable
+    member this.CustomAttribute = this.CustomAttributeTable
+    member this.StandaloneSig = this.StandaloneSigTable
+
+    member this.PropertyMap = this.PropertyMapTable
+    member this.Property = this.PropertyTable
+    member this.MethodSemantics = this.MethodSemanticsTable
+    member this.MethodImpl = this.MethodImplTable
+    member this.TypeSpec = this.TypeSpecTable
+    member this.Assembly = this.AssemblyTable
+    member this.AssemblyRef = this.AssemblyRefTable
 
 [<RequireQualifiedAccess>]
 module ParsedMetadataTables =
@@ -371,6 +688,7 @@ module ParsedMetadataTables =
                   TableCount = count }
             let inline createOptionalTable parser = ValueSome(createTable parser)
             match table with
+            | MetadataTableFlags.None -> () // Temporary work around since for some reason, None has entries.
             | MetadataTableFlags.Module ->
                 tables.ModuleTable <- createTable(ModuleParser header.HeapSizes)
                 tables.TablesSize <- tables.TablesSize + tables.ModuleTable.Size
@@ -392,18 +710,40 @@ module ParsedMetadataTables =
             | MetadataTableFlags.InterfaceImpl ->
                 tables.InterfaceImplTable <- createOptionalTable(InterfaceImplParser header.Rows)
                 tables.TablesSize <- tables.TablesSize + tables.InterfaceImplTable.Value.Size
-            | MetadataTableFlags.MemberRef
-            | MetadataTableFlags.Constant
-            | MetadataTableFlags.CustomAttribute
-            | MetadataTableFlags.StandAloneSig
+            | MetadataTableFlags.MemberRef ->
+                tables.MemberRefTable <- MemberRefParser(header.HeapSizes, header.Rows) |> createOptionalTable
+                tables.TablesSize <- tables.TablesSize + tables.MemberRefTable.Value.Size
+            | MetadataTableFlags.Constant ->
+                tables.ConstantTable <- ConstantParser(header.HeapSizes, header.Rows) |> createOptionalTable
+                tables.TablesSize <- tables.TablesSize + tables.ConstantTable.Value.Size
+            | MetadataTableFlags.CustomAttribute ->
+                tables.CustomAttributeTable <- CustomAttributeParser(header.HeapSizes, header.Rows) |> createOptionalTable
+                tables.TablesSize <- tables.TablesSize + tables.CustomAttributeTable.Value.Size
+            | MetadataTableFlags.StandAloneSig ->
+                tables.StandaloneSigTable <- createOptionalTable(StandaloneSigParser header.HeapSizes)
+                tables.TablesSize <- tables.TablesSize + tables.StandaloneSigTable.Value.Size
 
-            | MetadataTableFlags.PropertyMap
-            | MetadataTableFlags.Property
-            | MetadataTableFlags.MethodSemantics
-            | MetadataTableFlags.MethodImpl
+            | MetadataTableFlags.PropertyMap ->
+                tables.PropertyMapTable <- createOptionalTable(PropertyMapParser header.Rows)
+                tables.TablesSize <- tables.TablesSize + tables.PropertyMapTable.Value.Size
+            | MetadataTableFlags.Property ->
+                tables.PropertyTable <- createOptionalTable(PropertyParser header.HeapSizes)
+                tables.TablesSize <- tables.TablesSize + tables.PropertyTable.Value.Size
+            | MetadataTableFlags.MethodSemantics ->
+                tables.MethodSemanticsTable <- createOptionalTable(MethodSemanticsParser header.Rows)
+                tables.TablesSize <- tables.TablesSize + tables.MethodSemanticsTable.Value.Size
+            | MetadataTableFlags.MethodImpl ->
+                tables.MethodImplTable <- createOptionalTable(MethodImplParser header.Rows)
+                tables.TablesSize <- tables.TablesSize + tables.MethodImplTable.Value.Size
 
-            | MetadataTableFlags.TypeSpec
-            | MetadataTableFlags.Assembly
-            | MetadataTableFlags.AssemblyRef -> () // TODO: Parse these tables.
-            | _ -> () // Temporary to get printing to work
+            | MetadataTableFlags.TypeSpec ->
+                tables.TypeSpecTable <- createOptionalTable(TypeSpecParser header.HeapSizes)
+                tables.TablesSize <- tables.TablesSize + tables.TypeSpecTable.Value.Size
+            | MetadataTableFlags.Assembly ->
+                tables.AssemblyTable <- createOptionalTable(AssemblyParser header.HeapSizes)
+                tables.TablesSize <- tables.TablesSize + tables.AssemblyTable.Value.Size
+            | MetadataTableFlags.AssemblyRef ->
+                tables.AssemblyRefTable <- createOptionalTable(AssemblyRefParser header.HeapSizes)
+                tables.TablesSize <- tables.TablesSize + tables.AssemblyRefTable.Value.Size
+            | _ -> failwithf "Table %A is currently not supported" table
         tables

@@ -11,11 +11,14 @@ type ParsedBlob =
     internal { BlobOffset: uint32 }
     static member op_Implicit { BlobOffset = offset } = offset
 
-[<IsReadOnly; Struct>]
-type ParsedFieldSig = internal { FieldSig: ParsedBlob }
-
-[<IsReadOnly; Struct>]
-type ParsedMethodDefSig = internal { MethodDefSig: ParsedBlob }
+type [<IsReadOnly; Struct>] ParsedFieldSig = internal { FieldSig: ParsedBlob }
+type [<IsReadOnly; Struct>] ParsedMethodDefSig = internal { MethodDefSig: ParsedBlob }
+type [<IsReadOnly; Struct>] ParsedMemberRefSig = internal { MemberRefSig: ParsedBlob }
+type [<IsReadOnly; Struct>] ParsedAttributeSig = internal { CustomAttrib: ParsedBlob }
+type [<IsReadOnly; Struct>] ParsedStandaloneSig = internal { StandaloneSig: ParsedBlob }
+type [<IsReadOnly; Struct>] ParsedPropertySig = internal { PropertySig: ParsedBlob }
+type [<IsReadOnly; Struct>] ParsedTypeSpec = internal { TypeSpec: ParsedBlob }
+//type [<IsReadOnly; Struct>] TemporarySomethingSig = internal { TemporarySomethingSig: ParsedBlob }
 
 [<RequireQualifiedAccess>]
 module ParsedBlob =
@@ -42,8 +45,10 @@ type ParsedBlobStream internal (stream: ParsedMetadataStream) =
         match this.TryRead offset with
         | Ok size -> Ok stream.Buffer.[..size]
         | Error err -> Error err
-    member this.TryReadFieldSig { FieldSig = offset } =
+    member private this.TryReadFieldSig offset =
         match this.TryRead offset with
         | Ok size -> ParseBlob.fieldSig(Span(stream.Buffer, 0, size))
         | Error err -> Error err
+    member this.TryReadFieldSig { FieldSig = offset } = this.TryReadFieldSig offset
+    member this.TryReadFieldSig { StandaloneSig = offset } = this.TryReadFieldSig offset
     member _.Size = stream.StreamSize
