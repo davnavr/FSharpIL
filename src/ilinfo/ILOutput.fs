@@ -234,7 +234,7 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
             fieldf "TypeNamespace" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeNamespace
     | ValueNone -> ()
 
-let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) (wr: TextWriter) =
+let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) (blobs: ParsedBlobStream) (wr: TextWriter) =
     let row = table.[i]
     if VisibilityFilter.field vfilter row.Flags then
         wr.Write ".field "
@@ -261,12 +261,16 @@ let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) 
             // TODO: Write field marshalling information.
             wr.Write ") "
 
-        // TODO: Write type of field after reading signature.
+        match blobs.TryReadFieldSig(row.Signature) with
+        | Ok signature ->
+            // TODO: Include custom modifiers of field type.
+            TypeName.encoded signature.FieldType wr
+        | Error err -> fprintfn wr "Error reading type %O" err
 
         fprintfn wr " '%s' " (strings.GetString row.Name)
         rowIndex wr i
 
-let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings wr =
+let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings (blobs: _ voption) wr =
     match tables.Field with
     | ValueSome ftable when row.FieldList > 0u ->
         let ttable = tables.TypeDef.Value // TODO: Fix, fieldi is invalid.
@@ -276,12 +280,13 @@ let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>
             else ttable.[i + 1].FieldList
         let mutable fieldi = row.FieldList
         while fieldi < max do
-            fieldRow ftable (int32 fieldi) vfilter strings wr
+            // TODO: Report an error if blobs does not exist
+            fieldRow ftable (int32 fieldi) vfilter strings blobs.Value wr
             fieldi <- fieldi + 1u
     | ValueSome _
     | ValueNone -> ()
 
-let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsStream) (wr: TextWriter) =
+let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsStream) blobs (wr: TextWriter) =
     match tables.TypeDef with
     | ValueSome table ->
         for i = 0 to int32 table.RowCount - 1 do
@@ -351,12 +356,12 @@ let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsS
 
                 wr.WriteLine '{'
                 // TODO: Add indentation.
-                typeDefFields tables i &row vfilter strings wr
+                typeDefFields tables i &row vfilter strings blobs wr
                 // TODO: Write other members.
                 wr.WriteLine '}'
     | ValueNone -> ()
 
-let metadataTables headers il vfilter strings guid (tables: ParsedMetadataTables) offset wr =
+let metadataTables headers il vfilter strings guid blobs (tables: ParsedMetadataTables) offset wr =
     match headers with
     | NoHeaders -> ()
     | IncludeHeaders ->
@@ -368,7 +373,7 @@ let metadataTables headers il vfilter strings guid (tables: ParsedMetadataTables
     | IncludeIL, ValueSome strings', ValueSome guid' ->
         moduleTable tables strings' guid' wr
         typeRefTable tables strings' wr
-        typeDefTable tables vfilter strings' wr
+        typeDefTable tables vfilter strings' blobs wr
     wr
 
 let handleError state error offset wr =

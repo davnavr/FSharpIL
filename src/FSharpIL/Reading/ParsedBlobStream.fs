@@ -26,10 +26,10 @@ module ParsedBlob =
 type ParsedBlobStream internal (stream: ParsedMetadataStream) =
     member private _.TryRead { BlobOffset = Convert.U8 offset } =
         let mutable size = 0u
-        match ParsedMetadataStream.tryReadUnsigned offset stream &size with
+        match ParseBlob.tryReadUnsigned (offset + stream.StreamOffset) stream.Chunk &size with
         | Ok (Convert.U8 lsize) ->
             let isize, size' = int32 size, uint64 size
-            let offset' = offset + lsize
+            let offset' = offset + stream.StreamOffset + lsize
             if stream.Chunk.HasFreeBytes(offset', size') then
                 if uint32 stream.Buffer.Length < size then
                     stream.Buffer <- Array.zeroCreate isize
@@ -41,5 +41,9 @@ type ParsedBlobStream internal (stream: ParsedMetadataStream) =
     member this.TryReadBytes offset =
         match this.TryRead offset with
         | Ok size -> Ok stream.Buffer.[..size]
+        | Error err -> Error err
+    member this.TryReadFieldSig { FieldSig = offset } =
+        match this.TryRead offset with
+        | Ok size -> ParseBlob.fieldSig(Span(stream.Buffer, 0, size))
         | Error err -> Error err
     member _.Size = stream.StreamSize

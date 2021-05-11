@@ -117,6 +117,7 @@
     <Compile Include="Reading\ByteParser.fs" />
     <Compile Include="Reading\ChunkReader.fs" />
     <Compile Include="Reading\Headers.fs" />
+    <Compile Include="Reading\ParseBlob.fs" />
     <Compile Include="Reading\ParsedMetadataStream.fs" />
     <Compile Include="Reading\ParsedStringsStream.fs" />
     <Compile Include="Reading\ParsedGuidStream.fs" />

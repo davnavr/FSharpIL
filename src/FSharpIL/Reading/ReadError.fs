@@ -36,6 +36,22 @@ type ParsedStructure =
         | MetadataTableRowCounts -> "the CLI metadata table row counts"
         | MetadataRow(table, index) -> sprintf "the %A metadata row at index %i (0x%08x)" table index index
 
+type BlobError =
+    | InvalidUnsignedCompressedInteger of uint8
+    | BlobOutOfBounds of offset: uint64 * size: uint64
+    | InvalidFieldSignatureMagic of actual: uint8
+
+    override this.ToString() =
+        match this with
+        | InvalidUnsignedCompressedInteger value ->
+            Convert.ToString(value, 2) |> sprintf "the first byte of the compressed integer (0b%s) is invalid"
+        | BlobOutOfBounds(offset, size) ->
+            sprintf
+                "the offset into the \"#Blob\" heap (0x%016X) points to a blob with an invalid size (0x%016X), the blob extends outside of the heap"
+                offset
+                size
+        | InvalidFieldSignatureMagic actual -> sprintf "expected field signature to begin with the byte 0x06, but got 0x%02X" actual
+
 [<NoComparison; NoEquality>]
 type ReadError =
     | InvalidMagic of expected: ImmutableArray<byte> * actual: byte[]
@@ -49,11 +65,10 @@ type ReadError =
     | StructureOutsideOfCurrentSection of ParsedStructure
     | MissingNullTerminator of string
     | InvalidStringIndex of offset: uint32 * size: uint64
+    | BlobError of BlobError
     | CannotFindMetadataTables
     | MissingModuleTable
     | MetadataRowOutOfBounds of table: MetadataTableFlags * index: uint32 * count: uint32
-    | InvalidUnsignedCompressedInteger of uint8
-    | BlobOutOfBounds of offset: uint64 * size: uint64
     | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile
 
@@ -82,6 +97,7 @@ type ReadError =
         | MissingNullTerminator name -> sprintf "the string \"%s\" does not end in a null terminator" name
         | InvalidStringIndex(offset, size) ->
             sprintf "Invalid offset into the \"#Strings\" heap (0x%08X), maximum valid offset is (0x%08X)" offset (size - 1UL)
+        | BlobError err -> string err
         | CannotFindMetadataTables -> "the stream containing the metadata tables \"#~\" could not be found"
         | MissingModuleTable -> "the Module table (0x00) is missing"
         | MetadataRowOutOfBounds(table, index, count) ->
@@ -92,13 +108,6 @@ type ReadError =
                 index
                 count
                 count
-        | InvalidUnsignedCompressedInteger value ->
-            Convert.ToString(value, 2) |> sprintf "the first byte of the compressed integer (0b%s) is invalid"
-        | BlobOutOfBounds(offset, size) ->
-            sprintf
-                "the offset into the \"#Blob\" heap (0x%016X) points to a blob with an invalid size (0x%016X), the blob extends outside of the heap"
-                offset
-                size
         | CannotReadDebugTables -> "the metadata tables contain debugging metadata, which is currently not supported by FSharpIL"
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
 

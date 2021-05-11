@@ -553,6 +553,7 @@ let readMetadataTables file reader ustate =
         reader'
             (stream file.StringsStreamIndex file.StringsStream)
             (stream file.GuidStreamIndex file.GuidStream)
+            (stream file.BlobStreamIndex file.BlobStream)
             file.MetadataTables
             //(file.TextSectionOffset + file.MetadataTablesOffset) // This points to the first byte of the tables.
             (file.TextSectionOffset + file.MetadataRootOffset + file.StreamHeaders.[file.MetadataTablesIndex.Value].Offset) // NOTE: This points to the tables header.
