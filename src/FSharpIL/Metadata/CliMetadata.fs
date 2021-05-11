@@ -15,7 +15,9 @@ type MetadataTableFlags =
     | InterfaceImpl = 0x200UL
     | MemberRef = 0x400UL
     | Constant = 0x800UL
-    | CustomAttribute = 0x1_000UL
+    | CustomAttribute = 0x1000UL
+
+    | ClassLayout = 0x8000UL
 
     | StandAloneSig = 0x2_0000UL
     | EventMap = 0x4_0000UL
@@ -27,11 +29,14 @@ type MetadataTableFlags =
     | ModuleRef = 0x400_0000UL
     | TypeSpec = 0x800_0000UL
 
+    | FieldRva = 0x2000_0000UL
     | Assembly = 0x1_0000_0000UL
     | AssemblyRef = 0x8_0000_0000UL
 
     | File = 0x40_0000_0000UL
+    | ExportedType = 0x80_0000_0000UL
 
+    | ManifestResource = 0x100_0000_0000UL
     | NestedClass = 0x200_0000_0000UL
     | GenericParam = 0x400_0000_0000UL
     | MethodSpec = 0x800_0000_0000UL

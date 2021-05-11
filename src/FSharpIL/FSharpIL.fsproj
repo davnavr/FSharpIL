@@ -26,6 +26,7 @@
     <Compile Include="Metadata\Assembly.fs" />
     <Compile Include="Metadata\AssemblyRef.fs" />
     <Compile Include="Metadata\File.fs" />
+    <Compile Include="Metadata\ManifestResource.fs" />
     <Compile Include="Metadata\ModuleRef.fs" />
     <Compile Include="Metadata\TypeRef.fs" />
     <Compile Include="Metadata\Flags.fs" />

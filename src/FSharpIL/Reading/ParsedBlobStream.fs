@@ -18,6 +18,7 @@ type [<IsReadOnly; Struct>] ParsedAttributeSig = internal { CustomAttrib: Parsed
 type [<IsReadOnly; Struct>] ParsedStandaloneSig = internal { StandaloneSig: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedPropertySig = internal { PropertySig: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedTypeSpec = internal { TypeSpec: ParsedBlob }
+type [<IsReadOnly; Struct>] ParsedMethodInstantiation = internal { MethodSpec: ParsedBlob }
 //type [<IsReadOnly; Struct>] TemporarySomethingSig = internal { TemporarySomethingSig: ParsedBlob }
 
 [<RequireQualifiedAccess>]
