@@ -113,7 +113,7 @@ module CodedIndex =
             2
         )
 
-    let extends (counts: MetadataTableCounts) =
+    let typeDefOrRefOrSpec (counts: MetadataTableCounts) =
         Parser (
             counts.GetValueOrDefault MetadataTableFlags.TypeDef
             + (counts.GetValueOrDefault MetadataTableFlags.TypeRef)
@@ -199,7 +199,7 @@ type ParsedTypeDefRow =
 
 [<IsReadOnly; Struct>]
 type TypeDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
-    member inline private _.Extends = CodedIndex.extends counts
+    member inline private _.Extends = CodedIndex.typeDefOrRefOrSpec counts
     interface IByteParser<ParsedTypeDefRow> with
         member this.Parse buffer =
             let str = StringParser sizes
@@ -272,6 +272,20 @@ type ParamParser (sizes: HeapSizes) =
               Name = parse 4 buffer (StringParser sizes) }
         member _.Length = 4 + sizes.StringSize
 
+[<IsReadOnly; Struct>]
+type ParsedInterfaceImpl = { Class: uint32; Interface: ParsedTypeDefOrRefOrSpec }
+
+[<IsReadOnly; Struct>]
+type InterfaceImplParser (counts: MetadataTableCounts) =
+    member inline private _.Class = IndexParser MetadataTableFlags.TypeDef
+    member inline private _.Interface = CodedIndex.typeDefOrRefOrSpec counts
+    interface IByteParser<ParsedInterfaceImpl> with
+        member this.Parse buffer =
+            let { Tag = tag; Index = i } = this.Interface.Parse(this.Class.Length counts, buffer)
+            { Class = this.Class.Parse(counts, 0, buffer)
+              Interface = { TypeIndex = i; Tag = LanguagePrimitives.EnumOfValue tag } }
+        member this.Length = this.Class.Length counts + this.Interface.Length
+
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
     internal
@@ -308,6 +322,7 @@ type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
 type ParsedTypeDefTable = ParsedMetadataTable<TypeDefParser, ParsedTypeDefRow>
 type ParsedFieldTable = ParsedMetadataTable<FieldParser, ParsedFieldRow>
 type ParsedMethodDefTable = ParsedMetadataTable<MethodDefParser, ParsedMethodRow>
+type ParsedInterfaceImplTable = ParsedMetadataTable<InterfaceImplParser, ParsedInterfaceImpl>
 
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTables =
@@ -321,7 +336,8 @@ type ParsedMetadataTables =
           [<DefaultValue>] mutable TypeDefTable: ParsedTypeDefTable voption
           [<DefaultValue>] mutable FieldTable: ParsedFieldTable voption
           [<DefaultValue>] mutable MethodDefTable: ParsedMethodDefTable voption
-          [<DefaultValue>] mutable ParamTable: ParsedMetadataTable<ParamParser, ParsedParamRow> voption }
+          [<DefaultValue>] mutable ParamTable: ParsedMetadataTable<ParamParser, ParsedParamRow> voption
+          [<DefaultValue>] mutable InterfaceImplTable: ParsedInterfaceImplTable voption }
 
     member this.Header = this.TablesHeader
     /// The size of the metadata tables in bytes.
@@ -337,6 +353,7 @@ type ParsedMetadataTables =
     member this.Field = this.FieldTable
     member this.MethodDef = this.MethodDefTable
     member this.Param = this.ParamTable
+    member this.InterfaceImpl = this.InterfaceImplTable
 
 [<RequireQualifiedAccess>]
 module ParsedMetadataTables =
@@ -372,5 +389,21 @@ module ParsedMetadataTables =
             | MetadataTableFlags.Param ->
                 tables.ParamTable <- createOptionalTable(ParamParser header.HeapSizes)
                 tables.TablesSize <- tables.TablesSize + tables.ParamTable.Value.Size
+            | MetadataTableFlags.InterfaceImpl ->
+                tables.InterfaceImplTable <- createOptionalTable(InterfaceImplParser header.Rows)
+                tables.TablesSize <- tables.TablesSize + tables.InterfaceImplTable.Value.Size
+            | MetadataTableFlags.MemberRef
+            | MetadataTableFlags.Constant
+            | MetadataTableFlags.CustomAttribute
+            | MetadataTableFlags.StandAloneSig
+
+            | MetadataTableFlags.PropertyMap
+            | MetadataTableFlags.Property
+            | MetadataTableFlags.MethodSemantics
+            | MetadataTableFlags.MethodImpl
+
+            | MetadataTableFlags.TypeSpec
+            | MetadataTableFlags.Assembly
+            | MetadataTableFlags.AssemblyRef -> () // TODO: Parse these tables.
             | _ -> () // Temporary to get printing to work
         tables
