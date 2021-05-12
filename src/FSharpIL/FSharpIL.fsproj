@@ -124,6 +124,7 @@
     <Compile Include="Reading\ParsedGuidStream.fs" />
     <Compile Include="Reading\ParsedUserStringStream.fs" />
     <Compile Include="Reading\ParsedBlobStream.fs" />
+    <Compile Include="Reading\ParsedMethodBodies.fs" />
     <Compile Include="Reading\ParsedMetadataTables.fs" />
     <Compile Include="Reading\MetadataReader.fs" />
     <Compile Include="ReadCli.fsi" />

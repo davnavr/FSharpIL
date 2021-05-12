@@ -752,3 +752,10 @@ type Label private (position: uint32) =
             else failwith "TODO: Figure out if 4 needs to be added or subtracted to get correct offset for large branch targets" //position' - other
         target.SetTarget(int32 offset)
     override _.ToString() = sprintf "IL_%04x" position
+
+[<Flags>]
+type ILMethodFlags =
+    | TinyFormat = 0x2us
+    | FatFormat = 0x3us
+    | MoreSects = 0x8us
+    | InitLocals = 0x10us

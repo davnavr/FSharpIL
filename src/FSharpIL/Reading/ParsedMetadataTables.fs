@@ -765,6 +765,7 @@ type GenericParamConstraintTable = ParsedMetadataTable<GenericParamConstraintPar
 type ParsedMetadataTables =
     private
         { Chunk: ChunkReader
+          MethodBodies: ParsedMethodBodies
           TablesHeader: ParsedMetadataTablesHeader
           TablesOffset: uint64
           [<DefaultValue>] mutable TablesSize: uint64
@@ -842,9 +843,10 @@ type ParsedMetadataTables =
 
 [<RequireQualifiedAccess>]
 module ParsedMetadataTables =
-    let internal create chunk header offset =
+    let internal create chunk header bodies offset =
         let tables =
             { Chunk = chunk
+              MethodBodies = bodies
               TablesHeader = header
               TablesOffset = offset }
         for KeyValue(table, count) in header.Rows do // TODO: How to ensure that keys are in order?

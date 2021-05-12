@@ -27,13 +27,6 @@ type CodedIndex<'T> internal (count: int32, n: int32, indexer: 'T -> uint32 * ui
 
 let codedIndex count n indexer = CodedIndex(count, n, indexer)
 
-[<RequireQualifiedAccess>]
-module private ILMethodFlags =
-    let [<Literal>] TinyFormat = 0x2uy
-    let [<Literal>] FatFormat = 0x3us
-    let [<Literal>] MoreSects = 0x8us
-    let [<Literal>] InitLocals = 0x10us
-
 [<ReferenceEquality; NoComparison>]
 type CliInfo =
     { HeaderRva: uint32
@@ -118,11 +111,11 @@ let bodies rva (info: CliInfo) (writer: ChunkWriter) =
 
             // Header
             if tiny
-            then ILMethodFlags.TinyFormat ||| (byte size <<< 2) |> writer.WriteU1 // Flags and Size
+            then uint8 ILMethodFlags.TinyFormat ||| (byte size <<< 2) |> writer.WriteU1 // Flags and Size
             else
                 let mutable flags = ILMethodFlags.FatFormat // TODO: Set other fat method flags as needed.
                 if body.InitLocals then flags <- flags ||| ILMethodFlags.InitLocals
-                flags ||| (Size.FatFormat <<< 12) |> writer.WriteU2 // Flags and Size
+                flags ||| LanguagePrimitives.EnumOfValue(Size.FatFormat <<< 12) |> writer.WriteU2 // Flags and Size
                 writer.WriteU2 body.MaxStack
                 writer.WriteU4 size
                 MetadataToken.write localsi 0x11uy writer // LocalVarSigTok
