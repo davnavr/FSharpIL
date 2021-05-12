@@ -98,7 +98,7 @@ module CodedIndex =
                 let index = Bytes.readU4 0 buffer
                 let filter = UInt32.MaxValue <<< this.EncodingBits
                 { Tag = uint8(index &&& ~~~filter)
-                  Index = (index &&& filter) >>> this.EncodingBits } // TODO: Shift index
+                  Index = (index &&& filter) >>> this.EncodingBits }
             else
                 let index = Bytes.readU2 0 buffer
                 let filter = UInt16.MaxValue <<< this.EncodingBits
@@ -553,7 +553,8 @@ type ParsedAssembly =
       RevisionNumber: uint16
       Flags: AssemblyNameFlags
       PublicKey: ParsedBlob
-      Name: ParsedString }
+      Name: ParsedString
+      Culture: ParsedString }
 
     member this.Version =
         Version(int32 this.MajorVersion, int32 this.MinorVersion, int32 this.BuildNumber, int32 this.RevisionNumber)
@@ -569,8 +570,9 @@ type AssemblyParser (sizes: HeapSizes) =
               RevisionNumber = Bytes.readU2 10 buffer
               Flags = LanguagePrimitives.EnumOfValue(int32(Bytes.readU4 12 buffer))
               PublicKey = parse 16 buffer (BlobParser sizes)
-              Name = parse (16 + sizes.BlobSize) buffer (StringParser sizes) }
-        member _.Length = 16 + sizes.BlobSize + sizes.StringSize
+              Name = parse (16 + sizes.BlobSize) buffer (StringParser sizes)
+              Culture = parse (16 + sizes.BlobSize + sizes.StringSize) buffer (StringParser sizes) }
+        member _.Length = 16 + sizes.BlobSize + (2 * sizes.StringSize)
 
 [<IsReadOnly; Struct>]
 type ParsedAssemblyRef =
@@ -602,7 +604,7 @@ type AssemblyRefParser (sizes: HeapSizes) =
               Name = parse (12 + sizes.BlobSize) buffer str
               Culture = parse (12 + sizes.BlobSize + sizes.StringSize) buffer str
               HashValue = parse (12 + sizes.BlobSize + (2 * sizes.StringSize)) buffer blob }
-        member _.Length = 8 + (2 * sizes.StringSize) + (2 * sizes.BlobSize)
+        member _.Length = 12 + (2 * sizes.StringSize) + (2 * sizes.BlobSize)
 
 
 
