@@ -274,7 +274,7 @@ let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) 
 let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings (blobs: _ voption) wr =
     match tables.Field with
     | ValueSome ftable when row.FieldList > 0u ->
-        let ttable = tables.TypeDef.Value // TODO: Fix, fieldi is invalid.
+        let ttable = tables.TypeDef.Value
         let max =
             if i = int32 ttable.RowCount - 1
             then tables.Header.Rows.[MetadataTableFlags.Field]
@@ -284,6 +284,70 @@ let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>
             // TODO: Report an error if blobs does not exist
             fieldRow ftable (int32 fieldi) vfilter strings blobs.Value wr
             fieldi <- fieldi + 1u
+    | ValueSome _
+    | ValueNone -> ()
+
+let methodRow (table: ParsedMethodDefTable) i vfilter (strings: ParsedStringsStream) (blobs: ParsedBlobStream) (wr: TextWriter) =
+    let row = table.[i]
+    if VisibilityFilter.methodDef vfilter row.Flags then
+        wr.Write ".method "
+
+        match row.Flags &&& MethodAttributes.MemberAccessMask with
+        | MethodAttributes.Public -> "public "
+        | MethodAttributes.Assembly -> "assembly "
+        | MethodAttributes.FamORAssem -> "famorassem "
+        | MethodAttributes.FamANDAssem -> "famandassem "
+        | MethodAttributes.Family -> "family "
+        | MethodAttributes.Private -> "private "
+        | MethodAttributes.PrivateScope
+        | _ -> "compilercontrolled "
+        |> wr.Write
+        
+        if row.Flags.HasFlag MethodAttributes.Final then wr.Write "final "
+        if row.Flags.HasFlag MethodAttributes.CheckAccessOnOverride then wr.Write "strict "
+        if row.Flags.HasFlag MethodAttributes.HideBySig then wr.Write "hidebysig "
+        if row.Flags.HasFlag MethodAttributes.NewSlot then wr.Write "newslot "
+        if row.Flags.HasFlag MethodAttributes.Abstract then wr.Write "abstract "
+        if row.Flags.HasFlag MethodAttributes.Virtual then wr.Write "virtual "
+        if row.Flags.HasFlag MethodAttributes.Static then wr.Write "static "
+        if row.Flags.HasFlag MethodAttributes.SpecialName then wr.Write "specialname "
+        if row.Flags.HasFlag MethodAttributes.RTSpecialName then wr.Write "rtspecialname "
+
+        // TODO: Move return type and parameters to separate lines like ILSpy
+        let signature = () // TODO: Parse method signature.
+
+        // CallConv
+
+        // TODO: write the return type.
+
+        fprintf wr "'%s' " (strings.GetString row.Name)
+        wr.Write " ("
+        // TODO: Write parameters.
+        wr.Write ") "
+
+        // TODO: Check when to emit these method keywords.
+        if true then wr.Write "cil "
+        if true then wr.Write "managed "
+
+        let body = () // TODO: Parse method body.
+
+        wr.WriteLine '{'
+
+        wr.WriteLine '}'
+
+let typeDefMethods (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings (blobs: _ voption) wr =
+    match tables.MethodDef with
+    | ValueSome mtable when row.MethodList > 0u -> // TODO: Avoid duplicating code with field printing.
+        let ttable = tables.TypeDef.Value
+        let max =
+            if i = int32 ttable.RowCount - 1
+            then tables.Header.Rows.[MetadataTableFlags.MethodDef]
+            else ttable.[i + 1].MethodList
+        let mutable methodi = row.MethodList
+        while methodi < max do
+            // TODO: Report an error if blobs does not exist
+            methodRow mtable (int32 methodi) vfilter strings blobs.Value wr
+            methodi <- methodi + 1u
     | ValueSome _
     | ValueNone -> ()
 
@@ -358,6 +422,7 @@ let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsS
                 wr.WriteLine '{'
                 // TODO: Add indentation.
                 typeDefFields tables i &row vfilter strings blobs wr
+                typeDefMethods tables i &row vfilter strings blobs wr
                 // TODO: Write other members.
                 wr.WriteLine '}'
     | ValueNone -> ()

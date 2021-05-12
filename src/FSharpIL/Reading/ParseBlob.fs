@@ -60,3 +60,5 @@ let rec fieldSig (buffer: Span<byte>) =
         let struct (i, modifiers) = cmodifier 1 buffer (ImmutableArray.CreateBuilder())
         FieldSignature(modifiers, etype i buffer) |> Ok
     | bad -> Error(InvalidFieldSignatureMagic bad)
+
+
