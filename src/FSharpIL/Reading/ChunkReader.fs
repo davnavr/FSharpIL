@@ -22,34 +22,42 @@ type internal ChunkReader (csize: int32, chunks: byte[][]) =
         let struct(chunki, i) = this.GetIndex offset
         chunks.[chunki].[i]
 
-    member this.TryAsSpan(offset, buffer: outref<Span<byte>>) =
+    member this.TryAsSpan(offset, length, buffer: outref<Span<byte>>) =
         let struct(chunki, i) = this.GetIndex offset
         let chunk = chunks.[chunki]
-        if i + buffer.Length <= chunk.Length then
+        if i + length <= chunk.Length then
             buffer <- Span(chunk, i, buffer.Length)
             true
         else false
 
-    member this.ReadBytes(offset, buffer: Span<byte>) =
-        let mutable source = Span()
-        if this.TryAsSpan(offset, &source) then
-            // Copy without having to loop
-            source.CopyTo buffer
-        else
-            for bufferi = 0 to buffer.Length - 1 do
-                buffer.[bufferi] <- this.ReadU1(offset + uint64 bufferi)
+    member private this.SlowCopyTo(offset, buffer: Span<byte>) =
+        for bufferi = 0 to buffer.Length - 1 do
+            buffer.[bufferi] <- this.ReadU1(offset + uint64 bufferi)
 
-    member this.TryReadBytes(offset, buffer: Span<byte>) =
+    member this.CopyTo(offset, buffer: Span<byte>) =
+        let mutable source = Span()
+        if this.TryAsSpan(offset, source.Length, &source)
+        then source.CopyTo buffer // Copy without having to loop
+        else this.SlowCopyTo(offset, buffer)
+
+    member this.TryCopyTo(offset, buffer: Span<byte>) =
         if buffer.IsEmpty
         then true
         elif this.HasFreeBytes(offset, uint64 buffer.Length) then
-            this.ReadBytes(offset, buffer)
+            this.CopyTo(offset, buffer)
             true
         else false
+
+    member this.ReadBytes(offset, length) =
+        let mutable buffer = Span()
+        if not(this.TryAsSpan(offset, length, &buffer)) then
+            // Cannot span over multiple arrays, so a heap allocation is necessary
+            buffer <- Span.heapalloc<byte> length
+        buffer
 
     member this.TryParse<'Parser, 'T when 'Parser : struct and 'Parser :> IByteParser<'T>> offset =
         let parser = Unchecked.defaultof<'Parser>
         let buffer = Span.stackalloc<byte> parser.Length
-        if this.TryReadBytes(offset, buffer)
+        if this.TryCopyTo(offset, buffer)
         then ValueSome(parser.Parse buffer)
         else ValueNone

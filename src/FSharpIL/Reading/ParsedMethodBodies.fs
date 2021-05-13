@@ -60,13 +60,13 @@ type ParsedOpcode =
 type InvalidOpcode =
     | UnexpectedEndOfBody of offset: uint64
     | UnknownOpcode of offset: uint64 * opcode: uint8
+    | MissingOperandBytes of offset: uint64 * count: int32
 
     override this.ToString() =
         match this with
-        | UnexpectedEndOfBody offset ->
-            sprintf "Unexpected end of method body at offset 0x%016X from start of method body" offset
-        | UnknownOpcode(offset, opcode) ->
-            sprintf "Unknown opcode (%02X) at offset 0x%016X from start of method body" opcode offset
+        | UnexpectedEndOfBody offset -> sprintf "Unexpected end of method body at offset IL_0x%04x" offset
+        | UnknownOpcode(offset, opcode) -> sprintf "Unknown opcode (%02X) at offset IL_0x%04x" opcode offset
+        | MissingOperandBytes(offset, count) -> sprintf "Expected %i operand bytes at offset IL_0x%04x" count offset
 
 type ParsedOperandTag =
     | None = 0uy
@@ -179,11 +179,12 @@ type MethodBodyParser = struct
         //| SomeOtherOpcode
         | ParsedOpcode.Ldarg_s ->
             let mutable buffer = Span()
-            if this.MethodBody.Chunk.TryAsSpan(this.SectionOffset, &buffer) then
+            if this.MethodBody.Chunk.TryAsSpan(this.SectionOffset, 1, &buffer) then
                 operand <- ParsedOperand(ParsedOperandTag.U1, buffer)
+                this.offset <- this.offset + 1UL
                 true
             else
-                invalidOp "TODO: error if no room left for operand"
+                error <- MissingOperandBytes(this.offset, 1)
                 false
         | _ ->
             operand <- ParsedOperand()
@@ -223,7 +224,7 @@ type ParsedMethodBodies =
                       LocalVarSigTok = ValueNone }
             | _ ->
                 let buffer = Span.stackalloc<byte> 12
-                if this.Chunk.TryReadBytes(offset, buffer) then
+                if this.Chunk.TryCopyTo(offset, buffer) then
                     let flags = Bytes.readU2 0 buffer
                     match flags >>> 12 with
                     | 3us as size ->

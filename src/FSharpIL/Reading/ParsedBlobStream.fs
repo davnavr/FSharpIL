@@ -38,7 +38,7 @@ type ParsedBlobStream internal (stream: ParsedMetadataStream) =
                 if uint32 stream.Buffer.Length < size then
                     stream.Buffer <- Array.zeroCreate isize
                 let buffer = Span<byte>(stream.Buffer, 0, isize)
-                stream.Chunk.ReadBytes(offset', buffer)
+                stream.Chunk.CopyTo(offset', buffer)
                 Ok isize
             else Error(BlobOutOfBounds(offset, size'))
         | Error err -> Error(InvalidUnsignedCompressedInteger err)

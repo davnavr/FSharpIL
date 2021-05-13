@@ -303,7 +303,7 @@ let readCliHeader (chunk: ChunkReader) file reader ustate =
     | ValueSome size ->
         let fields = Span.heapalloc<byte>(int32 size)
         let offset = file.CliHeaderOffset + 4UL
-        if chunk.TryReadBytes(offset, fields) then
+        if chunk.TryCopyTo(offset, fields) then
             file.CliHeader <-
                 { Size = size
                   MajorRuntimeVersion = Bytes.readU2 0 fields
@@ -337,7 +337,7 @@ let readMetadataVersion (version: byte[]) =
 let readMetadataSignature (chunk: ChunkReader) file ustate =
     let magic = Span.stackalloc<byte> 4
     let foffset = file.MetadataRootOffset + file.TextSectionOffset
-    if chunk.TryReadBytes(file.MetadataRootOffset, magic) then
+    if chunk.TryCopyTo(file.MetadataRootOffset, magic) then
         if Magic.matches Magic.CliSignature magic
         then Success(ustate, ReadMetadataRoot)
         else Failure(foffset, InvalidMagic(Magic.CliSignature, Bytes.ofSpan 4 magic))
@@ -350,14 +350,14 @@ let readMetadataRoot (chunk: ChunkReader) file reader ustate =
     let buffer = Span.stackalloc<byte> 16
     let offset = file.MetadataRootOffset + 4UL
     let foffset = file.TextSectionOffset + offset
-    if chunk.TryReadBytes(offset, buffer.Slice(0, 12)) then
+    if chunk.TryCopyTo(offset, buffer.Slice(0, 12)) then
         let length = Bytes.readU4 8 buffer
         let version = Array.zeroCreate(int32 length)
         let offset' = offset + 12UL
         let foffset' = file.TextSectionOffset + offset'
-        if chunk.TryReadBytes(offset', Span version) then
+        if chunk.TryCopyTo(offset', Span version) then
             match readMetadataVersion version with
-            | ValueSome version' when chunk.TryReadBytes(offset' + uint64 length, buffer.Slice 12) ->
+            | ValueSome version' when chunk.TryCopyTo(offset' + uint64 length, buffer.Slice 12) ->
                 let scount = Bytes.readU2 14 buffer
                 file.StreamHeadersOffset <- offset' + uint64 length + 4UL
                 file.StreamHeaders <- Array.zeroCreate(int32 scount)
@@ -382,7 +382,7 @@ let readStreamName (chunk: ChunkReader) offset = // TODO: Make this recursive in
     let mutable cont, i = true, 0
     while cont && i < name.Length do
         let name' = name.Slice(i, 4)
-        if chunk.TryReadBytes(offset + uint64 i, name') then
+        if chunk.TryCopyTo(offset + uint64 i, name') then
             i <- i + 4
             if name'.[3] = 0uy then cont <- false
         else cont <- false
@@ -392,7 +392,7 @@ let readStreamName (chunk: ChunkReader) offset = // TODO: Make this recursive in
 
 let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span<byte>) i offset reader ustate =
     let foffset = file.TextSectionOffset + offset
-    if chunk.TryReadBytes(offset, fields) then
+    if chunk.TryCopyTo(offset, fields) then
         let offset' = offset + 8UL
         match readStreamName chunk offset' with
         | Ok name ->
@@ -516,12 +516,12 @@ let rec readTableCounts (lookup: 'Lookup) (valid: MetadataTableFlags) (counts: u
 let readTablesHeader (chunk: ChunkReader) (file: MutableFile) offset =
     let fields = Span.stackalloc<byte> 24
     let offset' = offset + file.TextSectionOffset
-    if chunk.TryReadBytes(offset, fields) then
+    if chunk.TryCopyTo(offset, fields) then
         let valid: MetadataTableFlags = LanguagePrimitives.EnumOfValue(Bytes.readU8 8 fields)
         //invalidOp "TODO: Check that specified tables are supported."
         let tablen = tableRowsCount valid 0
         let rcounts = Span.stackalloc<byte>(tablen * 4)
-        if chunk.TryReadBytes(offset + uint64 fields.Length, rcounts) then
+        if chunk.TryCopyTo(offset + uint64 fields.Length, rcounts) then
             let mutable rows = Array.zeroCreate tablen
 
             for rowi = 0 to tablen - 1 do

@@ -26,7 +26,7 @@ type ParsedGuidStream =
         | 0u -> Ok Guid.Empty
         | _ when this.IsValidOffset i ->
             let buffer = Span.stackalloc<byte> 16
-            this.Chunk.ReadBytes(this.GuidOffset + (uint64 i * 16UL), buffer)
+            this.Chunk.CopyTo(this.GuidOffset + (uint64 i * 16UL), buffer)
             Ok(Guid(Span.asReadOnly buffer))
         | _ -> Error(invalidOp "error")
     member this.GetGuid guid =
