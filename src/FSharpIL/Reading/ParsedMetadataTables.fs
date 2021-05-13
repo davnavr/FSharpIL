@@ -841,6 +841,8 @@ type ParsedMetadataTables =
     member this.MethodSpec = this.MethodSpecTable
     member this.GenericParamConstraint = this.GenericParamConstraintTable
 
+    member this.GetMethodBodies() = this.MethodBodies
+
 [<RequireQualifiedAccess>]
 module ParsedMetadataTables =
     let internal create chunk header bodies offset =
@@ -879,7 +881,7 @@ module ParsedMetadataTables =
             | MetadataTableFlags.InterfaceImpl ->
                 tables.InterfaceImplTable <- createOptionalTable(InterfaceImplParser header.Rows)
                 tables.TablesSize <- tables.TablesSize + tables.InterfaceImplTable.Value.Size
-            | MetadataTableFlags.MemberRef ->
+            | MetadataTableFlags.MemberRef -> // TODO: Fix, first row of this table is when things start being garbage, table offset is correct however
                 tables.MemberRefTable <- MemberRefParser(header.HeapSizes, header.Rows) |> createOptionalTable
                 tables.TablesSize <- tables.TablesSize + tables.MemberRefTable.Value.Size
             | MetadataTableFlags.Constant ->

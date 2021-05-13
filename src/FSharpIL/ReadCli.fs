@@ -588,7 +588,13 @@ let readMetadata chunk file reader ustate rstate =
             | Error err -> Failure err
         | ValueNone -> Failure(file.TextSectionOffset + file.StreamHeadersOffset, CannotFindMetadataTables)
     | ReadMetadataTables ->
-        file.MetadataTables <- ParsedMetadataTables.create chunk file.MetadataTablesHeader (failwith "TODO: Something") file.MetadataTablesOffset
+        file.MetadataTables <-
+            ParsedMetadataTables.create
+                chunk
+                file.MetadataTablesHeader
+                { Chunk = file.TextSectionData
+                  SectionRva = file.SectionHeaders.[file.TextSectionIndex].Data.VirtualAddress }
+                file.MetadataTablesOffset
         Success(readMetadataTables file reader ustate, MoveToEnd)
     | MoveToEnd -> End
 

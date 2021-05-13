@@ -207,6 +207,20 @@ let moduleTable (tables: ParsedMetadataTables) strings guid (wr: TextWriter) =
         fguid "GenerationId" row.EncId
         fguid "BaseGenerationId" row.EncBaseId
 
+// TODO: Print DottedNames correctly, see II.5.3
+
+let assemblyRefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) wr =
+    match tables.Assembly with
+    | ValueSome table ->
+        for i = 0 to int32 table.RowCount do
+            let row = table.[i]
+            fprintfn wr ".assembly extern %s" (strings.GetString row.Name)
+            wr.WriteLine '{'
+            fprintfn wr "    .ver %i:%i:%i:%i" row.MajorVersion row.MinorVersion row.BuildNumber row.RevisionNumber
+            wr.WriteLine '}'
+            wr.WriteLine()
+    | ValueNone -> ()
+
 let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
     match tables.TypeRef with
     | ValueSome table ->
@@ -287,7 +301,15 @@ let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>
     | ValueSome _
     | ValueNone -> ()
 
-let methodRow (table: ParsedMethodDefTable) i vfilter (strings: ParsedStringsStream) (blobs: ParsedBlobStream) (wr: TextWriter) =
+let methodRow
+    (table: ParsedMethodDefTable)
+    i
+    vfilter
+    (strings: ParsedStringsStream)
+    (blobs: ParsedBlobStream)
+    (bodies: ParsedMethodBodies)
+    (wr: TextWriter)
+    =
     let row = table.[i]
     if VisibilityFilter.methodDef vfilter row.Flags then
         wr.Write ".method "
@@ -329,10 +351,14 @@ let methodRow (table: ParsedMethodDefTable) i vfilter (strings: ParsedStringsStr
         if true then wr.Write "cil "
         if true then wr.Write "managed "
 
-        let body = () // TODO: Parse method body.
-
         wr.WriteLine '{'
-
+        if row.Rva > 0u then
+            match bodies.TryParse row.Rva with
+            | Ok(header, body) ->
+                fprintfn wr "// Method begins at RVA 0x%08X" row.Rva
+                fprintfn wr "// Code size %i (0x%08X)" header.CodeSize header.CodeSize
+                fprintfn wr ".maxstack %i" header.MaxStack
+            | Error err -> fprintfn wr "// %O" err
         wr.WriteLine '}'
 
 let typeDefMethods (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings (blobs: _ voption) wr =
@@ -346,7 +372,7 @@ let typeDefMethods (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow
         let mutable methodi = row.MethodList
         while methodi < max do
             // TODO: Report an error if blobs does not exist
-            methodRow mtable (int32 methodi) vfilter strings blobs.Value wr
+            methodRow mtable (int32 methodi) vfilter strings blobs.Value (tables.GetMethodBodies()) wr
             methodi <- methodi + 1u
     | ValueSome _
     | ValueNone -> ()
@@ -438,6 +464,7 @@ let metadataTables headers il vfilter strings guid blobs (tables: ParsedMetadata
     | NoIL, _, _ -> ()
     | IncludeIL, ValueSome strings', ValueSome guid' ->
         moduleTable tables strings' guid' wr
+        assemblyRefTable tables strings' wr
         typeRefTable tables strings' wr
         typeDefTable tables vfilter strings' blobs wr
     wr

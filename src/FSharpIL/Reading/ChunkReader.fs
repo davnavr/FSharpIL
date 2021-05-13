@@ -26,7 +26,7 @@ type internal ChunkReader (csize: int32, chunks: byte[][]) =
         let struct(chunki, i) = this.GetIndex offset
         let chunk = chunks.[chunki]
         if i + length <= chunk.Length then
-            buffer <- Span(chunk, i, buffer.Length)
+            buffer <- Span(chunk, i, length)
             true
         else false
 
@@ -36,7 +36,7 @@ type internal ChunkReader (csize: int32, chunks: byte[][]) =
 
     member this.CopyTo(offset, buffer: Span<byte>) =
         let mutable source = Span()
-        if this.TryAsSpan(offset, source.Length, &source)
+        if this.TryAsSpan(offset, buffer.Length, &source)
         then source.CopyTo buffer // Copy without having to loop
         else this.SlowCopyTo(offset, buffer)
 
