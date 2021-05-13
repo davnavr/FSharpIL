@@ -174,18 +174,18 @@ type MethodBodyParser = struct
             error <- UnknownOpcode(this.offset, unknown)
             Failure
 
-    member private this.ReadOperand(opcode, operand: outref<ParsedOperand>, error: outref<InvalidOpcode>) =
+    member private this.ReadOperandBytes(tag, size, operand: outref<ParsedOperand>, error: outref<InvalidOpcode>) =
+        if this.MethodBody.Chunk.HasFreeBytes(this.SectionOffset, uint64 size) then
+            operand <- ParsedOperand(tag, this.MethodBody.Chunk.ReadBytes(this.SectionOffset, size))
+            true
+        else
+            error <- MissingOperandBytes(this.offset, size)
+            false
+
+    member private this.ReadOperand(opcode, operand: outref<_>, error: outref<_>) =
         match opcode with
         //| SomeOtherOpcode
-        | ParsedOpcode.Ldarg_s ->
-            let mutable buffer = Span()
-            if this.MethodBody.Chunk.TryAsSpan(this.SectionOffset, 1, &buffer) then
-                operand <- ParsedOperand(ParsedOperandTag.U1, buffer)
-                this.offset <- this.offset + 1UL
-                true
-            else
-                error <- MissingOperandBytes(this.offset, 1)
-                false
+        | ParsedOpcode.Ldarg_s -> this.ReadOperandBytes(ParsedOperandTag.U1, 1, &operand, &error)
         | _ ->
             operand <- ParsedOperand()
             true

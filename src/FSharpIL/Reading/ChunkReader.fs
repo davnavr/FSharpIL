@@ -53,6 +53,7 @@ type internal ChunkReader (csize: int32, chunks: byte[][]) =
         if not(this.TryAsSpan(offset, length, &buffer)) then
             // Cannot span over multiple arrays, so a heap allocation is necessary
             buffer <- Span.heapalloc<byte> length
+            this.SlowCopyTo(offset, buffer)
         buffer
 
     member this.TryParse<'Parser, 'T when 'Parser : struct and 'Parser :> IByteParser<'T>> offset =
