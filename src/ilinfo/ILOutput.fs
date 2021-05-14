@@ -11,6 +11,8 @@ open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 open FSharpIL.Reading
 
+let indented wr = IndentedTextWriter(wr, 4)
+
 let inline heading name (offset: FileOffset) wr = fprintfn wr "// ----- %s (0x%016X)" name (uint64 offset)
 
 let inline fieldf name size printer wr value = fprintfn wr "// %s (%i bytes) = %a" name size printer value
@@ -248,7 +250,7 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
             fieldf "TypeNamespace" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeNamespace
     | ValueNone -> ()
 
-let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) (blobs: ParsedBlobStream) (wr: TextWriter) =
+let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) (blobs: ParsedBlobStream) (wr: #TextWriter) =
     let row = table.[i]
     if VisibilityFilter.field vfilter row.Flags then
         wr.Write ".field "
@@ -285,7 +287,7 @@ let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) 
         rowIndex wr i
         wr.WriteLine()
 
-let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings (blobs: _ voption) wr =
+let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings (blobs: _ voption) (wr: #TextWriter) =
     match tables.Field with
     | ValueSome ftable when row.FieldList > 0u ->
         let ttable = tables.TypeDef.Value
@@ -308,7 +310,7 @@ let methodRow
     (strings: ParsedStringsStream)
     (blobs: ParsedBlobStream)
     (bodies: ParsedMethodBodies)
-    (wr: TextWriter)
+    (wr: #TextWriter)
     =
     let row = table.[i]
     if VisibilityFilter.methodDef vfilter row.Flags then
@@ -352,16 +354,25 @@ let methodRow
         if true then wr.Write "managed "
 
         wr.WriteLine '{'
+        let wr' = indented wr
         if row.Rva > 0u then
             match bodies.TryParse row.Rva with
             | Ok(header, body) ->
-                fprintfn wr "// Method begins at RVA 0x%08X" row.Rva
-                fprintfn wr "// Code size %i (0x%08X)" header.CodeSize header.CodeSize
-                fprintfn wr ".maxstack %i" header.MaxStack
-            | Error err -> fprintfn wr "// %O" err
+                fprintfn wr' "// Method begins at RVA 0x%08X" row.Rva
+                fprintfn wr' "// Code size %i (0x%08X)" header.CodeSize header.CodeSize
+                fprintfn wr' ".maxstack %i" header.MaxStack
+            | Error err -> fprintfn wr' "// %O" err
         wr.WriteLine '}'
 
-let typeDefMethods (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings (blobs: _ voption) wr =
+let typeDefMethods
+    (tables: ParsedMetadataTables)
+    i
+    (row: inref<ParsedTypeDefRow>)
+    vfilter
+    strings
+    (blobs: _ voption)
+    (wr: #TextWriter)
+    =
     match tables.MethodDef with
     | ValueSome mtable when row.MethodList > 0u -> // TODO: Avoid duplicating code with field printing.
         let ttable = tables.TypeDef.Value
@@ -446,9 +457,9 @@ let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsS
                     wr.WriteLine()
 
                 wr.WriteLine '{'
-                // TODO: Add indentation.
-                typeDefFields tables i &row vfilter strings blobs wr
-                typeDefMethods tables i &row vfilter strings blobs wr
+                let wr' = indented wr
+                typeDefFields tables i &row vfilter strings blobs wr'
+                typeDefMethods tables i &row vfilter strings blobs wr'
                 // TODO: Write other members.
                 wr.WriteLine '}'
     | ValueNone -> ()
