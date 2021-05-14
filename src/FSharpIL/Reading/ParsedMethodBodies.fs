@@ -240,7 +240,7 @@ type ParsedMethodBodies =
 
     /// Attempts to parse the method body at the specified relative virtual address.
     member this.TryParse(rva: uint32) =
-        let offset = uint64(this.SectionRva - rva)
+        let offset = uint64(rva - this.SectionRva)
         if this.Chunk.IsValidOffset offset then
             let header = this.TryParseHeader offset
             match header with

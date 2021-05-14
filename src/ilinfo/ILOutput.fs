@@ -343,7 +343,7 @@ let methodRow
         // TODO: write the return type.
 
         fprintf wr "'%s' " (strings.GetString row.Name)
-        wr.Write " ("
+        wr.Write '('
         // TODO: Write parameters.
         wr.Write ") "
 
