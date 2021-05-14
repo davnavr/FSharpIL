@@ -85,12 +85,24 @@ type internal ParsedCodedIndex =
 
 [<RequireQualifiedAccess>]
 module CodedIndex =
+    let private isLarge max (tables: MetadataTableFlags) (counts: MetadataTableCounts) =
+        let mutable large, n = false, 0
+        while not large && n < 64 do
+            if counts.GetValueOrDefault((MetadataTableFlags.Module <<< n) &&& tables) > max then
+                large <- true
+            n <- n + 1
+        large
+
     [<IsReadOnly; IsByRefLike; Struct>]
     type Parser = struct
         /// Gets a value indicating whether this coded index would occupy four bytes.
         val IsLarge: bool
         val EncodingBits: int32
+        [<System.Obsolete>]
         internal new (count: uint32, n: int32) = { IsLarge = count > (0xFFFFu >>> n); EncodingBits = n }
+        internal new (tables, counts, n: int32) =
+            { IsLarge = isLarge (0xFFFFu >>> n) tables counts
+              EncodingBits = n }
         /// The number of bytes that this coded index would occupy.
         member this.Length = if this.IsLarge then 4 else 2
         member internal this.Parse(buffer: Span<byte>) =
@@ -109,97 +121,84 @@ module CodedIndex =
 
     let resolutionScopeParser (counts: MetadataTableCounts) =
         Parser (
-            counts.GetValueOrDefault MetadataTableFlags.Module
-            + (counts.GetValueOrDefault MetadataTableFlags.ModuleRef)
-            + (counts.GetValueOrDefault MetadataTableFlags.AssemblyRef)
-            + (counts.GetValueOrDefault MetadataTableFlags.TypeRef),
+            MetadataTableFlags.Module
+            ||| MetadataTableFlags.ModuleRef
+            ||| MetadataTableFlags.AssemblyRef
+            ||| MetadataTableFlags.TypeRef,
+            counts,
             2
         )
 
     let typeDefOrRefOrSpec (counts: MetadataTableCounts) =
         Parser (
-            counts.GetValueOrDefault MetadataTableFlags.TypeDef
-            + (counts.GetValueOrDefault MetadataTableFlags.TypeRef)
-            + (counts.GetValueOrDefault MetadataTableFlags.TypeSpec),
+            MetadataTableFlags.TypeDef
+            ||| MetadataTableFlags.TypeRef
+            ||| MetadataTableFlags.TypeSpec,
+            counts,
             2
         )
 
     let memberRefParent (counts: MetadataTableCounts) =
         Parser (
-            counts.GetValueOrDefault MetadataTableFlags.TypeDef
-            + (counts.GetValueOrDefault MetadataTableFlags.TypeRef)
-            + (counts.GetValueOrDefault MetadataTableFlags.ModuleRef)
-            + (counts.GetValueOrDefault MetadataTableFlags.MethodDef)
-            + (counts.GetValueOrDefault MetadataTableFlags.TypeSpec),
+            MetadataTableFlags.TypeDef
+            ||| MetadataTableFlags.TypeRef
+            ||| MetadataTableFlags.ModuleRef
+            ||| MetadataTableFlags.MethodDef
+            ||| MetadataTableFlags.TypeSpec,
+            counts,
             3
         )
 
     let hasConstant (counts: MetadataTableCounts) =
-        Parser (
-            counts.GetValueOrDefault MetadataTableFlags.Field
-            + (counts.GetValueOrDefault MetadataTableFlags.Param)
-            + (counts.GetValueOrDefault MetadataTableFlags.Property),
-            2
-        )
+        Parser(MetadataTableFlags.Field ||| MetadataTableFlags.Param ||| MetadataTableFlags.Property, counts, 2)
 
     let hasCustomAttribute (counts: MetadataTableCounts) =
         Parser (
-            counts.GetValueOrDefault MetadataTableFlags.MethodDef
-            + (counts.GetValueOrDefault MetadataTableFlags.Field)
-            + (counts.GetValueOrDefault MetadataTableFlags.TypeRef)
-            + (counts.GetValueOrDefault MetadataTableFlags.TypeDef)
-            + (counts.GetValueOrDefault MetadataTableFlags.Param)
-            + (counts.GetValueOrDefault MetadataTableFlags.InterfaceImpl)
-            + (counts.GetValueOrDefault MetadataTableFlags.MemberRef)
-            + (counts.GetValueOrDefault MetadataTableFlags.Module)
-            //+ (counts.GetValueOrDefault MetadataTableFlags.Permission)
-            + (counts.GetValueOrDefault MetadataTableFlags.Property)
-            + (counts.GetValueOrDefault MetadataTableFlags.Event)
-            + (counts.GetValueOrDefault MetadataTableFlags.StandAloneSig)
-            + (counts.GetValueOrDefault MetadataTableFlags.ModuleRef)
-            + (counts.GetValueOrDefault MetadataTableFlags.TypeSpec)
-            + (counts.GetValueOrDefault MetadataTableFlags.Assembly)
-            + (counts.GetValueOrDefault MetadataTableFlags.AssemblyRef)
-            + (counts.GetValueOrDefault MetadataTableFlags.File)
-            + (counts.GetValueOrDefault MetadataTableFlags.ExportedType)
-            + (counts.GetValueOrDefault MetadataTableFlags.ManifestResource)
-            + (counts.GetValueOrDefault MetadataTableFlags.GenericParam)
-            + (counts.GetValueOrDefault MetadataTableFlags.GenericParamConstraint)
-            + (counts.GetValueOrDefault MetadataTableFlags.MethodSpec),
+            MetadataTableFlags.MethodDef
+            ||| MetadataTableFlags.Field
+            ||| MetadataTableFlags.TypeRef
+            ||| MetadataTableFlags.TypeDef
+            ||| MetadataTableFlags.Param
+            ||| MetadataTableFlags.InterfaceImpl
+            ||| MetadataTableFlags.MemberRef
+            ||| MetadataTableFlags.Module
+            // ||| MetadataTableFlags.Permission
+            ||| MetadataTableFlags.Property
+            ||| MetadataTableFlags.Event
+            ||| MetadataTableFlags.StandAloneSig
+            ||| MetadataTableFlags.ModuleRef
+            ||| MetadataTableFlags.TypeSpec
+            ||| MetadataTableFlags.Assembly
+            ||| MetadataTableFlags.AssemblyRef
+            ||| MetadataTableFlags.File
+            ||| MetadataTableFlags.ExportedType
+            ||| MetadataTableFlags.ManifestResource
+            ||| MetadataTableFlags.GenericParam
+            ||| MetadataTableFlags.GenericParamConstraint
+            ||| MetadataTableFlags.MethodSpec,
+            counts,
             5
         )
 
     let customAttributeType (counts: MetadataTableCounts) =
-        Parser (
-            counts.GetValueOrDefault MetadataTableFlags.MethodDef + (counts.GetValueOrDefault MetadataTableFlags.MemberRef),
-            3
-        )
+        Parser(MetadataTableFlags.MethodDef ||| MetadataTableFlags.MemberRef, counts, 3)
 
-    let hasSemantics (counts: MetadataTableCounts) =
-        Parser (
-            counts.GetValueOrDefault MetadataTableFlags.Event + (counts.GetValueOrDefault MetadataTableFlags.Property),
-            1
-        )
+    let hasSemantics (counts: MetadataTableCounts) = Parser(MetadataTableFlags.Event ||| MetadataTableFlags.Property, counts, 1)
 
     let methodDefOrRef (counts: MetadataTableCounts) =
-        Parser (
-            counts.GetValueOrDefault MetadataTableFlags.MethodDef + (counts.GetValueOrDefault MetadataTableFlags.MemberRef),
-            1
-        )
+        Parser(MetadataTableFlags.MethodDef ||| MetadataTableFlags.MemberRef, counts, 1)
 
     let implementation (counts: MetadataTableCounts) =
         Parser (
-            counts.GetValueOrDefault MetadataTableFlags.File
-            + (counts.GetValueOrDefault MetadataTableFlags.AssemblyRef)
-            + (counts.GetValueOrDefault MetadataTableFlags.ExportedType),
+            MetadataTableFlags.File
+            ||| MetadataTableFlags.AssemblyRef
+            ||| MetadataTableFlags.ExportedType,
+            counts,
             2
         )
 
     let typeOrMethodDef (counts: MetadataTableCounts) =
-        Parser (
-            counts.GetValueOrDefault MetadataTableFlags.TypeDef + (counts.GetValueOrDefault MetadataTableFlags.MethodDef),
-            1
-        )
+        Parser(MetadataTableFlags.TypeDef ||| MetadataTableFlags.MethodDef, counts, 1)
 
 // TODO: Have constants that store the tags for coded indices instead of duplicating them with the writing code.
 type [<IsReadOnly; Struct>] ParsedResolutionScope = private { ResolutionScope: ParsedCodedIndex }

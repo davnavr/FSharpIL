@@ -210,9 +210,9 @@ let moduleTable (tables: ParsedMetadataTables) strings guid (wr: TextWriter) =
 // TODO: Print DottedNames correctly, see II.5.3
 
 let assemblyRefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) wr =
-    match tables.Assembly with
+    match tables.AssemblyRef with
     | ValueSome table ->
-        for i = 0 to int32 table.RowCount do
+        for i = 0 to int32 table.RowCount - 1 do
             let row = table.[i]
             fprintfn wr ".assembly extern %s" (strings.GetString row.Name)
             wr.WriteLine '{'
