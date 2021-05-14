@@ -212,9 +212,9 @@ type ParsedMethodBodies =
 
     member private this.TryParseHeader(offset: uint64) =
         let start = this.Chunk.ReadU1 offset
-        if start &&& 0b11uy > 1uy then
-            let htype = LanguagePrimitives.EnumOfValue(uint16 start)
-            match htype with
+        let htype = start &&& 0b11uy
+        if htype > 1uy then
+            match LanguagePrimitives.EnumOfValue(uint16 htype) with
             | ILMethodFlags.TinyFormat ->
                 Ok
                     { Flags = ILMethodFlags.TinyFormat
@@ -222,6 +222,7 @@ type ParsedMethodBodies =
                       MaxStack = 8us // Max number of items allowed on the stack for tiny methods.
                       CodeSize = (uint32 start) >>> 2
                       LocalVarSigTok = ValueNone }
+            | ILMethodFlags.FatFormat
             | _ ->
                 let buffer = Span.stackalloc<byte> 12
                 if this.Chunk.TryCopyTo(offset, buffer) then
@@ -233,7 +234,9 @@ type ParsedMethodBodies =
                               Size = uint8 size
                               MaxStack = Bytes.readU2 2 buffer
                               CodeSize = Bytes.readU4 4 buffer
-                              LocalVarSigTok = Bytes.readU4 8 buffer |> failwith "TODO: Read local variable signature" }
+                              LocalVarSigTok =
+                                Bytes.readU4 8 buffer
+                                ValueNone } // TODO: Read local variable signature
                     | size -> Error(InvalidFatMethodHeaderSize size)
                 else Error(MethodBodyOutOfSection offset)
         else Error(InvalidMethodBodyHeaderType start)
