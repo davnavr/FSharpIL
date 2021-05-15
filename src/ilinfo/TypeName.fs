@@ -13,7 +13,7 @@ let private write name ns (strings: ParsedStringsStream) (wr: TextWriter) =
         wr.Write ns'
         wr.Write '.'
     wr.Write(strings.GetString name)
-    wr.WriteLine '''
+    wr.Write '''
 
 let typeRef i (tables: ParsedMetadataTables) (strings: ParsedStringsStream) wr =
     match tables.TypeRef with

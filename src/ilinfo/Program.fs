@@ -74,8 +74,7 @@ let main args =
         if args'.LaunchDebugger then System.Diagnostics.Debugger.Launch() |> ignore
 
         match args' with
-        | { InputFile = NotFound path }
-        | { OutputKind = OutputKind.File(NotFound path) } -> exitfn "The file \"%s\" does not exist." path
+        | { InputFile = NotFound path } -> exitfn "The file \"%s\" does not exist." path
         | { InputFile = InvalidPath path }
         | { OutputKind = OutputKind.File(InvalidPath path) } -> exitfn "The file \"%s\" is invalid." path
         | { InputFile = UnauthorizedAccess path }

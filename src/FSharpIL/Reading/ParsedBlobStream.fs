@@ -42,14 +42,18 @@ type ParsedBlobStream internal (stream: ParsedMetadataStream) =
                 Ok isize
             else Error(BlobOutOfBounds(offset, size'))
         | Error err -> Error(InvalidUnsignedCompressedInteger err)
+
+    // TODO: Add ReadBytes method that throws on error.
     member this.TryReadBytes offset =
         match this.TryRead offset with
         | Ok size -> Ok stream.Buffer.[..size]
         | Error err -> Error err
+
     member private this.TryReadFieldSig offset =
         match this.TryRead offset with
         | Ok size -> ParseBlob.fieldSig(Span(stream.Buffer, 0, size))
         | Error err -> Error err
     member this.TryReadFieldSig { FieldSig = offset } = this.TryReadFieldSig offset
     member this.TryReadFieldSig { StandaloneSig = offset } = this.TryReadFieldSig offset
+
     member _.Size = stream.StreamSize

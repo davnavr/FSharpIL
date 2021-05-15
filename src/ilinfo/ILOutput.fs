@@ -1,6 +1,7 @@
 ﻿[<RequireQualifiedAccess>]
 module ILInfo.ILOutput
 
+open System
 open System.IO
 open System.Reflection
 open System.Text
@@ -20,6 +21,30 @@ let inline fieldf name size printer wr value = fprintfn wr "// %s (%i bytes) = %
 let inline field name printer wr (value: 'Value) = fieldf name sizeof<'Value> printer wr value
 
 let inline optional printer wr value  = ValueOption.iter (printer wr) value
+
+// TODO: Format identifier strings correctly.
+//let inline sqstring
+//let inline id
+
+/// Prints a string surrounded by double quotes (II.5.2).
+let qstring (wr: #TextWriter) (str: string) =
+    wr.Write '"'
+    for i = 0 to str.Length - 1 do
+        match str.[i] with
+        | '\t' | '\n' as c ->
+            wr.Write "\\"
+            wr.Write c
+        | '"' | '\\' | '\r' | '\000' as c ->
+            fprintf wr "\\%03o" (uint16 c)
+        | c -> wr.Write c
+    wr.Write '"'
+
+/// Prints a list of bytes in hexadecimal (II.5.5).
+let bytes wr (bytes: byte[]) =
+    let max = bytes.Length - 1
+    for i = 0 to max do
+        fprintf wr "%02X" bytes.[i]
+        if i < max then wr.Write ' '
 
 // TODO: Format values nicely
 
@@ -211,14 +236,45 @@ let moduleTable (tables: ParsedMetadataTables) strings guid (wr: TextWriter) =
 
 // TODO: Print DottedNames correctly, see II.5.3
 
-let assemblyRefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) wr =
+let assemblyRefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) blobs wr =
     match tables.AssemblyRef with
     | ValueSome table ->
         for i = 0 to int32 table.RowCount - 1 do
             let row = table.[i]
             fprintfn wr ".assembly extern %s" (strings.GetString row.Name)
             wr.WriteLine '{'
-            fprintfn wr "    .ver %i:%i:%i:%i" row.MajorVersion row.MinorVersion row.BuildNumber row.RevisionNumber
+            let wr' = indented wr
+
+            // TODO: List custom attributes of AssemblyRef.
+
+            match strings.GetString row.Culture with
+            | ""
+            | null -> ()
+            | culture -> fprintfn wr' ".culture %a" qstring culture
+
+            match blobs with
+            | ValueSome(blobs': ParsedBlobStream) ->
+                match blobs'.TryReadBytes row.PublicKeyOrToken with
+                | Ok [||] -> ()
+                | Ok token ->
+                    wr'.Write ".hash = ("
+                    bytes wr' token
+                    wr'.WriteLine ')'
+                | Error err -> fprintfn wr' "// error : Unable to read assembly hash, %O" err
+
+                match blobs'.TryReadBytes row.PublicKeyOrToken with
+                | Ok token ->
+                    wr'.Write ".publickey"
+                    if not(row.Flags.HasFlag AssemblyNameFlags.PublicKey) then
+                        wr'.Write "token"
+                    wr'.Write " = ("
+                    bytes wr' token
+                    wr'.WriteLine ')'
+                | Error err -> fprintfn wr' "// error : Unable to read public key or token, %O" err
+            | ValueNone -> wr'.Write "// TODO: How to deal with missing blob heap when writing assembly references?"
+
+            fprintfn wr' ".ver %i:%i:%i:%i" row.MajorVersion row.MinorVersion row.BuildNumber row.RevisionNumber
+
             wr.WriteLine '}'
             wr.WriteLine()
     | ValueNone -> ()
@@ -486,7 +542,7 @@ let metadataTables headers il vfilter strings guid blobs (tables: ParsedMetadata
     | NoIL, _, _ -> ()
     | IncludeIL, ValueSome strings', ValueSome guid' ->
         moduleTable tables strings' guid' wr
-        assemblyRefTable tables strings' wr
+        assemblyRefTable tables strings' blobs wr
         typeRefTable tables strings' wr
         typeDefTable tables vfilter strings' blobs wr
     wr
