@@ -9,6 +9,40 @@ open Microsoft.FSharp.Core.Operators.Checked
 open FSharpIL
 open FSharpIL.Metadata
 
+/// II.25.4.6
+[<IsReadOnly; Struct>]
+type ParsedEHClause<'Offset, 'Length> =
+    { Flags: ExceptionClauseFlags
+      TryOffset: 'Offset
+      TryLength: 'Length
+      HandlerOffset: 'Offset
+      HandlerLength: 'Length
+      ClassToken: uint32 // TODO: Have type for metadata token used in eh clause.
+      FilterOffset: uint32 }
+
+[<IsReadOnly; Struct>]
+type ParsedMethodDataSection =
+    { SectionType: ILSectionFlags
+      /// Offset from the start of the section to the first byte of the method section data.
+      SectionDataOffset: uint64
+      SectionSize: uint32 }
+
+// TODO: Decide if this module should be public, autoopen
+[<AutoOpen>]
+module ParsedMethodDataSection =
+    let inline (|Unknown|TinyEHTable|FatEHTable|) { SectionType = flags; SectionSize = size } =
+        match flags &&& (~~~ILSectionFlags.MoreSects) with
+        | ILSectionFlags.EHTable -> TinyEHTable((size * 12u) + 4u)
+        | ILSectionFlags.FatEHTable -> FatEHTable((size * 24u) + 4u)
+        | _ -> Unknown flags
+
+type ParsedTinyEHClause = ParsedEHClause<uint16, uint8>
+type ParsedFatEHClause = ParsedEHClause<uint32, uint32>
+
+type [<Interface>] IMethodDataSectionParser =
+    abstract TinyEHClause: ParsedTinyEHClause -> unit
+    abstract FatEHClause: ParsedFatEHClause -> unit
+
 [<IsReadOnly; Struct>]
 type ParsedMethodBodyHeader =
     { Flags: ILMethodFlags
@@ -16,7 +50,6 @@ type ParsedMethodBodyHeader =
       MaxStack: uint16
       CodeSize: uint32
       LocalVarSigTok: unit voption } // TODO: Have special value type for local variable token.
-     // TODO: Include data sections
 
 [<NoComparison>]
 type MethodBodyError =
@@ -24,6 +57,11 @@ type MethodBodyError =
     | InvalidMethodBodyHeaderType of header: uint8
     | MethodBodyOutOfSection of offset: uint64
     | InvalidFatMethodHeaderSize of size: uint16
+    | MissingDataSectionFlags of offset: uint64
+    | InvalidDataSectionFlags of ILSectionFlags
+    | MissingDataSectionSize of offset: uint64 * int32
+    | InvalidDataSectionSize of ILSectionFlags * offset: uint64 * expected: uint32 * actual: uint32
+    | DataSectionOutOfBounds of offset: uint64 * size: uint64
 
     override this.ToString() =
         match this with
@@ -38,6 +76,18 @@ type MethodBodyError =
             sprintf "The method body at offset 0x%016X from the start of the section is out of bounds" offset
         | InvalidFatMethodHeaderSize size ->
             sprintf "Expected fat method header size of 3 * 4 = 12 bytes but got %i * 4 = %i bytes instead" size (size * 4us)
+        | MissingDataSectionFlags offset ->
+            sprintf "Expected method data section flags at offset 0x%016X from the start of the section" offset
+        | InvalidDataSectionFlags flags -> sprintf "Invalid method data section flags (0x%02X) %A" (uint8 flags) flags
+        | MissingDataSectionSize(offset, size) ->
+            sprintf "Expected %i method data section size bytes at offset 0x%016X from the start of the section" size offset
+        | InvalidDataSectionSize(flags, offset, expected, actual) ->
+            sprintf
+                "Expected method data section %A at offset 0x%016X to have a size of %i bytes, but got %i bytes instead"
+                flags
+                offset
+                expected
+                actual
 
 type ParsedOpcode =
     | Nop = 0us
@@ -241,24 +291,90 @@ type ParsedMethodBodies =
                 else Error(MethodBodyOutOfSection offset)
         else Error(InvalidMethodBodyHeaderType start)
 
+    // TODO: Properly implement parsing of method data sections.
+
+    member private this.TryFindDataSections hoffset =
+        let sections = ImmutableArray.CreateBuilder<ParsedMethodDataSection>()
+        let rec inner (offset: uint64) =
+            if this.Chunk.IsValidOffset offset then
+                let flags: ILSectionFlags = LanguagePrimitives.EnumOfValue(this.Chunk.ReadU1 offset)
+                let buffer = Span.stackalloc<byte>(if flags.HasFlag ILSectionFlags.FatFormat then 3 else 1)
+                if this.Chunk.TryCopyTo(offset + 1UL, buffer) then
+                    let section =
+                        { SectionType = flags
+                          SectionDataOffset = offset + 1UL + uint64 buffer.Length
+                          SectionSize =
+                            match buffer.Length with
+                            | 3 ->
+                                (uint32 buffer.[2] <<< 16)
+                                ||| (uint32 buffer.[1] <<< 8)
+                                ||| uint32 buffer.[0]
+                            | 1
+                            | _ -> uint32 buffer.[0] }
+
+                    match section with
+                    | TinyEHTable size
+                    | FatEHTable size ->
+                        sections.Add section
+                        // TODO: Check that the data is in bounds.
+                        let offset' = Round.upTo 4UL (section.SectionDataOffset + uint64 size)
+                        if flags.HasFlag ILSectionFlags.MoreSects
+                        then inner offset'
+                        else Ok(struct(offset', sections.ToImmutable()))
+                    | Unknown _ -> Error(InvalidDataSectionFlags flags)
+                else Error(MissingDataSectionSize(offset, buffer.Length))
+            else Error(MissingDataSectionFlags offset)
+        inner(Round.upTo 4UL hoffset)
+
+    member private this.TryParseTinyEHTable(parser: #IMethodDataSectionParser, offset: uint64, count: int32) =
+        for i = 0 to count - 1 do
+            let offset' = offset + (uint64 i * 12UL)
+            ()
+
+    member this.TryParseDataSections<'Parser when 'Parser :> IMethodDataSectionParser> // TODO: Don't use 'Parser
+        (
+            parser: 'Parser,
+            sections: ImmutableArray<ParsedMethodDataSection>
+        ) =
+        let rec inner i =
+            if i < sections.Length then
+                let section = sections.[i]
+                match section with
+                | TinyEHTable size ->
+                    this.TryParseTinyEHTable(parser, section.SectionDataOffset + 2UL, int32((size - 2u) / 12u))
+                    inner (i + 1)
+                | FatEHTable size ->
+                    //failwith "TODO: Parse fat EH table"
+                    inner (i + 1)
+                | Unknown flags -> Error(InvalidDataSectionFlags flags)
+            else Ok parser
+        inner 0
+
     /// Attempts to parse the method body at the specified relative virtual address.
-    member this.TryParse(rva: uint32) =
+    member this.TryParseBody(rva: uint32) =
         let offset = uint64(rva - this.SectionRva)
         if this.Chunk.IsValidOffset offset then
             let header = this.TryParseHeader offset
             match header with
             | Ok header' ->
-                if header'.Flags.HasFlag ILMethodFlags.MoreSects then
-                    failwith "TODO: Read additional method data"
-                Ok struct (
-                    header',
-                    { Chunk = this.Chunk
-                      MethodOffset =
+                let moffset =
+                    let offset' =
                         match header'.Size with
                         | 0uy -> 1UL
                         | Convert.U8 hsize -> hsize * 4UL
                         + offset
-                      MethodSize = uint64 header'.CodeSize }
-                )
+                    if header'.Flags.HasFlag ILMethodFlags.MoreSects
+                    then this.TryFindDataSections offset'
+                    else Ok(struct(offset', ImmutableArray.Empty))
+                match moffset with
+                | Ok(moffset', sections) ->
+                    Ok struct (
+                        header',
+                        sections,
+                        { Chunk = this.Chunk
+                          MethodOffset = moffset'
+                          MethodSize = uint64 header'.CodeSize }
+                    )
+                | Error err -> Error err
             | Error err -> Error err
         else Error(InvalidMethodBodyRva rva)

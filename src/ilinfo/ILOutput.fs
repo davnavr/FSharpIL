@@ -11,7 +11,7 @@ open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 open FSharpIL.Reading
 
-let indented wr = IndentedTextWriter(wr, 4)
+let indented wr = new IndentedTextWriter(wr, 4)
 
 let inline heading name (offset: FileOffset) wr = fprintfn wr "// ----- %s (0x%016X)" name (uint64 offset)
 
@@ -356,11 +356,22 @@ let methodRow
         wr.WriteLine '{'
         let wr' = indented wr
         if row.Rva > 0u then
-            match bodies.TryParse row.Rva with
-            | Ok(header, body) ->
+            match bodies.TryParseBody row.Rva with
+            | Ok(header, data, body) ->
                 fprintfn wr' "// Method begins at RVA 0x%08X" row.Rva
                 fprintfn wr' "// Code size %i (0x%08X)" header.CodeSize header.CodeSize
                 fprintfn wr' ".maxstack %i" header.MaxStack
+
+                match header.LocalVarSigTok with
+                | ValueSome _ ->
+                    wr'.Write ".locals "
+                    if header.Flags.HasFlag ILMethodFlags.InitLocals then
+                        wr'.Write "init "
+                    wr'.WriteLine '('
+                    wr'.WriteLine ')'
+                | ValueNone -> ()
+
+                // TODO: Write instructions
             | Error err -> fprintfn wr' "// %O" err
         wr.WriteLine '}'
 
