@@ -6,7 +6,7 @@ open System.Runtime.CompilerServices
 open FSharpIL
 
 /// <summary>Represents an offset into the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
-[<IsReadOnly; Struct>]
+[<IsReadOnly; Struct>] // TODO: Rename to BlobOffset
 type ParsedBlob =
     internal { BlobOffset: uint32 }
     static member op_Implicit { BlobOffset = offset } = offset
@@ -26,6 +26,29 @@ module ParsedBlob =
     let (|FieldSig|) { FieldSig = blob } = blob
 
 /// <summary>Represents the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
+type _ParsedBlobStream =
+    internal
+        { Chunk: ChunkReader
+          BlobsOffset: uint64
+          BlobsSize: uint64 }
+
+    member private this.TryRead { BlobOffset = Convert.U8 offset } =
+        let mutable size = 0u
+        match ParseBlob.tryReadUnsigned (offset + this.BlobsOffset) this.Chunk &size with
+        | Ok (Convert.U8 lsize) ->
+            let offset', size' = offset + lsize, uint64 size
+            if this.Chunk.HasFreeBytes(offset', size')
+            then Ok(struct(offset', size'))
+            else Error(BlobOutOfBounds(offset, size'))
+        | Error err -> Error(InvalidUnsignedCompressedInteger err)
+
+    member this.TryToArray offset =
+        match this.TryRead offset with
+        | Ok(offset', Convert.I4 size) ->
+            // NOTE: This can result in two heap allocations, fix this.
+            Ok(this.Chunk.ReadBytes(offset', size).ToArray())
+        | Error err -> Error err
+
 [<Sealed>]
 type ParsedBlobStream internal (stream: ParsedMetadataStream) =
     member private _.TryRead { BlobOffset = Convert.U8 offset } =

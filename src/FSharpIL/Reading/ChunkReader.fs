@@ -4,6 +4,8 @@ open System
 
 open FSharpIL
 
+// TODO: Rename to chunk.
+// TODO: Add methods for slicing.
 [<Sealed>]
 type internal ChunkReader (csize: int32, chunks: byte[][]) =
     member _.GetIndex(offset: uint64) =

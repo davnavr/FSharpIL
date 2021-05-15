@@ -12,7 +12,7 @@ open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 open FSharpIL.Reading
 
-let indented wr = new IndentedTextWriter(wr, 4)
+let indented wr = new IndentedTextWriter(wr, 2)
 
 let inline heading name (offset: FileOffset) wr = fprintfn wr "// ----- %s (0x%016X)" name (uint64 offset)
 
@@ -235,6 +235,28 @@ let moduleTable (tables: ParsedMetadataTables) strings guid (wr: TextWriter) =
         fguid "BaseGenerationId" row.EncBaseId
 
 // TODO: Print DottedNames correctly, see II.5.3
+
+let assemblyTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) blobs wr =
+    match tables.Assembly with
+    | ValueSome table ->
+        for i = 0 to int32 table.RowCount - 1 do
+            let row = table.[i]
+            fprintfn wr ".assembly %s" (strings.GetString row.Name)
+            wr.WriteLine '{'
+            let wr' = indented wr
+            fprintfn wr' ".hash algorithm 0x%08X" (int32 row.HashAlgId)
+
+            // TODO: Reduce amount of duplicated code with AssemblyRef
+            match strings.GetString row.Culture with
+            | ""
+            | null -> ()
+            | culture -> fprintfn wr' ".culture %a" qstring culture
+
+            fprintfn wr' ".ver %i:%i:%i:%i" row.MajorVersion row.MinorVersion row.BuildNumber row.RevisionNumber
+
+            wr.WriteLine '}'
+            wr.WriteLine()
+    | ValueNone -> ()
 
 let assemblyRefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) blobs wr =
     match tables.AssemblyRef with
@@ -542,6 +564,7 @@ let metadataTables headers il vfilter strings guid blobs (tables: ParsedMetadata
     | NoIL, _, _ -> ()
     | IncludeIL, ValueSome strings', ValueSome guid' ->
         moduleTable tables strings' guid' wr
+        assemblyTable tables strings' blobs wr
         assemblyRefTable tables strings' blobs wr
         typeRefTable tables strings' wr
         typeDefTable tables vfilter strings' blobs wr
