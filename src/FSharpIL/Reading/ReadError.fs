@@ -54,7 +54,7 @@ type BlobError =
 
 [<NoComparison; NoEquality>]
 type ReadError =
-    | InvalidMagic of expected: ImmutableArray<byte> * actual: byte[]
+    | InvalidMagic of expected: ImmutableArray<byte> * actual: ImmutableArray<byte>
     | CannotMoveToPreviousOffset of offset: uint64
     | OptionalHeaderTooSmall of size: uint16
     | TooFewDataDirectories of count: uint32
@@ -74,11 +74,11 @@ type ReadError =
 
     member this.Message =
         match this with
-        | InvalidMagic(expected, Bytes.ReadOnlySpan actual) ->
+        | InvalidMagic(expected, actual) ->
             sprintf
                 "expected magic %s, but got %s"
                 (Bytes.print(expected.AsSpan()))
-                (Bytes.print actual)
+                (Bytes.print(actual.AsSpan()))
         | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset 0x%016X" offset
         | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
         | TooFewDataDirectories count -> sprintf "the number of data directories (%i) is too small" count

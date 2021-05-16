@@ -1,6 +1,8 @@
 ﻿module internal FSharpIL.Bytes
 
 open System
+open System.Collections.Immutable
+open System.Runtime.CompilerServices
 open System.Text
 
 let (|U2|) (value: uint16) =
@@ -43,9 +45,13 @@ let readU8 offset (bytes: Span<byte>) =
     ||| (uint64 bytes.[offset + 1] <<< 8)
     ||| uint64 bytes.[offset] // LSB
 
+[<Obsolete>]
 let inline (|ReadOnlySpan|) (bytes: byte[]) = System.ReadOnlySpan<byte> bytes
 
-let inline ofSpan length (bytes: Span<byte>) = bytes.Slice(0, length).ToArray()
+[<Obsolete>]
+let ofSpan length (bytes: Span<byte>) =
+    let mutable bytes' = bytes.Slice(0, length).ToArray()
+    Unsafe.As<_, ImmutableArray<byte>> &bytes'
 
 let print (bytes: ReadOnlySpan<byte>) =
     let sb = StringBuilder(bytes.Length * 5 - 1)
