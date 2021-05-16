@@ -76,12 +76,12 @@ type MutableFile =
       [<DefaultValue>] mutable DataDirectories: RvaAndSize[]
       [<DefaultValue>] mutable SectionHeaders: SectionHeader<SectionLocation>[]
       [<DefaultValue>] mutable TextSectionIndex: int32
-      [<DefaultValue>] mutable TextSectionData: Chunks
+      [<DefaultValue>] mutable TextSectionData: ChunkedMemory
       /// Offset from start of section to the CLI header (II.25.3.3).
-      [<DefaultValue>] mutable CliHeaderOffset: uint64
+      [<DefaultValue>] mutable CliHeaderOffset: uint32
       [<DefaultValue>] mutable CliHeader: ParsedCliHeader
       /// Offset from start of section to the CLI metadata root (II.24.2.1).
-      [<DefaultValue>] mutable MetadataRootOffset: uint64
+      [<DefaultValue>] mutable MetadataRootOffset: uint32
       [<DefaultValue>] mutable MetadataRoot: ParsedMetadataRoot
       /// Offset from start of section to the first byte of the CLI metadata stream headers (II.24.2.2).
       [<DefaultValue>] mutable StreamHeadersOffset: uint64
@@ -236,7 +236,7 @@ let readTextSection (src: Reader) (file: MutableFile) =
     let rec inner i size =
         match size with
         | 0u ->
-            file.TextSectionData <- Chunks.ofArrayUnsafe &data
+            file.TextSectionData <- ChunkedMemory.ofArrayUnsafe &data
             End
         | _ ->
             let len = min falignment size
@@ -302,9 +302,9 @@ let readCliHeader chunk file reader ustate =
     match ByteParser.tempParseChunkStruct<ParseU4, _> file.CliHeaderOffset chunk with
     | ValueSome size when size < Size.CliHeader -> Failure(foffset, CliHeaderTooSmall size)
     | ValueSome size ->
-        let fields = Span.heapalloc<byte>(int32 size)
-        let offset = file.CliHeaderOffset + 4UL
-        if chunk.TryCopyTo(offset, fields) then
+        let offset = file.CliHeaderOffset + 4u
+        match chunk.TrySlice(offset, size) with
+        | true, fields ->
             file.CliHeader <-
                 { Size = size
                   MajorRuntimeVersion = Bytes.readU2 0 fields
@@ -318,12 +318,11 @@ let readCliHeader chunk file reader ustate =
                   VTableFixups = rvaAndSize 44 fields
                   ExportAddressTableJumps = Bytes.readU8 52 fields
                   ManagedNativeHeader = Bytes.readU8 60 fields }
-            if size > Size.CliHeader then failwith "TODO: Skip padding bytes for CliHeader"
             Success (
                 MetadataReader.read reader.ReadCliHeader file.CliHeader foffset ustate,
                 FindMetadataRoot
             )
-        else Failure(file.TextSectionOffset + offset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
+        | false, _ -> Failure(file.TextSectionOffset + offset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
     | _ -> Failure(foffset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
 
 let readMetadataVersion (version: byte[]) =
@@ -336,21 +335,19 @@ let readMetadataVersion (version: byte[]) =
     then ValueNone
     else ValueSome(MetadataVersion(uint8 i + 1uy, version.[..i]))
 
-let readMetadataSignature chunks file ustate =
+let readMetadataSignature (chunk: ChunkedMemory) file ustate =
     let foffset = file.MetadataRootOffset + file.TextSectionOffset
-    match Chunks.trySlice file.MetadataRootOffset 4u chunks with
-    | ValueSome chunks' when chunks'.Equals Magic.CliSignature ->
-        Success(ustate, ReadMetadataRoot)
-    | ValueSome chunks' -> Failure(foffset, InvalidMagic(Magic.CliSignature, Chunks.toBlock chunks'))
-    | ValueNone ->
-        Failure(foffset, StructureOutsideOfCurrentSection ParsedStructure.MetadataSignature)
+    match chunk.TrySlice(file.MetadataRootOffset, 4u) with
+    | true, signature when signature.Equals Magic.CliSignature -> Success(ustate, ReadMetadataRoot)
+    | true, signature -> Failure(foffset, InvalidMagic(Magic.CliSignature, signature.ToImmutableArray()))
+    | false, _ -> Failure(foffset, StructureOutsideOfCurrentSection ParsedStructure.MetadataSignature)
 
 // TODO: Optimize reading of metadata root and streams, by using the Size part of the MetaData RVA and Size.
 let readMetadataRoot (chunk: ChunkReader) file reader ustate =
     // First 12 bytes are for MajorVersion, MinorVersion, Reserved and Length
     // Last 4 bytes are for Flags and Streams
     let buffer = Span.stackalloc<byte> 16
-    let offset = file.MetadataRootOffset + 4UL
+    let offset = file.MetadataRootOffset + 4u
     let foffset = file.TextSectionOffset + offset
     if chunk.TryCopyTo(offset, buffer.Slice(0, 12)) then
         let length = Bytes.readU4 8 buffer

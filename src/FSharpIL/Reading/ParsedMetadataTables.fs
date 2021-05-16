@@ -844,7 +844,7 @@ type ParsedMetadataTables =
 
 [<RequireQualifiedAccess>]
 module ParsedMetadataTables =
-    let internal create chunk header bodies offset =
+    let internal create chunk header bodies offset = // NOTE: method bodies also stores the same chunk instance containing the metadata.
         let tables =
             { Chunk = chunk
               MethodBodies = bodies

@@ -24,10 +24,10 @@ module internal ByteParser =
         parser.Parse(buffer.Slice(offset, parser.Length))
 
     // TODO: Remove this function when/if Parse accepts a Chunks instead.
-    let tempParseChunk<'Parser, 'Result when 'Parser :> IByteParser<'Result>> offset (chunks: Chunks) (parser: 'Parser) =
+    let tempParseChunk<'Parser, 'Result when 'Parser :> IByteParser<'Result>> offset (chunks: ChunkedMemory) (parser: 'Parser) =
         let buffer = Span.stackalloc<byte> parser.Length
-        if Chunks.tryCopyToSpan (Chunks.slice offset (uint32 parser.Length) chunks) 0u buffer then
-            ValueSome(parser.Parse buffer)
+        if chunks.Slice(offset, uint32 parser.Length).TryCopyTo(0u, buffer)
+        then ValueSome(parser.Parse buffer)
         else ValueNone
 
     let inline tempParseChunkStruct<'Parser, 'Result when 'Parser :> IByteParser<'Result> and 'Parser : struct> offset chunks =
