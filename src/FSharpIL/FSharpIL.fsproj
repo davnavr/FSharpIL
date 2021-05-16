@@ -15,6 +15,7 @@
     <Compile Include="Magic.fs" />
     <Compile Include="Round.fs" />
     <Compile Include="Span.fs" />
+    <Compile Include="Chunks.fs" />
     <Compile Include="Writing\ChunkWriter.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\Index.fs" />
