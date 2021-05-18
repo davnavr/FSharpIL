@@ -143,12 +143,19 @@ type ChunkedMemory with
 
     member this.ToImmutableArray() =
         match this.ChunkCount with
-        | 0
+        | 0 -> ImmutableArray.Empty
         | 1 -> this.chunks.[0]
         | _ ->
-            let mutable buffer = Array.zeroCreate<byte>(int32 this.Length)
-            for i = 0 to this.ChunkCount - 1 do
-                this.chunks.[i].CopyTo(buffer, i * this.ChunkSize)
+            let length = int32 this.Length
+            let mutable buffer = Array.zeroCreate<byte> length
+            let mutable struct(chunki, i), remaining = this.GetIndex 0u, buffer.Length
+            while remaining > 0 do
+                let copied = min remaining (this.chunks.[chunki].Length - i)
+                let destination = Span(buffer, length - remaining, copied)
+                this.chunks.[chunki].AsSpan().Slice(i, copied).CopyTo destination
+                i <- 0
+                chunki <- chunki + 1
+                remaining <- remaining - copied
             Unsafe.As<_, ImmutableArray<byte>> &buffer
 
     // TODO: Have better ways for testing equality.
