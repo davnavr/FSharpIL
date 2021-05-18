@@ -416,11 +416,11 @@ let readStreamHeaders (chunk: inref<ChunkedMemory>) file reader ustate =
                       Name = name }
                 ustate' <- MetadataReader.readStreamHeader reader header i (file.TextSectionOffset + offset) ustate'
 
-                if name.Equals Magic.MetadataStream then file.MetadataTablesIndex <- ValueSome i
-                if name.Equals Magic.StringStream then file.StringsStreamIndex <- ValueSome i
-                if name.Equals Magic.GuidStream then file.GuidStreamIndex <- ValueSome i
-                if name.Equals Magic.UserStringStream then file.UserStringStreamIndex <- ValueSome i
-                if name.Equals Magic.BlobStream then file.BlobStreamIndex <- ValueSome i
+                if name = Magic.MetadataStream then file.MetadataTablesIndex <- ValueSome i
+                if name = Magic.StringStream then file.StringsStreamIndex <- ValueSome i
+                if name = Magic.GuidStream then file.GuidStreamIndex <- ValueSome i
+                if name = Magic.UserStringStream then file.UserStringStreamIndex <- ValueSome i
+                if name = Magic.BlobStream then file.BlobStreamIndex <- ValueSome i
 
                 file.StreamHeaders.[i] <- header
                 offset <- offset + uint32 name.Length
