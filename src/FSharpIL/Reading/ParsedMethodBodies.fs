@@ -24,7 +24,7 @@ type ParsedEHClause<'Offset, 'Length> =
 type ParsedMethodDataSection =
     { SectionType: ILSectionFlags
       /// Offset from the start of the section to the first byte of the method section data.
-      SectionDataOffset: uint64
+      SectionDataOffset: uint32
       SectionSize: uint32 }
 
 // TODO: Decide if this module should be public, autoopen
@@ -55,13 +55,13 @@ type ParsedMethodBodyHeader =
 type MethodBodyError =
     | InvalidMethodBodyRva of rva: uint32
     | InvalidMethodBodyHeaderType of header: uint8
-    | MethodBodyOutOfSection of offset: uint64
+    | MethodBodyOutOfSection of offset: uint32
     | InvalidFatMethodHeaderSize of size: uint16
-    | MissingDataSectionFlags of offset: uint64
+    | MissingDataSectionFlags of offset: uint32
     | InvalidDataSectionFlags of ILSectionFlags
-    | MissingDataSectionSize of offset: uint64 * int32
-    | InvalidDataSectionSize of ILSectionFlags * offset: uint64 * expected: uint32 * actual: uint32
-    | DataSectionOutOfBounds of offset: uint64 * size: uint64
+    | MissingDataSectionSize of offset: uint32 * int32
+    | InvalidDataSectionSize of ILSectionFlags * offset: uint32 * expected: uint32 * actual: uint32
+    | DataSectionOutOfBounds of offset: uint32 * size: uint32
 
     override this.ToString() =
         match this with
@@ -73,17 +73,17 @@ type MethodBodyError =
                 (uint8 ILMethodFlags.TinyFormat)
                 (uint8 ILMethodFlags.FatFormat)
         | MethodBodyOutOfSection offset ->
-            sprintf "The method body at offset 0x%016X from the start of the section is out of bounds" offset
+            sprintf "The method body at offset 0x%08X from the start of the section is out of bounds" offset
         | InvalidFatMethodHeaderSize size ->
             sprintf "Expected fat method header size of 3 * 4 = 12 bytes but got %i * 4 = %i bytes instead" size (size * 4us)
         | MissingDataSectionFlags offset ->
-            sprintf "Expected method data section flags at offset 0x%016X from the start of the section" offset
+            sprintf "Expected method data section flags at offset 0x%08X from the start of the section" offset
         | InvalidDataSectionFlags flags -> sprintf "Invalid method data section flags (0x%02X) %A" (uint8 flags) flags
         | MissingDataSectionSize(offset, size) ->
-            sprintf "Expected %i method data section size bytes at offset 0x%016X from the start of the section" size offset
+            sprintf "Expected %i method data section size bytes at offset 0x%08X from the start of the section" size offset
         | InvalidDataSectionSize(flags, offset, expected, actual) ->
             sprintf
-                "Expected method data section %A at offset 0x%016X to have a size of %i bytes, but got %i bytes instead"
+                "Expected method data section %A at offset 0x%08X to have a size of %i bytes, but got %i bytes instead"
                 flags
                 offset
                 expected
@@ -108,9 +108,9 @@ type ParsedOpcode =
 
 [<NoComparison>]
 type InvalidOpcode =
-    | UnexpectedEndOfBody of offset: uint64
-    | UnknownOpcode of offset: uint64 * opcode: uint8
-    | MissingOperandBytes of offset: uint64 * count: int32
+    | UnexpectedEndOfBody of offset: uint32
+    | UnknownOpcode of offset: uint32 * opcode: uint8
+    | MissingOperandBytes of offset: uint32 * count: uint32
 
     override this.ToString() =
         match this with
@@ -128,26 +128,30 @@ type ParsedOperandTag =
     | SwitchTargets = 10uy
 
 [<IsReadOnly; IsByRefLike; Struct>]
-type ParsedOperand internal (tag: ParsedOperandTag, operand: Span<byte>) =
+type ParsedOperand internal (tag: ParsedOperandTag, operand: ChunkedMemory) =
     member _.Tag = tag
-    member internal _.Bytes = operand
+    member internal _.Operand = operand // TODO: Consider storing pointer (if possible) to operand bytes instead.
 
 // TODO: Have enum for table type.
 type [<IsReadOnly; Struct>] ParsedMetadataToken = { Table: uint8; Index: uint32 }
 
 [<RequireQualifiedAccess>]
 module ParsedOperand =
-    let inline private (|Bytes|) (operand: ParsedOperand) = operand.Bytes
-    let u1 (Bytes buffer) = buffer.[0]
-    let u2 (Bytes buffer) = Bytes.readU2 0 buffer
-    let u4 (Bytes buffer) = Bytes.readU4 0 buffer
-    let inline metadataToken operand =
+    let inline private (|Bytes|) (operand: ParsedOperand) = operand.Operand
+    let u1 (Bytes buffer) = buffer.[0u]
+    let u2 (Bytes buffer) = ChunkedMemory.readU2 0u &buffer
+    let u4 (Bytes buffer) = ChunkedMemory.readU4 0u &buffer
+    let metadataToken operand =
         let token = u4 operand
         { Table = Checked.uint8(token >>> 24); Index = token &&& 0xFFFFFFu }
     let switchTargets (Bytes buffer) =
         // The number of targets is excluded, only the targets are stored in the buffer.
-        let mutable counts = Array.zeroCreate<uint32>(buffer.Length / 4)
-        for i = 0 to counts.Length - 1 do counts.[i] <- Bytes.readU4 (i * 4) buffer
+        let ntargets = buffer.Length / 4u
+        let mutable counts = Array.zeroCreate<uint32>(int32 ntargets)
+        let mutable i = 0u
+        while i < ntargets do
+            counts.[int32 i ] <- ChunkedMemory.readU4 (i * 4u) &buffer
+            i <- i  + 1u
         Unsafe.As<_, ImmutableArray<int32>> &counts
 
     let inline (|None|U1|U2|I1|I4|MetadataToken|SwitchTargets|) (operand: ParsedOperand) =
@@ -164,9 +168,9 @@ module ParsedOperand =
 [<IsReadOnly; Struct>]
 type MethodBodyStream =
     internal
-        { Chunk: ChunkReader
-          MethodOffset: uint64
-          MethodSize: uint64 }
+        { Chunk: ChunkedMemory
+          MethodOffset: uint32
+          MethodSize: uint32 }
 
     /// <param name="offset">An offset from the start of this method.</param>
     /// <exception cref="System.ArgumentOutOfRangeException">
@@ -181,12 +185,12 @@ type MethodBodyStream =
                     sprintf "The method offset exceeds the size of the method (%i bytes)" this.MethodSize
                 )
             )
-        this.Chunk.ReadU1(this.MethodOffset + offset)
+        this.Chunk.[this.MethodOffset + offset]
     member this.Size = this.MethodSize
 
 [<RequireQualifiedAccess>]
 module internal MethodBodyStream =
-    let create (chunk: ChunkReader) offset size =
+    let create (chunk: ChunkedMemory) offset size =
         if chunk.IsValidOffset(offset + size) then
             ValueSome
                 { Chunk = chunk
@@ -203,8 +207,8 @@ type internal OpcodeParseResult =
 [<IsByRefLike; Struct>]
 type MethodBodyParser = struct
     val MethodBody: MethodBodyStream
-    val mutable private offset: uint64
-    new (body) = { MethodBody = body; offset = 0UL }
+    val mutable private offset: uint32
+    new (body) = { MethodBody = body; offset = 0u }
 
     member inline private this.CanRead = this.offset < this.MethodBody.Size
     member inline private this.SectionOffset = this.MethodBody.MethodOffset + this.offset
@@ -212,7 +216,7 @@ type MethodBodyParser = struct
     member private this.ReadByte(value: outref<byte>) =
         if this.CanRead then
             value <- this.MethodBody.[this.offset]
-            this.offset <- this.offset + 1UL
+            this.offset <- this.offset + 1u
             true
         else false
 
@@ -225,17 +229,16 @@ type MethodBodyParser = struct
             Failure
 
     member private this.ReadOperandBytes(tag, size, operand: outref<ParsedOperand>, error: outref<InvalidOpcode>) =
-        if this.MethodBody.Chunk.HasFreeBytes(this.SectionOffset, uint64 size) then
-            operand <- ParsedOperand(tag, this.MethodBody.Chunk.ReadBytes(this.SectionOffset, size))
-            true
-        else
-            error <- MissingOperandBytes(this.offset, size)
-            false
+        let success, operand' = this.MethodBody.Chunk.TrySlice(this.SectionOffset, size)
+        if success
+        then operand <- ParsedOperand(tag, operand')
+        else error <- MissingOperandBytes(this.offset, size)
+        success
 
     member private this.ReadOperand(opcode, operand: outref<_>, error: outref<_>) =
         match opcode with
         //| SomeOtherOpcode
-        | ParsedOpcode.Ldarg_s -> this.ReadOperandBytes(ParsedOperandTag.U1, 1, &operand, &error)
+        | ParsedOpcode.Ldarg_s -> this.ReadOperandBytes(ParsedOperandTag.U1, 1u, &operand, &error)
         | _ ->
             operand <- ParsedOperand()
             true
@@ -246,9 +249,9 @@ type MethodBodyParser = struct
         | Success opcode, _ ->
             match this.ReadOperand(opcode, &operand) with
             | true, _ -> struct(this.offset - start, Ok opcode)
-            | false, err -> struct(0UL, Error err)
-        | ReachedEnd, _ -> struct(0UL, Ok ParsedOpcode.Nop)
-        | Failure, err -> struct(0UL, Error err)
+            | false, err -> struct(0u, Error err)
+        | ReachedEnd, _ -> struct(0u, Ok ParsedOpcode.Nop)
+        | Failure, err -> struct(0u, Error err)
 end
 
 type MethodBodyStream with member this.Parse() = MethodBodyParser this
@@ -256,12 +259,12 @@ type MethodBodyStream with member this.Parse() = MethodBodyParser this
 [<ReferenceEquality>]
 type ParsedMethodBodies =
     internal
-        { Chunk: ChunkReader
+        { Chunk: ChunkedMemory
           /// RVA of the section containing the method bodies.
           SectionRva: uint32 }
 
-    member private this.TryParseHeader(offset: uint64) =
-        let start = this.Chunk.ReadU1 offset
+    member private this.TryParseHeader(offset: uint32) =
+        let start = this.Chunk.[offset]
         let htype = start &&& 0b11uy
         if htype > 1uy then
             match LanguagePrimitives.EnumOfValue(uint16 htype) with
@@ -274,7 +277,7 @@ type ParsedMethodBodies =
                       LocalVarSigTok = ValueNone }
             | ILMethodFlags.FatFormat
             | _ ->
-                let buffer = Span.stackalloc<byte> 12
+                let buffer = Span.stackalloc<byte> 12 // TODO: Don't use buffer for method body header
                 if this.Chunk.TryCopyTo(offset, buffer) then
                     let flags = Bytes.readU2 0 buffer
                     match flags >>> 12 with
@@ -295,14 +298,14 @@ type ParsedMethodBodies =
 
     member private this.TryFindDataSections hoffset =
         let sections = ImmutableArray.CreateBuilder<ParsedMethodDataSection>()
-        let rec inner (offset: uint64) =
+        let rec inner (offset: uint32) =
             if this.Chunk.IsValidOffset offset then
-                let flags: ILSectionFlags = LanguagePrimitives.EnumOfValue(this.Chunk.ReadU1 offset)
-                let buffer = Span.stackalloc<byte>(if flags.HasFlag ILSectionFlags.FatFormat then 3 else 1)
-                if this.Chunk.TryCopyTo(offset + 1UL, buffer) then
+                let flags: ILSectionFlags = LanguagePrimitives.EnumOfValue(this.Chunk.[offset])
+                let buffer = Span.stackalloc<byte>(if flags.HasFlag ILSectionFlags.FatFormat then 3 else 1) // TODO: Don't use span
+                if this.Chunk.TryCopyTo(offset + 1u, buffer) then
                     let section =
                         { SectionType = flags
-                          SectionDataOffset = offset + 1UL + uint64 buffer.Length
+                          SectionDataOffset = offset + 1u + uint32 buffer.Length
                           SectionSize =
                             match buffer.Length with
                             | 3 ->
@@ -317,18 +320,18 @@ type ParsedMethodBodies =
                     | FatEHTable size ->
                         sections.Add section
                         // TODO: Check that the data is in bounds.
-                        let offset' = Round.upTo 4UL (section.SectionDataOffset + uint64 size)
+                        let offset' = Round.upTo 4u (section.SectionDataOffset + size)
                         if flags.HasFlag ILSectionFlags.MoreSects
                         then inner offset'
                         else Ok(struct(offset', sections.ToImmutable()))
                     | Unknown _ -> Error(InvalidDataSectionFlags flags)
                 else Error(MissingDataSectionSize(offset, buffer.Length))
             else Error(MissingDataSectionFlags offset)
-        inner(Round.upTo 4UL hoffset)
+        inner(Round.upTo 4u hoffset)
 
-    member private this.TryParseTinyEHTable(parser: #IMethodDataSectionParser, offset: uint64, count: int32) =
+    member private this.TryParseTinyEHTable(parser: #IMethodDataSectionParser, offset: uint32, count: int32) =
         for i = 0 to count - 1 do
-            let offset' = offset + (uint64 i * 12UL)
+            let offset' = offset + (uint32 i * 12u)
             ()
 
     member this.TryParseDataSections<'Parser when 'Parser :> IMethodDataSectionParser> // TODO: Don't use 'Parser
@@ -341,7 +344,7 @@ type ParsedMethodBodies =
                 let section = sections.[i]
                 match section with
                 | TinyEHTable size ->
-                    this.TryParseTinyEHTable(parser, section.SectionDataOffset + 2UL, int32((size - 2u) / 12u))
+                    this.TryParseTinyEHTable(parser, section.SectionDataOffset + 2u, int32((size - 2u) / 12u))
                     inner (i + 1)
                 | FatEHTable size ->
                     //failwith "TODO: Parse fat EH table"
@@ -352,7 +355,7 @@ type ParsedMethodBodies =
 
     /// Attempts to parse the method body at the specified relative virtual address.
     member this.TryParseBody(rva: uint32) =
-        let offset = uint64(rva - this.SectionRva)
+        let offset = rva - this.SectionRva
         if this.Chunk.IsValidOffset offset then
             let header = this.TryParseHeader offset
             match header with
@@ -360,8 +363,8 @@ type ParsedMethodBodies =
                 let moffset =
                     let offset' =
                         match header'.Size with
-                        | 0uy -> 1UL
-                        | Convert.U8 hsize -> hsize * 4UL
+                        | 0uy -> 1u
+                        | Convert.U4 hsize -> hsize * 4u
                         + offset
                     if header'.Flags.HasFlag ILMethodFlags.MoreSects
                     then this.TryFindDataSections offset'
@@ -373,7 +376,7 @@ type ParsedMethodBodies =
                         sections,
                         { Chunk = this.Chunk
                           MethodOffset = moffset'
-                          MethodSize = uint64 header'.CodeSize }
+                          MethodSize = header'.CodeSize }
                     )
                 | Error err -> Error err
             | Error err -> Error err

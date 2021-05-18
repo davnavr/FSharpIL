@@ -5,6 +5,7 @@ module internal FSharpIL.Magic
 open System
 open System.Collections.Immutable
 
+// TODO: Create these magic bytes without allocating arrays twice.
 let MZ = ImmutableArray.Create<byte> "MZ"B
 
 let DosStub =
@@ -36,11 +37,11 @@ let [<Literal>] CliHeaderIndex = 14
 /// The signature of the CLI metadata root.
 let CliSignature = ImmutableArray.Create<byte> [| 0x42uy; 0x53uy; 0x4Auy; 0x42uy; |]
 
-let MetadataStream = "#~\000\000"B
-let StringStream =  "#Strings\000\000\000\000"B
-let UserStringStream = "#US\000"B
-let GuidStream = "#GUID\000\000\000"B
-let BlobStream = "#Blob\000\000\000"B
+let MetadataStream = ImmutableArray.Create<byte> "#~\000\000"B
+let StringStream = ImmutableArray.Create<byte> "#Strings\000\000\000\000"B
+let UserStringStream = ImmutableArray.Create<byte> "#US\000"B
+let GuidStream = ImmutableArray.Create<byte> "#GUID\000\000\000"B
+let BlobStream = ImmutableArray.Create<byte> "#Blob\000\000\000"B
 
 let matches (expected: ImmutableArray<byte>) (actual: Span<byte>) =
     if expected.Length <> actual.Length then

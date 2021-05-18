@@ -84,7 +84,7 @@ type MutableFile =
       [<DefaultValue>] mutable MetadataRootOffset: uint32
       [<DefaultValue>] mutable MetadataRoot: ParsedMetadataRoot
       /// Offset from start of section to the first byte of the CLI metadata stream headers (II.24.2.2).
-      [<DefaultValue>] mutable StreamHeadersOffset: uint64
+      [<DefaultValue>] mutable StreamHeadersOffset: uint32
       [<DefaultValue>] mutable StreamHeaders: ParsedStreamHeader[]
       [<DefaultValue>] mutable StringsStreamIndex: int32 voption
       [<DefaultValue>] mutable StringsStream: ParsedStringsStream
@@ -97,7 +97,7 @@ type MutableFile =
       [<DefaultValue>] mutable MetadataTablesIndex: int32 voption
       [<DefaultValue>] mutable MetadataTablesHeader: ParsedMetadataTablesHeader
       /// Offset from start of section to the first byte of the physical representation of the metadata tables (II.22.1).
-      [<DefaultValue>] mutable MetadataTablesOffset: uint64
+      [<DefaultValue>] mutable MetadataTablesOffset: uint32
       [<DefaultValue>] mutable MetadataTables: ParsedMetadataTables }
 
     /// <summary>File offset to the first byte of the <c>.text</c> section.</summary>
@@ -223,31 +223,30 @@ let readSectionHeaders (src: Reader) (count: uint16) (file: MutableFile) reader 
         Success(MetadataReader.read reader.ReadSectionHeaders (Unsafe.As &file.SectionHeaders) offset ustate, MoveToTextSectionData)
     else Failure UnexpectedEndOfFile
 
+let rec readSectionData (data: byref<byte[][]>) (src: Reader) file i size =
+    match size with
+    | 0u ->
+        file.TextSectionData <- ChunkedMemory.ofArrayUnsafe &data
+        End
+    | _ ->
+        let len = min (snd file.NTSpecificFields.Alignment) size
+        let len' = int32 len
+        let chunk = Array.zeroCreate len'
+        if src.ReadBytes(Span chunk) = len' then
+            data.[i] <- chunk
+            readSectionData &data src file (i + 1) (size - len)
+        else Failure UnexpectedEndOfFile
+
 let readTextSection (src: Reader) (file: MutableFile) =
-    let falignment = snd file.NTSpecificFields.Alignment
     let vsize = file.SectionHeaders.[file.TextSectionIndex].Data.VirtualSize
-    let len =
+    let mutable data =
+        let falignment = snd file.NTSpecificFields.Alignment
         let length = vsize / falignment
         if falignment * length < vsize
         then int32 length + 1
         else int32 length
-    let mutable data = Array.zeroCreate len
-
-    let rec inner i size =
-        match size with
-        | 0u ->
-            file.TextSectionData <- ChunkedMemory.ofArrayUnsafe &data
-            End
-        | _ ->
-            let len = min falignment size
-            let len' = int32 len
-            let chunk = Array.zeroCreate len'
-            data.[i] <- chunk
-            if src.ReadBytes(Span chunk) = len'
-            then inner (i + 1) (size - len)
-            else Failure UnexpectedEndOfFile
-
-    inner 0 vsize
+        |> Array.zeroCreate
+    readSectionData &data src file 0 vsize
 
 let readPE (src: Reader) file reader ustate rstate =
     let inline moveto target state' =
@@ -291,15 +290,18 @@ let readPE (src: Reader) file reader ustate rstate =
     | ReadTextSectionData -> readTextSection src file
 
 /// <summary>Calculates a file offset from an RVA pointing to a location within the <c>.text</c> section.</summary>
-let findTextOffset (text: inref<SectionLocation>) { RvaAndSize.Rva = rva } (offset: byref<uint64>) rstate ustate =
+let findTextOffset (text: inref<SectionLocation>) { RvaAndSize.Rva = rva } (offset: byref<uint32>) rstate ustate =
     if text.ContainsRva rva then
-        offset <- uint64 rva - uint64 text.VirtualAddress
+        offset <- rva - text.VirtualAddress
         Success(ustate, rstate)
     else Failure({ FileOffset = uint64 rva }, RvaNotInTextSection rva)
 
-let readCliHeader chunk file reader ustate =
+let inline rvaAndSize' i (chunk: inref<ChunkedMemory>) =
+    { Rva = ChunkedMemory.readU4 i &chunk; Size = ChunkedMemory.readU4 (i + 4u) &chunk }
+
+let readCliHeader (chunk: inref<ChunkedMemory>) file reader ustate =
     let foffset = file.CliHeaderOffset + file.TextSectionOffset
-    match ByteParser.tempParseChunkStruct<ParseU4, _> file.CliHeaderOffset chunk with
+    match ByteParser.tempParseChunkStruct<ParseU4, _> file.CliHeaderOffset &chunk with
     | ValueSome size when size < Size.CliHeader -> Failure(foffset, CliHeaderTooSmall size)
     | ValueSome size ->
         let offset = file.CliHeaderOffset + 4u
@@ -307,17 +309,17 @@ let readCliHeader chunk file reader ustate =
         | true, fields ->
             file.CliHeader <-
                 { Size = size
-                  MajorRuntimeVersion = Bytes.readU2 0 fields
-                  MinorRuntimeVersion = Bytes.readU2 2 fields
-                  MetaData = rvaAndSize 4 fields
-                  Flags = LanguagePrimitives.EnumOfValue(Bytes.readU4 12 fields)
-                  EntryPointToken = Bytes.readU4 16 fields
-                  Resources = rvaAndSize 20 fields
-                  StrongNameSignature = Bytes.readU8 28 fields
-                  CodeManagerTable = Bytes.readU8 36 fields
-                  VTableFixups = rvaAndSize 44 fields
-                  ExportAddressTableJumps = Bytes.readU8 52 fields
-                  ManagedNativeHeader = Bytes.readU8 60 fields }
+                  MajorRuntimeVersion = ChunkedMemory.readU2 0u &fields
+                  MinorRuntimeVersion = ChunkedMemory.readU2 2u &fields
+                  MetaData = rvaAndSize' 4u &fields
+                  Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU4 12u &fields)
+                  EntryPointToken = ChunkedMemory.readU4 16u &fields
+                  Resources = rvaAndSize' 20u &fields
+                  StrongNameSignature = ChunkedMemory.readU8 28u &fields
+                  CodeManagerTable = ChunkedMemory.readU8 36u &fields
+                  VTableFixups = rvaAndSize' 44u &fields
+                  ExportAddressTableJumps = ChunkedMemory.readU8 52u &fields
+                  ManagedNativeHeader = ChunkedMemory.readU8 60u &fields }
             Success (
                 MetadataReader.read reader.ReadCliHeader file.CliHeader foffset ustate,
                 FindMetadataRoot
@@ -325,82 +327,90 @@ let readCliHeader chunk file reader ustate =
         | false, _ -> Failure(file.TextSectionOffset + offset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
     | _ -> Failure(foffset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
 
-let readMetadataVersion (version: byte[]) =
-    let mutable cont, i = true, version.Length - 1
-    while cont && i >= 0 do
+let readMetadataVersion (version: inref<ChunkedMemory>) =
+    let mutable cont, i = true, version.Length - 1u
+    while cont && i >= 0u do
         if version.[i] > 0uy
         then cont <- false
-        else i <- i - 1
+        else i <- i - 1u
     if cont
     then ValueNone
-    else ValueSome(MetadataVersion(uint8 i + 1uy, version.[..i]))
+    else
+        let version' = Array.zeroCreate<byte>(int32 i + 1)
+        let mutable i' = 0u
+        while i' < i do
+            version'.[int32 i'] <- version.[i']
+            i' <- i' + 1u
+        ValueSome(MetadataVersion(uint8 i + 1uy, version'))
 
-let readMetadataSignature (chunk: ChunkedMemory) file ustate =
+let readMetadataSignature (chunk: inref<ChunkedMemory>) file ustate =
     let foffset = file.MetadataRootOffset + file.TextSectionOffset
     match chunk.TrySlice(file.MetadataRootOffset, 4u) with
     | true, signature when signature.Equals Magic.CliSignature -> Success(ustate, ReadMetadataRoot)
     | true, signature -> Failure(foffset, InvalidMagic(Magic.CliSignature, signature.ToImmutableArray()))
     | false, _ -> Failure(foffset, StructureOutsideOfCurrentSection ParsedStructure.MetadataSignature)
 
-// TODO: Optimize reading of metadata root and streams, by using the Size part of the MetaData RVA and Size.
-let readMetadataRoot (chunk: ChunkReader) file reader ustate =
-    // First 12 bytes are for MajorVersion, MinorVersion, Reserved and Length
-    // Last 4 bytes are for Flags and Streams
-    let buffer = Span.stackalloc<byte> 16
+/// Parses the CLI metadata root (II.24.2.1).
+let readMetadataRoot (chunk: inref<ChunkedMemory>) file reader ustate =
     let offset = file.MetadataRootOffset + 4u
     let foffset = file.TextSectionOffset + offset
-    if chunk.TryCopyTo(offset, buffer.Slice(0, 12)) then
-        let length = Bytes.readU4 8 buffer
-        let version = Array.zeroCreate(int32 length)
-        let offset' = offset + 12UL
+    match chunk.TrySlice(offset, 12u) with
+    | true, buffer -> // First 12 bytes are for MajorVersion, MinorVersion, Reserved and Length
+        let length = ChunkedMemory.readU4 8u &buffer
+        let offset' = offset + 12u
         let foffset' = file.TextSectionOffset + offset'
-        if chunk.TryCopyTo(offset', Span version) then
-            match readMetadataVersion version with
-            | ValueSome version' when chunk.TryCopyTo(offset' + uint64 length, buffer.Slice 12) ->
-                let scount = Bytes.readU2 14 buffer
-                file.StreamHeadersOffset <- offset' + uint64 length + 4UL
-                file.StreamHeaders <- Array.zeroCreate(int32 scount)
+        match chunk.TrySlice(offset', length) with
+        | true, version ->
+            match readMetadataVersion &version, chunk.TrySlice(offset' + length, 4u) with
+            | ValueSome version', (true, fields) -> // Last 4 bytes are for Flags and Streams
+                let nstreams = ChunkedMemory.readU2 2u &fields
+                file.StreamHeadersOffset <- offset' + length + 4u
+                file.StreamHeaders <- Array.zeroCreate(int32 nstreams)
                 file.MetadataRoot <-
-                    { MajorVersion = Bytes.readU2 0 buffer
-                      MinorVersion = Bytes.readU2 2 buffer
-                      Reserved = Bytes.readU4 4 buffer
+                    { MajorVersion = ChunkedMemory.readU2 0u &buffer
+                      MinorVersion = ChunkedMemory.readU2 2u &buffer
+                      Reserved = ChunkedMemory.readU4 4u &buffer
                       Version = version'
-                      Flags = Bytes.readU2 12 buffer
-                      Streams = scount }
+                      Flags = ChunkedMemory.readU2 0u &fields
+                      Streams = nstreams }
                 Success (
                     MetadataReader.read reader.ReadMetadataRoot file.MetadataRoot foffset ustate,
                     ReadStreamHeaders
                 )
-            | ValueSome _ -> Failure(foffset' + uint64 length, UnexpectedEndOfFile)
-            | ValueNone -> Failure(foffset', MetadataVersionHasNoNullTerminator version)
-        else Failure(foffset', UnexpectedEndOfFile)
-    else Failure(foffset, UnexpectedEndOfFile)
+            | ValueNone, _ -> Failure(foffset', MetadataVersionHasNoNullTerminator(version.ToImmutableArray()))
+            | _, (false, _) -> Failure(foffset' + length, UnexpectedEndOfFile)
+        | false, _ -> Failure(foffset, UnexpectedEndOfFile)
+    | false, _ -> Failure(foffset, UnexpectedEndOfFile)
 
-let readStreamName (chunk: ChunkReader) offset = // TODO: Make this recursive instead.
-    let name = Span.stackalloc<byte> 32 // According to (II.24.2.2), the name of the stream is limited to 32 characters.
-    let mutable cont, i = true, 0
-    while cont && i < name.Length do
-        let name' = name.Slice(i, 4)
-        if chunk.TryCopyTo(offset + uint64 i, name') then
-            i <- i + 4
-            if name'.[3] = 0uy then cont <- false
-        else cont <- false
-    if cont
-    then Error(Encoding.ASCII.GetString(Span.asReadOnly name))
-    else Ok(name.Slice(0, Round.upTo 4 i).ToArray())
+let rec streamNameSegment offset i (chunk: inref<ChunkedMemory>) (buffer: Span<byte>) =
+    let offset' = offset + uint32 i
+    if i < buffer.Length then
+        if chunk.TryCopyTo(offset', buffer.Slice(i, 4)) then
+            let i' = i + 4
+            if buffer.[i + 3] = 0uy then
+                let mutable name = buffer.Slice(0, i').ToArray()
+                Ok(Unsafe.As &name)
+            else streamNameSegment offset (i + 1) &chunk buffer
+        else Error UnexpectedEndOfFile
+    else Error(MissingNullTerminator(Encoding.ASCII.GetString(Span.asReadOnly buffer)))
 
-let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span<byte>) i offset reader ustate =
+/// Reads the name of a metadata stream (II.24.2.2).
+let inline readStreamName (chunk: inref<ChunkedMemory>) offset =
+    // According to (II.24.2.2), the name of the stream is limited to 32 characters.
+    streamNameSegment offset 0 &chunk (Span.stackalloc<byte> 32)
+
+// TODO: This function is invalid??
+// TODO: See if fields can be third argument.
+let rec readStreamHeaders (chunk: inref<ChunkedMemory>) (file: MutableFile) i offset reader ustate (fields: Span<byte>) =
     let foffset = file.TextSectionOffset + offset
     if chunk.TryCopyTo(offset, fields) then
-        let offset' = offset + 8UL
-        match readStreamName chunk offset' with
+        let offset' = offset + 8u
+        match readStreamName &chunk offset' with
         | Ok name ->
             let header =
                 { Offset = Bytes.readU4 0 fields
                   Size = Bytes.readU4 4 fields
-                  Name =
-                    let mutable name' = name
-                    Unsafe.As &name' }
+                  Name = name }
             let ustate' = MetadataReader.readStreamHeader reader header i foffset ustate
 
             if name = Magic.MetadataStream then file.MetadataTablesIndex <- ValueSome i
@@ -410,24 +420,24 @@ let rec readStreamHeaders (chunk: ChunkReader) (file: MutableFile) (fields: Span
             if name = Magic.BlobStream then file.BlobStreamIndex <- ValueSome i
 
             file.StreamHeaders.[i] <- header
-            
+
             if i >= file.StreamHeaders.Length - 1
             then Success(ustate', ReadStringsStream)
-            else readStreamHeaders chunk file fields (i + 1) (offset' + uint64 name.Length) reader ustate'
-        | Error err -> Failure(foffset, MissingNullTerminator err)
-    else Failure(foffset, StructureOutsideOfCurrentSection(ParsedStructure.StreamHeader i))
+            else readStreamHeaders &chunk file (i + 1) (offset' + uint32 name.Length) reader ustate' fields
+        | Error err -> Failure(file.TextSectionOffset + offset', err)
+    else Failure(file.TextSectionOffset + offset, StructureOutsideOfCurrentSection(ParsedStructure.StreamHeader i))
 
-let readMetadataHeap i chunk file (heap: outref<_>) =
+let readMetadataHeap i (chunk: inref<ChunkedMemory>) file (heap: outref<_>) =
     let header: inref<_> = &file.StreamHeaders.[i]
     let offset = file.TextSectionOffset + file.MetadataRootOffset + uint64 header.Offset
-    let success = ParsedMetadataStream.ofHeader file.MetadataRootOffset chunk header &heap
-    struct(success, offset, uint64 header.Size)
+    let success = ParsedMetadataStream.ofHeader file.MetadataRootOffset &chunk header &heap
+    struct(success, offset, header.Size)
 
-let readStringsHeap chunk file reader ustate =
+let readStringsHeap (chunk: inref<ChunkedMemory>) file reader ustate =
     match file.StringsStreamIndex with
     | ValueSome i ->
         let mutable heap = Unchecked.defaultof<_>
-        match readMetadataHeap i chunk file &heap with
+        match readMetadataHeap i &chunk file &heap with
         | true, offset, _ ->
             file.StringsStream <- ParsedStringsStream heap
             Success (
@@ -441,24 +451,24 @@ let readStringsHeap chunk file reader ustate =
         | false, offset, size -> Failure(offset, StructureOutsideOfCurrentSection(ParsedStructure.StringHeap size))
     | ValueNone -> Success(ustate, ReadGuidStream)
 
-let readGuidHeap (chunk: ChunkReader) file reader ustate =
+let readGuidHeap (chunk: inref<ChunkedMemory>) file reader ustate =
     match file.GuidStreamIndex with
     | ValueSome i ->
         let header: inref<_> = &file.StreamHeaders.[i]
-        let offset = file.MetadataRootOffset + uint64 header.Offset
+        let offset = file.MetadataRootOffset + header.Offset
         let foffset = file.TextSectionOffset + offset
-        let size = uint64 header.Size
-        if chunk.HasFreeBytes(offset, size) then
-            file.GuidStream <- { Chunk = chunk; GuidOffset = offset; GuidSize = uint64 header.Size }
+        match chunk.TrySlice(offset, header.Size) with
+        | true, guids ->
+            file.GuidStream <- ParsedGuidStream guids
             Success(MetadataReader.read reader.ReadGuidStream file.GuidStream foffset ustate, ReadUserStringStream)
-        else Failure(foffset, StructureOutsideOfCurrentSection(ParsedStructure.GuidHeap size))
+        | false, _ -> Failure(foffset, StructureOutsideOfCurrentSection(ParsedStructure.GuidHeap header.Size))
     | ValueNone -> Success(ustate, ReadUserStringStream)
 
-let readUserStringHeap chunk file reader ustate =
+let readUserStringHeap (chunk: inref<ChunkedMemory>) file reader ustate =
     match file.StringsStreamIndex with
     | ValueSome i ->
         let mutable heap = Unchecked.defaultof<_>
-        match readMetadataHeap i chunk file &heap with
+        match readMetadataHeap i &chunk file &heap with
         | true, offset, _ ->
             file.UserStringStream <- ParsedUserStringStream heap
             Success (
@@ -472,22 +482,25 @@ let readUserStringHeap chunk file reader ustate =
         | false, offset, size -> Failure(offset, StructureOutsideOfCurrentSection(ParsedStructure.UserStringHeap size))
     | ValueNone -> Success(ustate, ReadBlobStream)
 
-let readBlobHeap chunk file reader ustate =
+let readBlobHeap (chunk: inref<ChunkedMemory>) file reader ustate =
     match file.BlobStreamIndex with
     | ValueSome i ->
-        let mutable heap = Unchecked.defaultof<_>
-        match readMetadataHeap i chunk file &heap with
-        | true, offset, _ ->
-            file.BlobStream <- ParsedBlobStream heap
+        // TODO: Reduce code duplication with readGuidHeap and readMetadataHeap
+        let header: inref<_> = &file.StreamHeaders.[i]
+        let offset = file.MetadataRootOffset + header.Offset
+        let foffset = file.TextSectionOffset + offset
+        match chunk.TrySlice(offset, header.Size) with
+        | true, blobs ->
+            file.BlobStream <- ParsedBlobStream blobs
             Success (
                 MetadataReader.read
                     reader.ReadBlobStream
                     file.BlobStream
-                    offset
+                    foffset
                     ustate,
                 ReadMetadataTablesHeader
             )
-        | false, offset, size -> Failure(offset, StructureOutsideOfCurrentSection(ParsedStructure.BlobHeap size))
+        | false, _ -> Failure(foffset, StructureOutsideOfCurrentSection(ParsedStructure.BlobHeap header.Size))
     | ValueNone -> Success(ustate, ReadMetadataTablesHeader)
 
 /// Calculates the number of row counts for the valid metadata tables.
@@ -512,35 +525,34 @@ let rec readTableCounts (lookup: 'Lookup) (valid: MetadataTableFlags) (counts: u
             else counti
         readTableCounts lookup (valid >>> 1) counts counti' (validi + 1)
 
-let readTablesHeader (chunk: ChunkReader) (file: MutableFile) offset =
-    let fields = Span.stackalloc<byte> 24
+let readTablesHeader (chunk: inref<ChunkedMemory>) (file: MutableFile) offset =
     let offset' = offset + file.TextSectionOffset
-    if chunk.TryCopyTo(offset, fields) then
-        let valid: MetadataTableFlags = LanguagePrimitives.EnumOfValue(Bytes.readU8 8 fields)
-        //invalidOp "TODO: Check that specified tables are supported."
+    match chunk.TrySlice(offset, 24u) with
+    | true, fields ->
+        let valid = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU8 8u &fields)
         let tablen = tableRowsCount valid 0
-        let rcounts = Span.stackalloc<byte>(tablen * 4)
-        if chunk.TryCopyTo(offset + uint64 fields.Length, rcounts) then
-            let mutable rows = Array.zeroCreate tablen
-
+        match chunk.TrySlice(offset + fields.Length, uint32 tablen * 4u) with
+        | true, rows ->
+            let mutable rows' = Array.zeroCreate tablen
             for rowi = 0 to tablen - 1 do
-                rows.[rowi] <- Bytes.readU4 (rowi * 4) rcounts
+                rows'.[rowi] <- ChunkedMemory.readU4 (uint32 rowi * 4u) &rows
 
             file.MetadataTablesHeader <-
-                { Reserved1 = Bytes.readU4 0 fields
-                  MajorVersion = fields.[4]
-                  MinorVersion = fields.[5]
-                  HeapSizes = LanguagePrimitives.EnumOfValue fields.[6]
-                  Reserved2 = fields.[7]
+                { Reserved1 = ChunkedMemory.readU4 0u &fields
+                  MajorVersion = fields.[4u]
+                  MinorVersion = fields.[5u]
+                  HeapSizes = LanguagePrimitives.EnumOfValue fields.[6u]
+                  Reserved2 = fields.[7u]
                   Valid = valid
-                  Sorted = LanguagePrimitives.EnumOfValue(Bytes.readU8 16 fields)
-                  Rows = readTableCounts (Dictionary tablen) valid rows 0 0 }
+                  Sorted = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU8 16u &fields)
+                  Rows = readTableCounts (Dictionary tablen) valid rows' 0 0 }
 
-            file.MetadataTablesOffset <- offset + uint64(fields.Length + rcounts.Length)
+            file.MetadataTablesOffset <- offset + fields.Length + rows.Length
 
             Ok ReadMetadataTables
-        else Error(offset', StructureOutsideOfCurrentSection ParsedStructure.MetadataTableRowCounts)
-    else Error(offset', StructureOutsideOfCurrentSection ParsedStructure.MetadataTablesHeader)
+        | false, _ -> Error(offset', StructureOutsideOfCurrentSection ParsedStructure.MetadataTableRowCounts)
+    | false, _ ->
+        Error(offset', StructureOutsideOfCurrentSection ParsedStructure.MetadataTablesHeader)
 
 let readMetadataTables file reader ustate =
     match reader.ReadMetadataTables with
@@ -559,30 +571,28 @@ let readMetadataTables file reader ustate =
             ustate
     | ValueNone -> ustate
 
-let readMetadata chunk file reader ustate rstate =
+let readMetadata (chunk: inref<ChunkedMemory>) file reader ustate rstate =
     let text = &file.SectionHeaders.[file.TextSectionIndex].Data
     match rstate with
     | FindCliHeader ->
         findTextOffset &text file.DataDirectories.[Magic.CliHeaderIndex] &file.CliHeaderOffset ReadCliHeader ustate
-    | ReadCliHeader -> readCliHeader chunk file reader ustate
+    | ReadCliHeader -> readCliHeader &chunk file reader ustate
     | FindMetadataRoot ->
         findTextOffset &text file.CliHeader.MetaData &file.MetadataRootOffset ReadMetadataSignature ustate
-    | ReadMetadataSignature -> readMetadataSignature chunk file ustate
-    | ReadMetadataRoot -> readMetadataRoot chunk file reader ustate
+    | ReadMetadataSignature -> readMetadataSignature &chunk file ustate
+    | ReadMetadataRoot -> readMetadataRoot &chunk file reader ustate
     | ReadStreamHeaders ->
         match file.MetadataRoot.Streams with
         | 0us -> End
-        | _ ->
-            let fields = Span.stackalloc<byte> 8
-            readStreamHeaders chunk file fields 0 file.StreamHeadersOffset reader ustate
-    | ReadStringsStream -> readStringsHeap chunk file reader ustate
-    | ReadGuidStream -> readGuidHeap chunk file reader ustate
-    | ReadUserStringStream -> readUserStringHeap chunk file reader ustate
-    | ReadBlobStream -> readBlobHeap chunk file reader ustate
+        | _ -> readStreamHeaders &chunk file 0 file.StreamHeadersOffset reader ustate (Span.heapalloc<byte> 8) // NOTE: Heapalloc here moves error to the function readStreamHeaders
+    | ReadStringsStream -> readStringsHeap &chunk file reader ustate
+    | ReadGuidStream -> readGuidHeap &chunk file reader ustate
+    | ReadUserStringStream -> readUserStringHeap &chunk file reader ustate
+    | ReadBlobStream -> readBlobHeap &chunk file reader ustate
     | ReadMetadataTablesHeader ->
         match file.MetadataTablesIndex with
         | ValueSome i ->
-            match readTablesHeader chunk file (file.MetadataRootOffset + uint64 file.StreamHeaders.[i].Offset) with
+            match readTablesHeader &chunk file (file.MetadataRootOffset + file.StreamHeaders.[i].Offset) with
             | Ok rstate' -> Success(ustate, rstate')
             | Error err -> Failure err
         | ValueNone -> Failure(file.TextSectionOffset + file.StreamHeadersOffset, CannotFindMetadataTables)
@@ -604,7 +614,7 @@ let fromStream stream state reader =
         let src = Reader stream
         let file = { Lfanew = Unchecked.defaultof<uint32> }
         let rec metadata chunk ustate rstate =
-            match readMetadata chunk file reader ustate rstate with
+            match readMetadata &chunk file reader ustate rstate with
             | Success(ustate', rstate') -> metadata chunk ustate' rstate'
             | Failure(offset, err) -> reader.HandleError (ReadState.Metadata rstate) err (file.TextSectionOffset + offset) ustate
             | End -> ustate

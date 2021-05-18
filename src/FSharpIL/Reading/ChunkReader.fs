@@ -4,9 +4,7 @@ open System
 
 open FSharpIL
 
-// TODO: Rename to chunk.
-// TODO: Add methods for slicing.
-[<Sealed>]
+[<Sealed; Obsolete "Use ChunkedMemory struct instead">]
 type internal ChunkReader (csize: int32, chunks: byte[][]) =
     member _.GetIndex(offset: uint64) =
         let csize' = uint64 csize

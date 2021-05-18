@@ -4,36 +4,32 @@ open System
 
 open FSharpIL
 
-[<NoComparison; NoEquality>]
-type internal ParsedMetadataStream =
-    { Chunk: ChunkReader
-      mutable Buffer: byte[]
-      StreamOffset: uint64
-      StreamSize: uint64 }
+type internal ParsedMetadataStream internal (chunk: ChunkedMemory) =
+    let [<Literal>] DefaultBufferSize = 16
+    let mutable buffer = Array.zeroCreate DefaultBufferSize
+
+    member _.Chunk = chunk
+    member _.StreamSize = chunk.Length
+    member _.Buffer = buffer
 
     member this.AppendByte(i, value) =
-        if i >= this.Buffer.Length then
-            let buffer' = Array.zeroCreate<byte>(this.Buffer.Length * 2)
-            Span(this.Buffer).CopyTo(Span buffer')
-            this.Buffer <- buffer'
+        if i >= buffer.Length then
+            let buffer' = Array.zeroCreate<byte>(buffer.Length * 2)
+            Span(buffer).CopyTo(Span buffer')
+            buffer <- buffer'
         this.Buffer.[i] <- value
 
-    member this.IsValidOffset(Convert.U8 offset: uint32) = this.Chunk.IsValidOffset offset && offset < this.StreamSize
+    member _.IsValidOffset offset = chunk.IsValidOffset offset
 
 [<RequireQualifiedAccess>]
 module internal ParsedMetadataStream =
-    let [<Literal>] DefaultBufferSize = 32;
-
     let ofHeader
-        roffset
-        (chunk: ChunkReader)
-        { ParsedStreamHeader.Offset = Convert.U8 offset; Size = Convert.U8 size }
+        metadataRootOffset
+        (chunk: inref<ChunkedMemory>)
+        { ParsedStreamHeader.Offset = offset; Size = size }
         (stream: outref<_>) =
-        if chunk.HasFreeBytes(offset, size) then
-            stream <-
-                { Chunk = chunk
-                  StreamOffset = roffset + offset
-                  StreamSize = size
-                  Buffer = Array.zeroCreate DefaultBufferSize }
+        match chunk.TrySlice(metadataRootOffset + offset, size) with
+        | true, chunk' ->
+            stream <- ParsedMetadataStream chunk'
             true
-        else false
+        | false, _ -> false

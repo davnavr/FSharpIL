@@ -5,6 +5,7 @@ open FSharp.Core.Operators.Checked
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
@@ -533,7 +534,7 @@ let root (info: CliInfo) (writer: ChunkWriter) =
     let mutable offset = writer.Size
 
     // Stream headers
-    let inline streamHeader (name: byte[]) =
+    let inline streamHeader (name: ImmutableArray<byte>) =
         if name.Length % 4 <> 0 then
             invalidArg (nameof name) "The length of the stream header name must be a multiple of four."
         let header = writer.CreateWriter()

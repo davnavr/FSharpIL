@@ -20,15 +20,62 @@ type ChunkedMemory = struct
 
     member internal this.GetIndex offset =
         let offset', csize' = offset + this.soffset, uint32 this.ChunkSize
-        let chunki = offset / csize'
+        let chunki = offset' / csize'
         struct(int32 chunki, int32(offset' - chunki * csize'))
 
     member this.Item with get offset =
         let struct(chunki, i) = this.GetIndex offset
         this.chunks.[chunki].[i]
 
-    member this.IsValidOffset offset = offset >= this.soffset && offset < this.soffset + this.Length
-    member inline this.HasFreeBytes(offset, length) = this.IsValidOffset(offset + length - 1u)
+    member this.IsValidOffset offset = offset < this.Length
+    member inline this.HasFreeBytes(offset: uint32, length) = this.IsValidOffset(offset + length - 1u)
+
+    member private this.SlowCopyTo(offset, buffer: Span<byte>) =
+        let mutable i = 0u
+        while i < uint32 buffer.Length && i < this.Length do
+            buffer.[int32 i] <- this.[offset + i]
+            i <- i + 1u
+        i
+
+    /// <returns>
+    /// <see langword="true"/> if a span could successfully be created from the chunk at the specified offset; otherwise
+    /// <see langword="false"/>.
+    /// </returns>
+    member private this.TrySpanChunk(offset, buffer: outref<ReadOnlySpan<byte>>) =
+        if this.IsValidOffset offset then
+            let struct(chunki, i) = this.GetIndex offset
+            buffer <- this.chunks.[chunki].AsSpan().Slice i
+            true
+        else false
+
+    /// <summary>Attempts to copy the data starting at the specified <paramref name="offset"/> to the specified buffer.</summary>
+    member this.TryCopyTo(offset, buffer: Span<byte>) =
+        if this.chunks.IsEmpty || buffer.Length = 0 then true
+        elif this.HasFreeBytes(offset, uint32 buffer.Length) then
+            let mutable chunk = ReadOnlySpan()
+            if this.TrySpanChunk(offset, &chunk) && chunk.Length >= buffer.Length then
+                chunk.Slice(0, buffer.Length).CopyTo buffer // Copy without having to loop
+            else
+                this.SlowCopyTo(offset, buffer) |> ignore
+            true
+        else false
+
+    /// <exception cref="T:System.ArgumentOutOfRangeException">
+    /// Thrown when the destination <paramref name="buffer"/> contains more bytes than the number of bytes remaining at the
+    /// specified <paramref name="offset"/>.
+    /// </exception>
+    member this.CopyTo(offset, buffer) =
+        if not(this.TryCopyTo(offset, buffer)) then
+            raise (
+                ArgumentOutOfRangeException (
+                    "offset",
+                    offset,
+                    sprintf
+                        "The destination buffer contains more bytes (%i bytes) than the number of free bytes (%i bytes)."
+                        buffer.Length
+                        (this.Length - offset)
+                )
+            )
 
     interface IEquatable<ChunkedMemory> with
         member this.Equals other =
@@ -47,6 +94,21 @@ module ChunkedMemory =
         | _ ->
             let last = chunks.Length - 1
             ChunkedMemory(Unsafe.As &chunks, 0u, (uint32 chunks.[0].Length * uint32 last) + uint32 chunks.[last].Length)
+
+    let readU2 offset (chunks: inref<ChunkedMemory>) =
+        let buffer = Span.stackalloc<byte> 2
+        chunks.CopyTo(offset, buffer)
+        Bytes.readU2 0 buffer
+
+    let readU4 offset (chunks: inref<ChunkedMemory>) =
+        let buffer = Span.stackalloc<byte> 4
+        chunks.CopyTo(offset, buffer)
+        Bytes.readU4 0 buffer
+
+    let readU8 offset (chunks: inref<ChunkedMemory>) =
+        let buffer = Span.stackalloc<byte> 8
+        chunks.CopyTo(offset, buffer)
+        Bytes.readU8 0 buffer
 
 type ChunkedMemory with
     member this.TrySlice(start, length, slice: outref<ChunkedMemory>) =
@@ -79,36 +141,6 @@ type ChunkedMemory with
     /// </exception>
     member this.Slice start = this.Slice(start, this.Length - start)
 
-    member private this.SlowCopyTo(offset, buffer: Span<byte>) =
-        let mutable i = 0u
-        while i < uint32 buffer.Length && i < this.Length do
-            buffer.[int32 i] <- this.[i]
-            i <- i + 1u
-        i
-
-    /// <returns>
-    /// <see langword="true"/> if a span could successfully be created from the chunk at the specified offset; otherwise
-    /// <see langword="false"/>.
-    /// </returns>
-    member private this.TrySpanChunk(offset, buffer: outref<ReadOnlySpan<byte>>) =
-        if this.IsValidOffset offset then
-            let struct(chunki, i) = this.GetIndex offset
-            buffer <- this.chunks.[chunki].AsSpan().Slice i
-            true
-        else false
-
-    /// <summary>Attempts to copy the data starting at the specified <paramref name="offset"/> to the specified buffer.</summary>
-    member this.TryCopyTo(offset, buffer: Span<byte>) =
-        if this.chunks.IsEmpty || buffer.Length = 0 then true
-        elif this.HasFreeBytes(offset, uint32 buffer.Length) then
-            let mutable chunk = ReadOnlySpan()
-            if this.TrySpanChunk(offset, &chunk) && chunk.Length >= buffer.Length then
-                chunk.Slice(0, buffer.Length).CopyTo buffer // Copy without having to loop
-            else
-                this.SlowCopyTo(offset, buffer) |> ignore
-            true
-        else false
-
     member this.ToImmutableArray() =
         match this.ChunkCount with
         | 0
@@ -126,6 +158,7 @@ type ChunkedMemory with
             while equal && offset < this.Length do
                 if this.[offset] <> array.[int32 offset] then
                     equal <- false
+                offset <- offset + 1u
             equal
         else false
 

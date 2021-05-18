@@ -701,22 +701,22 @@ type TemporarySomethingParser (sizes: HeapSizes, counts: MetadataTableCounts) =
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTable<'Parser, 'Row when 'Parser :> IByteParser<'Row>> =
     internal
-        { Chunk: ChunkReader
+        { Chunk: ChunkedMemory
           Table: MetadataTableFlags
-          TableOffset: uint64
+          TableOffset: uint32
           TableParser: 'Parser
           TableCount: uint32 }
 
     member this.RowCount = this.TableCount
     /// The size of this metadata table in bytes.
-    member this.Size = uint64 this.TableCount * uint64 this.TableParser.Length
+    member this.Size = this.TableCount * uint32 this.TableParser.Length
 
     // TODO: Consider having reader functions for each table instead, for better error handling and reporting that includes offset and other information
     member this.TryGetRow(i: uint32) =
         if i >= this.RowCount then Error(MetadataRowOutOfBounds(this.Table, i, this.TableCount))
         else
             let buffer = Span.stackalloc<Byte> this.TableParser.Length
-            if this.Chunk.TryCopyTo(this.TableOffset + (uint64 i * uint64 this.TableParser.Length), buffer)
+            if this.Chunk.TryCopyTo(this.TableOffset + (i * uint32 this.TableParser.Length), buffer)
             then Ok(this.TableParser.Parse buffer)
             else Error(StructureOutsideOfCurrentSection(ParsedStructure.MetadataRow(this.Table, i)))
 
@@ -763,11 +763,11 @@ type GenericParamConstraintTable = ParsedMetadataTable<GenericParamConstraintPar
 [<NoComparison; ReferenceEquality>]
 type ParsedMetadataTables =
     private
-        { Chunk: ChunkReader
+        { Chunk: ChunkedMemory
           MethodBodies: ParsedMethodBodies
           TablesHeader: ParsedMetadataTablesHeader
-          TablesOffset: uint64
-          [<DefaultValue>] mutable TablesSize: uint64
+          TablesOffset: uint32
+          [<DefaultValue>] mutable TablesSize: uint32
           [<DefaultValue>] mutable ModuleTable: ParsedMetadataTable<ModuleParser, ParsedModuleRow>
           [<DefaultValue>] mutable TypeRefTable: ParsedMetadataTable<TypeRefParser, ParsedTypeRefRow> voption
           [<DefaultValue>] mutable TypeDefTable: ParsedTypeDefTable voption

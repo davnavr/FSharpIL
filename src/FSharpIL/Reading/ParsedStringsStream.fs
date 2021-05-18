@@ -22,12 +22,12 @@ type ParsedStringsStream internal (stream: ParsedMetadataStream) =
 
     member private _.TryRead { StringOffset = offset } =
         let rec inner i =
-            let offset' = uint64 offset + uint64 i
+            let offset' = offset + uint32 i
             if offset' >= stream.StreamSize
             then Error(MissingNullTerminator(Encoding.UTF8.GetString stream.Buffer))
             else
                 let i' = i + 1
-                match stream.Chunk.ReadU1(stream.StreamOffset + offset') with
+                match stream.Chunk.[offset'] with
                 | 0uy -> Ok i'
                 | value ->
                     stream.AppendByte(i, value)

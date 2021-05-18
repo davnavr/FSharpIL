@@ -6,7 +6,7 @@ open FSharpIL
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type FileOffset =
-    internal { FileOffset: uint64 }
+    internal { FileOffset: uint64 } // TODO: Make this a uint32 instead.
     static member op_Implicit { FileOffset = offset } = offset
     static member op_Implicit { FileOffset = Convert.U4 offset } = offset
 

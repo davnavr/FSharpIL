@@ -1,7 +1,7 @@
 ﻿[<RequireQualifiedAccess>]
 module ILInfo.ILOutput
 
-open System
+open System.Collections.Immutable
 open System.IO
 open System.Reflection
 open System.Text
@@ -40,7 +40,7 @@ let qstring (wr: #TextWriter) (str: string) =
     wr.Write '"'
 
 /// Prints a list of bytes in hexadecimal (II.5.5).
-let bytes wr (bytes: byte[]) =
+let bytes wr (bytes: ImmutableArray<byte>) =
     let max = bytes.Length - 1
     for i = 0 to max do
         fprintf wr "%02X" bytes.[i]
@@ -277,7 +277,6 @@ let assemblyRefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStrea
             match blobs with
             | ValueSome(blobs': ParsedBlobStream) ->
                 match blobs'.TryReadBytes row.PublicKeyOrToken with
-                | Ok [||] -> ()
                 | Ok token ->
                     wr'.Write ".hash = ("
                     bytes wr' token

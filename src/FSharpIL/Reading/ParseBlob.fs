@@ -4,37 +4,44 @@ module internal FSharpIL.Reading.ParseBlob
 open System
 open System.Collections.Immutable
 
+open FSharpIL
 open FSharpIL.Metadata
 
 /// Reads a variable-width, unsigned big-endian integer (II.23.2).
-let tryReadUnsigned offset (chunk: ChunkReader) (value: outref<uint32>) = // TODO: Move bit shifting logic to ByteParser.fs
-    let parsed = chunk.ReadU1 offset
+let tryReadUnsigned offset (chunk: inref<ChunkedMemory>) (value: outref<uint32>) = // TODO: Move bit shifting logic to ByteParser.fs
+    let parsed = chunk.[offset]
     if parsed &&& 0b1000_0000uy = 0uy then // 1 byte
         value <- uint32(parsed &&& 0b0111_1111uy)
         Ok 1uy
     elif parsed &&& 0b1100_0000uy = 0b1000_0000uy then // 2 bytes
-        value <- (uint16(parsed &&& 0b0011_1111uy) <<< 8) + uint16(chunk.ReadU1(offset + 1UL)) |> uint32
+        value <- (uint16(parsed &&& 0b0011_1111uy) <<< 8) + uint16(chunk.[offset + 1u]) |> uint32
         Ok 2uy
     elif parsed &&& 0b1110_0000uy = 0b1100_0000uy then // 4 bytes
         value <-
             (uint32(parsed &&& 0b0001_1111uy) <<< 24)
-            + (uint32(chunk.ReadU1(offset + 1UL)) <<< 16)
-            + (uint32(chunk.ReadU1(offset + 2UL)) <<< 8)
-            + uint32(chunk.ReadU1(offset + 3UL))
+            + (uint32(chunk.[offset + 1u]) <<< 16)
+            + (uint32(chunk.[offset + 2u]) <<< 8)
+            + uint32(chunk.[offset + 3u])
         Ok 4uy
     else Error parsed
 
-let rec private cmodifier i (buffer: Span<byte>) (modifiers: ImmutableArray<CustomModifier>.Builder) =
-    let elem = LanguagePrimitives.EnumOfValue buffer.[i]
-    match elem with
+let private cmodifier (chunk: inref<ChunkedMemory>) =
+    match LanguagePrimitives.EnumOfValue chunk.[0u] with
     | ElementType.CModOpt
     | ElementType.CModReqd ->
-        modifiers.Add(CustomModifier((elem = ElementType.CModReqd), failwith "TODO: read modifying type"))
-        cmodifier (i + failwith "length of type") buffer modifiers
-    | _ -> struct(i, modifiers.ToImmutable())
+        let modifiers = ImmutableArray.CreateBuilder<CustomModifier>()
+        let rec inner (chunk: ChunkedMemory) i =
+            match LanguagePrimitives.EnumOfValue chunk.[i] with
+            | ElementType.CModOpt
+            | ElementType.CModReqd as elem' ->
+                modifiers.Add(CustomModifier((elem' = ElementType.CModReqd), failwith "TODO: read modifying type"))
+                inner chunk (i + failwith "length of type")
+            | _ -> struct(chunk.Slice i, modifiers.ToImmutable())
+        inner chunk 0u
+    | _ -> struct(chunk, ImmutableArray.Empty)
 
-let etype i (buffer: Span<byte>) =
-    match LanguagePrimitives.EnumOfValue buffer.[i] with
+let etype (chunk: inref<ChunkedMemory>) = // TODO: Also return the remaining chunk
+    match LanguagePrimitives.EnumOfValue chunk.[0u] with
     | ElementType.Boolean -> EncodedType.Boolean
     | ElementType.Char -> EncodedType.Char
     | ElementType.I1 -> EncodedType.I1
@@ -54,11 +61,10 @@ let etype i (buffer: Span<byte>) =
     | _ -> EncodedType.String // TEMPORARY to get things to work
     // TODO: Read compressed integer for Var and Mvar
 
-let rec fieldSig (buffer: Span<byte>) =
-    match buffer.[0] with
+let rec fieldSig (chunk: inref<ChunkedMemory>) =
+    match chunk.[0u] with
     | 0x6uy ->
-        let struct (i, modifiers) = cmodifier 1 buffer (ImmutableArray.CreateBuilder())
-        FieldSignature(modifiers, etype i buffer) |> Ok
+        let modifiers = chunk.Slice 1u
+        let struct (chunk', modifiers') = cmodifier &modifiers
+        FieldSignature(modifiers', etype &chunk') |> Ok
     | bad -> Error(InvalidFieldSignatureMagic bad)
-
-

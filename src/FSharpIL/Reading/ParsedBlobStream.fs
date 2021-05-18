@@ -26,57 +26,28 @@ module ParsedBlob =
     let (|FieldSig|) { FieldSig = blob } = blob
 
 /// <summary>Represents the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
-type _ParsedBlobStream =
-    internal
-        { Chunk: ChunkReader
-          BlobsOffset: uint64
-          BlobsSize: uint64 }
+type ParsedBlobStream internal (chunk: ChunkedMemory) =
+    member _.Size = chunk.Length
 
-    member private this.TryRead { BlobOffset = Convert.U8 offset } =
+    member private _.TryRead { BlobOffset = offset } =
         let mutable size = 0u
-        match ParseBlob.tryReadUnsigned (offset + this.BlobsOffset) this.Chunk &size with
-        | Ok (Convert.U8 lsize) ->
-            let offset', size' = offset + lsize, uint64 size
-            if this.Chunk.HasFreeBytes(offset', size')
-            then Ok(struct(offset', size'))
-            else Error(BlobOutOfBounds(offset, size'))
+        match ParseBlob.tryReadUnsigned offset &chunk &size with
+        | Ok (Convert.U4 lsize) ->
+            let offset', size' = offset + lsize, size
+            match chunk.TrySlice(offset', size) with
+            | true, blob -> Ok blob
+            | false, _ -> Error(BlobOutOfBounds(offset, size'))
         | Error err -> Error(InvalidUnsignedCompressedInteger err)
 
-    member this.TryToArray offset =
-        match this.TryRead offset with
-        | Ok(offset', Convert.I4 size) ->
-            // NOTE: This can result in two heap allocations, fix this.
-            Ok(this.Chunk.ReadBytes(offset', size).ToArray())
-        | Error err -> Error err
-
-[<Sealed>]
-type ParsedBlobStream internal (stream: ParsedMetadataStream) =
-    member private _.TryRead { BlobOffset = Convert.U8 offset } =
-        let mutable size = 0u
-        match ParseBlob.tryReadUnsigned (offset + stream.StreamOffset) stream.Chunk &size with
-        | Ok (Convert.U8 lsize) ->
-            let isize, size' = int32 size, uint64 size
-            let offset' = offset + stream.StreamOffset + lsize
-            if stream.Chunk.HasFreeBytes(offset', size') then
-                if uint32 stream.Buffer.Length < size then
-                    stream.Buffer <- Array.zeroCreate isize
-                let buffer = Span<byte>(stream.Buffer, 0, isize)
-                stream.Chunk.CopyTo(offset', buffer)
-                Ok isize
-            else Error(BlobOutOfBounds(offset, size'))
-        | Error err -> Error(InvalidUnsignedCompressedInteger err)
-
-    // TODO: Add ReadBytes method that throws on error.
+    /// <summary>Returns the contents of the blob at the specified <paramref name="offset"/>.</summary>
     member this.TryReadBytes offset =
         match this.TryRead offset with
-        | Ok size -> Ok stream.Buffer.[..size]
+        | Ok blob -> Ok(blob.ToImmutableArray())
         | Error err -> Error err
 
     member private this.TryReadFieldSig offset =
         match this.TryRead offset with
-        | Ok size -> ParseBlob.fieldSig(Span(stream.Buffer, 0, size))
+        | Ok signature -> ParseBlob.fieldSig &signature
         | Error err -> Error err
     member this.TryReadFieldSig { FieldSig = offset } = this.TryReadFieldSig offset
     member this.TryReadFieldSig { StandaloneSig = offset } = this.TryReadFieldSig offset
-
-    member _.Size = stream.StreamSize

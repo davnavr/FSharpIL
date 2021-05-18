@@ -13,10 +13,10 @@ type ParsedStructure =
     | CliHeader
     | CliMetadataRoot
     | StreamHeader of index: int32
-    | StringHeap of size: uint64
-    | GuidHeap of size: uint64
-    | UserStringHeap of size: uint64
-    | BlobHeap of size: uint64
+    | StringHeap of size: uint32
+    | GuidHeap of size: uint32
+    | UserStringHeap of size: uint32
+    | BlobHeap of size: uint32
     | MetadataSignature
     | MetadataTablesHeader
     | MetadataTableRowCounts
@@ -38,7 +38,7 @@ type ParsedStructure =
 
 type BlobError =
     | InvalidUnsignedCompressedInteger of uint8
-    | BlobOutOfBounds of offset: uint64 * size: uint64
+    | BlobOutOfBounds of offset: uint32 * size: uint32
     | InvalidFieldSignatureMagic of actual: uint8
 
     override this.ToString() =
@@ -47,7 +47,7 @@ type BlobError =
             Convert.ToString(value, 2) |> sprintf "the first byte of the compressed integer (0b%s) is invalid"
         | BlobOutOfBounds(offset, size) ->
             sprintf
-                "the offset into the \"#Blob\" heap (0x%016X) points to a blob with an invalid size (0x%016X), the blob extends outside of the heap"
+                "the offset into the \"#Blob\" heap (0x%08X) points to a blob with an invalid size (0x%08X), the blob extends outside of the heap"
                 offset
                 size
         | InvalidFieldSignatureMagic actual -> sprintf "expected field signature to begin with the byte 0x06, but got 0x%02X" actual
@@ -61,14 +61,15 @@ type ReadError =
     | NoCliMetadata
     | RvaNotInTextSection of rva: uint32
     | CliHeaderTooSmall of size: uint32
-    | MetadataVersionHasNoNullTerminator of version: byte[]
+    | MetadataVersionHasNoNullTerminator of version: ImmutableArray<byte>
     | StructureOutsideOfCurrentSection of ParsedStructure
     | MissingNullTerminator of string
-    | InvalidStringIndex of offset: uint32 * size: uint64
+    | InvalidStringIndex of offset: uint32 * size: uint32
     | BlobError of BlobError
     | CannotFindMetadataTables
     | MissingModuleTable
     | MetadataRowOutOfBounds of table: MetadataTableFlags * index: uint32 * count: uint32
+    // TODO: Move this error elsewhere.
     | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile
 
@@ -89,14 +90,14 @@ type ReadError =
         | MetadataVersionHasNoNullTerminator version ->
             sprintf
                 "the metadata version in the CLI metadata root \"%s\" does not end in a null terminator"
-                (Encoding.UTF8.GetString version)
+                (Encoding.UTF8.GetString(version.AsSpan()))
         | StructureOutsideOfCurrentSection structure ->
             sprintf
                 "%O does not fit within the current section, check that the offset to the structure or the size of the section is correct"
                 structure
         | MissingNullTerminator name -> sprintf "the string \"%s\" does not end in a null terminator" name
         | InvalidStringIndex(offset, size) ->
-            sprintf "Invalid offset into the \"#Strings\" heap (0x%08X), maximum valid offset is (0x%08X)" offset (size - 1UL)
+            sprintf "Invalid offset into the \"#Strings\" heap (0x%08X), maximum valid offset is (0x%08X)" offset (size - 1u)
         | BlobError err -> string err
         | CannotFindMetadataTables -> "the stream containing the metadata tables \"#~\" could not be found"
         | MissingModuleTable -> "the Module table (0x00) is missing"
