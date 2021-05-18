@@ -364,7 +364,15 @@ let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) 
         rowIndex wr i
         wr.WriteLine()
 
-let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>) vfilter strings (blobs: _ voption) (wr: #TextWriter) =
+let typeDefFields
+    (tables: ParsedMetadataTables)
+    i
+    (row: inref<ParsedTypeDefRow>)
+    vfilter
+    strings
+    (blobs: _ voption)
+    (wr: #TextWriter)
+    =
     match tables.Field with
     | ValueSome ftable when row.FieldList > 0u ->
         let ttable = tables.TypeDef.Value
@@ -379,6 +387,29 @@ let typeDefFields (tables: ParsedMetadataTables) i (row: inref<ParsedTypeDefRow>
             fieldi <- fieldi + 1u
     | ValueSome _
     | ValueNone -> ()
+
+// TODO: Include exception handling information.
+let rec methodBodyInstruction (wr: #TextWriter) (operand: outref<ParsedOperand>) (body: byref<MethodBodyParser>) =
+    match body.Read &operand with
+    | _, Error err ->
+        fprintfn wr "// error : %O" err
+        // TODO: Show remaining method body bytes on error
+    | 0u, _ -> ()
+    | _, Ok opcode ->
+        fprintf wr "IL_%04X: " body.Offset
+        wr.Write(ParsedOpcode.name opcode)
+        // TODO: Write operand
+        wr.WriteLine()
+        methodBodyInstruction wr &operand &body
+
+let methodBodyInstructions data (body: MethodBodyStream) =
+    let wr = body.Parse()
+    let mutable operand = ParsedOperand()
+    let mutable cont, error = true, None
+    while error.IsNone do
+        match wr.Read &operand with
+        | 0u, _ -> ()
+    ()
 
 let methodRow
     (table: ParsedMethodDefTable)
@@ -448,7 +479,9 @@ let methodRow
                     wr'.WriteLine ')'
                 | ValueNone -> ()
 
-                // TODO: Write instructions
+                let mutable operand = ParsedOperand()
+                let mutable parser = body.Parse()
+                methodBodyInstruction wr' &operand &parser
             | Error err -> fprintfn wr' "// %O" err
         wr.WriteLine '}'
 

@@ -106,6 +106,93 @@ type ParsedOpcode =
     | Stloc_3 = 0xDus
     | Ldarg_s = 0xEus
 
+    | Ldnull = 0x14us
+    | Ldc_i4_m1 = 0x15us
+    | Ldc_i4_0 = 0x16us
+    | Ldc_i4_1 = 0x17us
+    | Ldc_i4_2 = 0x18us
+    | Ldc_i4_3 = 0x19us
+    | Ldc_i4_4 = 0x1Aus
+    | Ldc_i4_5 = 0x1Bus
+    | Ldc_i4_6 = 0x1Cus
+    | Ldc_i4_7 = 0x1Dus
+    | Ldc_i4_8 = 0x1Eus
+
+    | Dup = 0x25us
+    | Pop = 0x26us
+
+    | Ret = 0x2Aus
+
+    | Add = 0x58us
+    | Sub = 0x59us
+    | Mul = 0x5Aus
+    | Div = 0x5Bus
+    | Div_un = 0x5Bus
+    | Rem = 0x5Dus
+    | Rem_un = 0x5Eus
+    | And = 0x5Fus
+    | Or = 0x60us
+    | Xor = 0x61us
+    | Shl = 0x62us
+    | Shr = 0x63us
+    | Shr_un = 0x64us
+    | Neg = 0x65us
+    | Not = 0x66us
+    | Conv_i1 = 0x67us
+    | Conv_i2 = 0x68us
+    | Conv_i4 = 0x69us
+    | Conv_i8 = 0x6Aus
+    | Conv_r4 = 0x6Bus
+    | Conv_r8 = 0x6Cus
+    | Conv_u4 = 0x6Dus
+    | Conv_u8 = 0x6Eus
+
+    | Conv_r_un = 0x76us
+
+    | Throw = 0x7Aus
+
+    | Conv_ovf_i1_un = 0x82us
+    | Conv_ovf_i2_un = 0x83us
+    | Conv_ovf_i4_un = 0x84us
+    | Conv_ovf_i8_un = 0x85us
+    | Conv_ovf_u1_un = 0x86us
+    | Conv_ovf_u2_un = 0x87us
+    | Conv_ovf_u4_un = 0x88us
+    | Conv_ovf_u8_un = 0x89us
+    | Conv_ovf_i_un = 0x8Aus
+    | Conv_ovf_u_un = 0x8Bus
+
+    | Ldlen = 0x8Eus
+
+    | Conv_ovf_i1 = 0xB3us
+    | Conv_ovf_u1 = 0xB4us
+    | Conv_ovf_i2 = 0xB5us
+    | Conv_ovf_u2 = 0xB6us
+    | Conv_ovf_i4 = 0xB7us
+    | Conv_ovf_u4 = 0xB8us
+    | Conv_ovf_i8 = 0xB9us
+    | Conv_ovf_u8 = 0xBAus
+
+    | Conv_u2 = 0xD1us
+    | Conv_u1 = 0xD2us
+    | Conv_i = 0xD3us
+    | Conv_ovf_i = 0xD4us
+    | Conv_ovf_u = 0xD5us
+    | Add_ovf = 0xD6us
+    | Add_ovf_un = 0xD7us
+    | Mul_ovf = 0xD8us
+    | Mul_ovf_un = 0xD9us
+    | Sub_ovf = 0xDAus
+    | Sub_ovf_un = 0xDBus
+    | Endfinally = 0xDCus
+
+    | Conv_u = 0xE0us
+
+[<RequireQualifiedAccess>]
+module ParsedOpcode =
+    // TODO: Consider caching the names.
+    let name (opcode: ParsedOpcode) = opcode.ToString().ToLowerInvariant().Replace('_', '.')
+
 [<NoComparison>]
 type InvalidOpcode =
     | UnexpectedEndOfBody of offset: uint32
@@ -166,7 +253,7 @@ module ParsedOperand =
         | _ -> raise(ArgumentOutOfRangeException("operand", operand.Tag, "Invalid operand type"))
 
 [<IsReadOnly; Struct>]
-type MethodBodyStream =
+type MethodBodyStream = // TODO: For method body stream, simply slice it.
     internal
         { Chunk: ChunkedMemory
           MethodOffset: uint32
@@ -190,7 +277,7 @@ type MethodBodyStream =
 
 [<RequireQualifiedAccess>]
 module internal MethodBodyStream =
-    let create (chunk: ChunkedMemory) offset size =
+    let create (chunk: inref<ChunkedMemory>) offset size =
         if chunk.IsValidOffset(offset + size) then
             ValueSome
                 { Chunk = chunk
@@ -210,6 +297,7 @@ type MethodBodyParser = struct
     val mutable private offset: uint32
     new (body) = { MethodBody = body; offset = 0u }
 
+    member this.Offset = this.offset
     member inline private this.CanRead = this.offset < this.MethodBody.Size
     member inline private this.SectionOffset = this.MethodBody.MethodOffset + this.offset
 
@@ -223,7 +311,9 @@ type MethodBodyParser = struct
     member private this.ReadOpcode(error: outref<InvalidOpcode>) =
         match this.ReadByte() with
         | false, _ -> ReachedEnd
-        | _, 0uy -> Success ParsedOpcode.Nop
+        //| _, 0xFEuy -> failwith "TODO: Read 2-byte long opcode"
+        | _, Convert.U2 opcode when (opcode <= 0xEFus || opcode >= 0xFCus) && Enum.IsDefined(typeof<ParsedOpcode>, opcode) -> // TODO: Once all opcodes have been included in the enum, remove the Enum.IsDefined call for performance reasons.
+            Success(LanguagePrimitives.EnumOfValue opcode)
         | _, unknown ->
             error <- UnknownOpcode(this.offset, unknown)
             Failure
