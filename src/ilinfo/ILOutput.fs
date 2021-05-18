@@ -390,15 +390,19 @@ let typeDefFields
 
 // TODO: Include exception handling information.
 let rec methodBodyInstruction (wr: #TextWriter) (operand: outref<ParsedOperand>) (body: byref<MethodBodyParser>) =
+    let offset = body.Offset
     match body.Read &operand with
     | _, Error err ->
         fprintfn wr "// error : %O" err
         // TODO: Show remaining method body bytes on error
     | 0u, _ -> ()
     | _, Ok opcode ->
-        fprintf wr "IL_%04X: " body.Offset
+        fprintf wr "IL_%04X: " offset
         wr.Write(ParsedOpcode.name opcode)
-        // TODO: Write operand
+        match operand with
+        | ParsedOperand.U1 num -> fprintf wr " %i // 0x%02X" num num
+        | ParsedOperand.U2 num -> fprintf wr " %i // 0x%04X" num num
+        | ParsedOperand.None -> ()
         wr.WriteLine()
         methodBodyInstruction wr &operand &body
 

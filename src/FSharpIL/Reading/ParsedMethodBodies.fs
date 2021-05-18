@@ -268,6 +268,7 @@ module ParsedOperand =
             i <- i  + 1u
         Unsafe.As<_, ImmutableArray<int32>> &counts
 
+    // TODO: How to differentiate between normal integer operands and jump targets?
     let inline (|None|U1|U2|I1|I4|MetadataToken|SwitchTargets|) (operand: ParsedOperand) =
         match operand.Tag with
         | ParsedOperandTag.None -> None
@@ -326,6 +327,7 @@ type MethodBodyParser = struct
 
     member this.Offset = this.offset
     member inline private this.CanRead = this.offset < this.MethodBody.Size
+    /// Offset from the start of the section to the current offset into the method body // TODO: Change this description if method body chunk was sliced.
     member inline private this.SectionOffset = this.MethodBody.MethodOffset + this.offset
 
     member private this.ReadByte(value: outref<byte>) =
@@ -344,18 +346,19 @@ type MethodBodyParser = struct
             | false, _ -> ReachedEnd
             | _, Convert.U2 opcode when opcode <= 0x1Eus -> Success(LanguagePrimitives.EnumOfValue(0xFE00us ||| opcode))
             | _, unknown ->
-                error <- UnknownOpcode(this.offset, unknown)
+                error <- UnknownOpcode(this.offset - 1u, unknown)
                 Failure
         | _, Convert.U2 opcode when (opcode <= 0xEFus || opcode >= 0xFCus) && Enum.IsDefined(typeof<ParsedOpcode>, opcode) -> // TODO: Once all opcodes have been included in the enum, remove the Enum.IsDefined call for performance reasons.
             Success(LanguagePrimitives.EnumOfValue opcode)
         | _, unknown ->
-            error <- UnknownOpcode(this.offset, unknown)
+            error <- UnknownOpcode(this.offset - 1u, unknown)
             Failure
 
     member private this.ReadOperandBytes(tag, size, operand: outref<ParsedOperand>, error: outref<InvalidOpcode>) =
         let success, operand' = this.MethodBody.Chunk.TrySlice(this.SectionOffset, size)
-        if success
-        then operand <- ParsedOperand(tag, operand')
+        if success then
+            operand <- ParsedOperand(tag, operand')
+            this.offset <- this.offset + size
         else error <- MissingOperandBytes(this.offset, size)
         success
 
@@ -367,6 +370,12 @@ type MethodBodyParser = struct
             operand <- ParsedOperand()
             true
 
+    /// <param name="operand">
+    /// When this method returns, contains the operand of the opcode that was parsed.
+    /// </param>
+    /// <returns>
+    /// The number of bytes read and the opcode that was parsed, or an error indicating how the method body is invalid.
+    /// </returns>
     member this.Read(operand: outref<ParsedOperand>) =
         let start = this.offset
         match this.ReadOpcode() with
