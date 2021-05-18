@@ -46,7 +46,7 @@ type internal StringParser (sizes: HeapSizes) =
 [<IsReadOnly; Struct>]
 type internal GuidParser (sizes: HeapSizes) =
     interface IByteParser<ParsedGuid> with
-        member _.Parse buffer = { ParsedGuid.GuidOffset = Offset.parse buffer }
+        member _.Parse buffer = { ParsedGuid.GuidIndex = Offset.parse buffer }
         member _.Length = sizes.GuidSize
 
 [<IsReadOnly; Struct>]
