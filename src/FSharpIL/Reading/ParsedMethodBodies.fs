@@ -173,6 +173,8 @@ type ParsedOpcode =
     | Conv_ovf_i8 = 0xB9us
     | Conv_ovf_u8 = 0xBAus
 
+    | Ckfinite = 0xC3us
+
     | Conv_u2 = 0xD1us
     | Conv_u1 = 0xD2us
     | Conv_i = 0xD3us
@@ -184,9 +186,34 @@ type ParsedOpcode =
     | Mul_ovf_un = 0xD9us
     | Sub_ovf = 0xDAus
     | Sub_ovf_un = 0xDBus
+    //| Endfault = 0xDCus
     | Endfinally = 0xDCus
 
     | Conv_u = 0xE0us
+
+    | Arglist = 0xFE_00us
+    | Ceq = 0xFE_01us
+    | Cgt = 0xFE_02us
+    | Cgt_un = 0xFE_03us
+    | Clt = 0xFE_04us
+    | Clt_un = 0xFE_05us
+
+    | Localloc = 0xFE_0Fus
+
+    | Endfilter = 0xFE_11us
+
+    | Volatile_ = 0xFE_13us
+    | Tail_ = 0xFE_14us
+    | Volatile = 0xFE_13us
+
+    | Cpblk = 0xFE_17us
+    | Initblk = 0xFE_18us
+
+    | Rethrow = 0xFE_1Aus
+
+    | Refanytype = 0xFE_1Dus
+    | Readonly_ = 0xFE_1Eus
+
 
 [<RequireQualifiedAccess>]
 module ParsedOpcode =
@@ -202,7 +229,7 @@ type InvalidOpcode =
     override this.ToString() =
         match this with
         | UnexpectedEndOfBody offset -> sprintf "Unexpected end of method body at offset IL_0x%04x" offset
-        | UnknownOpcode(offset, opcode) -> sprintf "Unknown opcode (%02X) at offset IL_0x%04x" opcode offset
+        | UnknownOpcode(offset, opcode) -> sprintf "Unknown opcode (0x%02X) at offset IL_0x%04x" opcode offset
         | MissingOperandBytes(offset, count) -> sprintf "Expected %i operand bytes at offset IL_0x%04x" count offset
 
 type ParsedOperandTag =
@@ -311,7 +338,14 @@ type MethodBodyParser = struct
     member private this.ReadOpcode(error: outref<InvalidOpcode>) =
         match this.ReadByte() with
         | false, _ -> ReachedEnd
-        //| _, 0xFEuy -> failwith "TODO: Read 2-byte long opcode"
+        | _, 0xFEuy ->
+            // TODO: Avoid code duplication with reading first byte.
+            match this.ReadByte() with
+            | false, _ -> ReachedEnd
+            | _, Convert.U2 opcode when opcode <= 0x1Eus -> Success(LanguagePrimitives.EnumOfValue(0xFE00us ||| opcode))
+            | _, unknown ->
+                error <- UnknownOpcode(this.offset, unknown)
+                Failure
         | _, Convert.U2 opcode when (opcode <= 0xEFus || opcode >= 0xFCus) && Enum.IsDefined(typeof<ParsedOpcode>, opcode) -> // TODO: Once all opcodes have been included in the enum, remove the Enum.IsDefined call for performance reasons.
             Success(LanguagePrimitives.EnumOfValue opcode)
         | _, unknown ->
