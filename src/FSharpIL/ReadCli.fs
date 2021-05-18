@@ -4,6 +4,7 @@ module FSharpIL.ReadCli
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
 open System.IO
 open System.Runtime.CompilerServices
 open System.Text
@@ -390,42 +391,45 @@ let rec streamNameSegment offset i (chunk: inref<ChunkedMemory>) (buffer: Span<b
             if buffer.[i + 3] = 0uy then
                 let mutable name = buffer.Slice(0, i').ToArray()
                 Ok(Unsafe.As &name)
-            else streamNameSegment offset (i + 1) &chunk buffer
+            else streamNameSegment offset i' &chunk buffer
         else Error UnexpectedEndOfFile
     else Error(MissingNullTerminator(Encoding.ASCII.GetString(Span.asReadOnly buffer)))
 
 /// Reads the name of a metadata stream (II.24.2.2).
-let inline readStreamName (chunk: inref<ChunkedMemory>) offset =
+let readStreamName (chunk: inref<ChunkedMemory>) offset =
     // According to (II.24.2.2), the name of the stream is limited to 32 characters.
-    streamNameSegment offset 0 &chunk (Span.stackalloc<byte> 32)
+    let buffer = Span.stackalloc<byte> 32
+    streamNameSegment offset 0 &chunk buffer
 
-// TODO: This function is invalid??
-// TODO: See if fields can be third argument.
-let rec readStreamHeaders (chunk: inref<ChunkedMemory>) (file: MutableFile) i offset reader ustate (fields: Span<byte>) =
-    let foffset = file.TextSectionOffset + offset
-    if chunk.TryCopyTo(offset, fields) then
-        let offset' = offset + 8u
-        match readStreamName &chunk offset' with
-        | Ok name ->
-            let header =
-                { Offset = Bytes.readU4 0 fields
-                  Size = Bytes.readU4 4 fields
-                  Name = name }
-            let ustate' = MetadataReader.readStreamHeader reader header i foffset ustate
+let readStreamHeaders (chunk: inref<ChunkedMemory>) file reader ustate =
+    let fields = Span.stackalloc<byte> 8
+    let mutable i, offset, ustate', err = 0, file.StreamHeadersOffset, ustate, None
+    // Workaround InvalidProgramException by explicitly using a while loop instead of a recursive function.
+    while i < file.StreamHeaders.Length && err.IsNone do
+        if chunk.TryCopyTo(offset, fields) then
+            offset <- offset + 8u
+            match readStreamName &chunk offset with
+            | Ok name ->
+                let header =
+                    { Offset = Bytes.readU4 0 fields
+                      Size = Bytes.readU4 4 fields
+                      Name = name }
+                ustate' <- MetadataReader.readStreamHeader reader header i (file.TextSectionOffset + offset) ustate'
 
-            if name = Magic.MetadataStream then file.MetadataTablesIndex <- ValueSome i
-            if name = Magic.StringStream then file.StringsStreamIndex <- ValueSome i
-            if name = Magic.GuidStream then file.GuidStreamIndex <- ValueSome i
-            if name = Magic.UserStringStream then file.UserStringStreamIndex <- ValueSome i
-            if name = Magic.BlobStream then file.BlobStreamIndex <- ValueSome i
+                if name.Equals Magic.MetadataStream then file.MetadataTablesIndex <- ValueSome i
+                if name.Equals Magic.StringStream then file.StringsStreamIndex <- ValueSome i
+                if name.Equals Magic.GuidStream then file.GuidStreamIndex <- ValueSome i
+                if name.Equals Magic.UserStringStream then file.UserStringStreamIndex <- ValueSome i
+                if name.Equals Magic.BlobStream then file.BlobStreamIndex <- ValueSome i
 
-            file.StreamHeaders.[i] <- header
-
-            if i >= file.StreamHeaders.Length - 1
-            then Success(ustate', ReadStringsStream)
-            else readStreamHeaders &chunk file (i + 1) (offset' + uint32 name.Length) reader ustate' fields
-        | Error err -> Failure(file.TextSectionOffset + offset', err)
-    else Failure(file.TextSectionOffset + offset, StructureOutsideOfCurrentSection(ParsedStructure.StreamHeader i))
+                file.StreamHeaders.[i] <- header
+                offset <- offset + uint32 name.Length
+                i <- i + 1
+            | Error err' -> err <- Some err'
+        else err <- Some(StructureOutsideOfCurrentSection(ParsedStructure.StreamHeader i))
+    match err with
+    | None -> Success(ustate', ReadStringsStream)
+    | Some err' -> Failure(file.TextSectionOffset + offset, err')
 
 let readMetadataHeap i (chunk: inref<ChunkedMemory>) file (heap: outref<_>) =
     let header: inref<_> = &file.StreamHeaders.[i]
@@ -584,7 +588,7 @@ let readMetadata (chunk: inref<ChunkedMemory>) file reader ustate rstate =
     | ReadStreamHeaders ->
         match file.MetadataRoot.Streams with
         | 0us -> End
-        | _ -> readStreamHeaders &chunk file 0 file.StreamHeadersOffset reader ustate (Span.heapalloc<byte> 8) // NOTE: Heapalloc here moves error to the function readStreamHeaders
+        | _ -> readStreamHeaders &chunk file reader ustate
     | ReadStringsStream -> readStringsHeap &chunk file reader ustate
     | ReadGuidStream -> readGuidHeap &chunk file reader ustate
     | ReadUserStringStream -> readUserStringHeap &chunk file reader ustate
