@@ -10,11 +10,10 @@ open FSharpIL.Metadata
 [<IsReadOnly; Struct>]
 type ParsedCustomMod = { ModifierRequired: bool; ModifierType: ParsedTypeDefOrRefOrSpec }
 
-// TODO: Try not to make blob item structs by ref like.
 /// <summary>Represents a type parsed from a signature in the <c>#Blob</c> metadata heap (II.23.2.12).</summary>
 [<IsReadOnly; Struct>]
 type ParsedType =
-    internal { TypeTag: ElementType; Chunk: ChunkedMemory } // TODO: Figure out a more efficient way to store type information.
+    internal { TypeTag: ElementType; Chunk: ChunkedMemory }
     member this.Tag = this.TypeTag
 
 [<IsReadOnly; Struct>]
@@ -53,7 +52,7 @@ module internal ParseBlob =
             else Error(CompressedIntegerOutOfBounds 4u)
         else Error(InvalidUnsignedCompressedIntegerKind parsed)
 
-    // TODO: Figure out if it is more efficient to use -> struct(ChunkedMemory * Result<_, BlobError>), -> Result<struct(ChunkedMemory * _), BlobError>, byref<_> -> Result<ChunkedMemory, BlobError>, or byref<ChunkedMemory> -> byref<_>: BlobError option
+    // TODO: Figure out if it is more efficient to use -> Result<struct(ChunkedMemory * _), BlobError>, byref<_> -> Result<ChunkedMemory, BlobError>, or byref<ChunkedMemory> -> byref<_>: BlobError option
     let typeDefOrRefOrSpec offset (chunk: inref<ChunkedMemory>) =
         let mutable value = Unchecked.defaultof<uint32>
         match tryReadUnsigned offset &chunk &value with
