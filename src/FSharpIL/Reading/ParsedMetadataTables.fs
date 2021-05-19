@@ -10,6 +10,8 @@ open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Reading.ByteParser
 
+// TODO: See if introducing parser types would improve performance by avoiding struct copying.
+
 // TODO: Make this a struct instead.
 [<IsReadOnly; IsByRefLike; Struct>]
 type internal IndexParser (table: MetadataTableFlags) =
@@ -238,17 +240,6 @@ type TypeRefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
 type ParsedExtends =
     private { Extends: ParsedCodedIndex }
     member this.Null = this.Extends.IsNull
-
-type [<IsReadOnly; Struct>] ParsedTypeDefOrRefOrSpec = private { Tag: TypeDefOrRefOrSpecTag; TypeIndex: uint32 }
-
-[<RequireQualifiedAccess>]
-module ParsedTypeDefOrRefOrSpec =
-    let (|TypeDef|TypeRef|TypeSpec|Unknown|) { Tag = tag; TypeIndex = i } =
-        match tag with
-        | TypeDefOrRefOrSpecTag.Def -> TypeDef i
-        | TypeDefOrRefOrSpecTag.Ref -> TypeRef i
-        | TypeDefOrRefOrSpecTag.Spec -> TypeSpec i
-        | _ -> Unknown(tag, i)
 
 [<RequireQualifiedAccess>]
 module ParsedExtends =

@@ -204,7 +204,6 @@ type ParsedOpcode =
 
     | Volatile_ = 0xFE_13us
     | Tail_ = 0xFE_14us
-    | Volatile = 0xFE_13us
 
     | Cpblk = 0xFE_17us
     | Initblk = 0xFE_18us
@@ -228,9 +227,9 @@ type InvalidOpcode =
 
     override this.ToString() =
         match this with
-        | UnexpectedEndOfBody offset -> sprintf "Unexpected end of method body at offset IL_0x%04x" offset
-        | UnknownOpcode(offset, opcode) -> sprintf "Unknown opcode (0x%02X) at offset IL_0x%04x" opcode offset
-        | MissingOperandBytes(offset, count) -> sprintf "Expected %i operand bytes at offset IL_0x%04x" count offset
+        | UnexpectedEndOfBody offset -> sprintf "Unexpected end of method body at offset IL_%04x" offset
+        | UnknownOpcode(offset, opcode) -> sprintf "Unknown opcode (0x%02X) at offset IL_%04x" opcode offset
+        | MissingOperandBytes(offset, count) -> sprintf "Expected %i operand bytes at offset IL_%04x" count offset
 
 type ParsedOperandTag =
     | None = 0uy

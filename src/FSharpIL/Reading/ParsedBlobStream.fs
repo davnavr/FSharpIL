@@ -29,17 +29,18 @@ module ParsedBlob =
 type ParsedBlobStream internal (chunk: ChunkedMemory) =
     member _.Size = chunk.Length
 
-    member private _.TryRead { BlobOffset = offset } =
+    member _.TryRead { BlobOffset = offset } =
         let mutable size = 0u
         match ParseBlob.tryReadUnsigned offset &chunk &size with
         | Ok (Convert.U4 lsize) ->
             let offset', size' = offset + lsize, size
             match chunk.TrySlice(offset', size) with
             | true, blob -> Ok blob
-            | false, _ -> Error(BlobOutOfBounds(offset, size'))
-        | Error err -> Error(InvalidUnsignedCompressedInteger err)
+            | false, _ -> Error(BlobOutsideOfHeap(offset, size'))
+        | Error err -> Error err
 
     /// <summary>Returns the contents of the blob at the specified <paramref name="offset"/>.</summary>
+    [<Obsolete("Simple use the raw chunk instead of having to allocate an array for every blob.")>]
     member this.TryReadBytes offset =
         match this.TryRead offset with
         | Ok blob -> Ok(blob.ToImmutableArray())

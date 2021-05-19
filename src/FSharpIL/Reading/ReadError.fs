@@ -36,20 +36,34 @@ type ParsedStructure =
         | MetadataTableRowCounts -> "the CLI metadata table row counts"
         | MetadataRow(table, index) -> sprintf "the %A metadata row at index %i (0x%08x)" table index index
 
+// TODO: Move offset: uint32 to BlobError case in ReadError and use offset: ParsedBlob
 type BlobError =
-    | InvalidUnsignedCompressedInteger of uint8
-    | BlobOutOfBounds of offset: uint32 * size: uint32
+    | BlobOutsideOfHeap of offset: uint32 * size: uint32
+    | ExpectedEndOfBlob of offset: uint32 * size: uint32 * remaining: uint32
+    | CompressedIntegerOutOfBounds of size: uint32
+    | InvalidUnsignedCompressedIntegerKind of msb: uint8
     | InvalidFieldSignatureMagic of actual: uint8
 
     override this.ToString() =
         match this with
-        | InvalidUnsignedCompressedInteger value ->
-            Convert.ToString(value, 2) |> sprintf "the first byte of the compressed integer (0b%s) is invalid"
-        | BlobOutOfBounds(offset, size) ->
+        | BlobOutsideOfHeap(offset, size) ->
             sprintf
-                "the offset into the \"#Blob\" heap (0x%08X) points to a blob with an invalid size (0x%08X), the blob extends outside of the heap"
+                "the blob at offset (0x%08X) points to a blob with an invalid size (0x%08X), the blob extends outside of the heap"
                 offset
                 size
+        | ExpectedEndOfBlob(offset, size, remaining) ->
+            sprintf
+                "the blob at offset 0x%08X with size 0x%08X was expected to end at offset 0x%08X but %i bytes were remaining"
+                offset
+                size
+                (offset + size - remaining - 1u)
+                remaining
+        | CompressedIntegerOutOfBounds size ->
+            sprintf "the %i-byte wide compressed integer extended outside the end of the blob" size
+        | InvalidUnsignedCompressedIntegerKind msb ->
+            sprintf
+                "the first byte of the unsigned compressed integer (0b%s) is invalid, only 1-byte integers (0b0???), 2-byte integers (0b10??), or 4-byte integers are valid (0b110?)"
+                (Convert.ToString(msb, 2))
         | InvalidFieldSignatureMagic actual -> sprintf "expected field signature to begin with the byte 0x06, but got 0x%02X" actual
 
 [<NoComparison; NoEquality>]
