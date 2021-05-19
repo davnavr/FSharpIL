@@ -37,24 +37,24 @@ let ofTypeDefOrRefOrSpec extends (tables: ParsedMetadataTables) strings wr =
     | ParsedTypeDefOrRefOrSpec.TypeRef i -> typeRef i tables strings wr
     | _ -> fprintf wr "// TODO: Handle incorrect type names %A" extends
 
-let encoded etype wr =
-    match etype with
-    | EncodedType.Var i -> fprintfn wr "!%i" i
-    | EncodedType.MVar i -> fprintfn wr "!!%i" i
-    | EncodedType.Boolean -> wr.Write "bool"
-    | EncodedType.Char -> wr.Write "char"
-    | EncodedType.I1 -> wr.Write "int8"
-    | EncodedType.U1 -> wr.Write "unsigned int8"
-    | EncodedType.I2 -> wr.Write "int16"
-    | EncodedType.U2 -> wr.Write "unsigned int16"
-    | EncodedType.I4 -> wr.Write "int32"
-    | EncodedType.U4 -> wr.Write "unsigned int32"
-    | EncodedType.I8 -> wr.Write "int64"
-    | EncodedType.U8 -> wr.Write "unsigned int64"
-    | EncodedType.R4 -> wr.Write "float32"
-    | EncodedType.R8 -> wr.Write "float64"
-    | EncodedType.I -> wr.Write "native int"
-    | EncodedType.U -> wr.Write "native unsigned int"
-    | EncodedType.Object -> wr.Write "object"
-    | EncodedType.String -> wr.Write "string"
+let encoded (etype: ParsedType) wr =
+    match etype.Tag with
+    | ElementType.Var -> fprintfn wr "!%i" 0 // TODO: Get number
+    //| EncodedType.MVar i -> fprintfn wr "!!%i" i
+    | ElementType.Boolean -> wr.Write "bool"
+    | ElementType.Char -> wr.Write "char"
+    | ElementType.I1 -> wr.Write "int8"
+    | ElementType.U1 -> wr.Write "unsigned int8"
+    | ElementType.I2 -> wr.Write "int16"
+    | ElementType.U2 -> wr.Write "unsigned int16"
+    | ElementType.I4 -> wr.Write "int32"
+    | ElementType.U4 -> wr.Write "unsigned int32"
+    | ElementType.I8 -> wr.Write "int64"
+    | ElementType.U8 -> wr.Write "unsigned int64"
+    | ElementType.R4 -> wr.Write "float32"
+    | ElementType.R8 -> wr.Write "float64"
+    | ElementType.I -> wr.Write "native int"
+    | ElementType.U -> wr.Write "native unsigned int"
+    | ElementType.Object -> wr.Write "object"
+    | ElementType.String -> wr.Write "string"
     | bad -> fprintf wr "TODO: Add support for \"%A\"" bad

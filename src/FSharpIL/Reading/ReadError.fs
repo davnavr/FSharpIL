@@ -41,6 +41,7 @@ type BlobError =
     | BlobOutsideOfHeap of offset: uint32 * size: uint32
     | ExpectedEndOfBlob of offset: uint32 * size: uint32 * remaining: uint32
     | CompressedIntegerOutOfBounds of size: uint32
+    | InvalidBlobOffset of offset: uint32 * max: uint32
     | InvalidUnsignedCompressedIntegerKind of msb: uint8
     | InvalidFieldSignatureMagic of actual: uint8
     | InvalidElementType of etype: ElementType
@@ -61,6 +62,7 @@ type BlobError =
                 remaining
         | CompressedIntegerOutOfBounds size ->
             sprintf "the %i-byte wide compressed integer extended outside the end of the blob" size
+        | InvalidBlobOffset(offset, max) -> sprintf "invalid blob offset 0x%08X, maximum valid offset is 0x%08X" offset max
         | InvalidUnsignedCompressedIntegerKind msb ->
             sprintf
                 "the first byte of the unsigned compressed integer (0b%s) is invalid, only 1-byte integers (0b0???), 2-byte integers (0b10??), or 4-byte integers are valid (0b110?)"

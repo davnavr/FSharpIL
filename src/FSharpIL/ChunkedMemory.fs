@@ -19,6 +19,7 @@ type ChunkedMemory = struct
     member this.ChunkSize = if this.IsEmpty then 0 else this.chunks.[0].Length
 
     member internal this.GetIndex offset =
+        if this.IsEmpty then invalidOp(sprintf "Cannot access offset 0x%08X, the memory is empty" offset)
         let offset', csize' = offset + this.soffset, uint32 this.ChunkSize
         let chunki = offset' / csize'
         struct(int32 chunki, int32(offset' - chunki * csize'))
@@ -116,7 +117,7 @@ type ChunkedMemory with
             slice <- ChunkedMemory.empty
             true
         elif this.HasFreeBytes(start, length) then
-            slice <- ChunkedMemory(this.chunks, start, length)
+            slice <- ChunkedMemory(this.chunks, this.soffset + start, length)
             true
         else false
 

@@ -105,8 +105,10 @@ module internal ParseBlob =
         | ElementType.String -> Ok { TypeTag = elem; Chunk = ChunkedMemory.empty }
         | ElementType.Class
         | ElementType.ValueType ->
-            
-            invalidOp "bad"
+            match typeDefOrRefOrSpec &chunk with
+            | Ok t ->
+                Ok { TypeTag = elem; Chunk = ChunkedMemory.empty } // TODO: How to store type?
+            | Error err -> Error err
         | ElementType.Var
         | ElementType.MVar ->
             // TODO: Avoid calculating value of generic param index to be more efficient.
