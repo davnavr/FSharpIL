@@ -293,7 +293,7 @@ type TypeDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
 type ParsedFieldRow =
     { Flags: FieldAttributes
       Name: ParsedString
-      Signature: ParsedFieldSig }
+      Signature: FieldSigOffset }
 
 type FieldParser (sizes: HeapSizes) =
     interface IByteParser<ParsedFieldRow> with

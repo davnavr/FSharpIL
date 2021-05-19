@@ -120,11 +120,13 @@ type ChunkedMemory with
             true
         else false
 
+    member inline this.TrySlice(start, slice: outref<ChunkedMemory>) = this.TrySlice(start, this.Length - start, &slice)
+
     /// <exception cref="T:System.ArgumentOutOfRangeException">
     /// Thrown when the <paramref name="start"/> offset or <c><paramref name="start"/> + <paramref name="length"/></c> exceeds
     /// the maximum valid offset.
     /// </exception>
-    member this.Slice(start, length) =
+    member this.Slice(start, length: uint32) =
         match this.TrySlice(start, length) with
         | false, _ ->
             raise (
@@ -139,7 +141,7 @@ type ChunkedMemory with
     /// <exception cref="T:System.ArgumentOutOfRangeException">
     /// Thrown when the <paramref name="start"/> offset exceeds the maximum valid offset.
     /// </exception>
-    member this.Slice start = this.Slice(start, this.Length - start)
+    member inline this.Slice start = this.Slice(start, this.Length - start)
 
     member this.ToImmutableArray() =
         match this.ChunkCount with

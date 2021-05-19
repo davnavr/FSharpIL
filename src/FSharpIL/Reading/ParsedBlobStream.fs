@@ -11,7 +11,8 @@ type ParsedBlob =
     internal { BlobOffset: uint32 }
     static member op_Implicit { BlobOffset = offset } = offset
 
-type [<IsReadOnly; Struct>] ParsedFieldSig = internal { FieldSig: ParsedBlob }
+// TODO: Rename other types ending in Sig to end in Offset instead.
+type [<IsReadOnly; Struct>] FieldSigOffset = internal { FieldSig: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedMethodDefSig = internal { MethodDefSig: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedMemberRefSig = internal { MemberRefSig: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedAttributeSig = internal { CustomAttrib: ParsedBlob }
@@ -30,13 +31,13 @@ type ParsedBlobStream internal (chunk: ChunkedMemory) =
     member _.Size = chunk.Length
 
     member _.TryRead { BlobOffset = offset } =
-        let mutable size = 0u
-        match ParseBlob.tryReadUnsigned offset &chunk &size with
-        | Ok (Convert.U4 lsize) ->
-            let offset', size' = offset + lsize, size
+        let mutable  chunk' = chunk
+        match ParseBlob.compressedUnsigned &chunk' with
+        | Ok(Convert.U4 lsize, size) ->
+            let offset' = offset + lsize
             match chunk.TrySlice(offset', size) with
             | true, blob -> Ok blob
-            | false, _ -> Error(BlobOutsideOfHeap(offset, size'))
+            | false, _ -> Error(BlobOutsideOfHeap(offset, size))
         | Error err -> Error err
 
     /// <summary>Returns the contents of the blob at the specified <paramref name="offset"/>.</summary>
