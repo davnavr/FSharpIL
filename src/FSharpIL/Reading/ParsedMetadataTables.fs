@@ -309,7 +309,7 @@ type ParsedMethodRow =
       ImplFlags: MethodImplAttributes
       Flags: MethodAttributes
       Name: ParsedString
-      Signature: ParsedMethodDefSig
+      Signature: MethodDefSigOffset
       ParamList: uint32 }
 
 [<IsReadOnly; Struct>]

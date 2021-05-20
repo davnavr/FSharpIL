@@ -13,7 +13,7 @@ type ParsedBlob =
 
 // TODO: Rename other types ending in Sig to end in Offset instead.
 type [<IsReadOnly; Struct>] FieldSigOffset = internal { FieldSig: ParsedBlob }
-type [<IsReadOnly; Struct>] ParsedMethodDefSig = internal { MethodDefSig: ParsedBlob }
+type [<IsReadOnly; Struct>] MethodDefSigOffset = internal { MethodDefSig: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedMemberRefSig = internal { MemberRefSig: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedAttributeSig = internal { CustomAttrib: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedStandaloneSig = internal { StandaloneSig: ParsedBlob }
@@ -56,3 +56,8 @@ type ParsedBlobStream internal (chunk: ChunkedMemory) =
         | Error err -> Error err
     member this.TryReadFieldSig { FieldSig = offset } = this.TryReadFieldSig offset
     member this.TryReadFieldSig { StandaloneSig = offset } = this.TryReadFieldSig offset
+
+    member this.TryReadMethodDefSig { MethodDefSig = offset } =
+        match this.TryRead offset with
+        | Ok signature -> ParseBlob.methodDefSig &signature
+        | Error err -> Error err

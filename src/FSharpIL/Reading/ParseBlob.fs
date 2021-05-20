@@ -60,6 +60,7 @@ type ParsedParamOrRetType =
     | ParsedByRef of ParsedType
     | ParsedTypedByRef
 
+[<IsReadOnly; Struct>]
 type ParsedRetType =
     | RetType of ParsedParamOrRetType
     | RetVoid
@@ -68,6 +69,7 @@ type ParsedRetType =
 type ParsedParam = { CustomModifiers: ImmutableArray<ParsedCustomMod>; ParamType: ParsedParamOrRetType }
 
 // TODO: Figure out if EXPLICITTHIS implies HASTHIS
+[<IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]
 type ParsedMethodThis =
     | NoThis
@@ -75,7 +77,7 @@ type ParsedMethodThis =
     | ExplicitThis
 
 [<IsReadOnly; Struct>]
-type ParsedMethodDefSig =
+type MethodDefSigOffset =
     { This: ParsedMethodThis
       CallingConvention: MethodCallingConventions
       ReturnType: struct(ImmutableArray<ParsedCustomMod> * ParsedRetType)
@@ -282,13 +284,78 @@ module internal ParseBlob =
         | Error(InvalidElementType ElementType.Void) -> Ok(struct(modifiers, RetVoid))
         | Error err -> Error err
 
-    let param (chunk: byref<ChunkedMemory>) =
-        match paramOrRetType &chunk with
-        | modifiers, Ok ptype ->  Ok { CustomModifiers = modifiers; ParamType = ptype }
-        | _, Error err -> Error err
+    let rec param (chunk: byref<ChunkedMemory>) (parameters: ImmutableArray<ParsedParam>.Builder) =
+        if parameters.Count < parameters.Capacity then
+            match paramOrRetType &chunk with
+            | modifiers, Ok ptype ->
+                parameters.Add { CustomModifiers = modifiers; ParamType = ptype }
+                param &chunk parameters
+            | _, Error err -> Error err
+        else Ok(parameters.ToImmutable())
+
+    let paramList (chunk: byref<ChunkedMemory>) (Convert.I4 pcount) =
+        match pcount with
+        | 0 -> Ok ImmutableArray.Empty
+        | _ -> param &chunk (ImmutableArray.CreateBuilder pcount)
 
     let private methodDefOrRefCallingConvention (chunk: byref<ChunkedMemory>) =
-        ()
+        match chunk.TrySlice(0u, 1u) with
+        | true, cconv ->
+            chunk <- chunk.Slice 1u
+            let magic = cconv.[0u]
+            let inline invalid() = Error(InvalidMethodSignatureCallingConvention(ValueSome magic))
+            match LanguagePrimitives.EnumOfValue(magic &&& 0b11111uy) with
+            | CallingConvention.Default
+            | CallingConvention.VarArg
+            | CallingConvention.Generic as cconv' when cconv' <= CallingConvention.ExplicitThis ->
+                let this =
+                    if cconv'.HasFlag CallingConvention.HasThis then
+                        if cconv'.HasFlag CallingConvention.ExplicitThis
+                        then Ok ParsedMethodThis.ExplicitThis
+                        else Ok ParsedMethodThis.HasThis
+                    else invalid()
+                match this with
+                | Ok this' ->
+                    let gcount =
+                        if cconv' &&& CallingConvention.Generic > CallingConvention.Default then
+                            match compressedUnsigned &chunk with
+                            | Ok(_, 0u) -> Error MissingGenericArguments
+                            | Ok(_, count) -> Ok count
+                            | Error err -> Error err
+                        else Ok 0u
+                    match gcount with
+                    | Ok 0u ->
+                        Ok (
+                            struct (
+                                this',
+                                if cconv' &&& CallingConvention.VarArg > CallingConvention.Default then VarArg else Default
+                            )
+                        )
+                    | Ok gcount' -> Ok(struct(this', Generic gcount'))
+                    | Error err -> Error err
+                | Error err -> Error err
+            | _ -> invalid()
+        | false, _ -> Error(InvalidMethodSignatureCallingConvention ValueNone)
+
+    let methodDefSig (chunk: inref<ChunkedMemory>) =
+        let mutable chunk = chunk
+        match methodDefOrRefCallingConvention &chunk with
+        | Ok(this, cconv) ->
+            match compressedUnsigned &chunk with
+            | Ok(_, pcount) ->
+                match retType &chunk with
+                | Ok ret ->
+                    match paramList &chunk pcount with
+                    | Ok parameters ->
+                        { This = this
+                          CallingConvention = cconv
+                          ReturnType = ret
+                          Parameters = parameters }
+                        |> Ok
+                    | Error err -> Error err
+                | Error err -> Error err
+            | Error err -> Error err
+        | Error err -> Error err
 
     //let methodRefSig chunk =
     //    failwith "TODO: Can reuse methodDefSig function, just check for var args"

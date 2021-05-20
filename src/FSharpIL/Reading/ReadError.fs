@@ -47,6 +47,7 @@ type BlobError =
     | InvalidElementType of etype: ElementType
     | InvalidGenericInstantiationKind of ElementType voption
     | MissingGenericArguments
+    | InvalidMethodSignatureCallingConvention of uint8 voption
 
     override this.ToString() =
         match this with
@@ -80,6 +81,12 @@ type BlobError =
                 (uint8 ElementType.Class)
                 (uint8 ElementType.ValueType)
         | MissingGenericArguments -> "Expected at least 1 generic argument but got 0"
+        | InvalidMethodSignatureCallingConvention(ValueSome cconv) ->
+            sprintf
+                "the calling conventions of the method signature %A (0x%02X) are invalid"
+                (LanguagePrimitives.EnumOfValue<_, CallingConvention> cconv)
+                cconv
+        | InvalidMethodSignatureCallingConvention ValueNone -> "expected method signature calling conventions but got empty blob"
 
 [<NoComparison; NoEquality>]
 type ReadError =
