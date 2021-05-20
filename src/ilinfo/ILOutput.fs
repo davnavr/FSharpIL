@@ -12,7 +12,7 @@ open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 open FSharpIL.Reading
 
-let indented wr = new IndentedTextWriter(wr, 2)
+let indented wr = new IndentedTextWriter(wr, 4)
 
 let inline heading name (offset: FileOffset) wr = fprintfn wr "// ----- %s (0x%016X)" name (uint64 offset)
 
@@ -452,49 +452,88 @@ let methodRow
         if row.Flags.HasFlag MethodAttributes.SpecialName then wr.Write "specialname "
         if row.Flags.HasFlag MethodAttributes.RTSpecialName then wr.Write "rtspecialname "
 
-        // TODO: Move return type and parameters to separate lines like ILSpy
         match blobs.TryReadMethodDefSig row.Signature with
         | Ok signature ->
+            wr.WriteLine()
+            let wr' = indented wr
             match signature.This with
             | ParsedMethodThis.NoThis -> ()
-            | ParsedMethodThis.HasThis -> wr.Write "instance "
-            | ParsedMethodThis.ExplicitThis -> wr.Write "instance explicit "
+            | ParsedMethodThis.HasThis -> wr'.Write "instance "
+            | ParsedMethodThis.ExplicitThis -> wr'.Write "instance explicit "
 
             match signature.CallingConvention with
             | Default
             | Generic _ -> ()
-            | VarArg -> wr.Write "vararg "
+            | VarArg -> wr'.Write "vararg "
 
             let struct(retmod, rtype) = signature.ReturnType
-            TypeName.retType rtype tables strings wr
-            TypeName.cmodifiers retmod tables strings wr
+            TypeName.retType rtype tables strings wr'
+            TypeName.cmodifiers retmod tables strings wr'
 
-            fprintf wr " '%s'" (strings.GetString row.Name)
-            wr.Write '('
-            for i = 0 to signature.Parameters.Length - 1 do
-                if i > 0 then wr.Write ", "
-                // TODO: Write parameter names.
-                let param = signature.Parameters.[i]
-                TypeName.paramType param.ParamType tables strings wr
-                TypeName.cmodifiers param.CustomModifiers tables strings wr
-            wr.Write ") "
+            wr'.Write " '"
+            wr'.Write(strings.GetString row.Name)
+            wr'.Write "' "
+
+            if signature.Parameters.IsEmpty
+            then wr'.Write '('
+            else
+                wr'.WriteLine '('
+                let wr'' = indented wr'
+                for i = 0 to signature.Parameters.Length - 1 do
+                    if i > 0 then wr''.WriteLine ','
+
+                    let prow =
+                        match tables.Param with
+                        | ValueSome ptable ->
+                            match ptable.TryGetRow(row.ParamList + uint32 i) with
+                            | Ok prow -> ValueSome prow
+                            | Error _ -> ValueNone
+                        | ValueNone -> ValueNone
+
+                    match prow with
+                    | ValueSome { Flags = pflags } ->
+                        if pflags.HasFlag ParameterAttributes.In then wr''.Write "in "
+                        if pflags.HasFlag ParameterAttributes.Optional then wr''.Write "opt "
+                        if pflags.HasFlag ParameterAttributes.Out then wr''.Write "out "
+
+                        // TODO: Include marshalling information
+                    | ValueNone -> ()
+
+                    let param = signature.Parameters.[i]
+                    TypeName.paramType param.ParamType tables strings wr''
+                    TypeName.cmodifiers param.CustomModifiers tables strings wr''
+
+                    match prow with
+                    | ValueSome prow ->
+                        match strings.GetString prow.Name with
+                        | null
+                        | "" -> ()
+                        | name ->
+                            wr''.Write " '"
+                            wr''.Write name
+                            wr''.Write '''
+                    | ValueNone -> ()
+                wr'.WriteLine()
+            wr'.Write ')'
 
             match row.ImplFlags &&& MethodImplAttributes.CodeTypeMask with
-            | MethodImplAttributes.Native -> wr.Write "native "
-            | MethodImplAttributes.Runtime -> wr.Write "runtime "
+            | MethodImplAttributes.Native -> wr'.Write " native"
+            | MethodImplAttributes.Runtime -> wr'.Write " runtime"
             | MethodImplAttributes.IL
-            | _ -> wr.Write "cil "
+            | _ -> wr'.Write " cil"
 
+            wr'.Write ' '
             match row.ImplFlags &&& MethodImplAttributes.ManagedMask with
-            | MethodImplAttributes.Unmanaged -> wr.Write "un"
+            | MethodImplAttributes.Unmanaged -> wr'.Write "un"
             | _ -> ()
-            wr.Write "managed "
+            wr'.Write "managed"
 
-            if row.ImplFlags.HasFlag MethodImplAttributes.ForwardRef then wr.Write "forwardref "
-            if row.ImplFlags.HasFlag MethodImplAttributes.InternalCall then wr.Write "internalcall "
-            if row.ImplFlags.HasFlag MethodImplAttributes.NoInlining then wr.Write "noinlining "
-            if row.ImplFlags.HasFlag MethodImplAttributes.NoOptimization then wr.Write "nooptimization "
-            if row.ImplFlags.HasFlag MethodImplAttributes.Synchronized then wr.Write "synchronized "
+            if row.ImplFlags.HasFlag MethodImplAttributes.ForwardRef then wr'.Write " forwardref"
+            if row.ImplFlags.HasFlag MethodImplAttributes.InternalCall then wr'.Write " internalcall"
+            if row.ImplFlags.HasFlag MethodImplAttributes.NoInlining then wr'.Write " noinlining"
+            if row.ImplFlags.HasFlag MethodImplAttributes.NoOptimization then wr'.Write " nooptimization"
+            if row.ImplFlags.HasFlag MethodImplAttributes.Synchronized then wr'.Write " synchronized"
+            wr'.WriteLine()
         | Error err -> fprintfn wr "// error : Invalid method signature, %O" err
 
         wr.WriteLine '{'
@@ -541,6 +580,7 @@ let typeDefMethods
             else ttable.[i + 1].MethodList
         let mutable methodi = row.MethodList
         while methodi < max do
+            if methodi > 0u then wr.WriteLine()
             // TODO: Report an error if blobs does not exist
             methodRow mtable tables methodi vfilter strings blobs.Value (tables.GetMethodBodies()) wr
             methodi <- methodi + 1u
