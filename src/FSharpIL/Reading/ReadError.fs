@@ -68,7 +68,7 @@ type BlobError =
                 "the first byte of the unsigned compressed integer (0b%s) is invalid, only 1-byte integers (0b0???), 2-byte integers (0b10??), or 4-byte integers are valid (0b110?)"
                 (Convert.ToString(msb, 2))
         | InvalidFieldSignatureMagic actual -> sprintf "expected field signature to begin with the byte 0x06, but got 0x%02X" actual
-        | InvalidElementType etype -> sprintf "The element type %A (0x%02X) is invalid" etype (uint8 etype)
+        | InvalidElementType etype -> sprintf "the element type %A (0x%02X) is invalid" etype (uint8 etype)
 
 [<NoComparison; NoEquality>]
 type ReadError =

@@ -32,11 +32,11 @@ type ParsedBlobStream internal (chunk: ChunkedMemory) =
 
     member _.TryRead { BlobOffset = offset } =
         match chunk.TrySlice offset with
-        | true, chunk' ->
-            let mutable chunk' = chunk'
-            match ParseBlob.compressedUnsigned &chunk' with
-            | Ok(Convert.U4 lsize, size) ->
-                let offset' = offset + lsize
+        | true, moved ->
+            let mutable chunk' = moved
+            match ParseBlob.compressedu &chunk' with
+            | Ok size ->
+                let offset' = offset + (moved.Length - chunk'.Length)
                 match chunk.TrySlice(offset', size) with
                 | true, blob -> Ok blob
                 | false, _ -> Error(BlobOutsideOfHeap(offset, size))
@@ -50,9 +50,9 @@ type ParsedBlobStream internal (chunk: ChunkedMemory) =
         | Ok blob -> Ok(blob.ToImmutableArray())
         | Error err -> Error err
 
-    member private this.TryReadFieldSig offset =
+    member private this.TryReadFieldSig(offset, parser) =
         match this.TryRead offset with
-        | Ok signature -> ParseBlob.fieldSig &signature
-        | Error err -> Error err
-    member this.TryReadFieldSig { FieldSig = offset } = this.TryReadFieldSig offset
-    member this.TryReadFieldSig { StandaloneSig = offset } = this.TryReadFieldSig offset
+        | Ok signature -> ParseBlob.fieldSig &signature parser
+        | Error err -> Some err
+    member this.TryReadFieldSig({ FieldSig = offset }, parser) = this.TryReadFieldSig(offset, parser)
+    member this.TryReadFieldSig({ StandaloneSig = offset }: ParsedStandaloneSig, parser) = this.TryReadFieldSig(offset, parser)

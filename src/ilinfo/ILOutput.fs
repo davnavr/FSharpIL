@@ -327,6 +327,17 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
             fieldf "TypeNamespace" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeNamespace
     | ValueNone -> ()
 
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type PrintCustomMod<'Writer when 'Writer :> TextWriter> (wr: 'Writer) =
+    interface ICustomModParser with
+        member _.Parse _ = ()
+
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type PrintFieldSig<'Writer when 'Writer :> TextWriter> (wr: 'Writer) =
+    interface IFieldSigParser<PrintCustomMod<'Writer>, TypeName.Encoded<'Writer>> with
+        member _.CustomModifiers = PrintCustomMod wr
+        member _.FieldType = TypeName.Encoded wr
+
 let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) (blobs: ParsedBlobStream) (wr: #TextWriter) =
     let row = table.[i]
     if VisibilityFilter.field vfilter row.Flags then
@@ -354,11 +365,9 @@ let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) 
             // TODO: Write field marshalling information.
             wr.Write ") "
 
-        match blobs.TryReadFieldSig(row.Signature) with
-        | Ok signature ->
-            // TODO: Include custom modifiers of field type.
-            TypeName.encoded signature.FieldType wr
-        | Error err -> fprintfn wr "Error reading type %O" err
+        match blobs.TryReadFieldSig(row.Signature, PrintFieldSig wr) with
+        | None -> ()
+        | Some err -> fprintfn wr "Error reading type %O" err
 
         fprintf wr " '%s' " (strings.GetString row.Name)
         rowIndex wr i
