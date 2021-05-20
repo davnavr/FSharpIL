@@ -187,7 +187,45 @@ module internal ParseBlob =
                     | Ok t -> Ok(ParsedType.Ptr(modifiers, ValueSome t))
                     | Error err -> Error err
             | Error err -> Error err
+        | ElementType.GenericInst -> genericInst &chunk
+        //| ElementType.Array
         | _ -> Error(InvalidElementType elem)
+
+    and genArgList (chunk: byref<ChunkedMemory>) (args: ImmutableArray<ParsedType>.Builder) =
+        if args.Capacity = args.Count
+        then Ok(args.ToImmutable())
+        else
+            match etype &chunk with
+            | Ok arg ->
+                args.Add arg
+                genArgList &chunk args
+            | Error err -> Error err
+
+    and genericInst (chunk: byref<ChunkedMemory>) =
+        match chunk.TrySlice(0u, 1u) with
+        | true, chunk' ->
+            chunk <- chunk.Slice 1u
+            match LanguagePrimitives.EnumOfValue chunk'.[0u] with
+            | ElementType.Class
+            | ElementType.ValueType as kind ->
+                match typeDefOrRefOrSpec &chunk with
+                | Ok t ->
+                    match compressedUnsigned &chunk with
+                    | Ok(_, 0u) -> Error MissingGenericArguments
+                    | Ok(_, Convert.I4 count) ->
+                        match genArgList &chunk (ImmutableArray.CreateBuilder count) with
+                        | Ok args ->
+                            let kind' =
+                                match kind with
+                                | ElementType.Class -> DefinedTypeKind.Class
+                                | ElementType.ValueType
+                                | _ -> DefinedTypeKind.ValueType
+                            Ok(ParsedType.GenericInst(kind', t, args))
+                        | Error err -> Error err
+                    | Error err -> Error err
+                | Error err -> Error err
+            | kind -> Error(InvalidGenericInstantiationKind(ValueSome kind))
+        | false, _ -> Error(InvalidGenericInstantiationKind ValueNone)
 
     let rec fieldSig (chunk: inref<ChunkedMemory>) =
         // TODO: Check if chunk is not empty.

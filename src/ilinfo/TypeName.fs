@@ -63,6 +63,7 @@ let definedUserType kind t tables strings (wr: TextWriter) =
 /// Prints a type (II.7.1).
 let rec encoded (etype: ParsedType) tables strings wr =
     match etype with
+    // TODO: Substitute generic parameter index with name
     | ParsedType.Var i-> fprintf wr "!%i" i
     | ParsedType.MVar i -> fprintf wr "!!%i" i
     | ParsedType.Boolean -> wr.Write "bool"

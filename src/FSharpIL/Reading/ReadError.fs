@@ -45,6 +45,8 @@ type BlobError =
     | InvalidUnsignedCompressedIntegerKind of msb: uint8
     | InvalidFieldSignatureMagic of actual: uint8
     | InvalidElementType of etype: ElementType
+    | InvalidGenericInstantiationKind of ElementType voption
+    | MissingGenericArguments
 
     override this.ToString() =
         match this with
@@ -68,7 +70,16 @@ type BlobError =
                 "the first byte of the unsigned compressed integer (0b%s) is invalid, only 1-byte integers (0b0???), 2-byte integers (0b10??), or 4-byte integers are valid (0b110?)"
                 (Convert.ToString(msb, 2))
         | InvalidFieldSignatureMagic actual -> sprintf "expected field signature to begin with the byte 0x06, but got 0x%02X" actual
-        | InvalidElementType etype -> sprintf "The element type %A (0x%02X) is invalid" etype (uint8 etype)
+        | InvalidElementType etype -> sprintf "the element type %A (0x%02X) is invalid" etype (uint8 etype)
+        | InvalidGenericInstantiationKind etype ->
+            match etype with
+            | ValueNone -> "end of blob"
+            | ValueSome etype -> sprintf "%A (%02X)" etype (uint8 etype)
+            |> sprintf
+                "invalid generic instantiation, expected CLASS (0x%02X) or VALUETYPE (0x%02X) but got %s"
+                (uint8 ElementType.Class)
+                (uint8 ElementType.ValueType)
+        | MissingGenericArguments -> "Expected at least 1 generic argument but got 0"
 
 [<NoComparison; NoEquality>]
 type ReadError =
