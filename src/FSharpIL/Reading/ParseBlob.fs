@@ -123,6 +123,8 @@ module internal ParseBlob =
         | _ when isNull modifiers -> Ok ImmutableArray.Empty
         | _ -> Ok(modifiers.ToImmutable())
 
+    let inline customModList (chunk: byref<_>) = customMod &chunk null
+
     let rec etype (chunk: byref<ChunkedMemory>) =
         // TODO: Check that chunk is not empty.
         let elem = LanguagePrimitives.EnumOfValue chunk.[0u]
@@ -168,6 +170,13 @@ module internal ParseBlob =
                     | _ -> ParsedType.MVar
                 Ok(tag num)
             | Error err -> Error err
+        | ElementType.SZArray ->
+            match customModList &chunk with
+            | Ok modifiers ->
+                match etype &chunk with
+                | Ok t -> Ok(ParsedType.SZArray(modifiers, t))
+                | Error err -> Error err
+            | Error err -> Error err
         | _ -> Error(InvalidElementType elem)
 
     let rec fieldSig (chunk: inref<ChunkedMemory>) =
@@ -175,7 +184,7 @@ module internal ParseBlob =
         match chunk.[0u] with
         | 0x6uy ->
             let mutable chunk' = chunk.Slice 1u
-            match customMod &chunk' null with
+            match customModList &chunk' with
             | Ok modifiers ->
                 match etype &chunk' with
                 | Ok ftype -> Ok { CustomModifiers = modifiers; FieldType = ftype }
