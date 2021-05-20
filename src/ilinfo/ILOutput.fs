@@ -328,8 +328,8 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
     | ValueNone -> ()
 
 let fieldRow (table: ParsedFieldTable) tables i vfilter (strings: ParsedStringsStream) (blobs: ParsedBlobStream) (wr: #TextWriter) =
-    let row = table.[i]
-    if VisibilityFilter.field vfilter row.Flags then
+    match table.TryGetRow i with
+    | Ok row when VisibilityFilter.field vfilter row.Flags ->
         wr.Write ".field "
 
         match row.Flags &&& FieldAttributes.FieldAccessMask with
@@ -361,8 +361,10 @@ let fieldRow (table: ParsedFieldTable) tables i vfilter (strings: ParsedStringsS
         | Error err -> fprintfn wr "Error reading type %O" err
 
         fprintf wr " '%s' " (strings.GetString row.Name)
-        rowIndex wr i
+        rowIndex wr (int32 i)
         wr.WriteLine()
+    | Ok _ -> ()
+    | Error err -> fprintfn wr "// error : Cannot find field %i, %s" i err.Message
 
 let typeDefFields
     (tables: ParsedMetadataTables)
@@ -383,7 +385,7 @@ let typeDefFields
         let mutable fieldi = row.FieldList
         while fieldi < max do
             // TODO: Report an error if blobs does not exist
-            fieldRow ftable tables (int32 fieldi) vfilter strings blobs.Value wr
+            fieldRow ftable tables fieldi vfilter strings blobs.Value wr
             fieldi <- fieldi + 1u
     | ValueSome _
     | ValueNone -> ()
@@ -424,8 +426,8 @@ let methodRow
     (bodies: ParsedMethodBodies)
     (wr: #TextWriter)
     =
-    let row = table.[i]
-    if VisibilityFilter.methodDef vfilter row.Flags then
+    match table.TryGetRow i with
+    | Ok row when VisibilityFilter.methodDef vfilter row.Flags ->
         wr.Write ".method "
 
         match row.Flags &&& MethodAttributes.MemberAccessMask with
@@ -488,6 +490,8 @@ let methodRow
                 methodBodyInstruction wr' &operand &parser
             | Error err -> fprintfn wr' "// %O" err
         wr.WriteLine '}'
+    | Ok _ -> ()
+    | Error err -> fprintfn wr "// error : Cannot find method %i, %s" i err.Message
 
 let typeDefMethods
     (tables: ParsedMetadataTables)
@@ -508,7 +512,7 @@ let typeDefMethods
         let mutable methodi = row.MethodList
         while methodi < max do
             // TODO: Report an error if blobs does not exist
-            methodRow mtable (int32 methodi) vfilter strings blobs.Value (tables.GetMethodBodies()) wr
+            methodRow mtable methodi vfilter strings blobs.Value (tables.GetMethodBodies()) wr
             methodi <- methodi + 1u
     | ValueSome _
     | ValueNone -> ()
