@@ -55,6 +55,32 @@ type ParsedType =
 [<IsReadOnly; Struct>]
 type ParsedFieldSig = { CustomModifiers: ImmutableArray<ParsedCustomMod>; FieldType: ParsedType }
 
+type ParsedParamOrRetType =
+    | ParsedType of ParsedType
+    | ParsedByRef of ParsedType
+    | ParsedTypedByRef
+
+type ParsedRetType =
+    | RetType of ParsedParamOrRetType
+    | RetVoid
+
+[<IsReadOnly; Struct>]
+type ParsedParam = { CustomModifiers: ImmutableArray<ParsedCustomMod>; ParamType: ParsedParamOrRetType }
+
+// TODO: Figure out if EXPLICITTHIS implies HASTHIS
+[<RequireQualifiedAccess>]
+type ParsedMethodThis =
+    | NoThis
+    | HasThis
+    | ExplicitThis
+
+[<IsReadOnly; Struct>]
+type ParsedMethodDefSig =
+    { This: ParsedMethodThis
+      CallingConvention: MethodCallingConventions
+      ReturnType: struct(ImmutableArray<ParsedCustomMod> * ParsedRetType)
+      Parameters: ImmutableArray<ParsedParam> }
+
 [<RequireQualifiedAccess>]
 module internal ParseBlob =
     let inline ensureLastItem (chunk: inref<ChunkedMemory>) result =
@@ -96,10 +122,6 @@ module internal ParseBlob =
               TypeIndex = value >>> 2 }
             |> Ok
         | Error err -> Error err
-
-    let isModifierElem (chunk: byref<ChunkedMemory>) =
-        let value = LanguagePrimitives.EnumOfValue chunk.[0u]
-        value = ElementType.CModOpt || value = ElementType.CModReqd
 
     let rec customMod (chunk: byref<ChunkedMemory>) (modifiers: ImmutableArray<ParsedCustomMod>.Builder) =
         match LanguagePrimitives.EnumOfValue chunk.[0u] with
@@ -239,3 +261,34 @@ module internal ParseBlob =
                 | Error err -> Error err
             | Error err -> Error err
         | bad -> Error(InvalidFieldSignatureMagic bad)
+
+    let private paramOrRetType (chunk: byref<ChunkedMemory>) =
+        match customModList &chunk with
+        | Ok modifiers ->
+            match etype &chunk with
+            | Ok t -> struct(modifiers, Ok(ParsedType t))
+            | Error(InvalidElementType ElementType.ByRef) ->
+                match etype &chunk with
+                | Ok t -> struct(modifiers, Ok(ParsedByRef t))
+                | Error err -> struct(ImmutableArray.Empty, Error err)
+            | Error(InvalidElementType ElementType.TypedByRef) -> struct(modifiers, Ok ParsedTypedByRef)
+            | Error err -> struct(modifiers, Error err)
+        | Error err -> struct(ImmutableArray.Empty, Error err)
+
+    let retType (chunk: byref<ChunkedMemory>) =
+        let struct(modifiers, t) = paramOrRetType &chunk
+        match t with
+        | Ok t' -> Ok(struct(modifiers, RetType t'))
+        | Error(InvalidElementType ElementType.Void) -> Ok(struct(modifiers, RetVoid))
+        | Error err -> Error err
+
+    let param (chunk: byref<ChunkedMemory>) =
+        match paramOrRetType &chunk with
+        | modifiers, Ok ptype ->  Ok { CustomModifiers = modifiers; ParamType = ptype }
+        | _, Error err -> Error err
+
+    let private methodDefOrRefCallingConvention (chunk: byref<ChunkedMemory>) =
+        ()
+
+    //let methodRefSig chunk =
+    //    failwith "TODO: Can reuse methodDefSig function, just check for var args"
