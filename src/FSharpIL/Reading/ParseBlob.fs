@@ -159,8 +159,6 @@ module internal ParseBlob =
             | Error err -> Error err
         | ElementType.Var
         | ElementType.MVar ->
-            // TODO: Avoid calculating value of generic param index to be more efficient.
-            // Maybe consider storing index in special chunk instead? Sum all bytes in chunk to get index?
             match compressedUnsigned &chunk with
             | Ok(_, num) ->
                 let tag =
@@ -176,6 +174,18 @@ module internal ParseBlob =
                 match etype &chunk with
                 | Ok t -> Ok(ParsedType.SZArray(modifiers, t))
                 | Error err -> Error err
+            | Error err -> Error err
+        | ElementType.Ptr ->
+            match customModList &chunk with
+            | Ok modifiers ->
+                match LanguagePrimitives.EnumOfValue chunk.[0u] with
+                | ElementType.Void ->
+                    chunk <- chunk.Slice 1u
+                    Ok(ParsedType.Ptr(modifiers, ValueNone))
+                | _ ->
+                    match etype &chunk with
+                    | Ok t -> Ok(ParsedType.Ptr(modifiers, ValueSome t))
+                    | Error err -> Error err
             | Error err -> Error err
         | _ -> Error(InvalidElementType elem)
 
