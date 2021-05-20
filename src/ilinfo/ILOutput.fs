@@ -327,7 +327,7 @@ let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
             fieldf "TypeNamespace" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeNamespace
     | ValueNone -> ()
 
-let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) (blobs: ParsedBlobStream) (wr: #TextWriter) =
+let fieldRow (table: ParsedFieldTable) tables i vfilter (strings: ParsedStringsStream) (blobs: ParsedBlobStream) (wr: #TextWriter) =
     let row = table.[i]
     if VisibilityFilter.field vfilter row.Flags then
         wr.Write ".field "
@@ -357,7 +357,7 @@ let fieldRow (table: ParsedFieldTable) i vfilter (strings: ParsedStringsStream) 
         match blobs.TryReadFieldSig(row.Signature) with
         | Ok signature ->
             // TODO: Include custom modifiers of field type.
-            TypeName.encoded signature.FieldType wr
+            TypeName.encoded signature.FieldType tables strings wr
         | Error err -> fprintfn wr "Error reading type %O" err
 
         fprintf wr " '%s' " (strings.GetString row.Name)
@@ -383,7 +383,7 @@ let typeDefFields
         let mutable fieldi = row.FieldList
         while fieldi < max do
             // TODO: Report an error if blobs does not exist
-            fieldRow ftable (int32 fieldi) vfilter strings blobs.Value wr
+            fieldRow ftable tables (int32 fieldi) vfilter strings blobs.Value wr
             fieldi <- fieldi + 1u
     | ValueSome _
     | ValueNone -> ()

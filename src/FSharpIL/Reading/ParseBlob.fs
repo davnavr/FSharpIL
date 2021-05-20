@@ -7,13 +7,49 @@ open FSharpIL
 open FSharpIL.Metadata
 
 [<IsReadOnly; Struct>]
-type ParsedCustomMod = { ModifierRequired: bool; ModifierType: ParsedTypeDefOrRefOrSpec }
+[<RequireQualifiedAccess>]
+type CustomModKind =
+    | OptionalModfier
+    | RequiredModifier
+
+[<IsReadOnly; Struct>]
+type ParsedCustomMod = { ModifierRequired: CustomModKind; ModifierType: ParsedTypeDefOrRefOrSpec }
+
+// TODO: Avoid duplicate code with ElementType used in metadata building.
+[<IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
+type GenericInstKind =
+    | Class
+    | ValueType
 
 /// <summary>Represents a type parsed from a signature in the <c>#Blob</c> metadata heap (II.23.2.12).</summary>
-[<IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
 type ParsedType =
-    internal { TypeTag: ElementType; Chunk: ChunkedMemory }
-    member this.Tag = this.TypeTag
+    | Boolean
+    | Char
+    | I1
+    | U1
+    | I2
+    | U2
+    | I4
+    | U4
+    | I8
+    | U8
+    | R4
+    | R8
+    | I
+    | U
+    | Array of ParsedType * ArrayShape
+    | Class of ParsedTypeDefOrRefOrSpec
+    //| FnPtr of 
+    | GenericInst of GenericInstKind * ParsedTypeDefOrRefOrSpec * ImmutableArray<ParsedType>
+    | MVar of number: uint32
+    | Object
+    | Ptr of ImmutableArray<ParsedCustomMod> * ParsedType voption
+    | String
+    | SZArray of ImmutableArray<ParsedCustomMod> * ParsedType
+    | ValueType of ParsedTypeDefOrRefOrSpec
+    | Var of number: uint32
 
 [<IsReadOnly; Struct>]
 type ParsedFieldSig = { CustomModifiers: ImmutableArray<ParsedCustomMod>; FieldType: ParsedType }
@@ -74,7 +110,11 @@ module internal ParseBlob =
                 | _ -> modifiers
             match typeDefOrRefOrSpec &chunk with
             | Ok mtype ->
-                { ModifierRequired = (elem = ElementType.CModReqd)
+                { ModifierRequired =
+                    match elem with
+                    | ElementType.CModReqd -> CustomModKind.RequiredModifier
+                    | ElementType.CModOpt
+                    | _ -> CustomModKind.OptionalModfier
                   ModifierType = mtype }
                 |> modifiers'.Add
                 customMod &chunk modifiers'
@@ -87,39 +127,45 @@ module internal ParseBlob =
         let elem = LanguagePrimitives.EnumOfValue chunk.[0u]
         chunk <- chunk.Slice 1u
         match elem with
-        | ElementType.Boolean
-        | ElementType.Char
-        | ElementType.I1
-        | ElementType.U1
-        | ElementType.I2
-        | ElementType.U2
-        | ElementType.I4
-        | ElementType.U4
-        | ElementType.I8
-        | ElementType.U8
-        | ElementType.R4
-        | ElementType.R8
-        | ElementType.I
-        | ElementType.U
-        | ElementType.Object
-        | ElementType.String -> Ok { TypeTag = elem; Chunk = ChunkedMemory.empty }
+        | ElementType.Boolean -> Ok ParsedType.Boolean
+        | ElementType.Char -> Ok ParsedType.Char
+        | ElementType.I1 -> Ok ParsedType.I1
+        | ElementType.U1 -> Ok ParsedType.U1
+        | ElementType.I2 -> Ok ParsedType.I2
+        | ElementType.U2 -> Ok ParsedType.U2
+        | ElementType.I4 -> Ok ParsedType.I4
+        | ElementType.U4 -> Ok ParsedType.U4
+        | ElementType.I8 -> Ok ParsedType.I8
+        | ElementType.U8 -> Ok ParsedType.U8
+        | ElementType.R4 -> Ok ParsedType.R4
+        | ElementType.R8 -> Ok ParsedType.R8
+        | ElementType.I -> Ok ParsedType.I
+        | ElementType.U -> Ok ParsedType.U
+        | ElementType.Object -> Ok ParsedType.Object
+        | ElementType.String -> Ok ParsedType.String
         | ElementType.Class
         | ElementType.ValueType ->
             match typeDefOrRefOrSpec &chunk with
             | Ok t ->
-                Ok { TypeTag = elem; Chunk = ChunkedMemory.empty } // TODO: How to store type?
+                let tag =
+                    match elem with
+                    | ElementType.Class -> ParsedType.Class
+                    | ElementType.ValueType
+                    | _ -> ParsedType.ValueType
+                Ok(tag t)
             | Error err -> Error err
         | ElementType.Var
         | ElementType.MVar ->
             // TODO: Avoid calculating value of generic param index to be more efficient.
             // Maybe consider storing index in special chunk instead? Sum all bytes in chunk to get index?
             match compressedUnsigned &chunk with
-            | Ok(Convert.U4 size, _) ->
-                match chunk.TrySlice(0u, size) with
-                | true, num ->
-                    chunk <- chunk.Slice size
-                    Ok { TypeTag = elem; Chunk = num }
-                | false, _ -> Error(CompressedIntegerOutOfBounds size)
+            | Ok(_, num) ->
+                let tag =
+                    match elem with
+                    | ElementType.Var -> ParsedType.Var
+                    | ElementType.MVar
+                    | _ -> ParsedType.MVar
+                Ok(tag num)
             | Error err -> Error err
         | _ -> Error(InvalidElementType elem)
 
