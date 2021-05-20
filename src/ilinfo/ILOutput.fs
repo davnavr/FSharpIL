@@ -419,6 +419,7 @@ let methodBodyInstructions data (body: MethodBodyStream) =
 
 let methodRow
     (table: ParsedMethodDefTable)
+    tables
     i
     vfilter
     (strings: ParsedStringsStream)
@@ -452,20 +453,49 @@ let methodRow
         if row.Flags.HasFlag MethodAttributes.RTSpecialName then wr.Write "rtspecialname "
 
         // TODO: Move return type and parameters to separate lines like ILSpy
-        let signature = () // TODO: Parse method signature.
+        match blobs.TryReadMethodDefSig row.Signature with
+        | Ok signature ->
+            match signature.This with
+            | ParsedMethodThis.NoThis -> ()
+            | ParsedMethodThis.HasThis -> wr.Write "instance "
+            | ParsedMethodThis.ExplicitThis -> wr.Write "instance explicit "
 
-        // CallConv
+            match signature.CallingConvention with
+            | Default
+            | Generic _ -> ()
+            | VarArg -> wr.Write "vararg "
 
-        // TODO: write the return type.
+            let struct(retmod, rtype) = signature.ReturnType
+            TypeName.retType rtype tables strings wr
+            TypeName.cmodifiers retmod tables strings wr
 
-        fprintf wr "'%s' " (strings.GetString row.Name)
-        wr.Write '('
-        // TODO: Write parameters.
-        wr.Write ") "
+            fprintf wr " '%s'" (strings.GetString row.Name)
+            wr.Write '('
+            for i = 0 to signature.Parameters.Length - 1 do
+                if i > 0 then wr.Write ", "
+                // TODO: Write parameter names.
+                let param = signature.Parameters.[i]
+                TypeName.paramType param.ParamType tables strings wr
+                TypeName.cmodifiers param.CustomModifiers tables strings wr
+            wr.Write ") "
 
-        // TODO: Check when to emit these method keywords.
-        if true then wr.Write "cil "
-        if true then wr.Write "managed "
+            match row.ImplFlags &&& MethodImplAttributes.CodeTypeMask with
+            | MethodImplAttributes.Native -> wr.Write "native "
+            | MethodImplAttributes.Runtime -> wr.Write "runtime "
+            | MethodImplAttributes.IL
+            | _ -> wr.Write "cil "
+
+            match row.ImplFlags &&& MethodImplAttributes.ManagedMask with
+            | MethodImplAttributes.Unmanaged -> wr.Write "un"
+            | _ -> ()
+            wr.Write "managed "
+
+            if row.ImplFlags.HasFlag MethodImplAttributes.ForwardRef then wr.Write "forwardref "
+            if row.ImplFlags.HasFlag MethodImplAttributes.InternalCall then wr.Write "internalcall "
+            if row.ImplFlags.HasFlag MethodImplAttributes.NoInlining then wr.Write "noinlining "
+            if row.ImplFlags.HasFlag MethodImplAttributes.NoOptimization then wr.Write "nooptimization "
+            if row.ImplFlags.HasFlag MethodImplAttributes.Synchronized then wr.Write "synchronized "
+        | Error err -> fprintfn wr "// error : Invalid method signature, %O" err
 
         wr.WriteLine '{'
         let wr' = indented wr
@@ -512,7 +542,7 @@ let typeDefMethods
         let mutable methodi = row.MethodList
         while methodi < max do
             // TODO: Report an error if blobs does not exist
-            methodRow mtable methodi vfilter strings blobs.Value (tables.GetMethodBodies()) wr
+            methodRow mtable tables methodi vfilter strings blobs.Value (tables.GetMethodBodies()) wr
             methodi <- methodi + 1u
     | ValueSome _
     | ValueNone -> ()

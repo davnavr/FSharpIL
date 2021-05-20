@@ -36,9 +36,7 @@ let ofTypeDefOrRefOrSpec extends (tables: ParsedMetadataTables) strings wr =
         // Assume the TypeDef table exists if this function is being called, otherwise there wouldn't be a type to extend.
         let table = ValueOption.get tables.TypeDef
         match table.TryGetRow i with
-        | Ok row ->
-            let row = tables.TypeDef.Value.[int32 i]
-            write row.TypeName row.TypeNamespace strings wr
+        | Ok row -> write row.TypeName row.TypeNamespace strings wr
         | Error err -> fprintfn wr "// error : %s" err.Message
     | ParsedTypeDefOrRefOrSpec.TypeRef i -> typeRef i tables strings wr
     | _ -> fprintf wr "// TODO: Handle incorrect type names %A" extends
@@ -106,3 +104,16 @@ let rec encoded (etype: ParsedType) tables strings wr =
         | ValueSome t -> encoded t tables strings wr
         wr.Write '*'
         cmodifiers modifiers tables strings wr
+
+let paramType t tables strings wr =
+    match t with
+    | ParsedType t' -> encoded t' tables strings wr
+    | ParsedByRef t' ->
+        encoded t' tables strings wr
+        wr.Write '&'
+    | ParsedTypedByRef -> wr.Write "typedref"
+
+let retType t tables strings wr =
+    match t with
+    | RetType t' -> paramType t' tables strings wr
+    | RetVoid -> wr.Write "void"

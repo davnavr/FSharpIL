@@ -77,7 +77,7 @@ type ParsedMethodThis =
     | ExplicitThis
 
 [<IsReadOnly; Struct>]
-type MethodDefSigOffset =
+type ParsedMethodDefSig =
     { This: ParsedMethodThis
       CallingConvention: MethodCallingConventions
       ReturnType: struct(ImmutableArray<ParsedCustomMod> * ParsedRetType)
@@ -303,21 +303,23 @@ module internal ParseBlob =
         | true, cconv ->
             chunk <- chunk.Slice 1u
             let magic = cconv.[0u]
+            let magic' = LanguagePrimitives.EnumOfValue magic
             let inline invalid() = Error(InvalidMethodSignatureCallingConvention(ValueSome magic))
             match LanguagePrimitives.EnumOfValue(magic &&& 0b11111uy) with
             | CallingConvention.Default
             | CallingConvention.VarArg
-            | CallingConvention.Generic as cconv' when cconv' <= CallingConvention.ExplicitThis ->
+            | CallingConvention.Generic as cconv' when magic' <= CallingConvention.ExplicitThis ->
                 let this =
-                    if cconv'.HasFlag CallingConvention.HasThis then
-                        if cconv'.HasFlag CallingConvention.ExplicitThis
+                    if magic'.HasFlag CallingConvention.HasThis then
+                        if magic'.HasFlag CallingConvention.ExplicitThis
                         then Ok ParsedMethodThis.ExplicitThis
                         else Ok ParsedMethodThis.HasThis
+                    elif magic &&& 0b1110_0000uy = 0uy then Ok ParsedMethodThis.NoThis
                     else invalid()
                 match this with
                 | Ok this' ->
                     let gcount =
-                        if cconv' &&& CallingConvention.Generic > CallingConvention.Default then
+                        if cconv' = CallingConvention.Generic then
                             match compressedUnsigned &chunk with
                             | Ok(_, 0u) -> Error MissingGenericArguments
                             | Ok(_, count) -> Ok count
@@ -328,7 +330,7 @@ module internal ParseBlob =
                         Ok (
                             struct (
                                 this',
-                                if cconv' &&& CallingConvention.VarArg > CallingConvention.Default then VarArg else Default
+                                if cconv' = CallingConvention.VarArg then VarArg else Default
                             )
                         )
                     | Ok gcount' -> Ok(struct(this', Generic gcount'))
