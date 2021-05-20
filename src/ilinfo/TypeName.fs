@@ -48,6 +48,12 @@ let cmodifiers (modifiers: ImmutableArray<ParsedCustomMod>) tables strings (wr: 
         ofTypeDefOrRefOrSpec mtype tables strings wr
         wr.Write ')'
 
+let definedUserType kind t tables strings (wr: TextWriter) =
+    match kind with
+    | DefinedTypeKind.Class -> wr.Write "class "
+    | DefinedTypeKind.ValueType -> wr.Write "valuetype "
+    ofTypeDefOrRefOrSpec t tables strings wr
+
 /// Prints a type (II.7.1).
 let rec encoded (etype: ParsedType) tables strings wr =
     match etype with
@@ -69,9 +75,27 @@ let rec encoded (etype: ParsedType) tables strings wr =
     | ParsedType.U -> wr.Write "native unsigned int"
     | ParsedType.Object -> wr.Write "object"
     | ParsedType.String -> wr.Write "string"
-    | ParsedType.Class t -> fprintf wr "class %t" (ofTypeDefOrRefOrSpec t tables strings)
-    | ParsedType.ValueType t -> fprintf wr "valuetype %t" (ofTypeDefOrRefOrSpec t tables strings)
+    | ParsedType.Class t -> definedUserType DefinedTypeKind.Class t tables strings wr
+    | ParsedType.ValueType t -> definedUserType DefinedTypeKind.ValueType t tables strings wr
     | ParsedType.SZArray(modifiers, t) ->
         encoded t tables strings wr
-        cmodifiers modifiers tables strings wr
         wr.Write "[]"
+        cmodifiers modifiers tables strings wr
+    | ParsedType.Array(t, shape) ->
+        encoded t tables strings wr
+        wr.Write '['
+        wr.Write "// TODO: Print array shape information"
+        wr.Write ']'
+    | ParsedType.GenericInst(kind, t, gargs) ->
+        definedUserType kind t tables strings wr
+        wr.Write '<'
+        for i = 0 to gargs.Length - 1 do
+            if i > 0 then wr.Write ", "
+            encoded gargs.[i] tables strings wr
+        wr.Write '>'
+    | ParsedType.Ptr(modifiers, ptype) ->
+        match ptype with
+        | ValueNone -> wr.Write "void"
+        | ValueSome t -> encoded t tables strings wr
+        wr.Write '*'
+        cmodifiers modifiers tables strings wr

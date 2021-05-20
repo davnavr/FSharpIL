@@ -16,9 +16,10 @@ type CustomModKind =
 type ParsedCustomMod = { ModifierRequired: CustomModKind; ModifierType: ParsedTypeDefOrRefOrSpec }
 
 // TODO: Avoid duplicate code with ElementType used in metadata building.
+/// Indicates whether a user-defined type is a reference type or a value type.
 [<IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]
-type GenericInstKind =
+type DefinedTypeKind =
     | Class
     | ValueType
 
@@ -42,7 +43,7 @@ type ParsedType =
     | Array of ParsedType * ArrayShape
     | Class of ParsedTypeDefOrRefOrSpec
     //| FnPtr of 
-    | GenericInst of GenericInstKind * ParsedTypeDefOrRefOrSpec * ImmutableArray<ParsedType>
+    | GenericInst of DefinedTypeKind * ParsedTypeDefOrRefOrSpec * ImmutableArray<ParsedType>
     | MVar of number: uint32
     | Object
     | Ptr of ImmutableArray<ParsedCustomMod> * ParsedType voption
