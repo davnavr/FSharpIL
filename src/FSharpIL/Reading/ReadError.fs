@@ -48,6 +48,7 @@ type BlobError =
     | InvalidGenericInstantiationKind of ElementType voption
     | MissingGenericArguments
     | InvalidMethodSignatureCallingConvention of uint8 voption
+    | InvalidPropertyMagic of uint8 voption
 
     override this.ToString() =
         match this with
@@ -87,6 +88,11 @@ type BlobError =
                 (LanguagePrimitives.EnumOfValue<_, CallingConvention> cconv)
                 cconv
         | InvalidMethodSignatureCallingConvention ValueNone -> "expected method signature calling conventions but got empty blob"
+        | InvalidPropertyMagic actual ->
+            match actual with
+            | ValueNone -> "end of blob"
+            | ValueSome magic -> sprintf "0x%02X" magic
+            |> sprintf "expected property signature to begin with PROPERTY (0x8) or PROPERTY HASTHIS (0x28), but got %s"
 
 [<NoComparison; NoEquality>]
 type ReadError =

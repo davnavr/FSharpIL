@@ -61,3 +61,8 @@ type ParsedBlobStream internal (chunk: ChunkedMemory) =
         match this.TryRead offset with
         | Ok signature -> ParseBlob.methodDefSig &signature
         | Error err -> Error err
+
+    member this.TryReadPropertySig { PropertySig = offset } =
+        match this.TryRead offset with
+        | Ok signature -> ParseBlob.propertySig &signature
+        | Error err -> Error err

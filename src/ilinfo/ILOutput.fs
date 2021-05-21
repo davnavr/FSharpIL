@@ -456,7 +456,7 @@ let methodRow
         | Ok signature ->
             wr.WriteLine()
             let wr' = indented wr
-            match signature.This with
+            match signature.HasThis with
             | ParsedMethodThis.NoThis -> ()
             | ParsedMethodThis.HasThis -> wr'.Write "instance "
             | ParsedMethodThis.ExplicitThis -> wr'.Write "instance explicit "
@@ -588,7 +588,8 @@ let typeDefMethods
     | ValueNone -> ()
 
 let propertyRow
-    (table: ParsedPropertyTable)
+    (ptable: ParsedPropertyTable)
+    (mtable: ParsedPropertyMap)
     (tables: ParsedMetadataTables)
     i
     vfilter
@@ -596,20 +597,35 @@ let propertyRow
     (blobs: ParsedBlobStream)
     (wr: #TextWriter)
     =
-    match table.TryGetRow i with
-    | Ok row ->
+    match ptable.TryGetRow i with
+    | Ok row -> // TODO: Only include properties with specified visibility
         wr.Write ".property "
         if row.Flags.HasFlag PropertyAttributes.SpecialName then wr.Write "specialname "
         if row.Flags.HasFlag PropertyAttributes.RTSpecialName then wr.Write "rtspecialname "
-        // TODO: Check property signature
-        //wr.Write "instance "
-        // TODO: Write property type
 
-        wr.Write " '"
-        wr.Write(strings.GetString row.Name)
-        wr.WriteLine '''
+        match blobs.TryReadPropertySig row.Type with
+        | Ok signature ->
+            if signature.HasThis then wr.Write "instance "
+            TypeName.encoded signature.PropertyType tables strings wr
+            // TODO: Figure out if this is where a property's custom modifiers go.
+            TypeName.cmodifiers signature.CustomModifiers tables strings wr
+            wr.Write " '"
+            wr.Write(strings.GetString row.Name)
+            wr.Write '''
+            if not signature.Parameters.IsEmpty then
+                wr.WriteLine '('
+                let wr' = indented wr
+                for i = 0 to signature.Parameters.Length do
+                    if i > 0 then wr'.WriteLine ','
+                    let param = signature.Parameters.[i]
+                    TypeName.paramType param.ParamType tables strings wr'
+                    TypeName.cmodifiers param.CustomModifiers tables strings wr'
+                wr.WriteLine ')'
+            else wr.WriteLine()
+        | Error err -> fprintfn wr "// error : Cannot read property signature, %O" err
+
         wr.WriteLine '{'
-        // TODO: Access proeprty map for get, set, and other methods.
+        // TODO: Access property map for get, set, and other methods.
         wr.WriteLine '}'
 
     | Error err -> fprintfn wr "// error : Cannot find property %i, %s" i err.Message

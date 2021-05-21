@@ -78,9 +78,16 @@ type ParsedMethodThis =
 
 [<IsReadOnly; Struct>]
 type ParsedMethodDefSig =
-    { This: ParsedMethodThis
+    { HasThis: ParsedMethodThis
       CallingConvention: MethodCallingConventions
       ReturnType: struct(ImmutableArray<ParsedCustomMod> * ParsedRetType)
+      Parameters: ImmutableArray<ParsedParam> }
+
+[<IsReadOnly; Struct>]
+type ParsedPropertySig =
+    { HasThis: bool
+      CustomModifiers: ImmutableArray<ParsedCustomMod>
+      PropertyType: ParsedType
       Parameters: ImmutableArray<ParsedParam> }
 
 [<RequireQualifiedAccess>]
@@ -251,7 +258,7 @@ module internal ParseBlob =
             | kind -> Error(InvalidGenericInstantiationKind(ValueSome kind))
         | false, _ -> Error(InvalidGenericInstantiationKind ValueNone)
 
-    let rec fieldSig (chunk: inref<ChunkedMemory>) =
+    let fieldSig (chunk: inref<ChunkedMemory>) =
         // TODO: Check if chunk is not empty.
         match chunk.[0u] with
         | 0x6uy ->
@@ -349,7 +356,7 @@ module internal ParseBlob =
                 | Ok ret ->
                     match paramList &chunk pcount with
                     | Ok parameters ->
-                        { This = this
+                        { HasThis = this
                           CallingConvention = cconv
                           ReturnType = ret
                           Parameters = parameters }
@@ -361,3 +368,30 @@ module internal ParseBlob =
 
     //let methodRefSig chunk =
     //    failwith "TODO: Can reuse methodDefSig function, just check for var args"
+
+    let propertySig (chunk: inref<ChunkedMemory>) =
+        if not chunk.IsEmpty then
+            let magic = chunk.[0u]
+            match magic with
+            | 0x8uy // PROPERTY
+            | 0x28uy -> // PROPERTY ||| HASTHIS
+                let mutable chunk = chunk.Slice 1u
+                match customModList &chunk with
+                | Ok modifiers ->
+                    match compressedUnsigned &chunk with
+                    | Ok(_, pcount) ->
+                        match etype &chunk with
+                        | Ok ptype ->
+                            match paramList &chunk pcount with
+                            | Ok parameters ->
+                                { HasThis = magic &&& 0x20uy <> 0uy
+                                  CustomModifiers = modifiers
+                                  PropertyType = ptype
+                                  Parameters = parameters }
+                                |> Ok
+                            | Error err -> Error err
+                        | Error err -> Error err
+                    | Error err -> Error err
+                | Error err -> Error err
+            | _ -> Error(InvalidPropertyMagic(ValueSome magic))
+        else Error(InvalidPropertyMagic ValueNone)
