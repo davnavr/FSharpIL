@@ -587,6 +587,33 @@ let typeDefMethods
     | ValueSome _
     | ValueNone -> ()
 
+let propertyRow
+    (table: ParsedPropertyTable)
+    (tables: ParsedMetadataTables)
+    i
+    vfilter
+    (strings: ParsedStringsStream)
+    (blobs: ParsedBlobStream)
+    (wr: #TextWriter)
+    =
+    match table.TryGetRow i with
+    | Ok row ->
+        wr.Write ".property "
+        if row.Flags.HasFlag PropertyAttributes.SpecialName then wr.Write "specialname "
+        if row.Flags.HasFlag PropertyAttributes.RTSpecialName then wr.Write "rtspecialname "
+        // TODO: Check property signature
+        //wr.Write "instance "
+        // TODO: Write property type
+
+        wr.Write " '"
+        wr.Write(strings.GetString row.Name)
+        wr.WriteLine '''
+        wr.WriteLine '{'
+        // TODO: Access proeprty map for get, set, and other methods.
+        wr.WriteLine '}'
+
+    | Error err -> fprintfn wr "// error : Cannot find property %i, %s" i err.Message
+
 let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsStream) blobs (wr: TextWriter) =
     match tables.TypeDef with
     | ValueSome table ->

@@ -460,7 +460,7 @@ type PropertyMapParser (counts: MetadataTableCounts) =
 type ParsedProperty =
     { Flags: PropertyAttributes
       Name: ParsedString
-      Type: ParsedPropertySig }
+      Type: PropertySigOffset }
 
 [<IsReadOnly; Struct>]
 type PropertyParser (sizes: HeapSizes) =
@@ -728,6 +728,7 @@ type ParsedMethodDefTable = ParsedMetadataTable<MethodDefParser, ParsedMethodRow
 type ParsedInterfaceImplTable = ParsedMetadataTable<InterfaceImplParser, ParsedInterfaceImpl>
 type ParsedMemberRefTable = ParsedMetadataTable<MemberRefParser, ParsedMemberRef>
 type ParsedConstantTable = ParsedMetadataTable<ConstantParser, ParsedConstant>
+// TODO: Append Parsed to all parsed metadata tables
 type CustomAttributeTable = ParsedMetadataTable<CustomAttributeParser, ParsedCustomAttribute>
 
 type ClassLayoutTable = ParsedMetadataTable<ClassLayoutParser, ParsedClassLayout>
@@ -735,14 +736,14 @@ type ClassLayoutTable = ParsedMetadataTable<ClassLayoutParser, ParsedClassLayout
 type StandaloneSigTable = ParsedMetadataTable<StandaloneSigParser, ParsedStandaloneSig>
 
 type PropertyMapTable = ParsedMetadataTable<PropertyMapParser, ParsedPropertyMap>
-type PropertyTable = ParsedMetadataTable<PropertyParser, ParsedProperty>
+type ParsedPropertyTable = ParsedMetadataTable<PropertyParser, ParsedProperty>
 type MethodSemanticsTable = ParsedMetadataTable<MethodSemanticsParser, ParsedMethodSemantics>
 type MethodImplTable = ParsedMetadataTable<MethodImplParser, ParsedMethodImpl>
 type TypeSpecTable = ParsedMetadataTable<TypeSpecParser, ParsedTypeSpec>
 
 type FieldRvaTable = ParsedMetadataTable<FieldRvaParser, ParsedFieldRva>
-type AssemblyTable = ParsedMetadataTable<AssemblyParser, ParsedAssembly>
-type AssemblyRefTable = ParsedMetadataTable<AssemblyRefParser, ParsedAssemblyRef>
+type ParsedAssemblyTable = ParsedMetadataTable<AssemblyParser, ParsedAssembly>
+type ParsedAssemblyRefTable = ParsedMetadataTable<AssemblyRefParser, ParsedAssemblyRef>
 
 type ManifestResourceTable = ParsedMetadataTable<ManifestResourceParser, ParsedManifestResource>
 type NestedClassTable = ParsedMetadataTable<NestedClassParser, ParsedNestedClass>
@@ -775,14 +776,14 @@ type ParsedMetadataTables =
           [<DefaultValue>] mutable StandaloneSigTable: StandaloneSigTable voption
 
           [<DefaultValue>] mutable PropertyMapTable: PropertyMapTable voption
-          [<DefaultValue>] mutable PropertyTable: PropertyTable voption
+          [<DefaultValue>] mutable PropertyTable: ParsedPropertyTable voption
           [<DefaultValue>] mutable MethodSemanticsTable: MethodSemanticsTable voption
           [<DefaultValue>] mutable MethodImplTable: MethodImplTable voption
           [<DefaultValue>] mutable TypeSpecTable: TypeSpecTable voption
 
           [<DefaultValue>] mutable FieldRvaTable: FieldRvaTable voption
-          [<DefaultValue>] mutable AssemblyTable: AssemblyTable voption
-          [<DefaultValue>] mutable AssemblyRefTable: AssemblyRefTable voption
+          [<DefaultValue>] mutable AssemblyTable: ParsedAssemblyTable voption
+          [<DefaultValue>] mutable AssemblyRefTable: ParsedAssemblyRefTable voption
 
           [<DefaultValue>] mutable ManifestResourceTable: ManifestResourceTable voption
           [<DefaultValue>] mutable NestedClassTable: NestedClassTable voption
