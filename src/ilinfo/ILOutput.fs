@@ -589,7 +589,7 @@ let typeDefMethods
 
 let propertyRow
     (ptable: ParsedPropertyTable)
-    (mtable: ParsedPropertyMap)
+    (mtable: PropertyMapTable)
     (tables: ParsedMetadataTables)
     i
     vfilter
@@ -615,7 +615,7 @@ let propertyRow
             if not signature.Parameters.IsEmpty then
                 wr.WriteLine '('
                 let wr' = indented wr
-                for i = 0 to signature.Parameters.Length do
+                for i = 0 to signature.Parameters.Length - 1 do
                     if i > 0 then wr'.WriteLine ','
                     let param = signature.Parameters.[i]
                     TypeName.paramType param.ParamType tables strings wr'
@@ -629,6 +629,34 @@ let propertyRow
         wr.WriteLine '}'
 
     | Error err -> fprintfn wr "// error : Cannot find property %i, %s" i err.Message
+
+let typeDefProperties
+    trow
+    (tables: ParsedMetadataTables)
+    vfilter
+    (strings: ParsedStringsStream)
+    (blobs: ParsedBlobStream voption)
+    (wr: #TextWriter)
+    =
+    match blobs, tables.Property, tables.PropertyMap with
+    | ValueSome blobs', ValueSome ptable, ValueSome mtable ->
+        // TODO: Store property map in a dictionary to avoid iterating through the map table for each type.
+        let mutable i = 0u
+        while i < mtable.RowCount do
+            let row = mtable.[int32 i]
+            if row.Parent = trow then
+                propertyRow
+                    ptable
+                    mtable
+                    tables
+                    i
+                    vfilter
+                    strings
+                    blobs'
+                    wr
+            i <- i + 1u
+    | ValueSome _, _, _ -> wr.Write "// error : Cannot access property tables for some reason?"
+    | ValueNone, _, _ -> wr.Write "// error : Cannot access blob stream to get property signatures"
 
 let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsStream) blobs (wr: TextWriter) =
     match tables.TypeDef with
@@ -702,6 +730,7 @@ let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsS
                 let wr' = indented wr
                 typeDefFields tables i &row vfilter strings blobs wr'
                 typeDefMethods tables i &row vfilter strings blobs wr'
+                typeDefProperties (uint32 i) tables vfilter strings blobs wr'
                 // TODO: Write other members.
                 wr.WriteLine '}'
     | ValueNone -> ()
