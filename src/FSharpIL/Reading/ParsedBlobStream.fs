@@ -18,7 +18,7 @@ type [<IsReadOnly; Struct>] ParsedMemberRefSig = internal { MemberRefSig: Parsed
 type [<IsReadOnly; Struct>] ParsedAttributeSig = internal { CustomAttrib: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedStandaloneSig = internal { StandaloneSig: ParsedBlob }
 type [<IsReadOnly; Struct>] PropertySigOffset = internal { PropertySig: ParsedBlob }
-type [<IsReadOnly; Struct>] ParsedTypeSpec = internal { TypeSpec: ParsedBlob }
+type [<IsReadOnly; Struct>] TypeSpecOffset = internal { TypeSpec: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedMethodInstantiation = internal { MethodSpec: ParsedBlob }
 //type [<IsReadOnly; Struct>] TemporarySomethingSig = internal { TemporarySomethingSig: ParsedBlob }
 
@@ -27,6 +27,7 @@ module ParsedBlob =
     let (|FieldSig|) { FieldSig = blob } = blob
 
 /// <summary>Represents the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
+[<Sealed>]
 type ParsedBlobStream internal (chunk: ChunkedMemory) =
     member _.Size = chunk.Length
 
@@ -65,4 +66,9 @@ type ParsedBlobStream internal (chunk: ChunkedMemory) =
     member this.TryReadPropertySig { PropertySig = offset } =
         match this.TryRead offset with
         | Ok signature -> ParseBlob.propertySig &signature
+        | Error err -> Error err
+
+    member this.TryReadTypeSpec { TypeSpec = offset } =
+        match this.TryRead offset with
+        | Ok signature -> ParseBlob.typeSpec &signature
         | Error err -> Error err

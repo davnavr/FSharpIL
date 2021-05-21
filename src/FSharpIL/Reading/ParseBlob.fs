@@ -15,7 +15,6 @@ type CustomModKind =
 [<IsReadOnly; Struct>]
 type ParsedCustomMod = { ModifierRequired: CustomModKind; ModifierType: ParsedTypeDefOrRefOrSpec }
 
-// TODO: Avoid duplicate code with ElementType used in metadata building.
 /// Indicates whether a user-defined type is a reference type or a value type.
 [<IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]
@@ -23,9 +22,17 @@ type DefinedTypeKind =
     | Class
     | ValueType
 
+// TODO: Make TypeSpec its own type.
+// TODO: Avoid code duplication with ParsedType DU, maybe make ParsedTypeSpec a case?
+//[<RequireQualifiedAccess>]
+//type ParsedTypeSpec =
+//    | GenericInst of DefinedTypeKind * ParsedTypeDefOrRefOrSpec * ImmutableArray<ParsedTypeSpec>
+
+// TODO: Avoid duplicate code with ElementType used in metadata building.
 /// <summary>Represents a type parsed from a signature in the <c>#Blob</c> metadata heap (II.23.2.12).</summary>
 [<RequireQualifiedAccess>]
 type ParsedType =
+    //| TypeSpec of ParsedTypeSpec
     | Boolean
     | Char
     | I1
@@ -395,3 +402,9 @@ module internal ParseBlob =
                 | Error err -> Error err
             | _ -> Error(InvalidPropertyMagic(ValueSome magic))
         else Error(InvalidPropertyMagic ValueNone)
+
+    // TODO: Many additional typespecs are allowed by ECMA-335 augmentations (https://github.com/dotnet/runtime/blob/main/docs/design/specs/Ecma-335-Augments.md).
+    // but prevent usage of CLASS or VALUETYPE?
+    let typeSpec (chunk: inref<ChunkedMemory>) =
+        let mutable chunk = chunk
+        etype &chunk

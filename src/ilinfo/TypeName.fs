@@ -30,7 +30,7 @@ let typeRef i (tables: ParsedMetadataTables) (strings: ParsedStringsStream) wr =
             write row.TypeName row.TypeNamespace strings wr
         | Error err -> fprintfn wr "// error : %s" err.Message // TODO: How to print error messages gracefully and without copying this over and over again?
 
-let ofTypeDefOrRefOrSpec extends (tables: ParsedMetadataTables) strings wr =
+let rec ofTypeDefOrRefOrSpec extends (tables: ParsedMetadataTables) strings (blobs: ParsedBlobStream) wr =
     match extends with
     | ParsedTypeDefOrRefOrSpec.TypeDef i ->
         // Assume the TypeDef table exists if this function is being called, otherwise there wouldn't be a type to extend.
@@ -39,27 +39,37 @@ let ofTypeDefOrRefOrSpec extends (tables: ParsedMetadataTables) strings wr =
         | Ok row -> write row.TypeName row.TypeNamespace strings wr
         | Error err -> fprintfn wr "// error : %s" err.Message
     | ParsedTypeDefOrRefOrSpec.TypeRef i -> typeRef i tables strings wr
+    | ParsedTypeDefOrRefOrSpec.TypeSpec i ->
+        match tables.TypeSpec with
+        | ValueSome ttable ->
+            match ttable.TryGetRow i with
+            | Ok i' ->
+                match blobs.TryReadTypeSpec i' with
+                | Ok tspec -> encoded tspec tables strings blobs wr
+                | Error err -> fprintfn wr "// error : %O" err
+            | Error err -> fprintfn wr "// error : %s" err.Message
+        | ValueNone -> fprintfn wr "// error : Cannot find TypeSpec table"
     | _ -> fprintf wr "// TODO: Handle incorrect type names %A" extends
 
 /// Prints the custom modifiers of a type.
-let cmodifiers (modifiers: ImmutableArray<ParsedCustomMod>) tables strings (wr: TextWriter) =
+and cmodifiers (modifiers: ImmutableArray<ParsedCustomMod>) tables strings blobs (wr: TextWriter) =
     for { ModifierRequired = req; ModifierType = mtype } in modifiers do
         wr.Write " mod"
         match req with
         | CustomModKind.OptionalModfier -> wr.Write "opt"
         | CustomModKind.RequiredModifier -> wr.Write "req"
         wr.Write '('
-        ofTypeDefOrRefOrSpec mtype tables strings wr
+        ofTypeDefOrRefOrSpec mtype tables strings blobs wr
         wr.Write ')'
 
-let definedUserType kind t tables strings (wr: TextWriter) =
+and definedUserType kind t tables strings blobs (wr: TextWriter) =
     match kind with
     | DefinedTypeKind.Class -> wr.Write "class "
     | DefinedTypeKind.ValueType -> wr.Write "valuetype "
-    ofTypeDefOrRefOrSpec t tables strings wr
+    ofTypeDefOrRefOrSpec t tables strings blobs wr
 
 /// Prints a type (II.7.1).
-let rec encoded (etype: ParsedType) tables strings wr =
+and encoded (etype: ParsedType) tables strings blobs wr =
     match etype with
     // TODO: Substitute generic parameter index with name
     | ParsedType.Var i-> fprintf wr "!%i" i
@@ -80,40 +90,40 @@ let rec encoded (etype: ParsedType) tables strings wr =
     | ParsedType.U -> wr.Write "native unsigned int"
     | ParsedType.Object -> wr.Write "object"
     | ParsedType.String -> wr.Write "string"
-    | ParsedType.Class t -> definedUserType DefinedTypeKind.Class t tables strings wr
-    | ParsedType.ValueType t -> definedUserType DefinedTypeKind.ValueType t tables strings wr
+    | ParsedType.Class t -> definedUserType DefinedTypeKind.Class t tables strings blobs wr
+    | ParsedType.ValueType t -> definedUserType DefinedTypeKind.ValueType t tables strings blobs wr
     | ParsedType.SZArray(modifiers, t) ->
-        encoded t tables strings wr
+        encoded t tables strings blobs wr
         wr.Write "[]"
-        cmodifiers modifiers tables strings wr
+        cmodifiers modifiers tables strings blobs wr
     | ParsedType.Array(t, shape) ->
-        encoded t tables strings wr
+        encoded t tables strings blobs wr
         wr.Write '['
         wr.Write "// TODO: Print array shape information"
         wr.Write ']'
     | ParsedType.GenericInst(kind, t, gargs) ->
-        definedUserType kind t tables strings wr
+        definedUserType kind t tables strings blobs wr
         wr.Write '<'
         for i = 0 to gargs.Length - 1 do
             if i > 0 then wr.Write ", "
-            encoded gargs.[i] tables strings wr
+            encoded gargs.[i] tables strings blobs wr
         wr.Write '>'
     | ParsedType.Ptr(modifiers, ptype) ->
         match ptype with
         | ValueNone -> wr.Write "void"
-        | ValueSome t -> encoded t tables strings wr
+        | ValueSome t -> encoded t tables strings blobs wr
         wr.Write '*'
-        cmodifiers modifiers tables strings wr
+        cmodifiers modifiers tables strings blobs wr
 
-let paramType t tables strings wr =
+let paramType t tables strings blobs wr =
     match t with
-    | ParsedType t' -> encoded t' tables strings wr
+    | ParsedType t' -> encoded t' tables strings blobs wr
     | ParsedByRef t' ->
-        encoded t' tables strings wr
+        encoded t' tables strings blobs wr
         wr.Write '&'
     | ParsedTypedByRef -> wr.Write "typedref"
 
-let retType t tables strings wr =
+let retType t tables strings blobs wr =
     match t with
-    | RetType t' -> paramType t' tables strings wr
+    | RetType t' -> paramType t' tables strings blobs wr
     | RetVoid -> wr.Write "void"

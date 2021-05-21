@@ -357,7 +357,7 @@ let fieldRow (table: ParsedFieldTable) tables i vfilter (strings: ParsedStringsS
         match blobs.TryReadFieldSig(row.Signature) with
         | Ok signature ->
             // TODO: Include custom modifiers of field type.
-            TypeName.encoded signature.FieldType tables strings wr
+            TypeName.encoded signature.FieldType tables strings blobs wr
         | Error err -> fprintfn wr "Error reading type %O" err
 
         fprintf wr " '%s' " (strings.GetString row.Name)
@@ -372,7 +372,7 @@ let typeDefFields
     (row: inref<ParsedTypeDefRow>)
     vfilter
     strings
-    (blobs: _ voption)
+    (blobs: ParsedBlobStream voption)
     (wr: #TextWriter)
     =
     match tables.Field with
@@ -467,8 +467,8 @@ let methodRow
             | VarArg -> wr'.Write "vararg "
 
             let struct(retmod, rtype) = signature.ReturnType
-            TypeName.retType rtype tables strings wr'
-            TypeName.cmodifiers retmod tables strings wr'
+            TypeName.retType rtype tables strings blobs wr'
+            TypeName.cmodifiers retmod tables strings blobs wr'
 
             wr'.Write " '"
             wr'.Write(strings.GetString row.Name)
@@ -500,8 +500,8 @@ let methodRow
                     | ValueNone -> ()
 
                     let param = signature.Parameters.[i]
-                    TypeName.paramType param.ParamType tables strings wr''
-                    TypeName.cmodifiers param.CustomModifiers tables strings wr''
+                    TypeName.paramType param.ParamType tables strings blobs wr''
+                    TypeName.cmodifiers param.CustomModifiers tables strings blobs wr''
 
                     match prow with
                     | ValueSome prow ->
@@ -606,9 +606,8 @@ let propertyRow
         match blobs.TryReadPropertySig row.Type with
         | Ok signature ->
             if signature.HasThis then wr.Write "instance "
-            TypeName.encoded signature.PropertyType tables strings wr
-            // TODO: Figure out if this is where a property's custom modifiers go.
-            TypeName.cmodifiers signature.CustomModifiers tables strings wr
+            TypeName.encoded signature.PropertyType tables strings blobs wr
+            TypeName.cmodifiers signature.CustomModifiers tables strings blobs wr
             wr.Write " '"
             wr.Write(strings.GetString row.Name)
             wr.Write '''
@@ -618,8 +617,8 @@ let propertyRow
                 for i = 0 to signature.Parameters.Length - 1 do
                     if i > 0 then wr'.WriteLine ','
                     let param = signature.Parameters.[i]
-                    TypeName.paramType param.ParamType tables strings wr'
-                    TypeName.cmodifiers param.CustomModifiers tables strings wr'
+                    TypeName.paramType param.ParamType tables strings blobs wr'
+                    TypeName.cmodifiers param.CustomModifiers tables strings blobs wr'
                 wr.WriteLine ')'
             else wr.WriteLine()
         | Error err -> fprintfn wr "// error : Cannot read property signature, %O" err
@@ -723,7 +722,8 @@ let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsS
                 | ValueNone -> ()
                 | ValueSome extends ->
                     wr.Write "    extends "
-                    TypeName.ofTypeDefOrRefOrSpec extends tables strings wr
+                    // TODO: Check that blob stream exists for typespec.
+                    TypeName.ofTypeDefOrRefOrSpec extends tables strings (ValueOption.get blobs) wr
                     wr.WriteLine()
 
                 wr.WriteLine '{'

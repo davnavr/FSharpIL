@@ -517,7 +517,7 @@ type MethodImplParser (counts: MetadataTableCounts) =
 
 [<IsReadOnly; Struct>]
 type TypeSpecParser (sizes: HeapSizes) =
-    interface IByteParser<ParsedTypeSpec> with
+    interface IByteParser<TypeSpecOffset> with
         member _.Parse buffer = { TypeSpec = parse 0 buffer (BlobParser sizes) }
         member _.Length = sizes.BlobSize
 
@@ -739,7 +739,7 @@ type PropertyMapTable = ParsedMetadataTable<PropertyMapParser, ParsedPropertyMap
 type ParsedPropertyTable = ParsedMetadataTable<PropertyParser, ParsedProperty>
 type MethodSemanticsTable = ParsedMetadataTable<MethodSemanticsParser, ParsedMethodSemantics>
 type MethodImplTable = ParsedMetadataTable<MethodImplParser, ParsedMethodImpl>
-type TypeSpecTable = ParsedMetadataTable<TypeSpecParser, ParsedTypeSpec>
+type TypeSpecTable = ParsedMetadataTable<TypeSpecParser, TypeSpecOffset>
 
 type FieldRvaTable = ParsedMetadataTable<FieldRvaParser, ParsedFieldRva>
 type ParsedAssemblyTable = ParsedMetadataTable<AssemblyParser, ParsedAssembly>
