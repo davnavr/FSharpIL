@@ -3,7 +3,7 @@
 open System
 
 /// The exception that is thrown by FSharpIL when something goes wrong.
-[<Sealed; Serializable>]
+[<Sealed; Serializable; Obsolete>]
 type internal InternalException (e: exn) =
     inherit Exception (InternalException.Message, e)
 

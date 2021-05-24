@@ -2,7 +2,7 @@
 
 open Microsoft.FSharp.Core.Operators.Checked
 
-open FSharpIL
+open FSharpIL.Utilities
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type FileOffset =

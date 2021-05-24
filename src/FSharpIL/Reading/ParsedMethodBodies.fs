@@ -7,6 +7,8 @@ open System.Runtime.CompilerServices
 open Microsoft.FSharp.Core.Operators.Checked
 
 open FSharpIL
+open FSharpIL.Utilities
+
 open FSharpIL.Metadata
 
 /// II.25.4.6

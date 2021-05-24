@@ -4,6 +4,7 @@ open System
 open System.Runtime.CompilerServices
 
 open FSharpIL
+open FSharpIL.Utilities
 
 /// <summary>Represents an offset into the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
 [<IsReadOnly; Struct>] // TODO: Rename to BlobOffset

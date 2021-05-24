@@ -1,4 +1,5 @@
-﻿module internal FSharpIL.Bytes
+﻿[<System.Obsolete>]
+module internal FSharpIL.Bytes
 
 open System
 open System.Collections.Immutable

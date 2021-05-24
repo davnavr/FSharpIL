@@ -4,6 +4,8 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL
+open FSharpIL.Utilities
+
 open FSharpIL.Metadata
 
 [<IsReadOnly; Struct>]

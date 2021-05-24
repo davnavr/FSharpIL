@@ -1,5 +1,5 @@
 ﻿[<RequireQualifiedAccess>]
-module internal FSharpIL.Convert
+module internal FSharpIL.Utilities.Convert
 
 let inline (|I4|) num = int32 num
 let inline (|U1|) num = uint8 num
