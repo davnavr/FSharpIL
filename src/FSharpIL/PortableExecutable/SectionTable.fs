@@ -22,22 +22,30 @@ type SectionFlags =
     | MemRead = 0x4000_0000u
     | MemWrite = 0x8000_0000u
 
-// II.25.3
-type SectionHeader =
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type SectionLocation =
+    { VirtualSize: uint32
+      VirtualAddress: uint32
+      RawDataSize: uint32
+      RawDataPointer: uint32 }
+
+    member this.ContainsRva rva = rva >= this.VirtualAddress && rva < (this.VirtualAddress + this.VirtualSize)
+
+/// (II.25.3)
+type SectionHeader<'Data> =
     { SectionName: SectionName
       // VirtualSize: uint32
       // VirtualAddress: uint32
 
       // NOTE: SizeOfRawData is "size of the initialized data on disk in bytes" and is a multiple of FileAlignment
       // TODO: PointerToRawData is file offset to the data, rounded up to multiple of file alignment
-      Data: ImmutableArray<SectionData>
+      Data: 'Data
 
       /// Reserved value that should be set to zero.
       PointerToRelocations: uint32
-      //PointerToLineNumbers: uint32
-      /// Reserved value that should be set to zero.
+      PointerToLineNumbers: uint32
       NumberOfRelocations: uint16
-      //NumberOfLineNumbers: uint16
+      NumberOfLineNumbers: uint16
       Characteristics: SectionFlags }
 
 // TODO: Should custom sections be allowed? It would mean that the section name would have to be checked when looking for the .text or .rsrc section.
@@ -58,15 +66,17 @@ type Section =
         let name, flags =
             match this.Kind with
             | TextSection ->
-                ".text"B, SectionFlags.CntCode ||| SectionFlags.MemExecute ||| SectionFlags.MemRead
+                SectionName.text, SectionFlags.CntCode ||| SectionFlags.MemExecute ||| SectionFlags.MemRead
             | RsrcSection ->
-                ".rsrc"B, SectionFlags.CntInitializedData ||| SectionFlags.MemRead
+                SectionName.rsrc, SectionFlags.CntInitializedData ||| SectionFlags.MemRead
             | RelocSection ->
-                ".reloc"B, SectionFlags.CntInitializedData ||| SectionFlags.MemRead ||| SectionFlags.MemDiscardable
-        { SectionName = SectionName.ofBytes name |> Option.get
+                SectionName.reloc, SectionFlags.CntInitializedData ||| SectionFlags.MemRead ||| SectionFlags.MemDiscardable
+        { SectionName = name
           Data = this.Data
           PointerToRelocations = 0u
+          PointerToLineNumbers = 0u
           NumberOfRelocations = 0us
+          NumberOfLineNumbers = 0us
           Characteristics = flags }
 
 // II.25.2.3.3

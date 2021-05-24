@@ -1,10 +1,11 @@
 ﻿namespace FSharpIL.Metadata
 
 open System.Collections.Immutable
-open System.Runtime.CompilerServices
 
+// TODO: Rename to ValidTableFlags.
 [<System.Flags>]
 type MetadataTableFlags =
+    | None = 0UL
     | Module = 1UL
     | TypeRef = 2UL
     | TypeDef = 4UL
@@ -16,25 +17,33 @@ type MetadataTableFlags =
     | Constant = 0x800UL
     | CustomAttribute = 0x1000UL
 
-    | StandAloneSig = 0x20000UL
-    | EventMap = 0x40000UL
-    | Event = 0x100000UL
-    | PropertyMap = 0x200000UL
-    | Property = 0x800000UL
-    | MethodSemantics = 0x1000000UL
-    | MethodImpl = 0x2000000UL
-    | ModuleRef = 0x4000000UL
-    | TypeSpec = 0x8000000UL
+    | ClassLayout = 0x8000UL
 
-    | Assembly = 0x100000000UL
-    | AssemblyRef = 0x800000000UL
+    | StandAloneSig = 0x2_0000UL
+    | EventMap = 0x4_0000UL
+    | Event = 0x10_0000UL
+    | PropertyMap = 0x20_0000UL
+    | Property = 0x80_0000UL
+    | MethodSemantics = 0x100_0000UL
+    | MethodImpl = 0x200_0000UL
+    | ModuleRef = 0x400_0000UL
+    | TypeSpec = 0x800_0000UL
 
-    | File = 0x4000000000UL
+    | FieldRva = 0x2000_0000UL
+    | Assembly = 0x1_0000_0000UL
+    | AssemblyRef = 0x8_0000_0000UL
 
-    | NestedClass = 0x20000000000UL
-    | GenericParam = 0x40000000000UL
-    | MethodSpec = 0x80000000000UL
-    | GenericParamConstraint = 0x100000000000UL
+    | File = 0x40_0000_0000UL
+    | ExportedType = 0x80_0000_0000UL
+
+    | ManifestResource = 0x100_0000_0000UL
+    | NestedClass = 0x200_0000_0000UL
+    | GenericParam = 0x400_0000_0000UL
+    | MethodSpec = 0x800_0000_0000UL
+    | GenericParamConstraint = 0x1000_0000_0000UL
+
+    | Document = 0x1_0000_0000_0000UL
+    | MethodDebugInformation = 0x2_0000_0000_0000UL
 
 /// Represents the CLI metadata header (II.25.3.3), metadata root (II.24.2.1), metadata tables (II.24.2.6), and other metadata streams.
 [<Sealed>]

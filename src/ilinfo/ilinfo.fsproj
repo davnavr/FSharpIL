@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>ilinfo</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ILInfo</RootNamespace>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Flags.fs" />
+    <Compile Include="VisibilityFilter.fs" />
+    <Compile Include="Print.fs" />
+    <Compile Include="TypeName.fs" />
+    <Compile Include="IndentedTextWriter.fs" />
+    <Compile Include="ILOutput.fs" />
+    <Compile Include="Output.fs" />
+    <Compile Include="Program.fs" />
+
+    <PackageReference Include="Argu" Version="6.1.1" />
+
+    <ProjectReference Include="$(RootDirectory)/src/FSharpIL/FSharpIL.fsproj" />
+  </ItemGroup>
+
+</Project>

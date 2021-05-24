@@ -88,7 +88,7 @@ type ExceptionHandlerBlock (content: MethodBodyContent) =
 // TODO: Figure out how to prevent (some) invalid method bodies.
 [<IsByRefLike; IsReadOnly; Struct>]
 type MethodBodyWriter (content: MethodBodyContent) =
-    member inline _.ByteCount = content.ByteCount
+    member _.ByteCount = content.ByteCount
 
     member inline private _.WriteMetadataToken(index, table) = MetadataToken.write index table content.Writer
 
@@ -752,3 +752,29 @@ type Label private (position: uint32) =
             else failwith "TODO: Figure out if 4 needs to be added or subtracted to get correct offset for large branch targets" //position' - other
         target.SetTarget(int32 offset)
     override _.ToString() = sprintf "IL_%04x" position
+
+/// Specifies the type of the method header and additional information (II.25.4.4).
+[<Flags>]
+type ILMethodFlags =
+    | TinyFormat = 0x2us
+    | FatFormat = 0x3us
+    | MoreSects = 0x8us
+    | InitLocals = 0x10us
+
+/// Describes a method body data section (II.25.4.5).
+[<Flags>]
+type ILSectionFlags =
+    | None = 0uy
+    | EHTable = 0x1uy
+    | OptILTable = 0x2uy
+    /// Indicates that the size of the method body data section takes up 3 bytes instead of 1 byte.
+    | FatFormat = 0x40uy
+    | MoreSects = 0x80uy
+    | FatEHTable = 0x65uy
+
+[<Flags>]
+type ExceptionClauseFlags =
+    | Exception = 0u
+    | Filter = 1u
+    | Finally = 2u
+    | Fault = 4u

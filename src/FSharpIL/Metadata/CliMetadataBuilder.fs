@@ -30,6 +30,27 @@ type CliHeaderFields =
           CodeManagerTable = 0UL
           VTableFixups = () }
 
+/// <summary>
+/// Specifies the sizes of offsets into the <c>#Strings</c>, <c>#GUID</c>, and <c>#Blob</c> streams (II.24.2.6).
+/// </summary>
+[<Flags>]
+type HeapSizes =
+    | None = 0uy
+    /// <summary>Specifies that offsets into the <c>#Strings</c> stream should be 4 bytes wide.</summary>
+    | String = 0x1uy
+    /// <summary>Specifies that offsets into the <c>#GUID</c> stream should be 4 bytes wide.</summary>
+    | Guid = 0x2uy
+    /// <summary>Specifies that offsets into the <c>#Blob</c> stream should be 4 bytes wide.</summary>
+    | Blob = 0x4uy
+
+[<AutoOpen>]
+module HeapSizes =
+    let inline private isLarge (flags: HeapSizes) heap = if flags.HasFlag heap then 4 else 2
+    type HeapSizes with
+        member this.StringSize = isLarge this HeapSizes.String
+        member this.GuidSize = isLarge this HeapSizes.Guid
+        member this.BlobSize = isLarge this HeapSizes.Blob
+
 /// (II.25.3.3.1)
 [<Flags>]
 type CorFlags =
@@ -42,12 +63,12 @@ type CorFlags =
 
 /// <summary>(0x00) Represents the single row of the <c>Module</c> table (II.22.30).</summary>
 [<Struct; IsReadOnly>]
-type ModuleTable =
-    { // Generation
+type ModuleTable = // TODO: Allow Generation, EncId, and EncBaseId to be set to allow its usage in FSharpIL.Reading
+    { // Generation: uint64
       Name: Identifier
       Mvid: Guid
-      // EncId
-      // EncBaseId
+      // EncId: Guid
+      // EncBaseId: Guid
       }
 
 /// <summary>(0x29) Represents a row in the <c>NestedClass</c> table (II.22.32).</summary>

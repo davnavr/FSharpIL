@@ -15,8 +15,7 @@ type ValidFlags<'Tag, 'Flags when 'Flags :> Enum> = struct
 end
 
 [<AutoOpen>]
-module internal FlagPatterns =
-    let (|Flags|) (flags: #IFlags<_>) = flags.Value
+module FlagPatterns = let inline (|Flags|) (flags: #IFlags<_>) = flags.Value
 
 type Visibility =
     | CompilerControlled

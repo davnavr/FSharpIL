@@ -2,6 +2,12 @@
 [<RequireQualifiedAccess>]
 module internal FSharpIL.Magic
 
+open System
+open System.Collections.Immutable
+
+// TODO: Create these magic bytes without allocating arrays twice.
+let MZ = ImmutableArray.Create<byte> "MZ"B
+
 let DosStub =
     let lfanew = [| 0x80; 0x00; 0x00; 0x00 |]
     [|
@@ -24,11 +30,25 @@ let DosStub =
     |]
     |> Array.map byte
 
-let PESignature = "PE\000\000"B
+let PESignature = ImmutableArray.Create<byte> "PE\000\000"B
 
-/// Magic number used in the optional header that identifies the file as a PE32 executable.
-[<Literal>]
-let PE32 = 0x10Bus
+let [<Literal>] CliHeaderIndex = 14
 
 /// The signature of the CLI metadata root.
-let CliSignature = [| 0x42uy; 0x53uy; 0x4Auy; 0x42uy; |]
+let CliSignature = ImmutableArray.Create<byte> [| 0x42uy; 0x53uy; 0x4Auy; 0x42uy; |]
+
+let MetadataStream = ImmutableArray.Create<byte> "#~\000\000"B
+let StringStream = ImmutableArray.Create<byte> "#Strings\000\000\000\000"B
+let UserStringStream = ImmutableArray.Create<byte> "#US\000"B
+let GuidStream = ImmutableArray.Create<byte> "#GUID\000\000\000"B
+let BlobStream = ImmutableArray.Create<byte> "#Blob\000\000\000"B
+
+let matches (expected: ImmutableArray<byte>) (actual: Span<byte>) =
+    if expected.Length <> actual.Length then
+        sprintf "Expected %i bytes but got %i" expected.Length actual.Length |> invalidArg "actual"
+    let mutable i = 0
+    while i >= 0 && i < expected.Length do
+        if expected.[i] = actual.[i]
+        then i <- i + 1
+        else i <- -1
+    i > -1

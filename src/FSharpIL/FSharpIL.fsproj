@@ -9,10 +9,13 @@
 
   <ItemGroup>
     <Compile Include="Result.fs" />
+    <Compile Include="Convert.fs" />
     <Compile Include="Bytes.fs" />
     <Compile Include="InternalException.fs" />
     <Compile Include="Magic.fs" />
     <Compile Include="Round.fs" />
+    <Compile Include="Span.fs" />
+    <Compile Include="ChunkedMemory.fs" />
     <Compile Include="Writing\ChunkWriter.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\Index.fs" />
@@ -24,6 +27,7 @@
     <Compile Include="Metadata\Assembly.fs" />
     <Compile Include="Metadata\AssemblyRef.fs" />
     <Compile Include="Metadata\File.fs" />
+    <Compile Include="Metadata\ManifestResource.fs" />
     <Compile Include="Metadata\ModuleRef.fs" />
     <Compile Include="Metadata\TypeRef.fs" />
     <Compile Include="Metadata\Flags.fs" />
@@ -99,14 +103,34 @@
     <Compile Include="XmlDoc\DocMember.fs" />
     <Compile Include="XmlDoc\Name.fs" />
     <Compile Include="XmlDoc\Doc.fs" />
+    <Compile Include="PortableExecutable\Omitted.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />
     <Compile Include="PortableExecutable\Fields.fs" />
     <Compile Include="PortableExecutable\PEFile.fs" />
+    <Compile Include="Size.fs" />
     <Compile Include="WriteCli.fs" />
     <Compile Include="WritePE.fsi" />
     <Compile Include="WritePE.fs" />
+    <Compile Include="Reading\FileOffset.fs" />
+    <Compile Include="Reading\ReadState.fs" />
+    <Compile Include="Reading\ReadError.fs" />
+    <Compile Include="Reading\ByteParser.fs" />
+    <Compile Include="Reading\ChunkReader.fs" />
+    <Compile Include="Reading\Headers.fs" />
+    <Compile Include="Reading\ParsedTypeDefOrRefOrSpec.fs" />
+    <Compile Include="Reading\ParseBlob.fs" />
+    <Compile Include="Reading\ParsedMetadataStream.fs" />
+    <Compile Include="Reading\ParsedStringsStream.fs" />
+    <Compile Include="Reading\ParsedGuidStream.fs" />
+    <Compile Include="Reading\ParsedUserStringStream.fs" />
+    <Compile Include="Reading\ParsedBlobStream.fs" />
+    <Compile Include="Reading\ParsedMethodBodies.fs" />
+    <Compile Include="Reading\ParsedMetadataTables.fs" />
+    <Compile Include="Reading\MetadataReader.fs" />
+    <Compile Include="ReadCli.fsi" />
+    <Compile Include="ReadCli.fs" />
 
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
   </ItemGroup>

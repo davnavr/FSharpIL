@@ -7,8 +7,7 @@ type IsDll =
     | [<Obsolete>] IsDll
     | [<Obsolete>] IsExe
 
-// II.25.2.2.1
-/// Flags that specify file characteristics in the PE file header.
+/// Flags that specify file characteristics in the PE file header (II.25.2.2.1).
 [<Flags>]
 type ImageFileFlags =
     | FileRelocsStripped = 0x0001us
@@ -24,48 +23,72 @@ module ImageFileFlags =
 type MachineFlags =
     | I386 = 0x14Cus
 
-// II.25.2.2
-type CoffHeader =
+/// (II.25.2.2)
+type CoffHeader<'NumSections, 'HeaderSize> =
     { Machine: MachineFlags
-      // NumberOfSections
+      NumberOfSections: 'NumSections
       TimeDateStamp: uint32
       SymbolTablePointer: uint32
       SymbolCount: uint32
-      // OptionalHeaderSize
+      OptionalHeaderSize: 'HeaderSize
       Characteristics: ImageFileFlags }
 
-    /// Default PE file header indicating that the file is a <c>.dll</c> file.
-    static member Default =
+[<RequireQualifiedAccess>]
+module CoffHeader =
+    /// <summary>Default PE file header indicating that the file is a <c>.dll</c> file.</summary>
+    let defaultFields =
         { Machine = MachineFlags.I386
+          NumberOfSections = Omitted
           TimeDateStamp = 0u
           SymbolTablePointer = 0u
           SymbolCount = 0u
+          OptionalHeaderSize = Omitted
           Characteristics = ImageFileFlags.dll }
 
-// II.25.2.3.1
-type StandardFields =
-    { // Note that the Magic field is not included, so it should always be PE32 (0x10B), not PE32+ (0x20B)
+/// <summary>Represents the value of the <c>Magic</c> field in the PE file standard fields.</summary>
+type PEImageKind =
+    | ROM = 0x107us
+    /// Identifies the Portable Executable file as a PE32 executable.
+    | PE32 = 0x10Bus
+    | PE32Plus = 0x20Bus
+
+/// (II.25.2.3.1)
+type StandardFields<'Magic, 'Size, 'BaseOfData> =
+    { Magic: 'Magic // Currently, the value always used is PE32 (0x10B), not PE32+ (0x20B)
       LMajor: byte
       LMinor: byte
-      // CodeSize
-      // InitializedDataSize
-      // UninitizalizedDataSize
-      // EntryPointRva
-      // BaseOfCode
-      // BaseOfData // Note that this field is absent in PE32+
-      }
+      CodeSize: 'Size
+      InitializedDataSize: 'Size
+      UninitializedDataSize: 'Size
+      EntryPointRva: 'Size
+      BaseOfCode: 'Size
+      // Note that this field is absent in PE32+
+      BaseOfData: 'BaseOfData }
 
-    static member Default =
-        { LMajor = 8uy
-          LMinor = 0uy }
+[<RequireQualifiedAccess>]
+module StandardFields =
+    let defaultFields =
+        { Magic = Omitted
+          LMajor = 8uy
+          LMinor = 0uy
+          CodeSize = Omitted
+          InitializedDataSize = Omitted
+          UninitializedDataSize = Omitted
+          EntryPointRva = Omitted
+          BaseOfCode = Omitted
+          BaseOfData = Omitted }
 
-type ImageBase =
-    | ImageBase of uint16
-
-    static member op_Implicit(ImageBase imageBase) =
-        (uint32 imageBase) * 0x10000u
-
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type ImageBase = struct
+    val internal Value: uint16
+    new (value) = { Value = value }
+    static member op_Implicit(imageBase: ImageBase) = uint32 imageBase.Value * 0x10000u
+    static member op_Implicit(imageBase: ImageBase) = uint64(uint32 imageBase)
     static member Default = ImageBase 0x40us
+end
+
+[<AutoOpen>]
+module ImageBase = let (|ImageBase|) (imageBase: ImageBase) = imageBase.Value
 
 type ImageSubsystem =
     | Unknown = 0us
@@ -98,36 +121,34 @@ type PEFileFlags =
     | GuardCF = 0x4000us
     | TerminalServerAware = 0x8000us
 
-// II.25.2.3.2
-type NTSpecificFields =
-    { ImageBase: ImageBase
-      Alignment: Alignment
+/// Represents the NT-specific fields of the optional header of a PE32 exectuable (II.25.2.3.2).
+type NTSpecificFields<'ImageBase, 'Alignment, 'ImageSize, 'Size, 'NumDataDirectories> = // TODO: Don't make alignment a generic param.
+    { ImageBase: 'ImageBase
+      Alignment: 'Alignment
       OSMajor: uint16
       OSMinor: uint16
       UserMajor: uint16
       UserMinor: uint16
       SubSysMajor: uint16
       SubSysMinor: uint16
-      /// Reserved value that must be zero.
+      /// Reserved value that must be set to zero.
       Win32VersionValue: uint32
-      // ImageSize
-      // HeaderSize
+      ImageSize: 'ImageSize
+      HeadersSize: 'ImageSize
       FileChecksum: uint32
       Subsystem: ImageSubsystem
       DllFlags: PEFileFlags
-      StackReserveSize: uint32
-      StackCommitSize: uint32
-      HeapReserveSize: uint32
-      HeapCommitSize: uint32
-      /// Reserved value that must be zero.
+      StackReserveSize: 'Size
+      StackCommitSize: 'Size
+      HeapReserveSize: 'Size
+      HeapCommitSize: 'Size
+      /// Reserved value that must be set to zero.
       LoaderFlags: uint32
-      // NumberOfDataDirectories
-      }
+      NumberOfDataDirectories: 'NumDataDirectories }
 
-    member this.FileAlignment = this.Alignment.FileAlignment
-    member this.SectionAlignment = this.Alignment.SectionAlignment
-
-    static member Default =
+[<RequireQualifiedAccess>]
+module NTSpecificFields = // TODO: Create a default fields module instead.
+    let defaultFields =
         { ImageBase = ImageBase.Default
           Alignment = Alignment.Default
           // NOTE: OSMajor and SubSysMajor both have values of 0x04 in some assemblies
@@ -138,6 +159,8 @@ type NTSpecificFields =
           SubSysMajor = 0x05us
           SubSysMinor = 0us
           Win32VersionValue = 0u
+          ImageSize = Omitted
+          HeadersSize = Omitted
           FileChecksum = 0u
           Subsystem = ImageSubsystem.WindowsCui
           DllFlags =
@@ -148,4 +171,5 @@ type NTSpecificFields =
           StackCommitSize = 0x1000u
           HeapReserveSize = 0x100000u
           HeapCommitSize = 0x1000u
-          LoaderFlags = 0u }
+          LoaderFlags = 0u
+          NumberOfDataDirectories = Omitted }

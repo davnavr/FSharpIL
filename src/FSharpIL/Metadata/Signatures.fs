@@ -4,7 +4,7 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 /// Represents an element type used in a signature (II.23.1.16).
-type internal ElementType =
+type ElementType =
     | End = 0uy
     | Void = 0x1uy
     | Boolean = 0x2uy

@@ -11,21 +11,6 @@ open Microsoft.FSharp.Core.Operators.Checked
 open FSharpIL.PortableExecutable
 open FSharpIL.Writing
 
-[<RequireQualifiedAccess>]
-module Size =
-    let PEHeader = Magic.DosStub.Length + Magic.PESignature.Length |> uint32
-
-    [<Literal>]
-    let CoffHeader = 20u
-
-    /// The value of the `SizeOfOptionalHeader` field in the COFF file header.
-    [<Literal>]
-    let OptionalHeader = 0xE0us
-
-    /// The length of a single section header.
-    [<Literal>]
-    let SectionHeader = 40u
-
 [<ReferenceEquality; NoComparison>]
 type PEInfo =
     { File: PEFile
@@ -53,7 +38,7 @@ let coffHeader pe (writer: ChunkWriter) =
 let standardFields info (writer: ChunkWriter) =
     let pe = info.File
     let standard = info.File.StandardFields
-    writer.WriteU2 Magic.PE32
+    writer.WriteU2 PEImageKind.PE32
     writer.WriteU1 standard.LMajor
     writer.WriteU1 standard.LMinor
 
@@ -79,8 +64,8 @@ let standardFields info (writer: ChunkWriter) =
 let ntSpecificFields info (writer: ChunkWriter) =
     let nt = info.File.NTSpecificFields
     writer.WriteU4 nt.ImageBase
-    writer.WriteU4 nt.SectionAlignment
-    writer.WriteU4 nt.FileAlignment
+    writer.WriteU4 nt.Alignment.SectionAlignment
+    writer.WriteU4 nt.Alignment.FileAlignment
     writer.WriteU2 nt.OSMajor
     writer.WriteU2 nt.OSMinor
     writer.WriteU2 nt.UserMajor
@@ -92,7 +77,7 @@ let ntSpecificFields info (writer: ChunkWriter) =
     info.ImageSize <- writer.CreateWriter()
     writer.SkipBytes 4u
 
-    writer.WriteU4 nt.FileAlignment
+    writer.WriteU4 nt.Alignment.FileAlignment
     writer.WriteU4 nt.FileChecksum
     writer.WriteU2 nt.Subsystem
     writer.WriteU2 nt.DllFlags
@@ -125,21 +110,21 @@ let dataDirectories info (writer: ChunkWriter) =
     | Some _ ->
         info.CliHeaderRva <- writer.CreateWriter()
         writer.SkipBytes 4u
-        writer.WriteU4 WriteCli.Size.CliHeader
+        writer.WriteU4 Size.CliHeader
     | None -> writer.WriteU8 0UL
 
     writer.WriteU8 0UL // Reserved
 
 let sections (info: PEInfo) (writer: ChunkWriter) =
     let pe = info.File
-    let falignment = uint32 pe.NTSpecificFields.FileAlignment
-    let salignment = uint32 pe.NTSpecificFields.SectionAlignment
+    let falignment = uint32 pe.NTSpecificFields.Alignment.FileAlignment
+    let salignment = uint32 pe.NTSpecificFields.Alignment.SectionAlignment
 
     let mutable fileOffset =
         Size.PEHeader
-        + Size.CoffHeader
+        + uint32 Size.CoffHeader
         + uint32 Size.OptionalHeader
-        + (uint32 pe.SectionTable.Length * Size.SectionHeader)
+        + (uint32 pe.SectionTable.Length * uint32 Size.SectionHeader)
         |> Round.upTo falignment
 
     let mutable virtualAddress = salignment
@@ -208,7 +193,7 @@ let write pe =
               CliHeaderRva = uninitialized
               Sections = Array.zeroCreate pe.SectionTable.Length }
         let content = LinkedList<byte[]>()
-        let falignment = int32 pe.NTSpecificFields.FileAlignment
+        let falignment = int32 pe.NTSpecificFields.Alignment.FileAlignment
         let writer = ChunkWriter(Array.zeroCreate falignment |> content.AddFirst)
 
         writer.WriteBytes Magic.DosStub
@@ -227,9 +212,9 @@ let write pe =
             let header' = writer.CreateWriter()
             writer.SkipBytes 16u
             writer.WriteU4 header.PointerToRelocations
-            writer.WriteU4 0u // PointerToLineNumbers
+            writer.WriteU4 header.PointerToLineNumbers
             writer.WriteU2 header.NumberOfRelocations
-            writer.WriteU2 0us // NumberOfLineNumbers
+            writer.WriteU2 header.NumberOfLineNumbers
             writer.WriteU4 header.Characteristics
             info.Sections.[i] <- header'
 
@@ -241,8 +226,8 @@ let write pe =
 
         // Calculate the image size
         let imageSize =
-            let falignment' = uint32 pe.NTSpecificFields.FileAlignment
-            let round = uint32 pe.NTSpecificFields.SectionAlignment / falignment' |> Round.upTo
+            let falignment' = uint32 pe.NTSpecificFields.Alignment.FileAlignment
+            let round = uint32 pe.NTSpecificFields.Alignment.SectionAlignment / falignment' |> Round.upTo
             (round headerChunks + round(uint32 content.Count - headerChunks)) * falignment'
         info.ImageSize.WriteU4 imageSize
 
