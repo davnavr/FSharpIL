@@ -49,6 +49,8 @@ type BlobError =
     | MissingGenericArguments
     | InvalidMethodSignatureCallingConvention of uint8 voption
     | InvalidPropertyMagic of uint8 voption
+    | InvalidCustomAttributeProlog of uint16 voption
+    | MissingNamedArgumentCount
 
     override this.ToString() =
         match this with
@@ -93,6 +95,12 @@ type BlobError =
             | ValueNone -> "end of blob"
             | ValueSome magic -> sprintf "0x%02X" magic
             |> sprintf "expected property signature to begin with PROPERTY (0x8) or PROPERTY HASTHIS (0x28), but got %s"
+        | InvalidCustomAttributeProlog actual ->
+            match actual with
+            | ValueSome prolog -> sprintf "got 0x%04X" prolog
+            | ValueNone -> "the blob did not contain enough bytes"
+            |> sprintf "expected custom attribute PROLOG 0x0001, but %s"
+        | MissingNamedArgumentCount -> "missing custom attribute named argument count NumNamed"
 
 [<NoComparison; NoEquality>]
 type ReadError =

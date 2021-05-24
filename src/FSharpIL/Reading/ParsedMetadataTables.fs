@@ -400,7 +400,7 @@ type [<IsReadOnly; Struct>] ParsedAttributeType = private { CustomAttributeType:
 type ParsedCustomAttribute =
     { Parent: ParsedAttributeParent
       Type: ParsedAttributeType
-      Value: ParsedAttributeSig }
+      Value: CustomAttribOffset }
 
 [<IsReadOnly; Struct>]
 type CustomAttributeParser (sizes: HeapSizes, counts: MetadataTableCounts) =

@@ -97,8 +97,71 @@ type ParsedPropertySig =
       PropertyType: ParsedType
       Parameters: ImmutableArray<ParsedParam> }
 
+[<RequireQualifiedAccess; IsReadOnly; Struct>]
+type PrimitiveElemType =
+    | Bool
+    | Char
+    | R4
+    | R8
+    | I1
+    | I2
+    | I4
+    | I8
+    | U1
+    | U2
+    | U4
+    | U8
+    | String
+    | Type
+
+[<RequireQualifiedAccess>]
+type ParsedElemType =
+    | ElemType of PrimitiveElemType
+    | SZArray of PrimitiveElemType
+    | Boxed of PrimitiveElemType
+
+// TODO: Add function for converting from ParsedType
+//module ParsedElemType
+
+// TODO: How to encode System.Type?
+/// <summary>Represents an <c>Elem</c> item parsed from a custom attribute (II.23.3).</summary>
+[<RequireQualifiedAccess>]
+type ParsedFixedArg =
+    | Bool of uint8
+    | Char of char
+    | Float32 of single
+    | Float64 of double
+    | Int8 of int8
+    | Int16 of int16
+    | Int32 of int32
+    | Int64 of int64
+    | UInt8 of uint8
+    | UInt16 of uint16
+    | UInt32 of uint32
+    | UInt64 of uint64
+    | SZArray of ImmutableArray<ParsedFixedArg>
+
+[<IsReadOnly; Struct>]
+type FieldOrProperty =
+    | NamedField
+    | NamedProperty
+
+[<IsReadOnly; Struct>]
+type ParsedNamedArg =
+    { Kind: FieldOrProperty
+      Name: string
+      Value: ParsedFixedArg }
+
+[<IsReadOnly; Struct>]
+type ParsedCustomAttrib =
+    { FixedArguments: ImmutableArray<ParsedFixedArg>
+      NamedArguments: ImmutableArray<ParsedNamedArg> }
+
+// TODO: Make main parsing functions publically available.
 [<RequireQualifiedAccess>]
 module internal ParseBlob =
+    // TODO: Create common chunk function/method for simultaneously slicing then moving.
+
     let inline ensureLastItem (chunk: inref<ChunkedMemory>) result =
         match result with
         | Ok value when chunk.IsEmpty -> Ok value
@@ -408,3 +471,72 @@ module internal ParseBlob =
     let typeSpec (chunk: inref<ChunkedMemory>) =
         let mutable chunk = chunk
         etype &chunk
+
+    let private elemThingReplaceWithChunkMethod (length: uint32) (chunk: byref<ChunkedMemory>) =
+        match chunk.TrySlice(0u, length) with
+        | true, elem ->
+            chunk <- chunk.Slice length
+            Ok elem
+        | false, _ -> Error(failwith "not enough room for elem in blob")
+
+    let rec private fixedArg
+        (fixedArgs: ImmutableArray<ParsedElemType>)
+        (arguments: ImmutableArray<ParsedFixedArg>.Builder)
+        (chunk: byref<ChunkedMemory>)
+        =
+        if arguments.Count < fixedArgs.Length then
+            let elem =
+                match fixedArgs.[arguments.Count] with
+                | ParsedElemType.ElemType(PrimitiveElemType.Bool) ->
+                    match elemThingReplaceWithChunkMethod 1u &chunk with
+                    | Ok elem ->
+                        Ok(ParsedFixedArg.Bool elem.[0u])
+                    | Error err -> Error err
+                | _ ->
+                    failwith "TODO: Parse elem after determining type of argument"
+            match elem with
+            | Ok elem' ->
+                arguments.Add elem'
+                fixedArg fixedArgs arguments &chunk
+            | Error err -> Error err
+        else Ok(arguments.ToImmutable())
+
+    let rec private namedArg
+        (arguments: ImmutableArray<ParsedNamedArg>.Builder)
+        (chunk: byref<ChunkedMemory>)
+        =
+        if arguments.Capacity <> arguments.Count then
+            failwith "a"
+        else Ok(arguments.ToImmutable())
+
+    let private namedArgList fixedArgs (chunk: byref<ChunkedMemory>) =
+        match chunk.TrySlice(0u, 2u) with
+        | true, numNamedArgs ->
+            chunk <- chunk.Slice 2u
+            let namedArgs' =
+                match ChunkedMemory.readU2 0u &numNamedArgs with
+                | 0us -> Ok ImmutableArray.Empty
+                | Convert.I4 numNamedArgs' -> namedArg (ImmutableArray.CreateBuilder numNamedArgs') &chunk
+            match namedArgs' with
+            | Ok namedArgs'' -> Ok { FixedArguments = fixedArgs; NamedArguments = namedArgs'' }
+            | Error err -> Error err
+        | false, _ -> Error MissingNamedArgumentCount
+
+    let private fixedArgList (fixedArgs: ImmutableArray<_>) (chunk: byref<ChunkedMemory>) =
+        let fixedArgs' =
+            if fixedArgs.IsEmpty
+            then Ok ImmutableArray.Empty
+            else fixedArg fixedArgs (ImmutableArray.CreateBuilder fixedArgs.Length) &chunk
+        match fixedArgs' with
+        | Ok fixedArgs'' -> namedArgList fixedArgs'' &chunk
+        | Error err -> Error err
+
+    let customAttrib fixedArgs (chunk: inref<ChunkedMemory>) =
+        match chunk.TrySlice 2u with
+        | true, chunk' ->
+            match ChunkedMemory.readU2 0u &chunk with
+            | 1us ->
+                let mutable chunk' = chunk'
+                fixedArgList fixedArgs &chunk'
+            | prolog -> Error(InvalidCustomAttributeProlog(ValueSome prolog))
+        | false, _ -> Error(InvalidCustomAttributeProlog ValueNone)
