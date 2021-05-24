@@ -1,7 +1,7 @@
-﻿namespace FSharpIL.PortableExecutable
+﻿namespace FSharpIL
 
 /// Indicates that the value of a field cannot be set.
-type Omitted = struct end
+type [<System.Runtime.CompilerServices.IsReadOnly>] Omitted = struct end
 
 [<AutoOpen>]
 module Omitted = let Omitted = Omitted()

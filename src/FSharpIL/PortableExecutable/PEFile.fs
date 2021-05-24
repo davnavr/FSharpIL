@@ -2,6 +2,7 @@
 
 open System.Collections.Immutable
 
+open FSharpIL
 open FSharpIL.Metadata
 
 type PEFile =

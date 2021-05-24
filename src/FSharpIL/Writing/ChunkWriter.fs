@@ -9,8 +9,9 @@ open Microsoft.FSharp.Core.Operators.Checked
 
 open FSharpIL.Bytes
 
+// TODO: Rename to ChunkedMemoryBuilder, make this class public, and move to FSharpIL namespace.
 // TODO: Since only append operations are used, consider something other than LinkedList such as FSharpList.
-[<Sealed>]
+[<Sealed; Obsolete>]
 type internal ChunkWriter (chunk: LinkedListNode<byte[]>, position: int, defaultCapacity: int32) =
     do if position < 0 || position > chunk.Value.Length then
         sprintf

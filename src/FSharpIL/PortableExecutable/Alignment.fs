@@ -1,9 +1,8 @@
 ﻿namespace FSharpIL.PortableExecutable
 
-open System.ComponentModel
 open System.Runtime.CompilerServices
 
-[<Struct; IsReadOnly; EditorBrowsable(EditorBrowsableState.Never)>]
+[<Struct; IsReadOnly>]
 type Alignment =
     private { Section: uint16; File: uint16 }
     static member Default = { Section = 0x2000us; File = 0x200us; }

@@ -2,6 +2,8 @@
 
 open System
 
+open FSharpIL
+
 [<Obsolete>]
 type IsDll =
     | [<Obsolete>] IsDll

@@ -15,6 +15,7 @@
     <Compile Include="Bytes.fs" />
     <Compile Include="InternalException.fs" />
     <Compile Include="Magic.fs" />
+    <Compile Include="Omitted.fs" />
     <Compile Include="ChunkedMemory.fs" />
     <Compile Include="Writing\ChunkWriter.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
@@ -103,7 +104,6 @@
     <Compile Include="XmlDoc\DocMember.fs" />
     <Compile Include="XmlDoc\Name.fs" />
     <Compile Include="XmlDoc\Doc.fs" />
-    <Compile Include="PortableExecutable\Omitted.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\SectionTable.fs" />

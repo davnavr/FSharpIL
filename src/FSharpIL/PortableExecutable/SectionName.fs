@@ -1,31 +1,28 @@
 ﻿namespace FSharpIL.PortableExecutable
 
+open System.Collections.Immutable
+open System.Runtime.CompilerServices
 open System.Text
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type SectionName =
-    internal
-    | SectionName of byte[]
-
-    override this.ToString() =
-        let (SectionName name) = this
-        Encoding.UTF8.GetString(name).TrimEnd '\000'
+    internal { SectionName: byte[] }
+    override this.ToString() = Encoding.UTF8.GetString(this.SectionName).TrimEnd '\000'
 
 [<RequireQualifiedAccess>]
 module SectionName =
-    let text = SectionName ".text"B
-    let rsrc = SectionName ".rsrc"B
-    let reloc = SectionName ".reloc"B
+    let text = { SectionName = ".text"B }
+    let rsrc = { SectionName = ".rsrc"B }
+    let reloc = { SectionName = ".reloc"B }
     let ofBytes (bytes: byte[]) =
         if bytes.Length <= 8 then
-            Array.init
-                8
-                (fun i ->
+            let name = Array.zeroCreate<byte> 8
+            for i = 0 to name.Length - 1 do
+                name.[i] <-
                     if i >= bytes.Length
                     then 0uy
-                    else bytes.[i])
-            |> SectionName
-            |> Some
-        else None
-    let toArray (SectionName bytes) = bytes.Clone() :?> byte[]
+                    else bytes.[i]
+            ValueSome { SectionName = name }
+        else ValueNone
+    let toBlock { SectionName = bytes } = Unsafe.As<_, ImmutableArray<byte>>(&Unsafe.AsRef &bytes)
