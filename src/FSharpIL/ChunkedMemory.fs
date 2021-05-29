@@ -5,7 +5,7 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 /// Represents a non-contiguous region of memory split into chunks of equal sizes.
-[<IsReadOnly;>]
+[<IsReadOnly>]
 [<CustomEquality; NoComparison>]
 type ChunkedMemory = struct
     val private chunks: ImmutableArray<ImmutableArray<byte>>

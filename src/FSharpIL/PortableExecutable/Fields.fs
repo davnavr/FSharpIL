@@ -1,13 +1,9 @@
 ﻿namespace FSharpIL.PortableExecutable
 
 open System
+open System.Runtime.CompilerServices
 
 open FSharpIL
-
-[<Obsolete>]
-type IsDll =
-    | [<Obsolete>] IsDll
-    | [<Obsolete>] IsExe
 
 /// Flags that specify file characteristics in the PE file header (II.25.2.2.1).
 [<Flags>]
@@ -35,18 +31,6 @@ type CoffHeader<'NumSections, 'HeaderSize> =
       OptionalHeaderSize: 'HeaderSize
       Characteristics: ImageFileFlags }
 
-[<RequireQualifiedAccess>]
-module CoffHeader =
-    /// <summary>Default PE file header indicating that the file is a <c>.dll</c> file.</summary>
-    let defaultFields =
-        { Machine = MachineFlags.I386
-          NumberOfSections = Omitted
-          TimeDateStamp = 0u
-          SymbolTablePointer = 0u
-          SymbolCount = 0u
-          OptionalHeaderSize = Omitted
-          Characteristics = ImageFileFlags.dll }
-
 /// <summary>Represents the value of the <c>Magic</c> field in the PE file standard fields.</summary>
 type PEImageKind =
     | ROM = 0x107us
@@ -67,30 +51,13 @@ type StandardFields<'Magic, 'Size, 'BaseOfData> =
       // Note that this field is absent in PE32+
       BaseOfData: 'BaseOfData }
 
-[<RequireQualifiedAccess>]
-module StandardFields =
-    let defaultFields =
-        { Magic = Omitted
-          LMajor = 8uy
-          LMinor = 0uy
-          CodeSize = Omitted
-          InitializedDataSize = Omitted
-          UninitializedDataSize = Omitted
-          EntryPointRva = Omitted
-          BaseOfCode = Omitted
-          BaseOfData = Omitted }
-
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<IsReadOnly; Struct>]
 type ImageBase = struct
     val internal Value: uint16
     new (value) = { Value = value }
     static member op_Implicit(imageBase: ImageBase) = uint32 imageBase.Value * 0x10000u
-    static member op_Implicit(imageBase: ImageBase) = uint64(uint32 imageBase)
     static member Default = ImageBase 0x40us
 end
-
-[<AutoOpen>]
-module ImageBase = let (|ImageBase|) (imageBase: ImageBase) = imageBase.Value
 
 type ImageSubsystem =
     | Unknown = 0us
@@ -148,30 +115,15 @@ type NTSpecificFields<'ImageBase, 'Alignment, 'ImageSize, 'Size, 'NumDataDirecto
       LoaderFlags: uint32
       NumberOfDataDirectories: 'NumDataDirectories }
 
-[<RequireQualifiedAccess>]
-module NTSpecificFields = // TODO: Create a default fields module instead.
-    let defaultFields =
-        { ImageBase = ImageBase.Default
-          Alignment = Alignment.Default
-          // NOTE: OSMajor and SubSysMajor both have values of 0x04 in some assemblies
-          OSMajor = 0x05us
-          OSMinor = 0us
-          UserMajor = 0us
-          UserMinor = 0us
-          SubSysMajor = 0x05us
-          SubSysMinor = 0us
-          Win32VersionValue = 0u
-          ImageSize = Omitted
-          HeadersSize = Omitted
-          FileChecksum = 0u
-          Subsystem = ImageSubsystem.WindowsCui
-          DllFlags =
-              PEFileFlags.DynamicBase |||
-              PEFileFlags.NoSEH |||
-              PEFileFlags.NXCompatible
-          StackReserveSize = 0x100000u
-          StackCommitSize = 0x1000u
-          HeapReserveSize = 0x100000u
-          HeapCommitSize = 0x1000u
-          LoaderFlags = 0u
-          NumberOfDataDirectories = Omitted }
+type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageSize, 'NumDataDirectories> =
+    | PE32 of StandardFields<'ImageKind, 'StandardField, uint32> * NTSpecificFields<'ImageBase, Alignment, 'ImageSize, uint32, 'NumDataDirectories>
+    | PE32Plus of StandardFields<'ImageKind, 'StandardField, Omitted> * NTSpecificFields<'ImageBase, Alignment, 'ImageSize, uint64, 'NumDataDirectories>
+
+// TODO: How will ImageBase work, since it is different sizes for PE32 and PE32+, and overflows should be prevented.
+// TODO: Better alias for optional header used in building PE files.
+type OptionalHeader = OptionalHeader<Omitted, Omitted, ImageBase, Omitted, Omitted>
+
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type RvaAndSize =
+    { Rva: Rva; Size: uint32 }
+    static member inline Zero = { Rva = Rva.Zero; Size = 0u }

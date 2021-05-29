@@ -5,6 +5,7 @@ open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 
+// TODO: Move this to PortableExecutable namespace.
 [<IsReadOnly; Struct>]
 type RvaAndSize = { Rva: uint32; Size: uint32 }
 

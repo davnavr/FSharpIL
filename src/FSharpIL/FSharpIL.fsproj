@@ -17,6 +17,7 @@
     <Compile Include="Magic.fs" />
     <Compile Include="Omitted.fs" />
     <Compile Include="ChunkedMemory.fs" />
+    <Compile Include="ChunkedMemoryBuilder.fs" />
     <Compile Include="Writing\ChunkWriter.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\Index.fs" />
@@ -104,11 +105,13 @@
     <Compile Include="XmlDoc\DocMember.fs" />
     <Compile Include="XmlDoc\Name.fs" />
     <Compile Include="XmlDoc\Doc.fs" />
+    <Compile Include="PortableExecutable\Rva.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
-    <Compile Include="PortableExecutable\SectionName.fs" />
-    <Compile Include="PortableExecutable\SectionTable.fs" />
     <Compile Include="PortableExecutable\Fields.fs" />
-    <Compile Include="PortableExecutable\PEFile.fs" />
+    <Compile Include="PortableExecutable\SectionName.fs" />
+    <Compile Include="PortableExecutable\SectionBuilder.fs" />
+    <Compile Include="PortableExecutable\DefaultFields.fs" />
+    <Compile Include="PortableExecutable\PEFileBuilder.fs" />
     <Compile Include="Size.fs" />
     <Compile Include="WriteCli.fs" />
     <Compile Include="WritePE.fsi" />

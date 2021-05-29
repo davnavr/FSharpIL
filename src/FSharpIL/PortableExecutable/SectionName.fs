@@ -4,6 +4,7 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 open System.Text
 
+/// Specifies the name of a section in its section header (II.25.3).
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type SectionName =
