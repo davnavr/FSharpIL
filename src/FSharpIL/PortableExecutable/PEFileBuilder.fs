@@ -10,6 +10,7 @@ type PEFileBuilder (fileHeader: CoffHeader<Omitted, Omitted>, optionalHeader: Op
     let sections = List<SectionBuilder> sectionsCapacity
     member _.FileHeader = fileHeader
     member _.OptionalHeader = optionalHeader
+    member val DataDirectories = { CliHeader = Unchecked.defaultof<_> }
 
     member _.GetSection i = sections.[i]
 

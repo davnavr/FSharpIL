@@ -7,7 +7,7 @@ open FSharpIL
 // TODO: Have function for retrieving section header?
 [<Sealed>]
 type SectionBuilder internal (alignment: Alignment, name: SectionName, flags: SectionCharacteristics) =
-    let section = ChunkedMemoryBuilder(int32 alignment.FileAlignment)
+    let mutable section = ChunkedMemoryBuilder(int32 alignment.FileAlignment)
     member _.Name = name
     member _.VirtualSize = invalidOp "TODO: Get virtual size"
     member _.VirtualAddress = invalidOp "TODO: Get virtual address"
@@ -25,6 +25,6 @@ type SectionBuilder internal (alignment: Alignment, name: SectionName, flags: Se
           NumberOfRelocations = 0us
           NumberOfLineNumbers = 0us
           Characteristics = flags }
-    member this.AddData(data: ImmutableArray<byte>) = invalidOp "TODO: Add data"
-    //member this.AddCliMetadata(metadata: CliMetadata) =
+    member _.AddData(data: ImmutableArray<byte>) = section.Write data
+    //member this.AddCliMetadata(metadata: CliMetadata): CliHeaderDirectory =
     //    

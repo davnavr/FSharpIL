@@ -1,5 +1,5 @@
 ﻿/// Contains various magic numbers and bytes used throughout a PE file.
-[<RequireQualifiedAccess>]
+[<RequireQualifiedAccess; System.Obsolete>]
 module internal FSharpIL.Magic
 
 open System

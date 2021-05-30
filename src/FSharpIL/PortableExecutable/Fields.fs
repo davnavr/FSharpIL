@@ -133,13 +133,13 @@ type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageSize, 'NumData
 // TODO: Better alias for optional header used in building PE files.
 type OptionalHeader = OptionalHeader<Omitted, Omitted, ImageBase, Omitted, Omitted>
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<IsReadOnly; Struct>]
 type RvaAndSize =
     { Rva: Rva; Size: uint32 }
     static member inline Zero = { Rva = Rva.Zero; Size = 0u }
 
 /// Flags describing the characteristics of a PE file section (II.25.3).
-[<System.Flags>]
+[<Flags>]
 type SectionCharacteristics =
     | CntCode = 0x20u
     | CntInitializedData = 0x40u
@@ -162,3 +162,30 @@ type SectionHeader =
       NumberOfRelocations: uint16
       NumberOfLineNumbers: uint16
       Characteristics: SectionCharacteristics }
+
+[<IsReadOnly; Struct>]
+type CliHeaderDirectory = internal { CliDirectory: RvaAndSize }
+// TODO: Add other special types for other data directories.
+
+[<AutoOpen>]
+module DataDirectory =
+    let (|CliHeader|) { CliDirectory = data } = data
+
+[<NoComparison; StructuralEquality>]
+type DataDirectories =
+    { [<DefaultValue>] mutable ExportTable: RvaAndSize
+      [<DefaultValue>] mutable ImportTable: RvaAndSize
+      [<DefaultValue>] mutable ResourceTable: RvaAndSize
+      [<DefaultValue>] mutable ExceptionTable: RvaAndSize
+      [<DefaultValue>] mutable CertificateTable: RvaAndSize
+      [<DefaultValue>] mutable BaseRelocationTable: RvaAndSize
+      [<DefaultValue>] mutable DebugTable: RvaAndSize
+      [<DefaultValue>] mutable CopyrightTable: RvaAndSize
+      [<DefaultValue>] mutable GlobalPointerTable: RvaAndSize
+      [<DefaultValue>] mutable TLSTable: RvaAndSize
+      [<DefaultValue>] mutable LoadConfigTable: RvaAndSize
+      [<DefaultValue>] mutable BoundImportTable: RvaAndSize
+      [<DefaultValue>] mutable ImportAddressTable: RvaAndSize
+      [<DefaultValue>] mutable DelayImportDescriptor: RvaAndSize
+      mutable CliHeader: CliHeaderDirectory
+      [<DefaultValue>] mutable Reserved: RvaAndSize }

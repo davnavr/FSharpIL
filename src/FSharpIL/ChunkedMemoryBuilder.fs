@@ -9,7 +9,6 @@ open FSharpIL.Utilities
 
 // TODO: Should the builder type be a struct or reference type?
 /// Represents a mutable, non-contiguous region of memory split into chunks of equal sizes.
-[<IsByRefLike>]
 type ChunkedMemoryBuilder = struct
     val mutable private current: LinkedListNode<byte[]>
     val mutable private pos: int32
