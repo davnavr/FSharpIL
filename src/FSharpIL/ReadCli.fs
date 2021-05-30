@@ -127,7 +127,7 @@ let readStandardFields (src: Reader) (fields: outref<_>) reader ustate =
     let offset = src.Offset
     if src.ReadBytes(buffer.Slice(0, 2)) = 2 then
         let magic = LanguagePrimitives.EnumOfValue(Bytes.readU2 0 buffer)
-        let length = if magic = PEImageKind.PE32 then 26 else 22
+        let length = if magic = ImageKind.PE32 then 26 else 22
         let fields' = buffer.Slice(2, length)
         if src.ReadBytes fields' = length then
             fields <-
@@ -141,7 +141,7 @@ let readStandardFields (src: Reader) (fields: outref<_>) reader ustate =
                   BaseOfCode = Bytes.readU4 18 fields'
                   BaseOfData =
                     match magic with
-                    | PEImageKind.PE32 -> ValueSome(Bytes.readU4 22 fields')
+                    | ImageKind.PE32 -> ValueSome(Bytes.readU4 22 fields')
                     | _ -> ValueNone }
             Success(MetadataReader.read reader.ReadStandardFields fields offset ustate, ReadNTSpecificFields)
         else Failure UnexpectedEndOfFile
@@ -150,7 +150,7 @@ let readStandardFields (src: Reader) (fields: outref<_>) reader ustate =
 let readNTSpecificFields (src: Reader) magic (fields: outref<_>) reader ustate =
     let length =
         match magic with
-        | PEImageKind.PE32Plus -> 88
+        | ImageKind.PE32Plus -> 88
         | _ -> 68
     let buffer = Span.heapalloc<byte> length
     let offset = src.Offset
@@ -159,7 +159,7 @@ let readNTSpecificFields (src: Reader) magic (fields: outref<_>) reader ustate =
         if numdirs >= 15u then
             fields <-
                 match magic with
-                | PEImageKind.PE32Plus -> invalidOp "PE32+ not yet supported"
+                | ImageKind.PE32Plus -> invalidOp "PE32+ not yet supported"
                 | _ ->
                     { ImageBase = uint64(Bytes.readU4 0 buffer)
                       // TODO: Validate alignment values, maybe use Alignment type?

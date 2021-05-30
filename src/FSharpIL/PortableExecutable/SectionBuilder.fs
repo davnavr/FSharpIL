@@ -1,38 +1,13 @@
-﻿namespace FSharpIL.PortableExecutable
+﻿namespace FSharpIL.PortableExecutable // TODO: Might need to use functions from WriteCli module, so move to Writing namespace?
 
 open System.Collections.Immutable
 
 open FSharpIL
 
-/// Flags describing the section's characteristics (II.25.3).
-[<System.Flags>]
-type SectionCharacteristics =
-    | CntCode = 0x20u
-    | CntInitializedData = 0x40u
-    | CntUninitializedData = 0x80u
-    | MemDiscardable = 0x200_0000u
-    | MemExecute = 0x2000_0000u
-    | MemRead = 0x4000_0000u
-    | MemWrite = 0x8000_0000u
-
-/// (II.25.3)
-type SectionHeader =
-    { SectionName: SectionName
-      VirtualSize: uint32
-      VirtualAddress: uint32
-      RawDataSize: uint32
-      RawDataPointer: uint32
-      /// Reserved value that should be set to zero.
-      PointerToRelocations: uint32
-      PointerToLineNumbers: uint32
-      NumberOfRelocations: uint16
-      NumberOfLineNumbers: uint16
-      Characteristics: SectionCharacteristics }
-
 // TODO: Have function for retrieving section header?
 [<Sealed>]
 type SectionBuilder internal (alignment: Alignment, name: SectionName, flags: SectionCharacteristics) =
-    let data = ChunkedMemoryBuilder(int32 alignment.FileAlignment)
+    let section = ChunkedMemoryBuilder(int32 alignment.FileAlignment)
     member _.Name = name
     member _.VirtualSize = invalidOp "TODO: Get virtual size"
     member _.VirtualAddress = invalidOp "TODO: Get virtual address"
@@ -50,3 +25,6 @@ type SectionBuilder internal (alignment: Alignment, name: SectionName, flags: Se
           NumberOfRelocations = 0us
           NumberOfLineNumbers = 0us
           Characteristics = flags }
+    member this.AddData(data: ImmutableArray<byte>) = invalidOp "TODO: Add data"
+    //member this.AddCliMetadata(metadata: CliMetadata) =
+    //    

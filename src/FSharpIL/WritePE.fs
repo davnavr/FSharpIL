@@ -38,7 +38,7 @@ let coffHeader pe (writer: ChunkWriter) =
 let standardFields info (writer: ChunkWriter) =
     let pe = info.File
     let standard = info.File.StandardFields
-    writer.WriteU2 PEImageKind.PE32
+    writer.WriteU2 ImageKind.PE32
     writer.WriteU1 standard.LMajor
     writer.WriteU1 standard.LMinor
 

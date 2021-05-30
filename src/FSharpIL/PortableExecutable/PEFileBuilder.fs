@@ -16,7 +16,7 @@ type PEFileBuilder (fileHeader: CoffHeader<Omitted, Omitted>, optionalHeader: Op
     // TODO: Provide functions for modifying instead of methods? Or both?
     /// Creates a section with the specified name and flags.
     member _.CreateSection(name, characteristics) =
-        let builder = SectionBuilder(invalidOp "get file alignment", name, characteristics)
+        let builder = SectionBuilder(optionalHeader.Alignment, name, characteristics)
         sections.Add builder
         builder
 

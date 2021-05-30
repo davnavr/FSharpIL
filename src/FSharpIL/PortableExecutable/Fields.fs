@@ -32,7 +32,7 @@ type CoffHeader<'NumSections, 'HeaderSize> =
       Characteristics: ImageFileFlags }
 
 /// <summary>Represents the value of the <c>Magic</c> field in the PE file standard fields.</summary>
-type PEImageKind =
+type ImageKind =
     | ROM = 0x107us
     /// Identifies the Portable Executable file as a PE32 executable.
     | PE32 = 0x10Bus
@@ -40,7 +40,7 @@ type PEImageKind =
 
 /// (II.25.2.3.1)
 type StandardFields<'Magic, 'Size, 'BaseOfData> =
-    { Magic: 'Magic // Currently, the value always used is PE32 (0x10B), not PE32+ (0x20B)
+    { Magic: 'Magic
       LMajor: byte
       LMinor: byte
       CodeSize: 'Size
@@ -115,9 +115,19 @@ type NTSpecificFields<'ImageBase, 'Alignment, 'ImageSize, 'Size, 'NumDataDirecto
       LoaderFlags: uint32
       NumberOfDataDirectories: 'NumDataDirectories }
 
+/// Represents the optional header of the PE file which, despite the name, is not optional (II.25.2.3).
 type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageSize, 'NumDataDirectories> =
-    | PE32 of StandardFields<'ImageKind, 'StandardField, uint32> * NTSpecificFields<'ImageBase, Alignment, 'ImageSize, uint32, 'NumDataDirectories>
-    | PE32Plus of StandardFields<'ImageKind, 'StandardField, Omitted> * NTSpecificFields<'ImageBase, Alignment, 'ImageSize, uint64, 'NumDataDirectories>
+    | PE32 of
+        StandardFields<'ImageKind, 'StandardField, uint32> *
+        NTSpecificFields<'ImageBase, Alignment, 'ImageSize, uint32, 'NumDataDirectories>
+    | PE32Plus of
+        StandardFields<'ImageKind, 'StandardField, Omitted> *
+        NTSpecificFields<'ImageBase, Alignment, 'ImageSize, uint64, 'NumDataDirectories>
+
+    member this.Alignment =
+        match this with
+        | PE32(_, { Alignment = alignment })
+        | PE32Plus(_, { Alignment = alignment }) -> alignment
 
 // TODO: How will ImageBase work, since it is different sizes for PE32 and PE32+, and overflows should be prevented.
 // TODO: Better alias for optional header used in building PE files.
@@ -127,3 +137,28 @@ type OptionalHeader = OptionalHeader<Omitted, Omitted, ImageBase, Omitted, Omitt
 type RvaAndSize =
     { Rva: Rva; Size: uint32 }
     static member inline Zero = { Rva = Rva.Zero; Size = 0u }
+
+/// Flags describing the characteristics of a PE file section (II.25.3).
+[<System.Flags>]
+type SectionCharacteristics =
+    | CntCode = 0x20u
+    | CntInitializedData = 0x40u
+    | CntUninitializedData = 0x80u
+    | MemDiscardable = 0x200_0000u
+    | MemExecute = 0x2000_0000u
+    | MemRead = 0x4000_0000u
+    | MemWrite = 0x8000_0000u
+
+/// Describes the location, size, and characteristings of a section (II.25.3).
+type SectionHeader =
+    { SectionName: SectionName
+      VirtualSize: uint32
+      VirtualAddress: uint32
+      RawDataSize: uint32
+      RawDataPointer: uint32
+      /// Reserved value that should be set to zero.
+      PointerToRelocations: uint32
+      PointerToLineNumbers: uint32
+      NumberOfRelocations: uint16
+      NumberOfLineNumbers: uint16
+      Characteristics: SectionCharacteristics }

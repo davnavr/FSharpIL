@@ -10,7 +10,7 @@ type Reader<'Arg, 'State> = ('Arg -> FileOffset -> 'State -> 'State) voption
 type ErrorHandler<'State> = ReadState -> ReadError -> FileOffset -> 'State -> 'State
 
 type ParsedCoffHeader = CoffHeader<uint16, uint16>
-type ParsedStandardFields = StandardFields<PEImageKind, uint32, uint32 voption>
+type ParsedStandardFields = StandardFields<ImageKind, uint32, uint32 voption>
 type ParsedNTSpecificFields = NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
 type ParsedDataDirectories = ImmutableArray<RvaAndSize>
 type ParsedSectionHeaders = ImmutableArray<SectionHeader<SectionLocation>>

@@ -12,6 +12,7 @@
     <Compile Include="Utilities\Result.fs" />
     <Compile Include="Utilities\Round.fs" />
     <Compile Include="Utilities\Span.fs" />
+    <Compile Include="Utilities\BytesOf.fs" />
     <Compile Include="Bytes.fs" />
     <Compile Include="InternalException.fs" />
     <Compile Include="Magic.fs" />
@@ -107,8 +108,8 @@
     <Compile Include="XmlDoc\Doc.fs" />
     <Compile Include="PortableExecutable\Rva.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
-    <Compile Include="PortableExecutable\Fields.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
+    <Compile Include="PortableExecutable\Fields.fs" />
     <Compile Include="PortableExecutable\SectionBuilder.fs" />
     <Compile Include="PortableExecutable\DefaultFields.fs" />
     <Compile Include="PortableExecutable\PEFileBuilder.fs" />
