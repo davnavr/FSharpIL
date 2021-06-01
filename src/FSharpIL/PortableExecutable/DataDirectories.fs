@@ -86,3 +86,6 @@ module DataDirectories =
             builder.CliHeader,
             builder.Reserved
         )
+
+[<RequireQualifiedAccess>]
+type DataDirectoriesBuilder with member this.ToImmutable() = DataDirectories.ofBuilder this

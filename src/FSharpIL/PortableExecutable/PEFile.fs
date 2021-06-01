@@ -1,6 +1,6 @@
 ﻿namespace FSharpIL.PortableExecutable
 
-open System.Collections.Generic
+open System.Collections.Immutable
 
 open FSharpIL
 
@@ -11,11 +11,16 @@ type Section = struct
     internal new (header, data) = { Header = header; Data = data }
 end
 
-type IPortableExecutable =
-    abstract CoffHeader: CoffHeader<Omitted, Omitted>
-    abstract OptionalHeader: OptionalHeader
-    abstract DataDirectories: DataDirectories
-    abstract Sections: IReadOnlyCollection<Section>
-
-// TODO: Make immutable version of PEFileBuilder
-// type PEFile
+[<Sealed>]
+type PEFile internal
+    (
+        fileHeader: CoffHeader<Omitted, Omitted>,
+        optionalHeader: OptionalHeader,
+        dataDirectories: DataDirectories,
+        sections: ImmutableArray<Section>
+    )
+    =
+    member _.FileHeader = fileHeader
+    member _.OptionalHeader = optionalHeader
+    member _.DataDirectories = dataDirectories
+    member _.Sections = sections

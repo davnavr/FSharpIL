@@ -52,7 +52,7 @@ type PEInfo =
       Sections: ImmutableArray<Section>
       CliHeaderRva: Rva }
 
-let getFileInfo (file: #IPortableExecutable) =
+let getFileInfo (file: PEFile) =
     let optionalHeader, dataDirectories, sections = file.OptionalHeader, file.DataDirectories, file.Sections
     let falignment, salignment =
         uint32 optionalHeader.Alignment.FileAlignment, uint32 optionalHeader.Alignment.SectionAlignment
@@ -64,10 +64,9 @@ let getFileInfo (file: #IPortableExecutable) =
             | PE32Plus _ -> failwith "TODO: Get size of PE32+ header"
         uint32 msDosStub.Length
         + uint32 Magic.portableExecutableSignature.Length
-        + uint32 optionalHeaderSize+ (Magic.sectionHeaderSize * uint32 sections.Count)
+        + uint32 optionalHeaderSize+ (Magic.sectionHeaderSize * uint32 sections.Length)
         |> Round.upTo falignment
-    let mutable sections', sectioni = Array.zeroCreate sections.Count, 0
-    let mutable codeSize, initDataSize, uninitDataSize, imageSize = 0u, 0u, 0u, Round.upTo salignment headersSize // TODO: Starting value of ImageSize should be size of headers rounded up to section alignment.
+    let mutable codeSize, initDataSize, uninitDataSize, imageSize = 0u, 0u, 0u, Round.upTo salignment headersSize
     let mutable baseOfCode, baseOfData, rva = Rva.Zero, Rva.Zero, Rva salignment
 
     for section in sections do
@@ -80,10 +79,8 @@ let getFileInfo (file: #IPortableExecutable) =
         if baseOfData = Rva.Zero && section.Header.SectionName = SectionName.rsrc then baseOfData <- rva
 
         imageSize <- imageSize + size
-        sections'.[sectioni] <- section
-        sectioni <- sectioni + 1
         rva <- rva + Round.upTo salignment size
-    { FileHeader = file.CoffHeader
+    { FileHeader = file.FileHeader
       OptionalHeader = file.OptionalHeader
       DataDirectories = dataDirectories
       CodeSize = codeSize
@@ -95,7 +92,7 @@ let getFileInfo (file: #IPortableExecutable) =
       SectionAlignment = salignment
       ImageSize = imageSize
       HeadersSize = headersSize
-      Sections = Unsafe.As &sections'
+      Sections = file.Sections
       CliHeaderRva = dataDirectories.CliHeader.CliHeader.Rva }
 
 [<Struct>]
@@ -178,7 +175,7 @@ let optionalHeader info (writer: byref<#IByteWriter>) =
         writer.WriteLE nt.LoaderFlags
     writer.WriteLE 0x10u // NumberOfRvaAndSizes
 
-let internal write (file: #IPortableExecutable) (output: #IByteWriter) =
+let internal write file (output: #IByteWriter) =
     let mutable output' = FileHeaderWriter output
     let info = getFileInfo file
     output'.Write msDosStub

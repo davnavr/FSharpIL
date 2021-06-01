@@ -1,30 +1,9 @@
 ﻿namespace FSharpIL.PortableExecutable
 
-open System
 open System.Collections.Generic
+open System.Runtime.CompilerServices
 
 open FSharpIL
-
-[<Sealed>]
-type internal PEFileBuilderSectionsEnumerator = class
-    val mutable private enumerator: List<SectionBuilder>.Enumerator
-    new (enumerator) = { enumerator = enumerator }
-    member this.Current = this.enumerator.Current.ToImmutable()
-    interface IEnumerator<Section> with
-        member this.Current = this.Current
-        member this.Current = box this.Current
-        member this.MoveNext() = this.enumerator.MoveNext()
-        member this.Dispose() = this.enumerator.Dispose()
-        member this.Reset() = (this.enumerator :> IEnumerator<_>).Reset()
-end
-
-[<Sealed>]
-type internal PEFileBuilderSections internal (sections: List<SectionBuilder>) =
-    member _.GetEnumerator() = new PEFileBuilderSectionsEnumerator(sections.GetEnumerator())
-    interface IReadOnlyCollection<Section> with
-        member _.Count = sections.Count
-        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
-        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
 
 /// Represents a Portable Executable file.
 [<Sealed>]
@@ -46,11 +25,11 @@ type PEFileBuilder (fileHeader: CoffHeader<Omitted, Omitted>, optionalHeader: Op
         sections.Add builder
         builder
 
-    interface IPortableExecutable with
-        member this.CoffHeader = this.FileHeader
-        member this.OptionalHeader = this.OptionalHeader
-        member this.DataDirectories = DataDirectories.ofBuilder this.DataDirectories
-        member _.Sections = PEFileBuilderSections sections :> IReadOnlyCollection<_>
+    member this.ToImmutable() =
+        let mutable sections' = Array.zeroCreate sections.Count
+        for i = 0 to sections.Count - 1 do
+            sections'.[i] <- sections.[i].ToImmutable()
+        PEFile(fileHeader, optionalHeader, DataDirectories.ofBuilder this.DataDirectories, Unsafe.As &sections')
 
 // Comments below are important.
 

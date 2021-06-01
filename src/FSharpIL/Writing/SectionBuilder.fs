@@ -1,11 +1,9 @@
 ﻿namespace FSharpIL.PortableExecutable // TODO: Might need to use functions from WriteCli module, so move to Writing namespace?
 
-open System.Collections.Generic
 open System.Collections.Immutable
 
 open FSharpIL
 
-// TODO: Have function for retrieving section header?
 [<Sealed>]
 type SectionBuilder internal (alignment: Alignment, name: SectionName, flags: SectionCharacteristics) =
     let mutable section = ChunkedMemoryBuilder(int32 alignment.FileAlignment)
