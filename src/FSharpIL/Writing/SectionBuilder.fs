@@ -30,4 +30,4 @@ type SectionBuilder internal (alignment: Alignment, name: SectionName, flags: Se
     //member this.AddCliMetadata(metadata: CliMetadata): CliHeaderDirectory =
     //    
     // NOTE: Changes to the underlying chunks would result in changes in the "immutable" version, but all Add methods so far do not modify existing data.
-    member this.ToImmutable() = Section(this.CreateHeader(), section.ToReadOnly())
+    member this.ToImmutable() = Section(this.CreateHeader(), section.ToImmutable())

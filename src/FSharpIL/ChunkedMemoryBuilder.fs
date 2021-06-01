@@ -3,6 +3,9 @@
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
+
+open FSharpIL.Utilities
 
 // TODO: Should the builder type be a struct or reference type?
 /// Represents a mutable, non-contiguous region of memory split into chunks of equal sizes.
@@ -88,14 +91,12 @@ type ChunkedMemoryBuilder = struct
             Printf.bprintf sb " 0x%02X" this.current.Value.[i]
         sb.ToString()
 
-    // TODO: Better name for method used to get data.
-    member internal this.ToReadOnly() =
-        let data = List this.ChunkCount
-        let mutable chunk = this.current
-        while chunk <> null do
-            data.Add(ReadOnlyMemory chunk.Value)
-            chunk <- chunk.Next
-        data
+    member this.ToImmutable() =
+        let mutable chunks, chunki = Array.zeroCreate this.current.List.Count, 0
+        for chunk in this.current.List do
+            chunks.[chunki] <- ImmutableArray.Create(items = chunk)
+            chunki <- chunki + 1
+        ChunkedMemory(Unsafe.As<_, ImmutableArray<ImmutableArray<byte>>> &chunks)
 
     interface IByteWriter with member this.Write data = this.Write data
 end

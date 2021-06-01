@@ -8,15 +8,11 @@ open System.IO
 open FSharpIL
 open FSharpIL.PortableExecutable
 
-/// <returns>The length of the section data in bytes and the actual section data.</returns>
+// TODO: Use PEFile instead of #IPortableExecutable
+
 val internal write : #IPortableExecutable -> #IByteWriter -> struct(int32 * LinkedList<byte[]>)
 
-/// Creates a byte array containing the Portable Executable file.
-val array : #IPortableExecutable -> byte[]
-
-/// <summary>
 /// Writes the Portable Executable file to an immutable byte array.
-/// </summary>
 val block : #IPortableExecutable -> ImmutableArray<byte>
 
 val chunkedMemory : #IPortableExecutable -> ChunkedMemory

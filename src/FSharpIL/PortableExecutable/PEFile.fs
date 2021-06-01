@@ -7,7 +7,7 @@ open FSharpIL
 [<System.Runtime.CompilerServices.IsReadOnly>]
 type Section = struct
     val Header: SectionHeader
-    val Data: IReadOnlyCollection<System.ReadOnlyMemory<byte>>
+    val Data: ChunkedMemory
     internal new (header, data) = { Header = header; Data = data }
 end
 

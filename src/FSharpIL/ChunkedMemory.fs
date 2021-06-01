@@ -15,6 +15,7 @@ type ChunkedMemory = struct
     /// The total length of this region of memory, in bytes.
     val Length: uint32
     internal new (chunks, start, length) = { chunks = chunks; soffset = start; Length = length }
+    internal new (chunks) = ChunkedMemory(chunks, 0u, uint32 chunks.Length * uint32 chunks.[0].Length)
     member this.IsEmpty = this.chunks.IsEmpty || this.chunks.[0].IsEmpty
     member this.ChunkCount = this.chunks.Length
     /// The length of each chunk except for the last chunk.
@@ -149,8 +150,12 @@ type ChunkedMemory with
     member this.ToImmutableArray() =
         match this.ChunkCount with
         | 0 -> ImmutableArray.Empty
-        | 1 -> this.chunks.[0]
+        | 1 ->
+            failwith "TODO: Fix, this does not take into account the fact that the starting position might not be zero"
+            this.chunks.[0]
         | _ ->
+            // TODO: If starting pos is zero, optimize by returning actual chunks instead of copying.
+            // TODO: Fix, where is soffset used here?
             let length = int32 this.Length
             let mutable buffer = Array.zeroCreate<byte> length
             let mutable struct(chunki, i), remaining = this.GetIndex 0u, buffer.Length

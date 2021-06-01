@@ -71,7 +71,7 @@ let getFileInfo (file: #IPortableExecutable) =
     let mutable baseOfCode, baseOfData, rva = Rva.Zero, Rva.Zero, Rva salignment
 
     for section in sections do
-        let flags, size = section.Header.Characteristics, uint32 section.Data.Length // TODO: Fix, the length is now wrong
+        let flags, size = section.Header.Characteristics, section.Data.Length
         if flags.HasFlag SectionCharacteristics.CntCode then codeSize <- codeSize + size
         if flags.HasFlag SectionCharacteristics.CntInitializedData then initDataSize <- initDataSize + size
         if flags.HasFlag SectionCharacteristics.CntUninitializedData then uninitDataSize <- uninitDataSize + size
@@ -196,14 +196,14 @@ let internal write (file: #IPortableExecutable) (output: #IByteWriter) =
 
     // Section data
     for section in info.Sections do
-        for segment in section.Data do output'.Write segment.Span
+        let data = Span.stackalloc<byte> section.Data.ChunkSize
+        section.Data.CopyTo(0u, data)
+        output'.Write data
     output'.Output
 
-let chunkedMemory file = (write file (ChunkedMemoryBuilder(int32 file.OptionalHeader.Alignment.FileAlignment)))
+let chunkedMemory file = (write file (ChunkedMemoryBuilder(int32 file.OptionalHeader.Alignment.FileAlignment))).ToImmutable()
 
 let block file = (chunkedMemory file).ToImmutableArray()
-
-let array file = Convert.unsafeTo (block file)
 
 // TODO: When writing to file, can optimize by writing PE file headers directly to underlying stream.
 let toStream stream file =
