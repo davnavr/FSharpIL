@@ -3,7 +3,6 @@
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
-open System.Runtime.CompilerServices
 
 open FSharpIL.Utilities
 
@@ -104,4 +103,6 @@ type ChunkedMemoryBuilder = struct
         for i = this.pos to this.current.Value.Length - 1 do
             Printf.bprintf sb " 0x%02X" this.current.Value.[i]
         sb.ToString()
+
+    interface IByteWriter with member this.Write data = this.Write data
 end

@@ -1,6 +1,6 @@
 ﻿/// Contains functions for obtaining the bytes of various integer types.
 [<RequireQualifiedAccess>]
-module FSharpIL.Utilities.BytesOf
+module FSharpIL.Utilities.BytesOf // TODO: Make these functions that write the bytes to a Span in LE order instead.
 
 let (|U2|) (value: uint16) =
     struct (

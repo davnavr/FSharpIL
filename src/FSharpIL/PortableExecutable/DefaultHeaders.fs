@@ -1,5 +1,5 @@
 ﻿[<RequireQualifiedAccess>]
-module FSharpIL.PortableExecutable.DefaultFields
+module FSharpIL.PortableExecutable.DefaultHeaders
 
 open FSharpIL
 

@@ -149,7 +149,7 @@ type SectionCharacteristics =
     | MemRead = 0x4000_0000u
     | MemWrite = 0x8000_0000u
 
-/// Describes the location, size, and characteristings of a section (II.25.3).
+/// Describes the location, size, and characteristics of a section (II.25.3).
 type SectionHeader =
     { SectionName: SectionName
       VirtualSize: uint32
@@ -162,30 +162,3 @@ type SectionHeader =
       NumberOfRelocations: uint16
       NumberOfLineNumbers: uint16
       Characteristics: SectionCharacteristics }
-
-[<IsReadOnly; Struct>]
-type CliHeaderDirectory = internal { CliDirectory: RvaAndSize }
-// TODO: Add other special types for other data directories.
-
-[<AutoOpen>]
-module DataDirectory =
-    let (|CliHeader|) { CliDirectory = data } = data
-
-[<NoComparison; StructuralEquality>]
-type DataDirectories =
-    { [<DefaultValue>] mutable ExportTable: RvaAndSize
-      [<DefaultValue>] mutable ImportTable: RvaAndSize
-      [<DefaultValue>] mutable ResourceTable: RvaAndSize
-      [<DefaultValue>] mutable ExceptionTable: RvaAndSize
-      [<DefaultValue>] mutable CertificateTable: RvaAndSize
-      [<DefaultValue>] mutable BaseRelocationTable: RvaAndSize
-      [<DefaultValue>] mutable DebugTable: RvaAndSize
-      [<DefaultValue>] mutable CopyrightTable: RvaAndSize
-      [<DefaultValue>] mutable GlobalPointerTable: RvaAndSize
-      [<DefaultValue>] mutable TLSTable: RvaAndSize
-      [<DefaultValue>] mutable LoadConfigTable: RvaAndSize
-      [<DefaultValue>] mutable BoundImportTable: RvaAndSize
-      [<DefaultValue>] mutable ImportAddressTable: RvaAndSize
-      [<DefaultValue>] mutable DelayImportDescriptor: RvaAndSize
-      mutable CliHeader: CliHeaderDirectory
-      [<DefaultValue>] mutable Reserved: RvaAndSize }
