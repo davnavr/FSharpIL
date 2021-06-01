@@ -3,11 +3,9 @@ module FSharpIL.Writing.WritePE
 
 open System
 open System.Collections.Immutable
-open System.Runtime.CompilerServices
+open System.IO
 
 open Microsoft.FSharp.Core.Operators.Checked
-
-open FSharpIL.Utilities
 
 open FSharpIL
 open FSharpIL.PortableExecutable
@@ -175,7 +173,7 @@ let optionalHeader info (writer: byref<#IByteWriter>) =
         writer.WriteLE nt.LoaderFlags
     writer.WriteLE 0x10u // NumberOfRvaAndSizes
 
-let internal write file (output: #IByteWriter) =
+let internal write file output =
     let mutable output' = FileHeaderWriter output
     let info = getFileInfo file
     output'.Write msDosStub
@@ -184,7 +182,7 @@ let internal write file (output: #IByteWriter) =
     optionalHeader info &output'
 
     // Padding to start of section data
-    let mutable padding = (Round.upTo info.SectionAlignment output'.Position) - output'.Position
+    let mutable padding = (Round.upTo info.FileAlignment output'.Position) - output'.Position
     while padding > 0u do
         let padding' = Span.stackalloc<byte>(int32(min padding info.FileAlignment))
         padding'.Clear()
@@ -202,8 +200,35 @@ let chunkedMemory file = (write file (ChunkedMemoryBuilder(int32 file.OptionalHe
 
 let block file = (chunkedMemory file).ToImmutableArray()
 
-// TODO: When writing to file, can optimize by writing PE file headers directly to underlying stream.
-let toStream stream file =
-    ()
+[<Struct>]
+type StreamByteWriter<'Stream when 'Stream :> Stream> (stream: 'Stream) =
+    interface IByteWriter with member _.Write data = stream.Write data
 
-// TODO: When writing to array or to ChunkedMemory, write PE file headers to there instead.
+let toStream (stream: #Stream) file = write file (StreamByteWriter stream) |> ignore
+
+let toFile (file: FileInfo) pe =
+    match file with
+    | null -> nullArg "file"
+    | _ ->
+        use stream = file.OpenWrite()
+        toStream stream pe
+
+let toPath path pe =
+    use stream = File.OpenWrite path
+    toStream stream pe
+
+let stream (file: PEFile) = invalidOp "TODO: Create stream type": Stream
+
+[<Struct>]
+type ArrayByteWriter = struct
+    val mutable private offset: int32
+    val private dest: byte[]
+    new (destination) = { dest = destination; offset = 0 }
+    interface IByteWriter with
+        member this.Write data =
+            let dest' = Span(this.dest, this.offset, data.Length)
+            data.CopyTo dest'
+            this.offset <- this.offset + data.Length
+end
+
+let toArray file destination = write file (ArrayByteWriter destination) |> ignore
