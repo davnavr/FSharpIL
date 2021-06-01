@@ -56,6 +56,7 @@ type ImageBase = struct
     val internal Value: uint16
     new (value) = { Value = value }
     static member op_Implicit(imageBase: ImageBase) = uint32 imageBase.Value * 0x10000u
+    static member inline op_Implicit(imageBase: ImageBase) = uint64(uint32 imageBase)
     static member Default = ImageBase 0x40us
 end
 

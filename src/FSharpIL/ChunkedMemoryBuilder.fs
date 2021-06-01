@@ -88,5 +88,14 @@ type ChunkedMemoryBuilder = struct
             Printf.bprintf sb " 0x%02X" this.current.Value.[i]
         sb.ToString()
 
+    // TODO: Better name for method used to get data.
+    member internal this.ToReadOnly() =
+        let data = List this.ChunkCount
+        let mutable chunk = this.current
+        while chunk <> null do
+            data.Add(ReadOnlyMemory chunk.Value)
+            chunk <- chunk.Next
+        data
+
     interface IByteWriter with member this.Write data = this.Write data
 end

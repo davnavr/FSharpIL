@@ -1,5 +1,6 @@
 ﻿namespace FSharpIL.PortableExecutable // TODO: Might need to use functions from WriteCli module, so move to Writing namespace?
 
+open System.Collections.Generic
 open System.Collections.Immutable
 
 open FSharpIL
@@ -28,3 +29,5 @@ type SectionBuilder internal (alignment: Alignment, name: SectionName, flags: Se
     member _.AddData(data: ImmutableArray<byte>) = section.Write data
     //member this.AddCliMetadata(metadata: CliMetadata): CliHeaderDirectory =
     //    
+    // NOTE: Changes to the underlying chunks would result in changes in the "immutable" version, but all Add methods so far do not modify existing data.
+    member this.ToImmutable() = Section(this.CreateHeader(), section.ToReadOnly())
