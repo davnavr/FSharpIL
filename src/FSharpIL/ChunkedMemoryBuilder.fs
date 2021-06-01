@@ -4,8 +4,6 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
-open FSharpIL.Utilities
-
 // TODO: Should the builder type be a struct or reference type?
 /// Represents a mutable, non-contiguous region of memory split into chunks of equal sizes.
 type ChunkedMemoryBuilder = struct
@@ -51,32 +49,18 @@ type ChunkedMemoryBuilder = struct
             data.Slice(i, length).CopyTo destination
             i <- i + length
         this.pos <- this.pos + data.Length
+
+    // TODO: Avoid code duplication with ByteWriterExtensions methods.
     member inline this.Write(data: Span<byte>) = this.Write(Span<byte>.op_Implicit data)
     member inline this.Write(data: byte[]) = this.Write(ReadOnlySpan data)
     member inline this.Write(data: ImmutableArray<byte>) = this.Write(data.AsSpan())
 
     /// Writes an unsigned 2-byte integer in little-endian format.
-    member this.WriteLE (BytesOf.U2 (msb, lsb)) =
-        this.Write lsb
-        this.Write msb
-
+    member this.WriteLE(value: uint16) = ByteWriterExtensions.WriteLE(&this, value)
     /// Writes an unsigned 4-byte integer in little-endian format.
-    member this.WriteLE (BytesOf.U4 (msb, b3, b2, lsb)) =
-        this.Write lsb
-        this.Write b2
-        this.Write b3
-        this.Write msb
-
+    member this.WriteLE(value: uint32) = ByteWriterExtensions.WriteLE(&this, value)
     /// Writes an unsigned 8-byte integer in little-endian format.
-    member this.WriteLE (BytesOf.U8 (msb, b7, b6, b5, b4, b3, b2, lsb)) =
-        this.Write lsb
-        this.Write b2
-        this.Write b3
-        this.Write b4
-        this.Write b5
-        this.Write b6
-        this.Write b7
-        this.Write msb
+    member this.WriteLE(value: uint64) = ByteWriterExtensions.WriteLE(&this, value)
 
     member this.SkipBytes count =
         if count > 0 then

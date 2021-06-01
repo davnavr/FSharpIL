@@ -12,7 +12,7 @@
     <Compile Include="Utilities\Result.fs" />
     <Compile Include="Utilities\Round.fs" />
     <Compile Include="Utilities\Span.fs" />
-    <Compile Include="Utilities\BytesOf.fs" />
+    <Compile Include="Utilities\Bytes.fs" />
     <Compile Include="Omitted.fs" />
     <Compile Include="ChunkedMemory.fs" />
     <Compile Include="IByteWriter.fs" />

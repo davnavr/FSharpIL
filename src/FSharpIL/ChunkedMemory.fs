@@ -4,6 +4,8 @@ open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
+open FSharpIL.Utilities
+
 /// Represents a non-contiguous region of memory split into chunks of equal sizes.
 [<IsReadOnly>]
 [<CustomEquality; NoComparison>]
@@ -172,6 +174,4 @@ type ChunkedMemory with
             equal
         else false
 
-    member this.Equals(array: byte[]) =
-        let mutable array' = array
-        this.Equals(Unsafe.As<_, ImmutableArray<byte>> &array')
+    member this.Equals(array: byte[]) = this.Equals(Convert.unsafeTo<_, ImmutableArray<byte>> array)
