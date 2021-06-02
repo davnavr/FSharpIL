@@ -113,6 +113,8 @@
     <Compile Include="PortableExecutable\DataDirectories.fs" />
     <Compile Include="PortableExecutable\PEFile.fs" />
     <Compile Include="Magic.fs" />
+    <Compile Include="Writing\WriteCli.fsi" />
+    <Compile Include="Writing\WriteCli.fs" />
     <Compile Include="Writing\SectionBuilder.fs" />
     <Compile Include="Writing\PEFileBuilder.fs" />
     <Compile Include="Writing\WritePE.fsi" />
