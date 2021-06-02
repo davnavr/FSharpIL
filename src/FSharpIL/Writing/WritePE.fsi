@@ -17,7 +17,7 @@ val chunkedMemory : PEFile -> ChunkedMemory
 /// <summary>
 /// Creates a read-only <see cref="T:System.IO.Stream"/> used to read over the Portable Executable file.
 /// </summary>
-val stream : PEFile -> Stream
+val stream : PEFile -> ChunkedMemoryStream
 
 val toArray : PEFile -> byte[] -> unit
 

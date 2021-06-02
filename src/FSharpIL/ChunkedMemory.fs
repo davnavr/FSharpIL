@@ -52,15 +52,18 @@ type ChunkedMemory = struct
             true
         else false
 
+    member internal this.UnsafeCopyTo(offset, buffer: Span<byte>) =
+        let mutable chunk = ReadOnlySpan()
+        if this.TrySpanChunk(offset, &chunk) && chunk.Length >= buffer.Length then
+            chunk.Slice(0, buffer.Length).CopyTo buffer // Copy without having to loop
+        else
+            this.SlowCopyTo(offset, buffer) |> ignore
+
     /// <summary>Attempts to copy the data starting at the specified <paramref name="offset"/> to the specified buffer.</summary>
     member this.TryCopyTo(offset, buffer: Span<byte>) =
         if this.chunks.IsEmpty || buffer.Length = 0 then true
         elif this.HasFreeBytes(offset, uint32 buffer.Length) then
-            let mutable chunk = ReadOnlySpan()
-            if this.TrySpanChunk(offset, &chunk) && chunk.Length >= buffer.Length then
-                chunk.Slice(0, buffer.Length).CopyTo buffer // Copy without having to loop
-            else
-                this.SlowCopyTo(offset, buffer) |> ignore
+            this.UnsafeCopyTo(offset, buffer)
             true
         else false
 

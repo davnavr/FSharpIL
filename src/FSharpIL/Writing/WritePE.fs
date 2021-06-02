@@ -217,7 +217,7 @@ let toPath path pe =
     use stream = File.OpenWrite path
     toStream stream pe
 
-let stream (file: PEFile) = invalidOp "TODO: Create stream type": Stream
+let stream file = new ChunkedMemoryStream(chunkedMemory file)
 
 [<Struct>]
 type ArrayByteWriter = struct

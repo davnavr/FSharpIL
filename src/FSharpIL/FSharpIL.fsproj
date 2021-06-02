@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Utilities\Fail.fs" />
     <Compile Include="Utilities\Convert.fs" />
     <Compile Include="Utilities\Result.fs" />
     <Compile Include="Utilities\Round.fs" />
@@ -15,6 +16,7 @@
     <Compile Include="Utilities\Bytes.fs" />
     <Compile Include="Omitted.fs" />
     <Compile Include="ChunkedMemory.fs" />
+    <Compile Include="ChunkedMemoryStream.fs" />
     <Compile Include="IByteWriter.fs" />
     <Compile Include="ChunkedMemoryBuilder.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
