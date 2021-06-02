@@ -19,6 +19,7 @@
     <Compile Include="ChunkedMemoryStream.fs" />
     <Compile Include="IByteWriter.fs" />
     <Compile Include="ChunkedMemoryBuilder.fs" />
+    <Compile Include="Metadata\CliHeader.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
     <Compile Include="Metadata\Index.fs" />
     <Compile Include="Metadata\Blob.fs" />
