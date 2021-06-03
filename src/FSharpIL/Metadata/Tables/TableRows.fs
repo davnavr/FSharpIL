@@ -204,7 +204,7 @@ type TypeDefRow =
     { Flags: TypeDefFlags
       TypeName: StringOffset
       TypeNamespace: StringOffset
-      Extends: Extends
+      Extends: TypeDefOrRef
       FieldList: TableIndex<FieldRow>
       MethodList: TableIndex<MethodDefRow> }
     interface ITableRow
@@ -231,7 +231,7 @@ type ParamRow =
 /// <summary>(0x09) Represents a row in the <c>InterfaceImpl</c> table (II.22.23).</summary>
 [<IsReadOnly; Struct>]
 type InterfaceImplRow =
-    { Class: TableIndex<TypeDefRow>; Interface: TypeDefOrRefOrSpec }
+    { Class: TableIndex<TypeDefRow>; Interface: TypeDefOrRef }
     interface ITableRow
 
 /// <summary>
@@ -259,7 +259,7 @@ type [<IsReadOnly; Struct>] ConstantBlob = internal { Constant: BlobOffset }
 [<IsReadOnly; Struct>]
 type ConstantRow =
     { Type: ElementType // the enum
-      Parent: ConstantParent
+      Parent: HasConstant
       Value: ConstantBlob } // TODO: Make ParsedConstantBlob type.
     interface ITableRow
 
@@ -269,7 +269,7 @@ type [<IsReadOnly; Struct>] CustomAttributeOffset = private { CustomAttrib: Blob
 /// <summary>(0x0C) Represents a row in the <c>CustomAttribute</c> table (II.22.10).</summary>
 [<IsReadOnly; Struct>]
 type CustomAttributeRow =
-    { Parent: CustomAttributeParent
+    { Parent: HasCustomAttribute
       Type: CustomAttributeType
       Value: CustomAttributeOffset }
     interface ITableRow
@@ -354,7 +354,7 @@ type MethodSemanticsFlags =
 type MethodSemanticsRow =
     { Semantics: MethodSemanticsFlags
       Method: TableIndex<MethodDefRow>
-      Association: PropertyAssociation }
+      Association: HasSemantics }
     interface ITableRow
 
 /// <summary>(0x19) Represents a row in the <c>MethodImpl</c> table (II.22.27).</summary>
@@ -524,5 +524,5 @@ type MethodSpecRow =
 [<IsReadOnly; Struct>]
 type GenericParamConstraintRow =
     { Owner: TableIndex<GenericParamRow>
-      Constraint: ParsedTypeDefOrRefOrSpec }
+      Constraint: TypeDefOrRef }
     interface ITableRow
