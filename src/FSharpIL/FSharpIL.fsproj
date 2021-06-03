@@ -61,9 +61,13 @@
     <Compile Include="Reading\ParsedBlobStream.fs" />
     <Compile Include="Reading\ParsedMethodBodies.fs" />
     <Compile Include="Reading\ParsedMetadataTables.fs" />
-    <Compile Include="Reading\MetadataReader.fs" />
-    <Compile Include="Reading\ReadCli.fsi" />
     <Compile Include="Reading\ReadCli.fs" />
+    <Compile Include="Reading\StructureReader.fs" />
+    <Compile Include="Reading\ErrorHandler.fs" />
+    <Compile Include="Reading\MetadataReader.fs" />
+    <Compile Include="Reading\PEFileReader.fs" />
+    <Compile Include="Reading\ReadPE.fsi" />
+    <Compile Include="Reading\ReadPE.fs" />
 
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
   </ItemGroup>

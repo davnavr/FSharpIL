@@ -21,7 +21,7 @@ module ImageFileFlags =
 type MachineFlags =
     | I386 = 0x14Cus
 
-/// (II.25.2.2)
+/// Specifies the number of sections and defines various characteristics of the PE file (II.25.2.2).
 type CoffHeader<'NumSections, 'HeaderSize> =
     { Machine: MachineFlags
       NumberOfSections: 'NumSections
@@ -119,13 +119,13 @@ type NTSpecificFields<'ImageBase, 'Alignment, 'ImageSize, 'Size, 'NumDataDirecto
       NumberOfDataDirectories: 'NumDataDirectories }
 
 /// Represents the optional header of the PE file which, despite the name, is not optional (II.25.2.3).
-type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageSize, 'NumDataDirectories> =
+type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageBasePlus, 'ImageSize, 'NumDataDirectories> =
     | PE32 of
         StandardFields<'ImageKind, 'StandardField, uint32> *
         NTSpecificFields<'ImageBase, Alignment, 'ImageSize, uint32, 'NumDataDirectories>
     | PE32Plus of
         StandardFields<'ImageKind, 'StandardField, Omitted> *
-        NTSpecificFields<'ImageBase, Alignment, 'ImageSize, uint64, 'NumDataDirectories>
+        NTSpecificFields<'ImageBasePlus, Alignment, 'ImageSize, uint64, 'NumDataDirectories>
 
     member this.Alignment =
         match this with
@@ -134,7 +134,7 @@ type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageSize, 'NumData
 
 // TODO: How will ImageBase work, since it is different sizes for PE32 and PE32+, and overflows should be prevented.
 // TODO: Better alias for optional header used in building PE files.
-type OptionalHeader = OptionalHeader<Omitted, Omitted, ImageBase, Omitted, Omitted>
+type OptionalHeader = OptionalHeader<Omitted, Omitted, ImageBase, ImageBase, Omitted, Omitted>
 
 [<IsReadOnly; Struct>]
 type RvaAndSize =
