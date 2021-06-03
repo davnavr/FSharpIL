@@ -24,6 +24,7 @@
     <Compile Include="Metadata\HeapOffsets.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\Tables\TableFlags.fs" />
+    <Compile Include="Metadata\Tables\TableIndex.fs" />
     <Compile Include="Metadata\Tables\TableRows.fs" />
     <Compile Include="Metadata\CliHeader.fs" />
     <Compile Include="Metadata\CliMetadataRoot.fs" />

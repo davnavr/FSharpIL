@@ -13,63 +13,7 @@ type ModuleRow =
       Mvid: GuidOffset
       EncId: GuidOffset
       EncBaseId: GuidOffset }
-
-/// <summary>
-/// Describes the attributes of a <c>TypeDef</c>, such as its visibility, layout, string formatting, and other information
-/// (II.23.1.15).
-/// </summary>
-[<Flags>]
-type TypeDefFlags =
-    | VisibilityMask = 7u
-    | NotPublic = 0u
-    | Public = 1u
-    | NestedPublic = 2u
-    /// The type is nested and is only visible to the containing type.
-    | NestedPrivate = 3u
-    /// The type is nested and is only visible to the containing type and types that are derived from the containing type.
-    | NestedFamily = 4u
-    /// The type is nested and is only visible to types in the same assembly.
-    | NestedAssembly = 5u
-    /// The type is nested and is only visible to the containing type and types that are derived from the containing type in the
-    /// same assembly.
-    | NestedFamAndAssem = 6u
-    /// The type is nested and is only visible to the containing type, types that are in the same assembly, and types that are
-    /// derived from the containing type.
-    | NestedFamOrAssem = 7u
-    /// Used to obtain the layout information of the class.
-    | LayoutMask = 0x18u
-    /// The fields of the type are laid out automatically by the CLR.
-    | AutoLayout = 0u
-    /// <summary>
-    /// The fields of the type are laid out sequentiallly according to the order of the fields in the metadata.
-    /// </summary>
-    /// <remarks>This is used as the default layout for structs by the C# and F# compilers.</remarks>
-    | SequentialLayout = 8u
-    /// The layout information for the fields of the type is explicitly provided.
-    | ExplicitLayout = 0x10u
-    | ClassSemanticsMask = 0x20u
-    | Class = 0u
-    | Interface = 0x20u
-    /// The type cannot be instantiated, only instances of derived types can be created.
-    | Abstract = 0x80u
-    /// The type cannot be inherited from.
-    | Sealed = 0x100u
-    | SpecialName = 0x400u
-    | Import = 0x1000u
-    | Serializable = 0x2000u
-    | StringFormatMask = 0x30000u
-    | AnsiClass = 0u
-    | UnicodeClass = 0x10000u
-    | AutoClass = 0x20000u
-    /// A non-standard encoding is used when marshalling strings.
-    | CustomFormatClass = 0x30000u
-    /// Used to obtain non-standard encoding information used when marshalling strings.
-    | CustomStringFormatMask = 0xC00000u
-    /// The type can be initialized before the first access to any of its static fields.
-    | BeforeFieldInit = 0x100000u
-    | RTSpecialName = 0x800u
-    | HasSecurity = 0x40000u
-    | IsTypeForwarder = 0x200000u
+    interface ITableRow
 
 /// <summary>(0x01) Represents a row in the <c>TypeRef</c> table (II.22.38).</summary>
 [<IsReadOnly; Struct>]
@@ -77,16 +21,7 @@ type TypeRefRow =
     { ResolutionScope: ResolutionScope
       TypeName: StringOffset
       TypeNamespace: StringOffset }
-
-/// <summary>(0x02) Represents a row in the <c>TypeDef</c> table (II.22.37).</summary>
-[<IsReadOnly; Struct>]
-type TypeDefRow =
-    { Flags: TypeDefFlags
-      TypeName: StringOffset
-      TypeNamespace: StringOffset
-      Extends: Extends
-      FieldList: uint32
-      MethodList: uint32 }
+    interface ITableRow
 
 /// <summary>Describes the attributes of a <c>Field</c> (II.23.1.5).</summary>
 [<Flags>]
@@ -124,6 +59,7 @@ type FieldRow =
     { Flags: FieldFlags
       Name: StringOffset
       Signature: FieldSigOffset }
+    interface ITableRow
 
 /// <summary>Describes the attributes of a <c>MethodDef</c> (II.23.1.10).</summary>
 [<Flags>]
@@ -203,6 +139,75 @@ type MethodDefRow =
       Name: StringOffset
       Signature: MethodDefSigOffset
       ParamList: uint32 }
+    interface ITableRow
+
+/// <summary>
+/// Describes the attributes of a <c>TypeDef</c>, such as its visibility, layout, string formatting, and other information
+/// (II.23.1.15).
+/// </summary>
+[<Flags>]
+type TypeDefFlags =
+    | VisibilityMask = 7u
+    | NotPublic = 0u
+    | Public = 1u
+    | NestedPublic = 2u
+    /// The type is nested and is only visible to the containing type.
+    | NestedPrivate = 3u
+    /// The type is nested and is only visible to the containing type and types that are derived from the containing type.
+    | NestedFamily = 4u
+    /// The type is nested and is only visible to types in the same assembly.
+    | NestedAssembly = 5u
+    /// The type is nested and is only visible to the containing type and types that are derived from the containing type in the
+    /// same assembly.
+    | NestedFamAndAssem = 6u
+    /// The type is nested and is only visible to the containing type, types that are in the same assembly, and types that are
+    /// derived from the containing type.
+    | NestedFamOrAssem = 7u
+    /// Used to obtain the layout information of the class.
+    | LayoutMask = 0x18u
+    /// The fields of the type are laid out automatically by the CLR.
+    | AutoLayout = 0u
+    /// <summary>
+    /// The fields of the type are laid out sequentiallly according to the order of the fields in the metadata.
+    /// </summary>
+    /// <remarks>This is used as the default layout for structs by the C# and F# compilers.</remarks>
+    | SequentialLayout = 8u
+    /// The layout information for the fields of the type is explicitly provided.
+    | ExplicitLayout = 0x10u
+    | ClassSemanticsMask = 0x20u
+    | Class = 0u
+    | Interface = 0x20u
+    /// The type cannot be instantiated, only instances of derived types can be created.
+    | Abstract = 0x80u
+    /// The type cannot be inherited from.
+    | Sealed = 0x100u
+    | SpecialName = 0x400u
+    | Import = 0x1000u
+    | Serializable = 0x2000u
+    | StringFormatMask = 0x30000u
+    | AnsiClass = 0u
+    | UnicodeClass = 0x10000u
+    | AutoClass = 0x20000u
+    /// A non-standard encoding is used when marshalling strings.
+    | CustomFormatClass = 0x30000u
+    /// Used to obtain non-standard encoding information used when marshalling strings.
+    | CustomStringFormatMask = 0xC00000u
+    /// The type can be initialized before the first access to any of its static fields.
+    | BeforeFieldInit = 0x100000u
+    | RTSpecialName = 0x800u
+    | HasSecurity = 0x40000u
+    | IsTypeForwarder = 0x200000u
+
+/// <summary>(0x02) Represents a row in the <c>TypeDef</c> table (II.22.37).</summary>
+[<IsReadOnly; Struct>]
+type TypeDefRow =
+    { Flags: TypeDefFlags
+      TypeName: StringOffset
+      TypeNamespace: StringOffset
+      Extends: Extends
+      FieldList: TableIndex<FieldRow>
+      MethodList: TableIndex<MethodDefRow> }
+    interface ITableRow
 
 /// <summary>Describes the attributes of a <c>Param</c> (II.23.1.13).</summary>
 [<Flags>]
@@ -221,10 +226,13 @@ type ParamRow =
     { Flags: ParamFlags
       Sequence: uint16
       Name: StringOffset }
+    interface ITableRow
 
 /// <summary>(0x09) Represents a row in the <c>InterfaceImpl</c> table (II.22.23).</summary>
 [<IsReadOnly; Struct>]
-type InterfaceImplRow = { Class: WhatToUseForIndexIntoTypeDef; Interface: TypeDefOrRefOrSpec }
+type InterfaceImplRow =
+    { Class: TableIndex<TypeDefRow>; Interface: TypeDefOrRefOrSpec }
+    interface ITableRow
 
 /// <summary>
 /// An offset into the <c>#Blob</c> heap pointing to a <c>MethodRefSig</c> (II.23.2.2) or a <c>FieldSig</c> (II.23.2.4).
@@ -239,6 +247,7 @@ type MemberRefRow =
     { Class: MemberRefParent
       Name: StringOffset
       Signature: MemberRefSigOffset }
+    interface ITableRow
 
 /// <summary>An offset into the <c>#Blob</c> heap pointing to a constant value (II.22.9).</summary>
 type [<IsReadOnly; Struct>] ConstantBlob = internal { Constant: BlobOffset }
@@ -252,6 +261,7 @@ type ConstantRow =
     { Type: ElementType // the enum
       Parent: ConstantParent
       Value: ConstantBlob } // TODO: Make ParsedConstantBlob type.
+    interface ITableRow
 
 /// <summary>An offset into the <c>#Blob</c> heap pointing to a <c>CustomAttrib</c> item (II.23.3).</summary>
 type [<IsReadOnly; Struct>] CustomAttributeOffset = private { CustomAttrib: BlobOffset }
@@ -262,6 +272,7 @@ type CustomAttributeRow =
     { Parent: CustomAttributeParent
       Type: CustomAttributeType
       Value: CustomAttributeOffset }
+    interface ITableRow
 
 
 
@@ -273,7 +284,8 @@ type CustomAttributeRow =
 type ClassLayoutRow =
     { PackingSize: uint16
       ClassSize: uint32
-      Parent: WhatToUseForIndexIntoTypeDef }
+      Parent: TableIndex<TypeDefRow> }
+    interface ITableRow
 
 
 
@@ -284,13 +296,9 @@ type ClassLayoutRow =
 type StandAloneSigRow =
     private { StandAloneSig: BlobOffset }
     member this.Signature = this.StandAloneSig
+    interface ITableRow
 
 
-
-/// <summary>
-/// (0x15) Represents a row in the <c>PropertyMap</c> table, which describes which properties belong to which types (II.22.35).
-/// </summary>
-type [<IsReadOnly; Struct>] PropertyMapRow = { Parent: WhatToUseForIndexIntoTypeDef; PropertyList: WhatToUseForIndexIntoProperty }
 
 /// <summary>
 /// An offset into the <c>#Blob</c> heap pointing to a <c>PropertySig</c> item, which describes the type of a property and its
@@ -313,6 +321,15 @@ type PropertyRow =
     { Flags: PropertyFlags
       Name: StringOffset
       Type: PropertySigOffset }
+    interface ITableRow
+
+/// <summary>
+/// (0x15) Represents a row in the <c>PropertyMap</c> table, which describes which properties belong to which types (II.22.35).
+/// </summary>
+[<IsReadOnly; Struct>] 
+type PropertyMapRow =
+    { Parent: TableIndex<TypeDefRow>; PropertyList: TableIndex<PropertyRow> }
+    interface ITableRow
 
 /// <summary>Describes what kind of method is associated with a <c>Property</c> or <c>Event</c> (II.23.1.12).</summary>
 [<Flags>]
@@ -336,16 +353,18 @@ type MethodSemanticsFlags =
 [<IsReadOnly; Struct>]
 type MethodSemanticsRow =
     { Semantics: MethodSemanticsFlags
-      Method: WhatToUseForIndexIntoMethodDef
+      Method: TableIndex<MethodDefRow>
       Association: PropertyAssociation }
+    interface ITableRow
 
 /// <summary>(0x19) Represents a row in the <c>MethodImpl</c> table (II.22.27).</summary>
 /// <remarks>Rows in this table are generated by the C# compiler for explicit interface implementations.</remarks>
 [<IsReadOnly; Struct>]
 type MethodImplRow =
-    { Class: WhatToUseForIndexIntoTypeDef
+    { Class: TableIndex<TypeDefRow>
       MethodBody: MethodDefOrRef
       MethodDeclaration: MethodDefOrRef }
+    interface ITableRow
 
 
 
@@ -358,6 +377,7 @@ type MethodImplRow =
 type TypeSpecRow =
     private { TypeSpec: BlobOffset }
     member this.Signature = this.TypeSpec
+    interface ITableRow
 
 
 
@@ -365,7 +385,10 @@ type TypeSpecRow =
 /// (0x1D) Represents a row in the <c>FieldRVA</c> table, which contains a Relative Virtual Address specifying the initial value
 /// of a field (II.22.18).
 /// </summary>
-type [<IsReadOnly; Struct>] FieldRvaRow = { Rva: Rva; Field: WhatToUseForIndexIntoField }
+[<IsReadOnly; Struct>]
+type FieldRvaRow =
+    { Rva: Rva; Field: TableIndex<FieldRow> }
+    interface ITableRow
 
 /// <summary>Specifies the algorithm used to compute the hash for the contents of an assembly (II.23.1.1).</summary>
 type AssemblyHashAlgorithm =
@@ -398,6 +421,8 @@ type AssemblyRow =
     member this.Version =
         Version(int32 this.MajorVersion, int32 this.MinorVersion, int32 this.BuildNumber, int32 this.RevisionNumber)
 
+    interface ITableRow
+
 /// <summary>
 /// (0x23) Represents a row in the <c>AssemblyRef</c> table, which describes the assemblies referenced by the current assembly or
 /// module (II.22.5).
@@ -417,6 +442,7 @@ type AssemblyRefRow =
     member this.Version =
         Version(int32 this.MajorVersion, int32 this.MinorVersion, int32 this.BuildNumber, int32 this.RevisionNumber)
 
+    interface ITableRow
 
 
 /// <summary>Describes the visibility of a <c>ManifestResource</c> (II.23.1.9).</summary>
@@ -433,6 +459,7 @@ type ManifestResourceRow =
       Flags: ManifestResourceFlags
       Name: StringOffset
       Implementation: Implementation }
+    interface ITableRow
 
 /// <summary>
 /// (0x29) Represents a row in the <c>NestedClass</c> table, which specifies which types are nested inside other types in this
@@ -440,8 +467,9 @@ type ManifestResourceRow =
 /// </summary>
 [<IsReadOnly; Struct>]
 type NestedClassRow =
-    { NestedClass: WhatToUseForIndexIntoTypeDef
-      EnclosingClass: WhatToUseForIndexIntoTypeDef }
+    { NestedClass: TableIndex<TypeDefRow>
+      EnclosingClass: TableIndex<TypeDefRow> }
+    interface ITableRow
 
 /// <summary>
 /// Specifies the attributes of a <c>GenericParam</c>, such as its variance and special constraints (II.23.1.7).
@@ -474,6 +502,7 @@ type GenericParamRow =
       Flags: GenericParamFlags
       Owner: TypeOrMethodDef
       Name: StringOffset }
+    interface ITableRow
 
 /// <summary>
 /// An offset into the <c>#Blob</c> heap pointing to a <c>MethodSpec</c> item, which describes the generic arguments of a method
@@ -486,6 +515,7 @@ type [<IsReadOnly; Struct>] MethodSpecOffset = internal { MethodSpec: BlobOffset
 type MethodSpecRow =
     { Method: MethodDefOrRef
       Instantiation: MethodSpecOffset }
+    interface ITableRow
 
 /// <summary>
 /// (0x2C) Represents a row in the <c>GenericParamConstraint</c> table, which specifies the interfaces and/or base type that a
@@ -493,5 +523,6 @@ type MethodSpecRow =
 /// </summary>
 [<IsReadOnly; Struct>]
 type GenericParamConstraintRow =
-    { Owner: WhatToUseForIndexIntoGenericParam
+    { Owner: TableIndex<GenericParamRow>
       Constraint: ParsedTypeDefOrRefOrSpec }
+    interface ITableRow
