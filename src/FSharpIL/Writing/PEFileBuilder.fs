@@ -18,7 +18,10 @@ type PEFileBuilder (fileHeader: CoffHeader<Omitted, Omitted>, optionalHeader: Op
 
     member _.GetSection i = sections.[i]
 
+    //member _.AddSection(builder: SectionBuilder)
+
     // TODO: Provide functions for modifying instead of methods? Or both?
+    [<System.Obsolete>]
     /// Creates a section with the specified name and flags.
     member _.CreateSection(name, characteristics) =
         let builder = SectionBuilder(optionalHeader.Alignment, name, characteristics)

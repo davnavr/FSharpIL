@@ -4,7 +4,7 @@ open System.Collections.Immutable
 
 open FSharpIL
 
-// TODO: How to keep track of RVAs? Some fields that depend on RVAs may have already been written after they become invalid. Maybe prevent modification of previous sections?
+// TODO: To allow easy tracking of RVAs prevent modification of previous sections by ensuring PEFileBuilder only accepts Section instances?
 [<Sealed>]
 type SectionBuilder internal (alignment: Alignment, name: SectionName, flags: SectionCharacteristics) =
     let mutable section = ChunkedMemoryBuilder(int32 alignment.FileAlignment)

@@ -1,4 +1,4 @@
-﻿/// Contains various magic numbers and bytes used throughout a PE file containing CLI metadata.
+﻿/// Contains various magic numbers used throughout a PE file.
 [<RequireQualifiedAccess>]
 module FSharpIL.Magic
 
@@ -16,6 +16,3 @@ let optionalHeaderSize = 0x224us
 
 /// The size of a single section header, in bytes.
 let sectionHeaderSize = 40u
-
-/// <summary>The size of the CLI header, in bytes, stored in the <c>Cb</c> field of the CLI header (II.25.3.3).</summary>
-let cliHeaderSize = 0x48u

@@ -60,14 +60,6 @@ type internal BlobParser (sizes: HeapSizes) =
 // TODO: Allow usage of existing types in FSharpIL.Metadata by using generic parameters and remove "string" and GUID and using some sort of index and builder system just like with Blobs.
 
 [<IsReadOnly; Struct>]
-type ParsedModuleRow =
-    { Generation: uint16
-      Name: ParsedString
-      Mvid: ParsedGuid
-      EncId: ParsedGuid
-      EncBaseId: ParsedGuid }
-
-[<IsReadOnly; Struct>]
 type ModuleParser (sizes: HeapSizes) =
     interface IByteParser<ParsedModuleRow> with
         member _.Parse buffer =
@@ -219,12 +211,6 @@ module ParsedResolutionScope =
         | { Tag = unknown } -> Unknown(unknown, rscope.Index)
 
 [<IsReadOnly; Struct>]
-type ParsedTypeRefRow =
-    { ResolutionScope: ParsedResolutionScope
-      TypeName: ParsedString
-      TypeNamespace: ParsedString }
-
-[<IsReadOnly; Struct>]
 type TypeRefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
     member inline private _.ResolutionScope = CodedIndex.resolutionScopeParser counts
     interface IByteParser<ParsedTypeRefRow> with
@@ -256,15 +242,6 @@ module ParsedExtends =
         | { Extends = { Tag = tag; Index = index } } -> ValueSome { Tag = LanguagePrimitives.EnumOfValue tag; TypeIndex = index }
 
 [<IsReadOnly; Struct>]
-type ParsedTypeDefRow =
-    { Flags: TypeAttributes
-      TypeName: ParsedString
-      TypeNamespace: ParsedString
-      Extends: ParsedExtends
-      FieldList: uint32
-      MethodList: uint32 }
-
-[<IsReadOnly; Struct>]
 type TypeDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
     member inline private _.Extends = CodedIndex.typeDefOrRefOrSpec counts
     interface IByteParser<ParsedTypeDefRow> with
@@ -289,12 +266,6 @@ type TypeDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
             + (IndexParser.length MetadataTableFlags.Field counts)
             + (IndexParser.length MetadataTableFlags.MethodDef counts)
 
-[<IsReadOnly; Struct>]
-type ParsedFieldRow =
-    { Flags: FieldAttributes
-      Name: ParsedString
-      Signature: FieldSigOffset }
-
 type FieldParser (sizes: HeapSizes) =
     interface IByteParser<ParsedFieldRow> with
         member _.Parse buffer =
@@ -302,15 +273,6 @@ type FieldParser (sizes: HeapSizes) =
               Name = parse 2 buffer (StringParser sizes)
               Signature = { FieldSig = parse (2 + sizes.StringSize) buffer (BlobParser sizes) } }
         member _.Length = 2 + sizes.StringSize + sizes.BlobSize
-
-[<IsReadOnly; Struct>]
-type ParsedMethodRow =
-    { Rva: uint32
-      ImplFlags: MethodImplAttributes
-      Flags: MethodAttributes
-      Name: ParsedString
-      Signature: MethodDefSigOffset
-      ParamList: uint32 }
 
 [<IsReadOnly; Struct>]
 type MethodDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
@@ -325,12 +287,6 @@ type MethodDefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
         member _.Length = 8 + sizes.StringSize + sizes.BlobSize + (IndexParser.length MetadataTableFlags.Param counts)
 
 [<IsReadOnly; Struct>]
-type ParsedParamRow =
-    { Flags: ParameterAttributes
-      Sequence: uint16
-      Name: ParsedString }
-
-[<IsReadOnly; Struct>]
 type ParamParser (sizes: HeapSizes) =
     interface IByteParser<ParsedParamRow> with
         member _.Parse buffer =
@@ -338,9 +294,6 @@ type ParamParser (sizes: HeapSizes) =
               Sequence = Bytes.readU2 2 buffer
               Name = parse 4 buffer (StringParser sizes) }
         member _.Length = 4 + sizes.StringSize
-
-[<IsReadOnly; Struct>]
-type ParsedInterfaceImpl = { Class: uint32; Interface: ParsedTypeDefOrRefOrSpec }
 
 [<IsReadOnly; Struct>]
 type InterfaceImplParser (counts: MetadataTableCounts) =
@@ -357,12 +310,6 @@ type InterfaceImplParser (counts: MetadataTableCounts) =
 type [<IsReadOnly; Struct>] ParsedMemberRefParent = private { MemberRefParent: ParsedCodedIndex }
 
 [<IsReadOnly; Struct>]
-type ParsedMemberRef =
-    { Class: ParsedMemberRefParent
-      Name: ParsedString
-      Signature: ParsedMemberRefSig }
-
-[<IsReadOnly; Struct>]
 type MemberRefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
     member inline private _.Class = CodedIndex.memberRefParent counts
     interface IByteParser<ParsedMemberRef> with
@@ -374,12 +321,6 @@ type MemberRefParser (sizes: HeapSizes, counts: MetadataTableCounts) =
         member this.Length = this.Class.Length + sizes.StringSize + sizes.BlobSize
 
 type [<IsReadOnly; Struct>] ParsedConstantParent = private { HasConstant: ParsedCodedIndex }
-
-[<IsReadOnly; Struct>]
-type ParsedConstant =
-    { Type: ElementType
-      Parent: ParsedConstantParent
-      Value: ParsedBlob } // TODO: Make ParsedConstantBlob type.
 
 [<IsReadOnly; Struct>]
 type ConstantParser (sizes: HeapSizes, counts: MetadataTableCounts) =
@@ -397,12 +338,6 @@ type [<IsReadOnly; Struct>] ParsedAttributeParent = private { HasCustomAttribute
 type [<IsReadOnly; Struct>] ParsedAttributeType = private { CustomAttributeType: ParsedCodedIndex }
 
 [<IsReadOnly; Struct>]
-type ParsedCustomAttribute =
-    { Parent: ParsedAttributeParent
-      Type: ParsedAttributeType
-      Value: CustomAttribOffset }
-
-[<IsReadOnly; Struct>]
 type CustomAttributeParser (sizes: HeapSizes, counts: MetadataTableCounts) =
     member inline private _.Parent = CodedIndex.hasCustomAttribute counts
     member inline private _.Type = CodedIndex.customAttributeType counts
@@ -416,12 +351,6 @@ type CustomAttributeParser (sizes: HeapSizes, counts: MetadataTableCounts) =
         member this.Length = this.Parent.Length + this.Type.Length + sizes.BlobSize
 
 
-
-[<IsReadOnly; Struct>]
-type ParsedClassLayout =
-    { PackingSize: uint16
-      ClassSize: uint32
-      Parent: uint32 }
 
 [<IsReadOnly; Struct>]
 type ClassLayoutParser (counts: MetadataTableCounts) =
@@ -443,8 +372,6 @@ type StandaloneSigParser (sizes: HeapSizes) =
 
 
 
-type [<IsReadOnly; Struct>] ParsedPropertyMap = { Parent: uint32; PropertyList: uint32 }
-
 [<IsReadOnly; Struct>]
 type PropertyMapParser (counts: MetadataTableCounts) =
     member inline private _.Parent = IndexParser MetadataTableFlags.TypeDef
@@ -457,12 +384,6 @@ type PropertyMapParser (counts: MetadataTableCounts) =
         member this.Length = this.Parent.Length counts + this.PropertyList.Length counts
 
 [<IsReadOnly; Struct>]
-type ParsedProperty =
-    { Flags: PropertyAttributes
-      Name: ParsedString
-      Type: PropertySigOffset }
-
-[<IsReadOnly; Struct>]
 type PropertyParser (sizes: HeapSizes) =
     interface IByteParser<ParsedProperty> with
         member _.Parse buffer =
@@ -472,12 +393,6 @@ type PropertyParser (sizes: HeapSizes) =
         member _.Length = 2 + sizes.StringSize + sizes.BlobSize
 
 type [<IsReadOnly; Struct>] ParsedPropertyAssociation = private { HasSemantics: ParsedCodedIndex }
-
-[<IsReadOnly; Struct>]
-type ParsedMethodSemantics =
-    { Semantics: MethodSemanticsFlags
-      Method: uint32
-      Association: ParsedPropertyAssociation }
 
 [<IsReadOnly; Struct>]
 type MethodSemanticsParser (counts: MetadataTableCounts) =
@@ -492,12 +407,6 @@ type MethodSemanticsParser (counts: MetadataTableCounts) =
         member this.Length = 2 + this.Method.Length counts + this.Association.Length
 
 type [<IsReadOnly; Struct>] ParsedMethodDefOrRef = private { MethodDefOrRef: ParsedCodedIndex }
-
-[<IsReadOnly; Struct>]
-type ParsedMethodImpl =
-    { Class: uint32
-      MethodBody: ParsedMethodDefOrRef
-      MethodDeclaration: ParsedMethodDefOrRef }
 
 [<IsReadOnly; Struct>]
 type MethodImplParser (counts: MetadataTableCounts) =
@@ -515,15 +424,13 @@ type MethodImplParser (counts: MetadataTableCounts) =
 
 
 
-[<IsReadOnly; Struct>]
-type TypeSpecParser (sizes: HeapSizes) =
-    interface IByteParser<TypeSpecOffset> with
-        member _.Parse buffer = { TypeSpec = parse 0 buffer (BlobParser sizes) }
-        member _.Length = sizes.BlobSize
+//[<IsReadOnly; Struct>]
+//type TypeSpecParser (sizes: HeapSizes) =
+//    interface IByteParser<TypeSpecOffset> with
+//        member _.Parse buffer = { TypeSpec = parse 0 buffer (BlobParser sizes) }
+//        member _.Length = sizes.BlobSize
 
 
-
-type [<IsReadOnly; Struct>] ParsedFieldRva = { Rva: uint32; Field: uint32 }
 
 [<IsReadOnly; Struct>]
 type FieldRvaParser (counts: MetadataTableCounts) =
@@ -565,21 +472,6 @@ type AssemblyParser (sizes: HeapSizes) =
         member _.Length = 16 + sizes.BlobSize + (2 * sizes.StringSize)
 
 [<IsReadOnly; Struct>]
-type ParsedAssemblyRef =
-    { MajorVersion: uint16
-      MinorVersion: uint16
-      BuildNumber: uint16
-      RevisionNumber: uint16
-      Flags: AssemblyNameFlags
-      PublicKeyOrToken: ParsedBlob
-      Name: ParsedString
-      Culture: ParsedString
-      HashValue: ParsedBlob }
-
-    member this.Version =
-        Version(int32 this.MajorVersion, int32 this.MinorVersion, int32 this.BuildNumber, int32 this.RevisionNumber)
-
-[<IsReadOnly; Struct>]
 type AssemblyRefParser (sizes: HeapSizes) =
     interface IByteParser<ParsedAssemblyRef> with
         member _.Parse buffer =
@@ -601,13 +493,6 @@ type AssemblyRefParser (sizes: HeapSizes) =
 type [<IsReadOnly; Struct>] ParsedImplementation = private { Implementation: ParsedCodedIndex }
 
 [<IsReadOnly; Struct>]
-type ParsedManifestResource =
-    { Offset: uint32
-      Flags: ManifestResourceFlags
-      Name: ParsedString
-      Implementation: ParsedImplementation }
-
-[<IsReadOnly; Struct>]
 type ManifestResourceParser (sizes: HeapSizes, counts: MetadataTableCounts) =
     member inline private _.Implementation = CodedIndex.implementation counts
     interface IByteParser<ParsedManifestResource> with
@@ -618,8 +503,6 @@ type ManifestResourceParser (sizes: HeapSizes, counts: MetadataTableCounts) =
               Name = parse 8 buffer (StringParser sizes)
               Implementation = { Implementation = implementation.Parse(8 + sizes.StringSize, buffer) } }
         member this.Length = 8 + sizes.StringSize + this.Implementation.Length
-
-type [<IsReadOnly; Struct>] ParsedNestedClass = { NestedClass: uint32; EnclosingClass: uint32 }
 
 [<IsReadOnly; Struct>]
 type NestedClassParser (counts: MetadataTableCounts) =
@@ -633,13 +516,6 @@ type NestedClassParser (counts: MetadataTableCounts) =
 type [<IsReadOnly; Struct>] ParsedTypeOrMethodDef = private { TypeOrMethodDef: ParsedCodedIndex }
 
 [<IsReadOnly; Struct>]
-type ParsedGenericParam =
-    { Number: uint16
-      Flags: GenericParameterAttributes
-      Owner: ParsedTypeOrMethodDef
-      Name: ParsedString }
-
-[<IsReadOnly; Struct>]
 type GenericParamParser (sizes: HeapSizes, counts: MetadataTableCounts) =
     member inline private _.Owner = CodedIndex.typeOrMethodDef counts
     interface IByteParser<ParsedGenericParam> with
@@ -651,8 +527,6 @@ type GenericParamParser (sizes: HeapSizes, counts: MetadataTableCounts) =
               Name = parse (4 + owner.Length) buffer (StringParser sizes) }
         member this.Length = 4 + this.Owner.Length + sizes.StringSize
 
-type [<IsReadOnly; Struct>] ParsedMethodSpec = { Method: uint32; Instantiation: ParsedMethodInstantiation }
-
 [<IsReadOnly; Struct>]
 type MethodSpecParser (sizes: HeapSizes, counts: MetadataTableCounts) =
     member inline private _.Method = IndexParser MetadataTableFlags.MethodDef
@@ -662,11 +536,6 @@ type MethodSpecParser (sizes: HeapSizes, counts: MetadataTableCounts) =
             { Method = method.Parse(counts, 0, buffer)
               Instantiation = { MethodSpec = parse (method.Length counts) buffer (BlobParser sizes) } }
         member this.Length = this.Method.Length counts + sizes.BlobSize
-
-[<IsReadOnly; Struct>]
-type ParsedGenericParamConstraint =
-    { Owner: uint32
-      Constraint: ParsedTypeDefOrRefOrSpec }
 
 [<IsReadOnly; Struct>]
 type GenericParamConstraintParser (counts: MetadataTableCounts) =

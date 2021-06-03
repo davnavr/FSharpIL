@@ -12,14 +12,6 @@ type ParsedBlob =
     internal { BlobOffset: uint32 }
     static member op_Implicit { BlobOffset = offset } = offset
 
-// TODO: Rename other types ending in Sig to end in Offset instead.
-type [<IsReadOnly; Struct>] FieldSigOffset = internal { FieldSig: ParsedBlob }
-type [<IsReadOnly; Struct>] MethodDefSigOffset = internal { MethodDefSig: ParsedBlob }
-type [<IsReadOnly; Struct>] ParsedMemberRefSig = internal { MemberRefSig: ParsedBlob }
-type [<IsReadOnly; Struct>] CustomAttribOffset = internal { CustomAttrib: ParsedBlob }
-type [<IsReadOnly; Struct>] ParsedStandaloneSig = internal { StandaloneSig: ParsedBlob }
-type [<IsReadOnly; Struct>] PropertySigOffset = internal { PropertySig: ParsedBlob }
-type [<IsReadOnly; Struct>] TypeSpecOffset = internal { TypeSpec: ParsedBlob }
 type [<IsReadOnly; Struct>] ParsedMethodInstantiation = internal { MethodSpec: ParsedBlob }
 //type [<IsReadOnly; Struct>] TemporarySomethingSig = internal { TemporarySomethingSig: ParsedBlob }
 

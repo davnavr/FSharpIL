@@ -8,7 +8,7 @@ type CorFlags =
     | None = 0u
     | ILOnly = 1u
     | Requires32Bit = 2u
-    /// Indicates that the image has a strong name signature.
+    /// The image has a strong name signature.
     | StrongNameSigned = 0x8u
     | NativeEntryPoint = 0x10u
     | TrackDebugData = 0x10000u
@@ -18,7 +18,7 @@ type CorFlags =
 /// (II.25.3.3).
 /// </summary>
 [<NoComparison; StructuralEquality>]
-type CliHeader<'Cb, 'Flags, 'EntryPointToken, 'Reserved, 'Metadata, 'Resources, 'StrongNameSignature, 'VTableFixups> =
+type CliHeader<'Cb, 'Flags, 'EntryPointToken, 'Reserved, 'Metadata, 'Resources, 'StrongNameSignature, 'VTableFixups> = // TODO: Don't make this a generic type.
     { /// The size of the CLI header, in bytes
       Cb: 'Cb
       MajorRuntimeVersion: uint16
@@ -32,6 +32,8 @@ type CliHeader<'Cb, 'Flags, 'EntryPointToken, 'Reserved, 'Metadata, 'Resources, 
       VTableFixups: 'VTableFixups
       ExportAddressTableJumps: 'Reserved
       ManagedNativeHeader: 'Reserved }
+
+type CliHeader = CliHeader<Omitted, Omitted, Omitted, Omitted, Omitted, Omitted, Omitted, Omitted>
 
 [<RequireQualifiedAccess>]
 module CliHeader =
