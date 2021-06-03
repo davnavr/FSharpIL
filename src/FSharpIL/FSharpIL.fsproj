@@ -23,6 +23,9 @@
     <Compile Include="Metadata\Magic.fs" />
     <Compile Include="Metadata\HeapOffsets.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
+    <Compile Include="Metadata\Blobs\Offsets.fs" />
+    <Compile Include="Metadata\Blobs\Signatures.fs" />
+    <Compile Include="Metadata\Blobs\ConstantType.fs" />
     <Compile Include="Metadata\Tables\TableFlags.fs" />
     <Compile Include="Metadata\Tables\TableIndex.fs" />
     <Compile Include="Metadata\Tables\CodedIndex.fs" />

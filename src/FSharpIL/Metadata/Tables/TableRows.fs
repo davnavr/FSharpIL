@@ -5,6 +5,7 @@ open System.Runtime.CompilerServices
 
 open FSharpIL
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Blobs
 
 [<IsReadOnly; Struct>]
 type ModuleRow =
@@ -49,9 +50,6 @@ type FieldFlags =
     | HasFieldMarshal = 0x1000us
     | HasDefault = 0x8000us
     | HasFieldRva = 0x100us
-
-/// <summary>An offset into the <c>#Blob</c> heap pointing to a <c>FieldSig</c> (II.23.2.4).</summary>
-type [<IsReadOnly; Struct>] FieldSigOffset = internal { FieldSig: BlobOffset }
 
 /// <summary>(0x04) Represents a row in the <c>Field</c> table (II.22.15).</summary>
 [<IsReadOnly; Struct>]
@@ -123,12 +121,6 @@ type MethodImplFlags =
     | NoInlining = 8us
     /// The method will not be optimized during native code generation.
     | NoOptimization = 0x40us
-
-/// <summary>
-/// An offset into the <c>#Blob</c> heap pointing to a <c>MethodDefSig</c>, which describes the return type and parameter types
-/// of a method (II.23.2.1).
-/// </summary>
-type [<IsReadOnly; Struct>] MethodDefSigOffset = internal { MethodDefSig: BlobOffset }
 
 /// <summary>(0x06) Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<IsReadOnly; Struct>]
@@ -235,11 +227,6 @@ type InterfaceImplRow =
     interface ITableRow
 
 /// <summary>
-/// An offset into the <c>#Blob</c> heap pointing to a <c>MethodRefSig</c> (II.23.2.2) or a <c>FieldSig</c> (II.23.2.4).
-/// </summary>
-type [<IsReadOnly; Struct>] MemberRefSigOffset = internal { MemberRefSig: BlobOffset }
-
-/// <summary>
 /// (0x0A) Represents a row in the <c>MemberRef</c> table, which contains references to methods or fields (II.22.25).
 /// </summary>
 [<IsReadOnly; Struct>]
@@ -249,22 +236,16 @@ type MemberRefRow =
       Signature: MemberRefSigOffset }
     interface ITableRow
 
-/// <summary>An offset into the <c>#Blob</c> heap pointing to a constant value (II.22.9).</summary>
-type [<IsReadOnly; Struct>] ConstantBlob = internal { Constant: BlobOffset }
-
 /// <summary>
 /// (0x0B) Represents a row in the <c>Constant</c> table, which contains "compile-time, constant values for fields, parameters,
 /// and properties" (II.22.9).
 /// </summary>
 [<IsReadOnly; Struct>]
 type ConstantRow =
-    { Type: ElementType // the enum
+    { Type: ConstantType
       Parent: HasConstant
-      Value: ConstantBlob } // TODO: Make ParsedConstantBlob type.
+      Value: ConstantOffset }
     interface ITableRow
-
-/// <summary>An offset into the <c>#Blob</c> heap pointing to a <c>CustomAttrib</c> item (II.23.3).</summary>
-type [<IsReadOnly; Struct>] CustomAttributeOffset = private { CustomAttrib: BlobOffset }
 
 /// <summary>(0x0C) Represents a row in the <c>CustomAttribute</c> table (II.22.10).</summary>
 [<IsReadOnly; Struct>]
@@ -299,12 +280,6 @@ type StandAloneSigRow =
     interface ITableRow
 
 
-
-/// <summary>
-/// An offset into the <c>#Blob</c> heap pointing to a <c>PropertySig</c> item, which describes the type of a property and its
-/// parameters (II.23.2.5).
-/// </summary>
-type [<IsReadOnly; Struct>] PropertySigOffset = private { PropertySig: BlobOffset }
 
 /// <summary>Describes the attributes of a <c>Property</c> (II.23.1.14).</summary>
 [<Flags>]
@@ -503,12 +478,6 @@ type GenericParamRow =
       Owner: TypeOrMethodDef
       Name: StringOffset }
     interface ITableRow
-
-/// <summary>
-/// An offset into the <c>#Blob</c> heap pointing to a <c>MethodSpec</c> item, which describes the generic arguments of a method
-/// (II.23.2.15).
-/// </summary>
-type [<IsReadOnly; Struct>] MethodSpecOffset = internal { MethodSpec: BlobOffset }
 
 /// <summary>(0x2B) Represents a row in the <c>MethodSpec</c> table (II.22.29).</summary>
 [<IsReadOnly; Struct>]
