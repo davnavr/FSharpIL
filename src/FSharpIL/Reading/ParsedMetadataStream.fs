@@ -4,6 +4,7 @@ open System
 
 open FSharpIL
 
+// TODO: Having this as a separate class is not needed, as this behavior is only neede by #Strings heap
 type internal ParsedMetadataStream internal (chunk: ChunkedMemory) =
     let [<Literal>] DefaultBufferSize = 16
     let mutable buffer = Array.zeroCreate DefaultBufferSize

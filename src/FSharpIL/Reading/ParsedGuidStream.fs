@@ -19,7 +19,7 @@ type ParsedGuidStream internal (chunk: ChunkedMemory) =
 
     member _.IsValidOffset offset = chunk.IsValidOffset(offset + 15u)
 
-    member this.TryGetGuid { ParsedGuid.GuidIndex = i } =
+    member _.TryGetGuid { ParsedGuid.GuidIndex = i } =
         match i with
         | 0u -> ValueSome Guid.Empty
         | _ ->
