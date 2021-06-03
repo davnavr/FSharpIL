@@ -1,8 +1,9 @@
 ﻿namespace FSharpIL.PortableExecutable
 
-open System.Collections.Immutable
 open System.Runtime.CompilerServices
 open System.Text
+
+open FSharpIL.Utilities
 
 /// Specifies the name of a section in its section header (II.25.3).
 [<IsReadOnly; Struct>]
@@ -13,6 +14,7 @@ type SectionName =
 
 [<RequireQualifiedAccess>]
 module SectionName =
+    // TODO: Figure out if null padding bytes are included or not
     let text = { SectionName = ".text"B }
     let rsrc = { SectionName = ".rsrc"B }
     let reloc = { SectionName = ".reloc"B }
@@ -26,4 +28,4 @@ module SectionName =
                     else bytes.[i]
             ValueSome { SectionName = name }
         else ValueNone
-    let toBlock { SectionName = bytes } = Unsafe.As<_, ImmutableArray<byte>>(&Unsafe.AsRef &bytes)
+    let toBlock { SectionName = bytes } = Convert.unsafeTo bytes

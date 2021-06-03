@@ -5,7 +5,8 @@ open System.Collections.Immutable
 open System.Text
 
 open FSharpIL
-open FSharpIL.Metadata
+open FSharpIL.Metadata.Tables
+open FSharpIL.Metadata.Blobs
 
 [<NoComparison; NoEquality>]
 [<RequireQualifiedAccess>]
@@ -20,7 +21,7 @@ type ParsedStructure =
     | MetadataSignature
     | MetadataTablesHeader
     | MetadataTableRowCounts
-    | MetadataRow of table: MetadataTableFlags * index: uint32
+    | MetadataRow of table: ValidTableFlags * index: uint32
 
     override this.ToString() =
         match this with
@@ -105,11 +106,11 @@ type BlobError =
 [<NoComparison; NoEquality>]
 type ReadError =
     | InvalidMagic of expected: ImmutableArray<byte> * actual: ImmutableArray<byte>
-    | CannotMoveToPreviousOffset of offset: uint64
+    | CannotMoveToPreviousOffset of offset: FileOffset
     | OptionalHeaderTooSmall of size: uint16
     | TooFewDataDirectories of count: uint32
     | NoCliMetadata
-    | RvaNotInTextSection of rva: uint32
+    | RvaNotInTextSection of Rva
     | CliHeaderTooSmall of size: uint32
     | MetadataVersionHasNoNullTerminator of version: ImmutableArray<byte>
     | StructureOutsideOfCurrentSection of ParsedStructure
@@ -118,7 +119,7 @@ type ReadError =
     | BlobError of BlobError
     | CannotFindMetadataTables
     | MissingModuleTable
-    | MetadataRowOutOfBounds of table: MetadataTableFlags * index: uint32 * count: uint32
+    | MetadataRowOutOfBounds of table: ValidTableFlags * index: uint32 * count: uint32
     // TODO: Move this error elsewhere.
     | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile

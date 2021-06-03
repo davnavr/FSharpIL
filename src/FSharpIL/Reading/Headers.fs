@@ -4,10 +4,7 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
-
-// TODO: Move this to PortableExecutable namespace.
-[<IsReadOnly; Struct>]
-type RvaAndSize = { Rva: uint32; Size: uint32 }
+open FSharpIL.PortableExecutable
 
 /// Represents a CLI header in a Portable Executable file that has been parsed (II.25.3.3).
 [<NoComparison; StructuralEquality>]

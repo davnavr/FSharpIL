@@ -15,4 +15,5 @@ type Rva = struct
     static member (*) (rva: Rva, value: uint32) = Rva(rva.value * value)
     static member (/) (rva: Rva, value: uint32) = Rva(rva.value / value)
     static member (-) (rva: Rva, value: uint32) = Rva(rva.value - value)
+    static member (-) (left: Rva, right: Rva) = Rva(left.value - right.value)
 end

@@ -38,6 +38,7 @@
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\Headers.fs" />
+    <Compile Include="PortableExecutable\SectionHeader.fs" />
     <Compile Include="PortableExecutable\DefaultHeaders.fs" />
     <Compile Include="PortableExecutable\DataDirectories.fs" />
     <Compile Include="PortableExecutable\PEFile.fs" />
@@ -64,8 +65,8 @@
     <Compile Include="Reading\ParsedMethodBodies.fs" />
     <Compile Include="Reading\ParsedMetadataTables.fs" />
     <Compile Include="Reading\MetadataReader.fs" />
-    <Compile Include="ReadCli.fsi" />
-    <Compile Include="ReadCli.fs" />
+    <Compile Include="Reading\ReadCli.fsi" />
+    <Compile Include="Reading\ReadCli.fs" />
 
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
   </ItemGroup>

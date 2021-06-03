@@ -6,6 +6,8 @@ open System.Collections.Immutable
 
 open FSharpIL.Utilities
 
+let dosHeaderSignature = Convert.unsafeTo<_, ImmutableArray<byte>> "MZ"B
+
 /// The PE signature, which immediately precedes the COFF header (II.25.2.1).
 let portableExecutableSignature = Convert.unsafeTo<_, ImmutableArray<byte>> "PE\000\000"B
 

@@ -13,7 +13,7 @@ type ParsedCoffHeader = CoffHeader<uint16, uint16>
 type ParsedStandardFields = StandardFields<ImageKind, uint32, uint32 voption>
 type ParsedNTSpecificFields = NTSpecificFields<uint64, uint32 * uint32, uint32, uint64, uint32>
 type ParsedDataDirectories = ImmutableArray<RvaAndSize>
-type ParsedSectionHeaders = ImmutableArray<SectionHeader<SectionLocation>>
+type ParsedSectionHeaders = ImmutableArray<SectionHeader>
 type MetadataTableReader<'State> =
     ParsedStringsStream voption -> ParsedGuidStream voption -> ParsedBlobStream voption -> ParsedMetadataTables -> FileOffset ->
         'State -> 'State
