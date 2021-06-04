@@ -1,5 +1,5 @@
 ﻿[<RequireQualifiedAccess>]
-module internal FSharpIL.Span
+module internal FSharpIL.Utilities.Span
 
 open System
 open System.Runtime.CompilerServices

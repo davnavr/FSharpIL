@@ -127,10 +127,15 @@ type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageBasePlus, 'Ima
         StandardFields<'ImageKind, 'StandardField, Omitted> *
         NTSpecificFields<'ImageBasePlus, Alignment, 'ImageSize, uint64, 'NumDataDirectories>
 
-    member this.Alignment =
+    member inline this.Alignment =
         match this with
         | PE32(_, { Alignment = alignment })
         | PE32Plus(_, { Alignment = alignment }) -> alignment
+
+    member inline this.NumberOfDataDirectories =
+        match this with
+        | PE32(_, { NumberOfDataDirectories = count })
+        | PE32Plus(_, { NumberOfDataDirectories = count }) -> count
 
 // TODO: How will ImageBase work, since it is different sizes for PE32 and PE32+, and overflows should be prevented.
 // TODO: Better alias for optional header used in building PE files.

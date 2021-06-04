@@ -2,19 +2,21 @@
 [<RequireQualifiedAccess>]
 module FSharpIL.Reading.ReadPE
 
-open System
-open System.Collections.Immutable
-open System.IO
+val fromArray<'State> : file: byte[] -> state: 'State -> PEFileReader<'State> -> 'State
 
-open FSharpIL
+val fromBlock<'State> :
+    file: System.Collections.Immutable.ImmutableArray<byte> ->
+    state: 'State ->
+    PEFileReader<'State> ->
+    'State
+
+val fromChunkedMemory<'State> : file: FSharpIL.ChunkedMemory -> state: 'State -> PEFileReader<'State> -> 'State
+
+val fromMemory<'State> : file: System.ReadOnlyMemory<byte> -> state: 'State -> PEFileReader<'State> -> 'State
 
 /// Reads a Portable Executable file from the specified stream.
-val fromStream<'State> : stream: Stream -> state: 'State -> MetadataReader<'State> -> 'State
-
-val fromMemory<'State> : file: ReadOnlyMemory<byte> -> state: 'State -> MetadataReader<'State> -> 'State
-
-val fromArray<'State> : file: byte[] -> state: 'State -> MetadataReader<'State> -> 'State
-
-val fromBlock<'State> : file: ImmutableArray<byte> -> state: 'State -> MetadataReader<'State> -> 'State
-
-val fromChunkedMemory<'State> : file: ChunkedMemory -> state: 'State -> MetadataReader<'State> -> 'State
+val fromStream<'Stream, 'State when 'Stream :> System.IO.Stream> :
+    stream: 'Stream ->
+    state: 'State ->
+    PEFileReader<'State> ->
+    'State

@@ -5,22 +5,25 @@ open System.Runtime.CompilerServices
 
 open FSharpIL
 
+[<Obsolete>]
 type IByteParser<'Result> =
     abstract Length: int32 // TODO: Make size an unsigned int.
     abstract Parse: Span<byte> -> 'Result // TODO: Replace Span<byte> with Chunks.
 
+[<Obsolete>]
 type [<IsReadOnly; Struct>] internal ParseU2 =
     interface IByteParser<uint16> with
         member _.Length = 2
         member _.Parse buffer = Bytes.readU2 0 buffer
 
+[<Obsolete>]
 type [<IsReadOnly; Struct>] internal ParseU4 =
     interface IByteParser<uint32> with
         member _.Length = 4
         member _.Parse buffer = Bytes.readU4 0 buffer
 
+[<Obsolete>]
 module internal ByteParser =
-    // TODO: This might replace Bytes.readU* functions.
     let parse<'Parser, 'Result when 'Parser :> IByteParser<'Result>> offset (buffer: Span<byte>) (parser: 'Parser) =
         parser.Parse(buffer.Slice(offset, parser.Length))
 

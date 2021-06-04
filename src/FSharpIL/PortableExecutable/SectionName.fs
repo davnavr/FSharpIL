@@ -15,10 +15,10 @@ type SectionName =
 [<RequireQualifiedAccess>]
 module SectionName =
     // TODO: Figure out if null padding bytes are included or not
-    let text = { SectionName = ".text"B }
-    let rsrc = { SectionName = ".rsrc"B }
-    let reloc = { SectionName = ".reloc"B }
-    let ofBytes (bytes: byte[]) =
+    let text = { SectionName = ".text\000\000\000"B }
+    let rsrc = { SectionName = ".rsrc\000\000\000"B }
+    let reloc = { SectionName = ".reloc\000\000"B }
+    let ofBytes (bytes: byte[]) = // TODO: Rename to tryOfBytes
         if bytes.Length <= 8 then
             let name = Array.zeroCreate<byte> 8
             for i = 0 to name.Length - 1 do

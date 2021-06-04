@@ -3,7 +3,7 @@
 type StructureReader<'Structure, 'State> = ('Structure -> FileOffset -> 'State -> 'State voption) voption
 
 [<RequireQualifiedAccess>]
-module StructureHeader =
+module StructureReader =
     let skip (_: FileOffset) state = ValueSome state
 
     let inline read (reader: StructureReader<_, _>) arg =

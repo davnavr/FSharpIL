@@ -108,6 +108,7 @@ type ReadError =
     | InvalidMagic of expected: ImmutableArray<byte> * actual: ImmutableArray<byte>
     | CannotMoveToPreviousOffset of offset: FileOffset
     | OptionalHeaderTooSmall of size: uint16
+    | UnsupportedOptionalHeaderSize of size: uint16
     | TooFewDataDirectories of count: uint32
     | NoCliMetadata
     | RvaNotInTextSection of Rva
@@ -133,6 +134,7 @@ type ReadError =
                 (Bytes.print(actual.AsSpan()))
         | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset 0x%016X" offset
         | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
+        | UnsupportedOptionalHeaderSize size -> sprintf "the parser does not support an optional header size of %i bytes" size
         | TooFewDataDirectories count -> sprintf "the number of data directories (%i) is too small" count
         | NoCliMetadata -> "the Portable Executable file does not contain any CLI metadata"
         | RvaNotInTextSection rva ->

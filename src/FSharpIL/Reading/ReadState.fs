@@ -45,8 +45,7 @@ type FileReadState =
     | ReadPESignature
     /// Indicates that the PE file header after the PE signature is being read (II.25.2.2).
     | ReadCoffHeader
-    | ReadStandardFields
-    | ReadNTSpecificFields
+    | ReadOptionalHeader
     | ReadDataDirectories
     | ReadSectionHeaders
     | MoveToTextSectionData
@@ -60,8 +59,7 @@ type FileReadState =
         | MoveToPESignature -> "moving to PE signature"
         | ReadPESignature -> "reading PE signature"
         | ReadCoffHeader -> "reading COFF header"
-        | ReadStandardFields -> "reading PE header standard fields of the PE optional header"
-        | ReadNTSpecificFields -> "reading NT-specific fields of the PE optional header"
+        | ReadOptionalHeader -> "reading PE optional header"
         | ReadDataDirectories -> "reading PE header data directories"
         | ReadSectionHeaders -> "reading section headers"
         | MoveToTextSectionData -> "moving to text section data"
