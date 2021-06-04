@@ -20,10 +20,12 @@ type ReadResult<'State, 'T, 'Error when 'State : struct> =
 type IHeaderReader = abstract Read: Span<byte> -> int32
 
 [<Sealed>]
-type HeaderReader<'Reader when 'Reader :> IHeaderReader> (reader: 'Reader) =
-    let mutable pos = { FileOffset = 0u }
-    member _.Offset = pos
-    member _.Read buffer = reader.Read buffer = buffer.Length
+type HeaderReader<'Reader when 'Reader :> IHeaderReader> = class
+    val mutable private pos: FileOffset
+    val mutable private reader: 'Reader
+    new (reader) = { pos = { FileOffset = 0u }; reader = reader }
+    member this.Offset = this.pos
+    member this.Read buffer = this.reader.Read buffer = buffer.Length
 
     member this.SkipBytes(count: uint32) = // TODO: Make skipping method work better.
         let buffer = Span.stackalloc<byte> 1
@@ -32,19 +34,20 @@ type HeaderReader<'Reader when 'Reader :> IHeaderReader> (reader: 'Reader) =
             if this.Read buffer
             then skipped <- skipped + 1u
             else cont <- false
-        pos <- pos + skipped
+        this.pos <- this.pos + skipped
         skipped
 
     member this.MoveTo (offset: FileOffset) =
-        if offset < pos then
+        if offset < this.pos then
             Some(CannotMoveToPreviousOffset this.Offset)
-        elif offset = pos then
+        elif offset = this.pos then
             None
         else
-            let diff = uint32(offset - pos)
+            let diff = uint32(offset - this.pos)
             if this.SkipBytes diff = diff
             then None
             else Some UnexpectedEndOfFile
+end
 
 [<NoComparison; NoEquality>]
 type PEInfo =
@@ -81,7 +84,8 @@ let readMagic (src: HeaderReader<_>) (expected: ImmutableArray<byte>) ustate nex
     else Failure UnexpectedEndOfFile
 
 let readLfanew (src: HeaderReader<_>) (lfanew: byref<FileOffset>) reader ustate =
-    let buffer, offset = Span.stackalloc<byte> 4, src.Offset
+    let buffer = Span.stackalloc<byte> 4
+    let offset = src.Offset
     if src.Read buffer then
         lfanew <- { FileOffset = Bytes.toU4 0 buffer }
         readStructure reader.ReadLfanew lfanew offset ustate MoveToPESignature
@@ -247,10 +251,6 @@ let readDataDirectories
         | Error err -> Failure err
     | Some err -> Failure err
 
-/// Finds the section containing the CLI header
-let findCliSection =
-    ()
-
 let rec readSectionHeader (src: HeaderReader<_>) (buffer: Span<byte>) (headers: SectionHeader[]) i =
     if i < headers.Length then
         if src.Read buffer then
@@ -279,6 +279,7 @@ let readSectionHeaders (src: HeaderReader<_>) (Convert.I4 count: uint16) (header
     | Some err -> Failure err
 
 // TODO: Can optimize this by checking if section contains CLI header as section headers are read in readSectionHeader.
+/// Finds the section containing the CLI header
 let rec findCliSection cliHeaderRva (headers: ParsedSectionHeaders) i =
     if cliHeaderRva = Rva.Zero then Error NoCliMetadata
     elif i < headers.Length then
@@ -367,3 +368,37 @@ type StreamHeaderReader<'Stream when 'Stream :> Stream> (stream: 'Stream) =
     interface IHeaderReader with member _.Read buffer = stream.Read buffer
 
 let fromStream (stream: #Stream) state reader = fromReader (StreamHeaderReader stream) state reader
+
+type MemoryHeaderReader = struct
+    val mutable private file: ReadOnlyMemory<byte>
+    new (file) = { file = file }
+    interface IHeaderReader with
+        member this.Read buffer =
+            let buffer' =
+                if buffer.Length > this.file.Length
+                then buffer.Slice(0, this.file.Length)
+                else buffer
+            this.file.Span.Slice(0, buffer'.Length).CopyTo buffer'
+            this.file <- this.file.Slice buffer'.Length
+            buffer'.Length
+end
+
+let fromMemory file state reader = fromReader (MemoryHeaderReader file) state reader
+let fromArray file state reader = fromMemory (ReadOnlyMemory file) state reader
+let fromBlock (file: ImmutableArray<_>) state reader = fromMemory (file.AsMemory()) state reader
+
+type ChunkedMemoryHeaderReader = struct
+    val mutable private file: ChunkedMemory
+    new (file) = { file = file }
+    interface IHeaderReader with
+        member this.Read buffer =
+            let buffer' =
+                if uint32 buffer.Length > this.file.Length
+                then buffer.Slice(0, int32 this.file.Length)
+                else buffer
+            this.file.CopyTo(0u, buffer)
+            this.file <- this.file.Slice(uint32 buffer'.Length)
+            buffer'.Length
+end
+
+let fromChunkedMemory file state reader = fromReader (ChunkedMemoryHeaderReader file) state reader
