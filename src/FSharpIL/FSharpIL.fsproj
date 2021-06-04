@@ -39,6 +39,7 @@
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\Headers.fs" />
+    <Compile Include="PortableExecutable\FileOffset.fs" />
     <Compile Include="PortableExecutable\SectionHeader.fs" />
     <Compile Include="PortableExecutable\DefaultHeaders.fs" />
     <Compile Include="PortableExecutable\DataDirectories.fs" />
@@ -50,7 +51,6 @@
     <Compile Include="Writing\PEFileBuilder.fs" />
     <Compile Include="Writing\WritePE.fsi" />
     <Compile Include="Writing\WritePE.fs" />
-    <Compile Include="Reading\FileOffset.fs" />
     <Compile Include="Reading\ReadState.fs" />
     <Compile Include="Reading\ReadError.fs" />
     <Compile Include="Reading\ByteParser.fs" />

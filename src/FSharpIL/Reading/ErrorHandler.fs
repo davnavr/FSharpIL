@@ -1,5 +1,7 @@
 ﻿namespace FSharpIL.Reading
 
+open FSharpIL.PortableExecutable
+
 type ErrorHandler<'State> = ReadState -> ReadError -> FileOffset -> 'State -> 'State
 
 [<RequireQualifiedAccess>]

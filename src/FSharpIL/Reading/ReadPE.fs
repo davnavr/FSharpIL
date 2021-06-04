@@ -53,9 +53,19 @@ type PEInfo =
       [<DefaultValue>] mutable OptionalHeader: ParsedOptionalHeader
       [<DefaultValue>] mutable DataDirectories: ParsedDataDirectories
       [<DefaultValue>] mutable SectionHeaders: ParsedSectionHeaders
-      }
+      [<DefaultValue>] mutable CliSectionIndex: int32 voption
+      [<DefaultValue>] mutable CliSectionData: ChunkedMemory }
+
+    /// <exception cref="T:System.InvalidOperationException">
+    /// Thrown if the section headers have not yet been read, or if section containing the CLI header has not been set.
+    /// </exception>
+    member this.ClrSectionHeader =
+        if this.SectionHeaders.IsDefault then
+            invalidOp "Cannot access section containing CLI header, section headers have not yet been read."
+        this.SectionHeaders.[ValueOption.get this.CliSectionIndex]
 
 let offsetToLfanew = { FileOffset = 0x3Cu }
+let cliHeaderIndex = 15
 
 let inline readStructure reader arg offset ustate next =
     match StructureReader.read reader arg offset ustate with
@@ -207,7 +217,7 @@ let readDataDirectories
     | None ->
         let named =
             match reader.ReadCliMetadata with
-            | ValueSome _ when count < 15 -> Error(TooFewDataDirectories(uint32 count))
+            | ValueSome _ when count < cliHeaderIndex -> Error(TooFewDataDirectories(uint32 count))
             | ValueSome _ ->
                 DataDirectories (
                     directories'.[0],
@@ -237,6 +247,10 @@ let readDataDirectories
         | Error err -> Failure err
     | Some err -> Failure err
 
+/// Finds the section containing the CLI header
+let findCliSection =
+    ()
+
 let rec readSectionHeader (src: HeaderReader<_>) (buffer: Span<byte>) (headers: SectionHeader[]) i =
     if i < headers.Length then
         if src.Read buffer then
@@ -245,7 +259,7 @@ let rec readSectionHeader (src: HeaderReader<_>) (buffer: Span<byte>) (headers: 
                   VirtualSize = Bytes.toU4 8 buffer
                   VirtualAddress = Rva(Bytes.toU4 12 buffer)
                   RawDataSize = Bytes.toU4 16 buffer
-                  RawDataPointer = Bytes.toU4 20 buffer
+                  RawDataPointer = { FileOffset = Bytes.toU4 20 buffer }
                   PointerToRelocations = Bytes.toU4 24 buffer
                   PointerToLineNumbers = Bytes.toU4 28 buffer
                   NumberOfRelocations = Bytes.toU2 32 buffer
@@ -256,12 +270,56 @@ let rec readSectionHeader (src: HeaderReader<_>) (buffer: Span<byte>) (headers: 
     else None
 
 let readSectionHeaders (src: HeaderReader<_>) (Convert.I4 count: uint16) (headers: outref<ParsedSectionHeaders>) reader ustate =
+    let buffer = Span.stackalloc<byte>(int32 Magic.sectionHeaderSize)
     let offset = src.Offset
     let headers': byref<SectionHeader[]> = &Unsafe.As &headers
     headers' <- Array.zeroCreate count
-    match readSectionHeader src (Span.stackalloc<byte>(int32 Magic.sectionHeaderSize)) headers' 0 with
-    | None -> readStructure reader.ReadSectionHeaders headers offset ustate (noImpl "TODO: Read section containing CliMetadata?")
+    match readSectionHeader src buffer headers' 0 with
+    | None -> readStructure reader.ReadSectionHeaders headers offset ustate ReadSectionData
     | Some err -> Failure err
+
+// TODO: Can optimize this by checking if section contains CLI header as section headers are read in readSectionHeader.
+let rec findCliSection cliHeaderRva (headers: ParsedSectionHeaders) i =
+    if cliHeaderRva = Rva.Zero then Error NoCliMetadata
+    elif i < headers.Length then
+        if SectionHeader.contains cliHeaderRva headers.[i]
+        then Ok i
+        else findCliSection cliHeaderRva headers (i + 1)
+    else Error(InvalidCliHeaderLocation cliHeaderRva)
+
+let rec copyCliSection (src: HeaderReader<_>) (chunks: byte[][]) falignment remaining i =
+    if i < chunks.Length then
+        let length = min remaining falignment
+        let chunk = Array.zeroCreate<byte>(int32 length)
+        if src.Read(Span chunk) then
+            chunks.[i] <- chunk
+            copyCliSection src chunks falignment (remaining - uint32 chunk.Length) (i + 1)
+        else Some UnexpectedEndOfFile
+    else None
+
+let readCliSection (src: HeaderReader<_>) file =
+    let { Rva = cliHeaderRva } =
+        match file.DataDirectories with
+        | (ValueSome directories, _) -> directories.CliHeader.CliHeader
+        | (_, directories) -> directories.[cliHeaderIndex]
+    match findCliSection cliHeaderRva file.SectionHeaders 0 with
+    | Ok i ->
+        let header = file.SectionHeaders.[i]
+        let falignment = uint32 file.OptionalHeader.Alignment.FileAlignment
+        let mutable chunks =
+            let count = header.RawDataSize / falignment
+            if falignment * count < header.RawDataSize
+            then count + 1u
+            else count
+            |> int32
+            |> Array.zeroCreate<byte[]>
+        match copyCliSection src chunks falignment header.RawDataSize 0 with
+        | None ->
+            file.CliSectionIndex <- ValueSome i
+            file.CliSectionData <- ChunkedMemory(Unsafe.As &chunks, 0u, header.RawDataSize)
+            End
+        | Some err -> Failure err
+    | Error err -> Failure err
 
 let readPE (src: HeaderReader<_>) file reader ustate rstate =
     let inline moveToOffset target state' =
@@ -284,6 +342,10 @@ let readPE (src: HeaderReader<_>) file reader ustate rstate =
     | ReadDataDirectories ->
         readDataDirectories src file.OptionalHeader.NumberOfDataDirectories &file.DataDirectories reader ustate
     | ReadSectionHeaders -> readSectionHeaders src file.CoffHeader.NumberOfSections &file.SectionHeaders reader ustate
+    | ReadSectionData ->
+        match reader.ReadCliMetadata with
+        | ValueNone -> End
+        | ValueSome _ -> readCliSection src file
 
 let fromReader (source: #IHeaderReader) state reader =
     let src, file = HeaderReader source, { Lfanew = { FileOffset = 0u } }
@@ -293,10 +355,11 @@ let fromReader (source: #IHeaderReader) state reader =
         | Success(ustate', rstate') -> pe ustate' rstate'
         | Failure err -> reader.HandleError (ReadState.File rstate) err src.Offset ustate
         | End ->
-            // Can skip reading metadata if the reader does not need to
+            // Can skip reading metadata if the reader does not need to read it.
             match reader.ReadCliMetadata with
             | ValueNone -> ustate
-            | ValueSome reader' -> failwith "TODO: read metadata"
+            | ValueSome reader' ->
+                failwith "TODO: read metadata"
     pe state ReadPEMagic
 
 [<IsReadOnly; Struct>]

@@ -39,17 +39,16 @@ type MetadataReadState =
 type FileReadState =
     | ReadPEMagic
     | MoveToLfanew
-    /// <summary>Indicates that the <c>lfanew</c> field pointing to the PE signature is being read (II.25.2.1).</summary>
+    /// <summary>The <c>lfanew</c> field pointing to the PE signature is being read (II.25.2.1).</summary>
     | ReadLfanew
     | MoveToPESignature
     | ReadPESignature
-    /// Indicates that the PE file header after the PE signature is being read (II.25.2.2).
+    /// The PE file header after the PE signature is being read (II.25.2.2).
     | ReadCoffHeader
     | ReadOptionalHeader
     | ReadDataDirectories
     | ReadSectionHeaders
-    | MoveToTextSectionData
-    | ReadTextSectionData
+    | ReadSectionData
 
     member this.Description =
         match this with
@@ -62,8 +61,7 @@ type FileReadState =
         | ReadOptionalHeader -> "reading PE optional header"
         | ReadDataDirectories -> "reading PE header data directories"
         | ReadSectionHeaders -> "reading section headers"
-        | MoveToTextSectionData -> "moving to text section data"
-        | ReadTextSectionData -> "reading text section data"
+        | ReadSectionData -> "reading section data"
 
 [<RequireQualifiedAccess>]
 type ReadState =

@@ -35,7 +35,7 @@ type SectionHeader =
       VirtualSize: uint32
       VirtualAddress: Rva
       RawDataSize: uint32
-      RawDataPointer: uint32
+      RawDataPointer: FileOffset
       /// Reserved value that should be set to zero.
       PointerToRelocations: uint32
       PointerToLineNumbers: uint32

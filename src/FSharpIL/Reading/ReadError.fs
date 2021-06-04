@@ -2,11 +2,11 @@
 
 open System
 open System.Collections.Immutable
-open System.Text
 
 open FSharpIL
 open FSharpIL.Metadata.Tables
 open FSharpIL.Metadata.Blobs
+open FSharpIL.PortableExecutable
 
 [<NoComparison; NoEquality>]
 [<RequireQualifiedAccess>]
@@ -105,65 +105,33 @@ type BlobError =
 
 [<NoComparison; NoEquality>]
 type ReadError =
+    | UnexpectedEndOfFile
     | InvalidMagic of expected: ImmutableArray<byte> * actual: ImmutableArray<byte>
     | CannotMoveToPreviousOffset of offset: FileOffset
     | OptionalHeaderTooSmall of size: uint16
     | UnsupportedOptionalHeaderSize of size: uint16
     | TooFewDataDirectories of count: uint32
     | NoCliMetadata
-    | RvaNotInTextSection of Rva
-    | CliHeaderTooSmall of size: uint32
-    | MetadataVersionHasNoNullTerminator of version: ImmutableArray<byte>
-    | StructureOutsideOfCurrentSection of ParsedStructure
-    | MissingNullTerminator of string
-    | InvalidStringIndex of offset: uint32 * size: uint32
-    | BlobError of BlobError
-    | CannotFindMetadataTables
-    | MissingModuleTable
-    | MetadataRowOutOfBounds of table: ValidTableFlags * index: uint32 * count: uint32
-    // TODO: Move this error elsewhere.
-    | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
-    | UnexpectedEndOfFile
+    | RvaNotInCliSection of Rva
+    | InvalidCliHeaderLocation of Rva
 
     member this.Message =
         match this with
+        | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
         | InvalidMagic(expected, actual) ->
             sprintf
                 "expected magic %s, but got %s"
                 (Bytes.print(expected.AsSpan()))
                 (Bytes.print(actual.AsSpan()))
-        | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset 0x%016X" offset
+        | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset 0x%O" offset
         | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
         | UnsupportedOptionalHeaderSize size -> sprintf "the parser does not support an optional header size of %i bytes" size
         | TooFewDataDirectories count -> sprintf "the number of data directories (%i) is too small" count
         | NoCliMetadata -> "the Portable Executable file does not contain any CLI metadata"
-        | RvaNotInTextSection rva ->
-            sprintf "the Relative Virtual Address (0x%08X) does not point into the \".text\" section" rva
-        | CliHeaderTooSmall size -> sprintf "the specified CLI header size is too small (%i)" size
-        | MetadataVersionHasNoNullTerminator version ->
-            sprintf
-                "the metadata version in the CLI metadata root \"%s\" does not end in a null terminator"
-                (Encoding.UTF8.GetString(version.AsSpan()))
-        | StructureOutsideOfCurrentSection structure ->
-            sprintf
-                "%O does not fit within the current section, check that the offset to the structure or the size of the section is correct"
-                structure
-        | MissingNullTerminator name -> sprintf "the string \"%s\" does not end in a null terminator" name
-        | InvalidStringIndex(offset, size) ->
-            sprintf "Invalid offset into the \"#Strings\" heap (0x%08X), maximum valid offset is (0x%08X)" offset (size - 1u)
-        | BlobError err -> string err
-        | CannotFindMetadataTables -> "the stream containing the metadata tables \"#~\" could not be found"
-        | MissingModuleTable -> "the Module table (0x00) is missing"
-        | MetadataRowOutOfBounds(table, index, count) ->
-            sprintf
-                "the %A metadata row at index %i (0x%08x) is out of bounds, the table only contains %i (0x%08x) items"
-                table
-                index
-                index
-                count
-                count
-        | CannotReadDebugTables -> "the metadata tables contain debugging metadata, which is currently not supported by FSharpIL"
-        | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
+        | RvaNotInCliSection rva ->
+            sprintf "the Relative Virtual Address (%O) does not point into the same section containing the CLI header" rva
+        | InvalidCliHeaderLocation rva ->
+            sprintf "the CLI header at the Relative Virtual Address (0x%O), is not contained within any section" rva
 
 [<RequireQualifiedAccess>]
 module ReadError =
