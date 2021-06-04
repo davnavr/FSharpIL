@@ -78,7 +78,7 @@ let inline readStructure reader arg offset ustate next =
 let readMagic (src: HeaderReader<_>) (expected: ImmutableArray<byte>) ustate next =
     let actual = Span.stackalloc<byte> expected.Length
     if src.Read actual then
-        if expected.AsSpan() = Span.asReadOnly actual
+        if Span.readOnlyEqual (expected.AsSpan()) (Span.asReadOnly actual)
         then Success(ustate, next)
         else InvalidMagic(expected, Span.toBlock actual) |> Failure
     else Failure UnexpectedEndOfFile

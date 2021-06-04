@@ -22,3 +22,5 @@ let inline toBlock (span: Span<'T>) =
     let mutable data = Array.zeroCreate<'T> span.Length
     span.CopyTo(Span data)
     Unsafe.As<_, System.Collections.Immutable.ImmutableArray<'T>> &data
+
+let inline readOnlyEqual (left: ReadOnlySpan<'T>) (right: ReadOnlySpan<'T>) = ReadOnlySpan<'T>.op_Equality(left, right)
