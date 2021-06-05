@@ -9,19 +9,22 @@ open FSharpIL.PortableExecutable
 
 [<NoComparison; NoEquality>]
 type CliInfo =
-    { mutable CliHeader: ParsedCliHeader }
+    { SectionRva: Rva
+      SectionOffset: FileOffset
+      [<DefaultValue>] mutable CliHeader: ParsedCliHeader }
+
+let inline calculateFileOffset { CliInfo.SectionOffset = start } { SectionOffset.SectionOffset = soffset } = start + soffset
 
 let readRvaAndSize offset (chunk: inref<_>) =
     { Rva = Rva(ChunkedMemory.readU4 offset &chunk)
       Size = ChunkedMemory.readU4 (offset + 4u) &chunk }
 
-let readCliHeader (section: inref<ChunkedMemory>) (header: outref<ParsedCliHeader>) offset reader ustate =
+let readCliHeader (section: inref<ChunkedMemory>) info offset reader ustate =
     match ChunkedMemory.tryReadU4 (uint32 offset) &section with
     | ValueSome cb when cb >= Magic.cliHeaderSize ->
         match section.TrySlice(uint32 offset + 4u) with
         | true, fields ->
-            header <-
-                // TODO: Check that CLI header size is correct.
+            info.CliHeader <-
                 { Cb = cb
                   MajorRuntimeVersion = ChunkedMemory.readU2 0u &fields
                   MinorRuntimeVersion = ChunkedMemory.readU2 2u &fields
@@ -34,21 +37,27 @@ let readCliHeader (section: inref<ChunkedMemory>) (header: outref<ParsedCliHeade
                   VTableFixups = readRvaAndSize 44u &fields
                   ExportAddressTableJumps = readRvaAndSize 52u &fields
                   ManagedNativeHeader = readRvaAndSize 60u &fields }
-            StructureReader.read reader.ReadCliHeader header (noImpl "TODO: Get file offset") ustate FindMetadataRoot
+            StructureReader.read reader.ReadCliHeader info.CliHeader (calculateFileOffset info offset) ustate FindMetadataRoot
         | false, _ -> Failure(offset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
     | ValueSome cb -> Failure(offset, CliHeaderTooSmall cb)
     | ValueNone -> Failure(offset, StructureOutsideOfCurrentSection ParsedStructure.CliHeader)
 
 let readMetadata (section: inref<ChunkedMemory>) info (cliHeaderOffset: SectionOffset) reader ustate rstate =
     match rstate with
-    | ReadCliHeader -> readCliHeader &section &info.CliHeader cliHeaderOffset reader ustate
+    | ReadCliHeader -> readCliHeader &section info cliHeaderOffset reader ustate
 
 let rec readMetadataLoop (section: inref<_>) info cliHeaderOffset reader ustate rstate =
     match readMetadata &section info cliHeaderOffset reader ustate rstate with
     | Success(ustate', rstate') -> readMetadataLoop &section info cliHeaderOffset reader ustate' rstate'
     | Failure(soffset, err) ->
-        ErrorHandler.handle rstate err (invalidOp "TODO: Get file offset from section offset") ustate reader.HandleError
+        ErrorHandler.handle rstate err (calculateFileOffset info soffset) ustate reader.HandleError
     | End -> ustate
 
-let fromChunkedMemory (section: inref<_>) cliHeaderOffset state reader =
-    readMetadataLoop &section { CliHeader = Unchecked.defaultof<_> } cliHeaderOffset reader state ReadCliHeader
+let fromChunkedMemory (section: inref<_>) sectionRva sectionOffset cliHeaderOffset state reader =
+    readMetadataLoop
+        &section
+        { SectionRva = sectionRva; SectionOffset = sectionOffset }
+        cliHeaderOffset
+        reader
+        state
+        ReadCliHeader
