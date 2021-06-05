@@ -16,7 +16,6 @@
     <Compile Include="Utilities\Bytes.fs" />
     <Compile Include="Omitted.fs" />
     <Compile Include="ChunkedMemory.fs" />
-    <Compile Include="IByteReader.fs" />
     <Compile Include="ChunkedMemoryStream.fs" />
     <Compile Include="IByteWriter.fs" />
     <Compile Include="ChunkedMemoryBuilder.fs" />
@@ -44,6 +43,7 @@
     <Compile Include="PortableExecutable\DefaultHeaders.fs" />
     <Compile Include="PortableExecutable\DataDirectories.fs" />
     <Compile Include="PortableExecutable\PEFile.fs" />
+    <Compile Include="PortableExecutable\SectionOffset.fs" />
     <Compile Include="Magic.fs" />
     <Compile Include="Writing\WriteCli.fsi" />
     <Compile Include="Writing\WriteCli.fs" />
@@ -62,10 +62,12 @@
     <Compile Include="Reading\ParsedBlobStream.fs" />
     <Compile Include="Reading\ParsedMethodBodies.fs" />
     <Compile Include="Reading\ParsedMetadataTables.fs" />
-    <Compile Include="Reading\ReadCli.fs" />
+    <Compile Include="Reading\ReadResult.fs" />
     <Compile Include="Reading\StructureReader.fs" />
     <Compile Include="Reading\ErrorHandler.fs" />
     <Compile Include="Reading\MetadataReader.fs" />
+    <Compile Include="Reading\ReadCli.fsi" />
+    <Compile Include="Reading\ReadCli.fs" />
     <Compile Include="Reading\PEFileReader.fs" />
     <Compile Include="Reading\ReadPE.fsi" />
     <Compile Include="Reading\ReadPE.fs" />

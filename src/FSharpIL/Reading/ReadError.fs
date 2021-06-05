@@ -111,11 +111,13 @@ type ReadError =
     | OptionalHeaderTooSmall of size: uint16
     | UnsupportedOptionalHeaderSize of size: uint16
     | TooFewDataDirectories of count: uint32
+    | StructureOutsideOfCurrentSection of ParsedStructure
     | NoCliMetadata
     | RvaNotInCliSection of Rva
     | InvalidCliHeaderLocation of Rva
+    | CliHeaderTooSmall of size: uint32
 
-    member this.Message =
+    override this.ToString() =
         match this with
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
         | InvalidMagic(expected, actual) ->
@@ -127,17 +129,23 @@ type ReadError =
         | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
         | UnsupportedOptionalHeaderSize size -> sprintf "the parser does not support an optional header size of %i bytes" size
         | TooFewDataDirectories count -> sprintf "the number of data directories (%i) is too small" count
+        | StructureOutsideOfCurrentSection structure ->
+            sprintf
+                "%O does not fit within the current section, check that the offset to the %O or that the size of the section is correct"
+                structure
+                structure
         | NoCliMetadata -> "the Portable Executable file does not contain any CLI metadata"
         | RvaNotInCliSection rva ->
             sprintf "the Relative Virtual Address (%O) does not point into the same section containing the CLI header" rva
         | InvalidCliHeaderLocation rva ->
             sprintf "the CLI header at the Relative Virtual Address (0x%O), is not contained within any section" rva
+        | CliHeaderTooSmall size -> sprintf "the specified CLI header size is too small (%i)" size
 
 [<RequireQualifiedAccess>]
 module ReadError =
-    let message (state: ReadState) (error: ReadError) { FileOffset = offset } =
-        sprintf "Error occured while %s at offset 0x%X: %s" state.Description offset error.Message
+    let message (state: IReadState) (error: ReadError) { FileOffset = offset } =
+        sprintf "Error occured while %O at offset 0x%X: %O" state offset error
 
 exception ReadException
-    of state: ReadState * error: ReadError * offset: FileOffset
+    of state: IReadState * error: ReadError * offset: FileOffset
     with override this.Message = ReadError.message this.state this.error this.offset

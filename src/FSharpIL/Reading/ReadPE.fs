@@ -11,12 +11,6 @@ open FSharpIL.Utilities
 open FSharpIL
 open FSharpIL.PortableExecutable
 
-[<IsReadOnly; Struct>]
-type ReadResult<'State, 'T, 'Error when 'State : struct> =
-    | Success of 'T * 'State
-    | Failure of 'Error
-    | End
-
 type IHeaderReader = abstract Read: Span<byte> -> int32
 
 [<Sealed>]
@@ -24,7 +18,10 @@ type HeaderReader<'Reader when 'Reader :> IHeaderReader> = class
     val mutable private pos: FileOffset
     val mutable private reader: 'Reader
     new (reader) = { pos = { FileOffset = 0u }; reader = reader }
+
     member this.Offset = this.pos
+
+    /// <returns>The number of bytes that were read and copied into the <paramref name="buffer"/>.</returns>
     member this.Read buffer = this.reader.Read buffer = buffer.Length
 
     member this.SkipBytes(count: uint32) = // TODO: Make skipping method work better.
@@ -57,7 +54,8 @@ type PEInfo =
       [<DefaultValue>] mutable DataDirectories: ParsedDataDirectories
       [<DefaultValue>] mutable SectionHeaders: ParsedSectionHeaders
       [<DefaultValue>] mutable CliSectionIndex: int32 voption
-      [<DefaultValue>] mutable CliSectionData: ChunkedMemory }
+      [<DefaultValue>] mutable CliSectionData: ChunkedMemory
+      [<DefaultValue>] mutable CliHeaderOffset: SectionOffset }
 
     /// <exception cref="T:System.InvalidOperationException">
     /// Thrown if the section headers have not yet been read, or if section containing the CLI header has not been set.
@@ -69,11 +67,6 @@ type PEInfo =
 
 let offsetToLfanew = { FileOffset = 0x3Cu }
 let cliHeaderIndex = 15
-
-let inline readStructure reader arg offset ustate next =
-    match StructureReader.read reader arg offset ustate with
-    | ValueSome ustate' -> Success(ustate', next)
-    | ValueNone -> End
 
 let readMagic (src: HeaderReader<_>) (expected: ImmutableArray<byte>) ustate next =
     let actual = Span.stackalloc<byte> expected.Length
@@ -88,7 +81,7 @@ let readLfanew (src: HeaderReader<_>) (lfanew: byref<FileOffset>) reader ustate 
     let offset = src.Offset
     if src.Read buffer then
         lfanew <- { FileOffset = Bytes.toU4 0 buffer }
-        readStructure reader.ReadLfanew lfanew offset ustate MoveToPESignature
+        StructureReader.read reader.ReadLfanew lfanew offset ustate MoveToPESignature
     else Failure UnexpectedEndOfFile
 
 let readCoffHeader (src: HeaderReader<_>) (coff: outref<_>) reader ustate =
@@ -103,7 +96,7 @@ let readCoffHeader (src: HeaderReader<_>) (coff: outref<_>) reader ustate =
               SymbolCount = Bytes.toU4 12 buffer
               OptionalHeaderSize = Bytes.toU2 16 buffer
               Characteristics = LanguagePrimitives.EnumOfValue(Bytes.toU2 18 buffer) }
-        readStructure reader.ReadCoffHeader coff offset ustate ReadOptionalHeader
+        StructureReader.read reader.ReadCoffHeader coff offset ustate ReadOptionalHeader
     else Failure UnexpectedEndOfFile
 
 /// Contains functions for reading the contents of the PE file optional header (II.25.2.3).
@@ -196,7 +189,7 @@ module OptionalHeader =
             match readNTSpecificFields src standardFields with
             | Ok header' ->
                 header <- header'
-                readStructure reader.ReadOptionalHeader header' offset ustate ReadDataDirectories
+                StructureReader.read reader.ReadOptionalHeader header' offset ustate ReadDataDirectories
             | Error err -> Failure err
         | Error err -> Failure err
 
@@ -247,7 +240,7 @@ let readDataDirectories
         match named with
         | Ok named ->
             directories <- named, Unsafe.As &directories'
-            readStructure reader.ReadDataDirectories directories offset ustate ReadSectionHeaders
+            StructureReader.read reader.ReadDataDirectories directories offset ustate ReadSectionHeaders
         | Error err -> Failure err
     | Some err -> Failure err
 
@@ -275,7 +268,7 @@ let readSectionHeaders (src: HeaderReader<_>) (Convert.I4 count: uint16) (header
     let headers': byref<SectionHeader[]> = &Unsafe.As &headers
     headers' <- Array.zeroCreate count
     match readSectionHeader src buffer headers' 0 with
-    | None -> readStructure reader.ReadSectionHeaders headers offset ustate ReadSectionData
+    | None -> StructureReader.read reader.ReadSectionHeaders headers offset ustate ReadSectionData
     | Some err -> Failure err
 
 // TODO: Can optimize this by checking if section contains CLI header as section headers are read in readSectionHeader.
@@ -317,6 +310,7 @@ let readCliSection (src: HeaderReader<_>) file =
         match copyCliSection src chunks falignment header.RawDataSize 0 with
         | None ->
             file.CliSectionIndex <- ValueSome i
+            file.CliHeaderOffset <- { SectionOffset = uint32(cliHeaderRva - header.VirtualAddress) }
             file.CliSectionData <- ChunkedMemory(Unsafe.As &chunks, 0u, header.RawDataSize)
             End
         | Some err -> Failure err
@@ -350,17 +344,15 @@ let readPE (src: HeaderReader<_>) file reader ustate rstate =
 
 let fromReader (source: #IHeaderReader) state reader =
     let src, file = HeaderReader source, { Lfanew = { FileOffset = 0u } }
-    //let rec metadata
     let rec pe ustate rstate =
         match readPE src file reader ustate rstate with
         | Success(ustate', rstate') -> pe ustate' rstate'
-        | Failure err -> reader.HandleError (ReadState.File rstate) err src.Offset ustate
+        | Failure err -> ErrorHandler.handle rstate err src.Offset ustate reader.HandleError
         | End ->
             // Can skip reading metadata if the reader does not need to read it.
             match reader.ReadCliMetadata with
             | ValueNone -> ustate
-            | ValueSome reader' ->
-                failwith "TODO: read metadata"
+            | ValueSome reader' -> ReadCli.fromChunkedMemory &file.CliSectionData file.CliHeaderOffset ustate reader'
     pe state ReadPEMagic
 
 [<IsReadOnly; Struct>]

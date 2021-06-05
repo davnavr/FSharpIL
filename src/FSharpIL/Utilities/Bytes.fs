@@ -29,19 +29,19 @@ let ofU8 (bytes: Span<byte>) (value: uint64) =
     bytes.[7] <- (value >>> 56) &&& 0xFFUL |> byte // MSB
     bytes
 
-/// Reads a 16-bit integer in little endian order
+/// Reads a 16-bit integer in little endian order.
 let toU2 offset (bytes: Span<byte>) =
     (uint16 bytes.[offset + 1] <<< 8) // MSB
     ||| uint16 bytes.[offset] // LSB
 
-/// Reads a 32-bit integer in little endian order
+/// Reads a 32-bit integer in little endian order.
 let toU4 offset (bytes: Span<byte>) =
     (uint32 bytes.[offset + 3] <<< 24) // MSB
     ||| (uint32 bytes.[offset + 2] <<< 16)
     ||| (uint32 bytes.[offset + 1] <<< 8)
     ||| uint32 bytes.[offset] // LSB
 
-/// Reads a 64-bit integer in little endian order
+/// Reads a 64-bit integer in little endian order.
 let toU8 offset (bytes: Span<byte>) =
     (uint64 bytes.[offset + 7] <<< 56) // MSB
     ||| (uint64 bytes.[offset + 6] <<< 48)

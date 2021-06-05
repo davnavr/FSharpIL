@@ -4,6 +4,7 @@ open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
+open FSharpIL
 open FSharpIL.Utilities
 
 /// Represents a non-contiguous region of memory split into chunks of equal sizes.
@@ -102,20 +103,30 @@ module ChunkedMemory =
             let last = chunks.Length - 1
             ChunkedMemory(Unsafe.As &chunks, 0u, (uint32 chunks.[0].Length * uint32 last) + uint32 chunks.[last].Length)
 
-    let readU2 offset (chunks: inref<ChunkedMemory>) =
+    let tryReadU2 offset (memory: inref<ChunkedMemory>) =
         let buffer = Span.stackalloc<byte> 2
-        chunks.CopyTo(offset, buffer)
-        Bytes.readU2 0 buffer
+        if memory.TryCopyTo(offset, buffer)
+        then ValueSome(Bytes.toU2 0 buffer)
+        else ValueNone
 
-    let readU4 offset (chunks: inref<ChunkedMemory>) =
+    let tryReadU4 offset (memory: inref<ChunkedMemory>) =
         let buffer = Span.stackalloc<byte> 4
-        chunks.CopyTo(offset, buffer)
-        Bytes.readU4 0 buffer
+        if memory.TryCopyTo(offset, buffer)
+        then ValueSome(Bytes.toU4 0 buffer)
+        else ValueNone
 
-    let readU8 offset (chunks: inref<ChunkedMemory>) =
+    let tryReadU8 offset (memory: inref<ChunkedMemory>) =
         let buffer = Span.stackalloc<byte> 8
-        chunks.CopyTo(offset, buffer)
-        Bytes.readU8 0 buffer
+        if memory.TryCopyTo(offset, buffer)
+        then ValueSome(Bytes.toU8 0 buffer)
+        else ValueNone
+
+    let inline readU2 offset (memory: inref<_>) = (tryReadU2 offset &memory).Value
+    let inline readU4 offset (memory: inref<_>) = (tryReadU4 offset &memory).Value
+    let inline readU8 offset (memory: inref<_>) = (tryReadU8 offset &memory).Value
+
+    // TODO: Make BigEndian versions if necessary.
+    //module BigEndian
 
 type ChunkedMemory with
     member this.TrySlice(start, length, slice: outref<ChunkedMemory>) =
@@ -130,7 +141,7 @@ type ChunkedMemory with
     member inline this.TrySlice(start, slice: outref<ChunkedMemory>) = this.TrySlice(start, this.Length - start, &slice)
 
     /// <exception cref="T:System.ArgumentOutOfRangeException">
-    /// Thrown when the <paramref name="start"/> offset or <c><paramref name="start"/> + <paramref name="length"/></c> exceeds
+    /// Thrown when the <paramref name="start"/> offset or <c>start + length</c> exceeds
     /// the maximum valid offset.
     /// </exception>
     member this.Slice(start, length: uint32) =
@@ -159,6 +170,7 @@ type ChunkedMemory with
         | _ ->
             // TODO: If starting pos is zero, optimize by returning actual chunks instead of copying.
             // TODO: Fix, where is soffset used here?
+            failwith "TODO: Fix, this does not take into account the fact that the starting position might not be zero"
             let length = int32 this.Length
             let mutable buffer = Array.zeroCreate<byte> length
             let mutable struct(chunki, i), remaining = this.GetIndex 0u, buffer.Length

@@ -18,7 +18,7 @@ type CorFlags =
 /// (II.25.3.3).
 /// </summary>
 [<NoComparison; StructuralEquality>]
-type CliHeader<'Cb, 'Flags, 'EntryPointToken, 'Reserved, 'Metadata, 'Resources, 'StrongNameSignature, 'VTableFixups> = // TODO: Don't make this a generic type.
+type CliHeader<'Cb, 'Flags, 'EntryPointToken, 'Metadata, 'Resources, 'StrongNameSignature, 'VTableFixups, 'Reserved> = // TODO: Don't make this a generic type.
     { /// The size of the CLI header, in bytes
       Cb: 'Cb
       MajorRuntimeVersion: uint16
