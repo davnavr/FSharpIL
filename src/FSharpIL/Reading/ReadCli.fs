@@ -4,6 +4,7 @@ module FSharpIL.Reading.ReadCli
 open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
+open System.Text
 
 open FSharpIL.Utilities
 
@@ -63,7 +64,7 @@ let readHeaderDataPointer (section: inref<ChunkedMemory>) sectionRva { Rva = rva
         data <- { Offset = { SectionOffset = uint32(sectionRva - rva) } }
         if section.TrySlice(uint32 data.Offset, size, &data.Data)
         then None
-        else Some(StructureOutsideOfCurrentSection ParsedStructure.CliMetadataRoot)
+        else Some(StructureOutOfBounds ParsedMetadataStructure.CliMetadataRoot)
     else Some(RvaNotInCliSection rva)
 
 let findMetadataRoot (section: inref<ChunkedMemory>) info ustate =
@@ -77,13 +78,15 @@ let readMetadataSignature info =
         if Span.readOnlyEqual (Span.asReadOnly magic) (Magic.metadataRootSignature.AsSpan())
         then Ok(Bytes.toU4 0 magic)
         else Error(InvalidMagic(Magic.metadataRootSignature, Span.toBlock magic))
-    else Error(StructureOutsideOfCurrentSection ParsedStructure.MetadataSignature)
+    else Error(StructureOutOfBounds ParsedMetadataStructure.MetadataSignature)
+
+let inline missingNullTerminator (encoding: Encoding) (str: ReadOnlySpan<byte>) = MissingNullTerminator(encoding.GetString str)
 
 let readMetadataVersion length offset (root: inref<ChunkedMemory>) =
     let version = root.Slice(offset, length).ToImmutableArray()
     match version.[version.Length - 1] with
     | 0uy -> Ok { RoundedLength = Checked.uint8 length; MetadataVersion = version }
-    | _ -> Error(MetadataVersionNotTerminated version)
+    | _ -> Error(missingNullTerminator Encoding.UTF8 (version.AsSpan()))
 
 /// Parses the CLI metadata root (II.24.2.1).
 let readMetadataRoot info reader ustate =
@@ -113,10 +116,10 @@ let readMetadataRoot info reader ustate =
                     ReadStreamHeaders
             | Error err -> failure err
         | ValueSome _
-        | ValueNone -> failure(noImpl "// TODO: Use different error for structure out of MetaData, since it isn't out of the section but exceeds the length in the Size part of RvaAndSize.")
+        | ValueNone -> failure(StructureOutOfBounds ParsedMetadataStructure.CliMetadataRoot)
     | Error err -> failure err
 
-let rec readStreamNameSegment (data: inref<ChunkedMemory>) (offset: SectionOffset) i (buffer: Span<byte>) =
+let rec readStreamNameSegment (data: inref<ChunkedMemory>) (offset: SectionOffset) headeri i (buffer: Span<byte>) =
     if i < buffer.Length then
         if data.TryCopyTo(uint32 offset, buffer.Slice(i, 4)) then
             let i' = i + 4
@@ -124,19 +127,19 @@ let rec readStreamNameSegment (data: inref<ChunkedMemory>) (offset: SectionOffse
                 buffer.Slice(0, i').ToArray()
                 |> Convert.unsafeTo<_, ImmutableArray<byte>>
                 |> Ok
-            else readStreamNameSegment &data (offset + 4u) i' buffer
-        else Error(offset, noImpl "stream name out of bounds")
-    else Error(offset, MissingNullTerminator)
+            else readStreamNameSegment &data (offset + 4u) headeri i' buffer
+        else Error(offset, StructureOutOfBounds(ParsedMetadataStructure.StreamHeader headeri))
+    else Error(offset, missingNullTerminator Encoding.UTF8 (Span.asReadOnly buffer))
 
-let readStreamName (data: inref<ChunkedMemory>) (offset: SectionOffset) =
+let readStreamName (data: inref<ChunkedMemory>) (offset: SectionOffset) headeri =
     // According to (II.24.2.2), the name of the stream is limited to 32 characters.
-    readStreamNameSegment &data offset 0 (Span.stackalloc<byte> 32)
+    readStreamNameSegment &data offset headeri 0 (Span.stackalloc<byte> 32)
 
 let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) (offset: SectionOffset) (headers: ParsedStreamHeader[]) i =
     if i <= headers.Length then
         let offset' = uint32 offset
         if section.HasFreeBytes(offset', 8u) then
-            match readStreamName &section (offset + 8u) with
+            match readStreamName &section (offset + 8u) i with
             | Ok name ->
                 headers.[i] <-
                     { Offset = MetadataRootOffset(ChunkedMemory.readU4 offset' &section)
@@ -144,7 +147,7 @@ let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) (offset: SectionOf
                       StreamName = name }
                 readStreamHeadersLoop &section (offset + 8u + uint32 name.Length) headers (i + 1)
             | Error err -> Some err
-        else Some(offset, noImpl "stream header out of bounds")
+        else Some(offset, StructureOutOfBounds(ParsedMetadataStructure.StreamHeader i))
     else None
 
 /// Parses the stream headers of the CLI metadata root (II.24.2.2).
@@ -168,7 +171,7 @@ let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
     | ReadMetadataRoot -> readMetadataRoot info reader ustate
     | ReadStreamHeaders ->
         match reader, info.MetadataRoot.Streams with
-        //| { }, 0us -> noImpl "TODO: If further metadata reading functions are defined that depend on stream contents, return error here"
+        //| { ReadStringsStream = ValueNone }, 0us -> noImpl "TODO: If further metadata reading functions are defined that depend on stream contents, return error here"
         | _, 0us -> End
         | _, _ -> readStreamHeaders &section info reader ustate
 

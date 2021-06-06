@@ -9,10 +9,9 @@ open FSharpIL.Metadata.Tables
 open FSharpIL.Metadata.Blobs
 open FSharpIL.PortableExecutable
 
-[<NoComparison; NoEquality>]
+/// Represents a structure or file header used in CLI metadata (II.24).
 [<RequireQualifiedAccess>]
-[<Obsolete>]
-type ParsedStructure =
+type ParsedMetadataStructure =
     | CliHeader
     | CliMetadataRoot
     | StreamHeader of index: int32
@@ -105,7 +104,6 @@ type BlobError =
             |> sprintf "expected custom attribute PROLOG 0x0001, but %s"
         | MissingNamedArgumentCount -> "missing custom attribute named argument count NumNamed"
 
-[<NoComparison; NoEquality>]
 type ReadError =
     | UnexpectedEndOfFile
     | InvalidMagic of expected: ImmutableArray<byte> * actual: ImmutableArray<byte>
@@ -113,14 +111,15 @@ type ReadError =
     | OptionalHeaderTooSmall of size: uint16
     | UnsupportedOptionalHeaderSize of size: uint16
     | TooFewDataDirectories of count: uint32
-    | [<Obsolete>] StructureOutsideOfCurrentSection of ParsedStructure
+    | StructureOutOfBounds of ParsedMetadataStructure
     | NoCliMetadata
     | RvaNotInCliSection of Rva
     | InvalidCliHeaderLocation of Rva
     | CliHeaderOutOfSection of Rva
     | CliHeaderTooSmall of size: uint32
     | InvalidMetadataVersionLength of length: uint32
-    | MetadataVersionNotTerminated of version: ImmutableArray<byte>
+    | [<Obsolete>] MetadataVersionNotTerminated of version: ImmutableArray<byte>
+    | MissingNullTerminator of string
 
     override this.ToString() =
         match this with
@@ -134,11 +133,7 @@ type ReadError =
         | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
         | UnsupportedOptionalHeaderSize size -> sprintf "the parser does not support an optional header size of %i bytes" size
         | TooFewDataDirectories count -> sprintf "the number of data directories (%i) is too small" count
-        | StructureOutsideOfCurrentSection structure ->
-            sprintf
-                "%O does not fit within the current section, check that the offset to the %O or that the size of the section is correct"
-                structure
-                structure
+        | StructureOutOfBounds structure -> sprintf "%O was out of bounds" structure
         | NoCliMetadata -> "the Portable Executable file does not contain any CLI metadata"
         | RvaNotInCliSection rva ->
             sprintf "the Relative Virtual Address (%O) does not point into the same section containing the CLI header" rva
