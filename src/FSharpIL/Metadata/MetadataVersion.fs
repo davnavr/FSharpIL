@@ -21,7 +21,10 @@ module MetadataVersion =
     let tryOfStr (str: string) =
         if str.Length > 255 || str.Contains '\000'
         then ValueNone
-        else ValueSome { RoundedLength = Round.upTo 4uy (uint8 str.Length); MetadataVersion = Convert.unsafeTo(Encoding.UTF8.GetBytes str) }
+        else
+            ValueSome
+                { RoundedLength = Round.upTo 4uy (uint8 str.Length)
+                  MetadataVersion = Convert.unsafeTo(Encoding.UTF8.GetBytes str) }
 
     let ofStr (str: string) =
         match tryOfStr str with

@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Immutable
+open System.Text
 
 open FSharpIL
 open FSharpIL.Metadata.Tables
@@ -10,6 +11,7 @@ open FSharpIL.PortableExecutable
 
 [<NoComparison; NoEquality>]
 [<RequireQualifiedAccess>]
+[<Obsolete>]
 type ParsedStructure =
     | CliHeader
     | CliMetadataRoot
@@ -111,11 +113,14 @@ type ReadError =
     | OptionalHeaderTooSmall of size: uint16
     | UnsupportedOptionalHeaderSize of size: uint16
     | TooFewDataDirectories of count: uint32
-    | StructureOutsideOfCurrentSection of ParsedStructure
+    | [<Obsolete>] StructureOutsideOfCurrentSection of ParsedStructure
     | NoCliMetadata
     | RvaNotInCliSection of Rva
     | InvalidCliHeaderLocation of Rva
+    | CliHeaderOutOfSection of Rva
     | CliHeaderTooSmall of size: uint32
+    | InvalidMetadataVersionLength of length: uint32
+    | MetadataVersionNotTerminated of version: ImmutableArray<byte>
 
     override this.ToString() =
         match this with
@@ -138,8 +143,19 @@ type ReadError =
         | RvaNotInCliSection rva ->
             sprintf "the Relative Virtual Address (%O) does not point into the same section containing the CLI header" rva
         | InvalidCliHeaderLocation rva ->
-            sprintf "the CLI header at the Relative Virtual Address (0x%O), is not contained within any section" rva
+            sprintf "the CLI header at the Relative Virtual Address (0x%O) is not contained within any section" rva
+        | CliHeaderOutOfSection rva ->
+            sprintf "the CLI header at the Relative Virtual Address (0x%O) extends past the end of the section" rva
         | CliHeaderTooSmall size -> sprintf "the specified CLI header size is too small (%i)" size
+        | InvalidMetadataVersionLength length ->
+            if length > 255u
+            then "cannot exceed 255 bytes"
+            else "was expected to be a multiple of 4"
+            |> sprintf "the length of the Version field of the CLI metadata root (%i bytes) %s" length
+        | MetadataVersionNotTerminated version ->
+            sprintf
+                "the metadata version in the CLI metadata root \"%s\" does not end in a null terminator"
+                (Encoding.UTF8.GetString(version.AsSpan()))
 
 [<RequireQualifiedAccess>]
 module ReadError =

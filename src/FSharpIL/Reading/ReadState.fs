@@ -9,15 +9,14 @@ type MetadataReadState =
     /// Indicates that the CLI header is being read (II.25.3.3).
     | ReadCliHeader
     | FindMetadataRoot
-    | ReadMetadataSignature
     | ReadMetadataRoot
     | ReadStreamHeaders
+    | ReadStringsStream
 
     override this.ToString() =
         match this with
         | ReadCliHeader -> "reading CLI header"
-        | FindMetadataRoot -> "searching for metadata root"
-        | ReadMetadataSignature -> "reading metadata root signature"
+        | FindMetadataRoot -> "locating metadata root"
         | ReadMetadataRoot -> "reading metadata root"
         | ReadStreamHeaders -> "reading metadata stream headers"
 

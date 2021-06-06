@@ -1,6 +1,6 @@
 ﻿/// Contains various magic numbers used throughout a PE file.
 [<RequireQualifiedAccess>]
-module FSharpIL.Magic
+module FSharpIL.Magic // TODO: Move this to PortableExecutable namespace.
 
 open System.Collections.Immutable
 

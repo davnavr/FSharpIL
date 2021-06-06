@@ -352,7 +352,15 @@ let fromReader (source: #IHeaderReader) state reader =
             // Can skip reading metadata if the reader does not need to read it.
             match reader.ReadCliMetadata with
             | ValueNone -> ustate
-            | ValueSome reader' -> ReadCli.fromChunkedMemory &file.CliSectionData file.CliHeaderOffset ustate reader'
+            | ValueSome reader' ->
+                let header = file.SectionHeaders.[file.CliSectionIndex.Value]
+                ReadCli.fromChunkedMemory
+                    &file.CliSectionData
+                    header.VirtualAddress
+                    header.RawDataPointer
+                    file.CliHeaderOffset
+                    ustate
+                    reader'
     pe state ReadPEMagic
 
 [<IsReadOnly; Struct>]
