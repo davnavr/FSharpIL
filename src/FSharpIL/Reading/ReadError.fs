@@ -5,6 +5,7 @@ open System.Collections.Immutable
 open System.Text
 
 open FSharpIL
+open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 open FSharpIL.Metadata.Blobs
 open FSharpIL.PortableExecutable
@@ -12,35 +13,19 @@ open FSharpIL.PortableExecutable
 /// Represents a structure or file header used in CLI metadata (II.24).
 [<RequireQualifiedAccess>]
 type ParsedMetadataStructure =
-    | CliHeader
     | CliMetadataRoot
-    | StreamHeader of index: int32
-    | StringHeap of size: uint32
-    | GuidHeap of size: uint32
-    | UserStringHeap of size: uint32
-    | BlobHeap of size: uint32
     | MetadataSignature
-    | MetadataTablesHeader
-    | MetadataTableRowCounts
-    | MetadataRow of table: ValidTableFlags * index: uint32
+    | StreamHeader of index: int32
 
     override this.ToString() =
         match this with
-        | CliHeader -> "the CLI metadata header"
         | CliMetadataRoot -> "the CLI metadata root"
-        | StreamHeader i -> sprintf "the CLI metadata stream header at index %i" i
-        | StringHeap size -> sprintf "the \"#Strings\" metadata heap (%i bytes)" size
-        | GuidHeap size -> sprintf "the \"#GUID\" metadata heap (%i bytes)" size
-        | UserStringHeap size -> sprintf "the \"#US\" metadata heap (%i bytes)" size
-        | BlobHeap size -> sprintf "the \"#Blob\" metadata heap (%i bytes)" size
         | MetadataSignature -> "the CLI metadata signature"
-        | MetadataTablesHeader -> "the CLI metadata tables header"
-        | MetadataTableRowCounts -> "the CLI metadata table row counts"
-        | MetadataRow(table, index) -> sprintf "the %A metadata row at index %i (0x%08x)" table index index
+        | StreamHeader i -> sprintf "the stream header (index %i)" i
 
 // TODO: Move offset: uint32 to BlobError case in ReadError and use offset: ParsedBlob
 type BlobError =
-    | BlobOutsideOfHeap of offset: uint32 * size: uint32
+    | BlobOutsideOfHeap of offset: uint32 * size: uint32 // TODO: Rename to BlobOutsideOfStream
     | ExpectedEndOfBlob of offset: uint32 * size: uint32 * remaining: uint32
     | CompressedIntegerOutOfBounds of size: uint32
     | InvalidBlobOffset of offset: uint32 * max: uint32
@@ -58,7 +43,7 @@ type BlobError =
         match this with
         | BlobOutsideOfHeap(offset, size) ->
             sprintf
-                "the blob at offset (0x%08X) points to a blob with an invalid size (0x%08X), the blob extends outside of the heap"
+                "the blob at offset (0x%08X) points to a blob with an invalid size (0x%08X), the blob extends outside of the stream"
                 offset
                 size
         | ExpectedEndOfBlob(offset, size, remaining) ->
@@ -118,8 +103,10 @@ type ReadError =
     | CliHeaderOutOfSection of Rva
     | CliHeaderTooSmall of size: uint32
     | InvalidMetadataVersionLength of length: uint32
-    | [<Obsolete>] MetadataVersionNotTerminated of version: ImmutableArray<byte>
     | MissingNullTerminator of string
+    | StreamOutOfBounds of index: int32 * ParsedStreamHeader
+    | InvalidStringOffset of StringOffset * max: StringOffset
+    | MissingStringStreamTerminator
 
     override this.ToString() =
         match this with
@@ -147,10 +134,15 @@ type ReadError =
             then "cannot exceed 255 bytes"
             else "was expected to be a multiple of 4"
             |> sprintf "the length of the Version field of the CLI metadata root (%i bytes) %s" length
-        | MetadataVersionNotTerminated version ->
+        | StreamOutOfBounds(_, header) ->
             sprintf
-                "the metadata version in the CLI metadata root \"%s\" does not end in a null terminator"
-                (Encoding.UTF8.GetString(version.AsSpan()))
+                "the \"%s\" stream at offset %O from the start of the CLI metadata root with size %i bytes was out of bounds"
+                header.PrintedName
+                header.Offset
+                header.Size
+        | InvalidStringOffset(offset, max) ->
+            sprintf "Invalid offset into the \"#Strings\" stream (%O), maximum valid offset is (%O)" offset max
+        | MissingStringStreamTerminator -> "the last byte of the \"#Strings\" stream must end in a null byte"
 
 [<RequireQualifiedAccess>]
 module ReadError =

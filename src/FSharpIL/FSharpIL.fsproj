@@ -52,10 +52,10 @@
     <Compile Include="Writing\WritePE.fsi" />
     <Compile Include="Writing\WritePE.fs" />
     <Compile Include="Reading\ReadState.fs" />
+    <Compile Include="Reading\ParsedHeaders.fs" />
     <Compile Include="Reading\ReadError.fs" />
     <Compile Include="Reading\ByteParser.fs" />
     <Compile Include="Reading\ParseBlob.fs" />
-    <Compile Include="Reading\ParsedMetadataStream.fs" />
     <Compile Include="Reading\ParsedStringsStream.fs" />
     <Compile Include="Reading\ParsedGuidStream.fs" />
     <Compile Include="Reading\ParsedUserStringStream.fs" />

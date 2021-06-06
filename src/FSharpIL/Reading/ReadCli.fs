@@ -12,9 +12,13 @@ open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 
-// TODO: Make type of Data be generic and rename this type, so it can be used with StreamHeaders as well.
-[<Struct>]
-type HeaderDataPointer = { Offset: SectionOffset; [<DefaultValue>] mutable Data: ChunkedMemory }
+type [<Struct>] HeaderDataPointer<'Data> = { Offset: SectionOffset; [<DefaultValue(false)>] mutable Data: 'Data }
+
+type ParsedMetadataStream<'Stream> = struct
+    val Index: int32 voption
+    [<DefaultValue(false)>] val mutable Stream: 'Stream
+    new (index) = { Index = ValueSome index }
+end
 
 [<NoComparison; NoEquality>]
 type CliInfo =
@@ -23,10 +27,10 @@ type CliInfo =
       SectionRva: Rva
       SectionOffset: FileOffset
       [<DefaultValue>] mutable CliHeader: ParsedCliHeader
-      [<DefaultValue>] mutable CliMetadata: HeaderDataPointer
+      [<DefaultValue>] mutable CliMetadata: HeaderDataPointer<ChunkedMemory>
       [<DefaultValue>] mutable MetadataRoot: ParsedCliMetadataRoot
-      [<DefaultValue>] mutable StreamHeadersOffset: SectionOffset
-      [<DefaultValue>] mutable StreamHeaders: ImmutableArray<ParsedStreamHeader> }
+      [<DefaultValue>] mutable StreamHeaders: HeaderDataPointer<ImmutableArray<ParsedStreamHeader>>
+      [<DefaultValue>] mutable StringsStream: ParsedMetadataStream<ParsedStringsStream> }
 
 let inline calculateFileOffset { CliInfo.SectionOffset = start } { SectionOffset.SectionOffset = soffset } = start + soffset
 
@@ -107,7 +111,7 @@ let readMetadataRoot info reader ustate =
                       Version = version
                       Flags = ChunkedMemory.readU2 (16u + length) &root
                       Streams = ChunkedMemory.readU2 (18u + length) &root }
-                info.StreamHeadersOffset <- { SectionOffset = 20u + length }
+                info.StreamHeaders <- { Offset = { SectionOffset = 20u + length } }
                 StructureReader.read
                     reader.ReadMetadataRoot
                     info.MetadataRoot
@@ -129,13 +133,13 @@ let rec readStreamNameSegment (data: inref<ChunkedMemory>) (offset: SectionOffse
                 |> Ok
             else readStreamNameSegment &data (offset + 4u) headeri i' buffer
         else Error(offset, StructureOutOfBounds(ParsedMetadataStructure.StreamHeader headeri))
-    else Error(offset, missingNullTerminator Encoding.UTF8 (Span.asReadOnly buffer))
+    else Error(offset, missingNullTerminator Encoding.ASCII (Span.asReadOnly buffer))
 
 let readStreamName (data: inref<ChunkedMemory>) (offset: SectionOffset) headeri =
     // According to (II.24.2.2), the name of the stream is limited to 32 characters.
     readStreamNameSegment &data offset headeri 0 (Span.stackalloc<byte> 32)
 
-let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) (offset: SectionOffset) (headers: ParsedStreamHeader[]) i =
+let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) info (offset: SectionOffset) (headers: ParsedStreamHeader[]) i =
     if i <= headers.Length then
         let offset' = uint32 offset
         if section.HasFreeBytes(offset', 8u) then
@@ -145,7 +149,10 @@ let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) (offset: SectionOf
                     { Offset = MetadataRootOffset(ChunkedMemory.readU4 offset' &section)
                       Size = ChunkedMemory.readU4 (offset' + 4u) &section
                       StreamName = name }
-                readStreamHeadersLoop &section (offset + 8u + uint32 name.Length) headers (i + 1)
+
+                if name = Magic.StreamNames.strings then info.StringsStream <- ParsedMetadataStream i
+
+                readStreamHeadersLoop &section info (offset + 8u + uint32 name.Length) headers (i + 1)
             | Error err -> Some err
         else Some(offset, StructureOutOfBounds(ParsedMetadataStructure.StreamHeader i))
     else None
@@ -154,15 +161,55 @@ let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) (offset: SectionOf
 let readStreamHeaders (section: inref<ChunkedMemory>) info reader ustate =
     let mutable headers = Unsafe.As &info.StreamHeaders
     headers <- Array.zeroCreate(int32 info.MetadataRoot.Streams)
-    match readStreamHeadersLoop &section info.StreamHeadersOffset headers 0 with
+    match readStreamHeadersLoop &section info info.StreamHeaders.Offset headers 0 with
     | None ->
         StructureReader.read
             reader.ReadStreamHeaders
-            info.StreamHeaders
-            (calculateFileOffset info info.StreamHeadersOffset)
+            info.StreamHeaders.Data
+            (calculateFileOffset info info.StreamHeaders.Offset)
             ustate
             ReadStringsStream
     | Some err -> Failure err
+
+/// Turns an offset from the start of the CLI metadata root to an offset from the start of the section.
+let inline offsetFromRoot info (offset: MetadataRootOffset) = info.CliMetadata.Offset + uint32 offset
+
+let readMetadataStream
+    (section: inref<ChunkedMemory>)
+    info
+    (stream: byref<ParsedMetadataStream<_>>)
+    ctor
+    reader
+    ustate
+    next
+    =
+    let stream' =
+        match stream.Index with
+        | ValueSome i ->
+            let header = &info.StreamHeaders.Data.ItemRef i
+            let offset = offsetFromRoot info header.Offset
+            match section.TrySlice(uint32 offset, header.Size) with
+            | true, data ->
+                match ctor data with
+                | Ok stream -> Ok stream
+                | Error err -> Error(offset, err)
+            | false, _ -> Error(offset, StreamOutOfBounds(i, header))
+        | ValueNone -> Ok(new 'Stream())
+    match stream' with
+    | Ok stream' ->
+        stream.Stream <- stream'
+        StructureReader.read reader stream' (noImpl "offset to first byte of stream") ustate next
+    | Error err -> Failure err
+
+let readStringsStream (section: inref<_>) info reader ustate =
+    readMetadataStream
+        &section
+        info
+        &info.StringsStream
+        ParsedStringsStream.tryCreate
+        reader.ReadStringsStream
+        ustate
+        ReadGuidStream
 
 let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
     match rstate with
@@ -171,9 +218,10 @@ let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
     | ReadMetadataRoot -> readMetadataRoot info reader ustate
     | ReadStreamHeaders ->
         match reader, info.MetadataRoot.Streams with
-        //| { ReadStringsStream = ValueNone }, 0us -> noImpl "TODO: If further metadata reading functions are defined that depend on stream contents, return error here"
+        // TODO: Consider returning an error if other reading functions depend on contents of stream or stream headers, but there are no streams defined.
         | _, 0us -> End
         | _, _ -> readStreamHeaders &section info reader ustate
+    | ReadStringsStream -> readStringsStream &section info reader ustate
 
 let rec readMetadataLoop (section: inref<_>) info reader ustate rstate =
     match readMetadata &section info reader ustate rstate with
