@@ -12,6 +12,7 @@ type MetadataReader<'State> =
       ReadGuidStream: StructureReader<ParsedGuidStream, 'State>
       ReadUserStringStream: StructureReader<ParsedUserStringStream, 'State>
       ReadBlobStream: StructureReader<ParsedBlobStream, 'State>
+      ReadTables: MetadataTablesReader<'State> voption
       HandleError: ErrorHandler<'State> }
 
 [<RequireQualifiedAccess>]
@@ -24,5 +25,6 @@ module MetadataReader =
           ReadGuidStream = ValueNone
           ReadUserStringStream = ValueNone
           ReadBlobStream = ValueNone
+          ReadTables = ValueNone
           HandleError = ErrorHandler.throwOnError }
         : MetadataReader<'State>

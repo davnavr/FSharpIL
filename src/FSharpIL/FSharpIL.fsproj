@@ -27,6 +27,7 @@
     <Compile Include="Metadata\Blobs\Signatures.fs" />
     <Compile Include="Metadata\Blobs\ConstantType.fs" />
     <Compile Include="Metadata\Tables\TableFlags.fs" />
+    <Compile Include="Metadata\Tables\TablesHeader.fs" />
     <Compile Include="Metadata\Tables\TableIndex.fs" />
     <Compile Include="Metadata\Tables\CodedIndex.fs" />
     <Compile Include="Metadata\Tables\TableRows.fs" />
@@ -65,6 +66,7 @@
     <Compile Include="Reading\ParsedMetadataTables.fs" />
     <Compile Include="Reading\ReadResult.fs" />
     <Compile Include="Reading\StructureReader.fs" />
+    <Compile Include="Reading\MetadataTablesReader.fs" />
     <Compile Include="Reading\ErrorHandler.fs" />
     <Compile Include="Reading\MetadataReader.fs" />
     <Compile Include="Reading\ReadCli.fsi" />

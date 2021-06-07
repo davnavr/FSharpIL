@@ -16,12 +16,14 @@ type ParsedMetadataStructure =
     | CliMetadataRoot
     | MetadataSignature
     | StreamHeader of index: int32
+    | MetadataTablesHeader
 
     override this.ToString() =
         match this with
         | CliMetadataRoot -> "the CLI metadata root"
         | MetadataSignature -> "the CLI metadata signature"
         | StreamHeader i -> sprintf "the stream header (index %i)" i
+        | MetadataTablesHeader -> "the metadata tables header"
 
 // TODO: Move offset: uint32 to BlobError case in ReadError and use offset: ParsedBlob
 type BlobError =

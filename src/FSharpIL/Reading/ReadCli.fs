@@ -10,6 +10,7 @@ open FSharpIL.Utilities
 
 open FSharpIL
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Tables
 open FSharpIL.PortableExecutable
 
 type [<Struct>] HeaderDataPointer<'Data> = { Offset: SectionOffset; [<DefaultValue(false)>] mutable Data: 'Data }
@@ -34,6 +35,8 @@ type CliInfo =
       [<DefaultValue>] mutable GuidStream: ParsedMetadataStream<ParsedGuidStream>
       [<DefaultValue>] mutable UserStringStream: ParsedMetadataStream<ParsedUserStringStream>
       [<DefaultValue>] mutable BlobStream: ParsedMetadataStream<ParsedBlobStream>
+      [<DefaultValue>] mutable TablesStream: ParsedMetadataStream<ChunkedMemory>
+      [<DefaultValue>] mutable Tables: ParsedMetadataTables
       //[<DefaultValue>] mutable MyField: MyType
       }
 
@@ -182,32 +185,82 @@ let inline offsetFromRoot info (offset: MetadataRootOffset) = info.CliMetadata.O
 
 let inline createMetadataStream stream = Result<_, ReadError>.Ok(^Stream : (new : ChunkedMemory -> ^Stream) stream)
 
-let readMetadataStream
-    (section: inref<ChunkedMemory>)
-    info
-    (stream: byref<ParsedMetadataStream<_>>)
-    ctor
-    reader
-    ustate
-    next
-    =
-    let stream' =
-        match stream.Index with
-        | ValueSome i ->
-            let header = &info.StreamHeaders.Data.ItemRef i
-            let offset = offsetFromRoot info header.Offset
-            match section.TrySlice(uint32 offset, header.Size) with
-            | true, data ->
-                match ctor data with
-                | Ok stream -> Ok(struct(calculateFileOffset info offset, stream))
-                | Error err -> Error(offset, err)
-            | false, _ -> Error(offset, StreamOutOfBounds(i, header))
-        | ValueNone -> Ok(struct(FileOffset.Zero, new 'Stream()))
-    match stream' with
+let validateMetadataStream (section: inref<ChunkedMemory>) info streami ctor =
+    match streami with
+    | ValueSome i ->
+        let header = &info.StreamHeaders.Data.ItemRef i
+        let offset = offsetFromRoot info header.Offset
+        match section.TrySlice(uint32 offset, header.Size) with
+        | true, data ->
+            match ctor data with
+            | Ok stream -> Ok(struct(calculateFileOffset info offset, stream))
+            | Error err -> Error(offset, err)
+        | false, _ -> Error(offset, StreamOutOfBounds(i, header))
+    | ValueNone -> Ok(struct(FileOffset.Zero, new 'Stream()))
+
+let readMetadataStream (section: inref<_>) info (stream: byref<ParsedMetadataStream<_>>) ctor reader ustate next =
+    match validateMetadataStream &section info stream.Index ctor with
     | Ok(offset, stream') ->
         stream.Stream <- stream'
         StructureReader.read reader stream' offset ustate next
     | Error err -> Failure err
+
+type CliInfo with
+    member inline this.TablesOffset = offsetFromRoot this (this.StreamHeaders.Data.ItemRef(this.TablesStream.Index.Value).Offset)
+
+/// Size of the first 7 fields of the metadata tables header, in bytes (II.24.2.6).
+let tablesHeaderFieldsSize = 24u
+
+let rec createTableRowCounts (lookup: 'Lookup) (valid: ValidTableFlags) (counts: uint32[]) counti validi =
+    match valid with
+    | ValidTableFlags.None -> System.Collections.ObjectModel.ReadOnlyDictionary lookup
+    | _ ->
+        let counti' =
+            if valid.HasFlag ValidTableFlags.Module then
+                lookup.[ValidTableFlags.Module <<< validi] <- counts.[counti]
+                counti + 1
+            else counti
+        createTableRowCounts lookup (valid >>> 1) counts counti' (validi + 1)
+
+let readMetadataTables (info: CliInfo) =
+    let inline outOfBounds offset =
+        Some(info.TablesOffset + offset, StructureOutOfBounds ParsedMetadataStructure.MetadataTablesHeader)
+    let stream: inref<_> = &info.TablesStream.Stream
+    if stream.HasFreeBytes(0u, tablesHeaderFieldsSize) then
+        let valid = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU8 8u &stream)
+        let numRowCounts =
+            let rec inline inner valid count =
+                match valid with
+                | ValidTableFlags.None -> count
+                | _ ->
+                    let count' =
+                        if valid.HasFlag ValidTableFlags.Module
+                        then count + 1
+                        else count
+                    inner (valid >>> 1) count'
+            inner valid 0
+        match stream.TrySlice(tablesHeaderFieldsSize + uint32(numRowCounts * sizeof<uint32>)) with
+        | true, rows ->
+            let rcounts = Array.zeroCreate<uint32> numRowCounts
+            for rowi = 0 to numRowCounts - 1 do
+                rcounts.[rowi] <- ChunkedMemory.readU4 (tablesHeaderFieldsSize + (uint32 rowi * 4u)) &rows
+
+            info.Tables <-
+                ParsedMetadataTables (
+                    rows,
+                    { Reserved1 = ChunkedMemory.readU4 0u &stream
+                      MajorVersion = stream.[4u]
+                      MinorVersion = stream.[5u]
+                      HeapSizes = LanguagePrimitives.EnumOfValue stream.[6u]
+                      Reserved2 = stream.[7u]
+                      Valid = valid
+                      Sorted = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU8 16u &stream)
+                      Rows = createTableRowCounts (System.Collections.Generic.Dictionary numRowCounts) valid rcounts 0 0 }
+                )
+
+            None
+        | false, _ -> outOfBounds tablesHeaderFieldsSize
+    else outOfBounds 0u
 
 let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
     match rstate with
@@ -254,8 +307,21 @@ let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
             createMetadataStream
             reader.ReadBlobStream
             ustate
-            ReadTablesHeader
+            ReadTablesStream
+    | ReadTablesStream ->
+        match validateMetadataStream &section info info.TablesStream.Index Ok with
+        | Ok(_, stream') ->
+            info.TablesStream.Stream <- stream'
 
+            match reader with
+            | { ReadTables = ValueNone } -> End
+            | { ReadTables = ValueSome _ } when stream'.IsEmpty -> noImpl "error for when metadata stream does not exist."
+            | _ -> Success(ustate, ReadMetadataTables)
+        | Error err -> Failure err
+    | ReadMetadataTables ->
+        match readMetadataTables info with
+        | None -> Success(ustate, ReadTableRows)
+        | Some err -> Failure err
 
 let rec readMetadataLoop (section: inref<_>) info reader ustate rstate =
     match readMetadata &section info reader ustate rstate with

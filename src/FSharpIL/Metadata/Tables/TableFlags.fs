@@ -2,6 +2,7 @@
 
 open System
 
+/// Bitmask used to refer to various metadata tables (II.24.2.6).
 [<Flags>]
 type ValidTableFlags =
     | None = 0UL
