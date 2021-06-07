@@ -7,7 +7,7 @@ open FSharpIL.Metadata
 type ParsedUserStringStream internal (stream: LengthEncodedStream) =
     let lookup = System.Collections.Generic.Dictionary<uint32, string>()
 
-    new (stream: ChunkedMemory) = new ParsedUserStringStream(LengthEncodedStream stream)
+    new (stream) = new ParsedUserStringStream(LengthEncodedStream stream)
     new () = ParsedUserStringStream ChunkedMemory.empty
 
     member _.Size = stream.contents.Length

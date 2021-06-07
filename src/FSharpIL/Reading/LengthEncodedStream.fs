@@ -3,6 +3,7 @@
 open FSharpIL
 open FSharpIL.Utilities
 
+/// Represents a metadata stream containing blobs, whose lengths are included before the corresponding blob's content (II.24.2.4).
 [<System.Runtime.CompilerServices.IsReadOnly>]
 type internal LengthEncodedStream = struct
     val contents: ChunkedMemory

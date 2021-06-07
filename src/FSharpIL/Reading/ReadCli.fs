@@ -33,6 +33,7 @@ type CliInfo =
       [<DefaultValue>] mutable StringsStream: ParsedMetadataStream<ParsedStringsStream>
       [<DefaultValue>] mutable GuidStream: ParsedMetadataStream<ParsedGuidStream>
       [<DefaultValue>] mutable UserStringStream: ParsedMetadataStream<ParsedUserStringStream>
+      [<DefaultValue>] mutable BlobStream: ParsedMetadataStream<ParsedBlobStream>
       //[<DefaultValue>] mutable MyField: MyType
       }
 
@@ -245,6 +246,16 @@ let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
             reader.ReadUserStringStream
             ustate
             ReadBlobStream
+    | ReadBlobStream ->
+        readMetadataStream
+            &section
+            info
+            &info.BlobStream
+            createMetadataStream
+            reader.ReadBlobStream
+            ustate
+            ReadTablesHeader
+
 
 let rec readMetadataLoop (section: inref<_>) info reader ustate rstate =
     match readMetadata &section info reader ustate rstate with

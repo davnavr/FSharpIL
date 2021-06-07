@@ -1,67 +1,18 @@
 ﻿namespace FSharpIL.Reading
 
-open System
-open System.Runtime.CompilerServices
-
 open FSharpIL
-open FSharpIL.Utilities
-
-/// <summary>Represents an offset into the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
-[<IsReadOnly; Struct>] // TODO: Rename to BlobOffset
-type ParsedBlob =
-    internal { BlobOffset: uint32 }
-    static member op_Implicit { BlobOffset = offset } = offset
-
-type [<IsReadOnly; Struct>] ParsedMethodInstantiation = internal { MethodSpec: ParsedBlob }
-//type [<IsReadOnly; Struct>] TemporarySomethingSig = internal { TemporarySomethingSig: ParsedBlob }
-
-[<RequireQualifiedAccess>]
-module ParsedBlob =
-    let (|FieldSig|) { FieldSig = blob } = blob
+open FSharpIL.Metadata
 
 /// <summary>Represents the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
 [<Sealed>]
-type ParsedBlobStream internal (chunk: ChunkedMemory) =
-    member _.Size = chunk.Length
+type ParsedBlobStream internal (stream: LengthEncodedStream) =
+    // TODO: Have lookups for various signature types.
+    //let 
 
-    member _.TryRead { BlobOffset = offset } =
-        match chunk.TrySlice offset with
-        | true, chunk' ->
-            let mutable chunk' = chunk'
-            match ParseBlob.compressedUnsigned &chunk' with
-            | Ok(Convert.U4 lsize, size) ->
-                let offset' = offset + lsize
-                match chunk.TrySlice(offset', size) with
-                | true, blob -> Ok blob
-                | false, _ -> Error(BlobOutsideOfHeap(offset, size))
-            | Error err -> Error err
-        | false, _ -> Error(InvalidBlobOffset(offset, chunk.Length - 1u))
+    new (stream) = ParsedBlobStream(LengthEncodedStream stream)
+    new () = ParsedBlobStream ChunkedMemory.empty
 
-    /// <summary>Returns the contents of the blob at the specified <paramref name="offset"/>.</summary>
-    [<Obsolete("Simple use the raw chunk instead of having to allocate an array for every blob.")>]
-    member this.TryReadBytes offset =
-        match this.TryRead offset with
-        | Ok blob -> Ok(blob.ToImmutableArray())
-        | Error err -> Error err
+    member _.Size = stream.contents.Length
 
-    member private this.TryReadFieldSig offset =
-        match this.TryRead offset with
-        | Ok signature -> ParseBlob.fieldSig &signature
-        | Error err -> Error err
-    member this.TryReadFieldSig { FieldSig = offset } = this.TryReadFieldSig offset
-    member this.TryReadFieldSig { StandaloneSig = offset } = this.TryReadFieldSig offset
-
-    member this.TryReadMethodDefSig { MethodDefSig = offset } =
-        match this.TryRead offset with
-        | Ok signature -> ParseBlob.methodDefSig &signature
-        | Error err -> Error err
-
-    member this.TryReadPropertySig { PropertySig = offset } =
-        match this.TryRead offset with
-        | Ok signature -> ParseBlob.propertySig &signature
-        | Error err -> Error err
-
-    member this.TryReadTypeSpec { TypeSpec = offset } =
-        match this.TryRead offset with
-        | Ok signature -> ParseBlob.typeSpec &signature
-        | Error err -> Error err
+    /// <summary>Returns the contents of the blob at the specified offset.</summary>
+    member _.TryGetBytes { BlobOffset = offset } = stream.TryReadBytes offset
