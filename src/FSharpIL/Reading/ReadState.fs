@@ -14,6 +14,7 @@ type MetadataReadState =
     | ReadStringsStream
     | ReadGuidStream
     | ReadUserStringStream
+    | ReadBlobStream
 
     override this.ToString() =
         match this with
@@ -24,6 +25,7 @@ type MetadataReadState =
         | ReadStringsStream -> "reading strings stream"
         | ReadGuidStream -> "reading GUID stream"
         | ReadUserStringStream -> "reading user strings stream"
+        | ReadBlobStream -> "reading metadata blob stream"
 
     interface IReadState
 

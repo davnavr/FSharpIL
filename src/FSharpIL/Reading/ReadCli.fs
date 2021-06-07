@@ -32,6 +32,7 @@ type CliInfo =
       [<DefaultValue>] mutable StreamHeaders: HeaderDataPointer<ImmutableArray<ParsedStreamHeader>>
       [<DefaultValue>] mutable StringsStream: ParsedMetadataStream<ParsedStringsStream>
       [<DefaultValue>] mutable GuidStream: ParsedMetadataStream<ParsedGuidStream>
+      [<DefaultValue>] mutable UserStringStream: ParsedMetadataStream<ParsedUserStringStream>
       //[<DefaultValue>] mutable MyField: MyType
       }
 
@@ -235,6 +236,15 @@ let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
             reader.ReadGuidStream
             ustate
             ReadUserStringStream
+    | ReadUserStringStream ->
+        readMetadataStream
+            &section
+            info
+            &info.UserStringStream
+            createMetadataStream
+            reader.ReadUserStringStream
+            ustate
+            ReadBlobStream
 
 let rec readMetadataLoop (section: inref<_>) info reader ustate rstate =
     match readMetadata &section info reader ustate rstate with

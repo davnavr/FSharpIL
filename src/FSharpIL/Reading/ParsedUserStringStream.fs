@@ -1,15 +1,20 @@
 ﻿namespace FSharpIL.Reading
 
-/// <summary>Represents an offset into the <c>#US</c> metadata heap (II.24.2.4).</summary>
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-type ParsedUserString (offset: uint32) =
-    member _.Offset = offset
-    member _.IsNull = offset = 0u
-
-[<AutoOpen>]
-module ParsedUserString = let (|ParsedUserString|) (offset: ParsedUserString) = offset.Offset
+open FSharpIL
+open FSharpIL.Metadata
 
 /// <summary>Represents the <c>#US</c> metadata heap, which contains UTF-16 strings (II.24.2.4).</summary>
-[<Sealed>]
-type ParsedUserStringStream internal (stream: ParsedMetadataStream) =
-    member _.Size = stream.StreamSize
+type ParsedUserStringStream internal (stream: LengthEncodedStream) =
+    let lookup = System.Collections.Generic.Dictionary<uint32, string>()
+
+    new (stream: ChunkedMemory) = new ParsedUserStringStream(LengthEncodedStream stream)
+    new () = ParsedUserStringStream ChunkedMemory.empty
+
+    member _.Size = stream.contents.Length
+
+    member _.TryGetString { UserStringOffset = offset } =
+        match lookup.TryGetValue offset with
+        | true, existing -> Ok existing
+        | false, _ ->
+            stream.TryReadBytes offset
+            Utilities.Fail.noImpl "TODO: Read the blob"

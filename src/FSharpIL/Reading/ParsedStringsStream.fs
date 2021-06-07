@@ -9,13 +9,14 @@ open FSharpIL.Metadata
 
 /// <summary>Represents the <c>#Strings</c> metadata heap, which contains null-terminated UTF-8 strings (II.24.2.3).</summary>
 [<Sealed>]
-type ParsedStringsStream (stream: ChunkedMemory) = // TODO: Check that last byte is a null byte.
+type ParsedStringsStream (stream: ChunkedMemory) =
     let mutable lookup = Dictionary<uint32, string>()
     let mutable buffer = Array.zeroCreate<byte> 32
 
     new () = ParsedStringsStream ChunkedMemory.empty
 
     member _.IsEmpty = stream.IsEmpty
+    member _.Size = stream.Length
 
     member _.TryGetString ({ StringOffset = offset' } as offset) =
         if offset' < stream.Length then

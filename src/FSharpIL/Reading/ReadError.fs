@@ -108,6 +108,7 @@ type ReadError =
     | InvalidStringOffset of StringOffset * max: StringOffset
     | MissingStringStreamTerminator
     | InvalidGuidIndex of GuidIndex * max: GuidIndex
+    | InvalidBlob of offset: uint32 * BlobError
 
     override this.ToString() =
         match this with
@@ -146,6 +147,7 @@ type ReadError =
         | MissingStringStreamTerminator -> "the last byte of the \"#Strings\" stream must end in a null byte"
         | InvalidGuidIndex(offset, max) ->
             sprintf "Invalid index into the \"#GUID\" stream (%O), maximum valid index is (%O)" offset max
+        | InvalidBlob(offset, err) -> sprintf "the blob at offset 0x%08X is invalid, %O" offset err
 
 [<RequireQualifiedAccess>]
 module ReadError =
