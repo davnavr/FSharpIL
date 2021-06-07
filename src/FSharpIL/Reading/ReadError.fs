@@ -107,6 +107,7 @@ type ReadError =
     | StreamOutOfBounds of index: int32 * ParsedStreamHeader
     | InvalidStringOffset of StringOffset * max: StringOffset
     | MissingStringStreamTerminator
+    | InvalidGuidIndex of GuidIndex * max: GuidIndex
 
     override this.ToString() =
         match this with
@@ -143,6 +144,8 @@ type ReadError =
         | InvalidStringOffset(offset, max) ->
             sprintf "Invalid offset into the \"#Strings\" stream (%O), maximum valid offset is (%O)" offset max
         | MissingStringStreamTerminator -> "the last byte of the \"#Strings\" stream must end in a null byte"
+        | InvalidGuidIndex(offset, max) ->
+            sprintf "Invalid index into the \"#GUID\" stream (%O), maximum valid index is (%O)" offset max
 
 [<RequireQualifiedAccess>]
 module ReadError =

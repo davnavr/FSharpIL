@@ -11,9 +11,9 @@ open FSharpIL.Metadata.Blobs
 type ModuleRow =
     { Generation: uint16
       Name: StringOffset
-      Mvid: GuidOffset
-      EncId: GuidOffset
-      EncBaseId: GuidOffset }
+      Mvid: GuidIndex
+      EncId: GuidIndex
+      EncBaseId: GuidIndex }
     interface ITableRow
 
 /// <summary>(0x01) Represents a row in the <c>TypeRef</c> table (II.22.38).</summary>

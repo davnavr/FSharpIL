@@ -13,6 +13,7 @@ type MetadataReadState =
     | ReadStreamHeaders
     | ReadStringsStream
     | ReadGuidStream
+    | ReadUserStringStream
 
     override this.ToString() =
         match this with
@@ -20,8 +21,9 @@ type MetadataReadState =
         | FindMetadataRoot -> "locating metadata root"
         | ReadMetadataRoot -> "reading metadata root"
         | ReadStreamHeaders -> "reading metadata stream headers"
-        | ReadStringsStream -> "reading metadata strings stream"
-        | ReadGuidStream -> "reading metadata GUID stream"
+        | ReadStringsStream -> "reading strings stream"
+        | ReadGuidStream -> "reading GUID stream"
+        | ReadUserStringStream -> "reading user strings stream"
 
     interface IReadState
 

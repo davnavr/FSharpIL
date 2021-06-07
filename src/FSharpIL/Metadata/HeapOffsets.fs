@@ -10,9 +10,9 @@ type StringOffset =
 
 /// <summary>Represents an index into the <c>#GUID</c> metadata heap (II.24.2.5).</summary>
 [<IsReadOnly; Struct>]
-type GuidOffset =
-    internal { GuidOffset: uint32 }
-    static member op_Implicit { GuidOffset = offset } = offset
+type GuidIndex =
+    internal { GuidIndex: uint32 }
+    static member op_Implicit { GuidIndex = offset } = offset
 
 /// <summary>Represents an index into the <c>#US</c> metadata heap (II.24.2.4).</summary>
 [<IsReadOnly; Struct>]

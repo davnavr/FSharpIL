@@ -30,7 +30,10 @@ type CliInfo =
       [<DefaultValue>] mutable CliMetadata: HeaderDataPointer<ChunkedMemory>
       [<DefaultValue>] mutable MetadataRoot: ParsedCliMetadataRoot
       [<DefaultValue>] mutable StreamHeaders: HeaderDataPointer<ImmutableArray<ParsedStreamHeader>>
-      [<DefaultValue>] mutable StringsStream: ParsedMetadataStream<ParsedStringsStream> }
+      [<DefaultValue>] mutable StringsStream: ParsedMetadataStream<ParsedStringsStream>
+      [<DefaultValue>] mutable GuidStream: ParsedMetadataStream<ParsedGuidStream>
+      //[<DefaultValue>] mutable MyField: MyType
+      }
 
 let inline calculateFileOffset { CliInfo.SectionOffset = start } { SectionOffset.SectionOffset = soffset } = start + soffset
 
@@ -151,6 +154,7 @@ let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) info (offset: Sect
                       StreamName = name }
 
                 if name = Magic.StreamNames.strings then info.StringsStream <- ParsedMetadataStream i
+                if name = Magic.StreamNames.guid then info.GuidStream <- ParsedMetadataStream i
 
                 readStreamHeadersLoop &section info (offset + 8u + uint32 name.Length) headers (i + 1)
             | Error err -> Some err
@@ -174,6 +178,8 @@ let readStreamHeaders (section: inref<ChunkedMemory>) info reader ustate =
 /// Turns an offset from the start of the CLI metadata root to an offset from the start of the section.
 let inline offsetFromRoot info (offset: MetadataRootOffset) = info.CliMetadata.Offset + uint32 offset
 
+let inline createMetadataStream stream = Result<_, ReadError>.Ok(^Stream : (new : ChunkedMemory -> ^Stream) stream)
+
 let readMetadataStream
     (section: inref<ChunkedMemory>)
     info
@@ -191,25 +197,15 @@ let readMetadataStream
             match section.TrySlice(uint32 offset, header.Size) with
             | true, data ->
                 match ctor data with
-                | Ok stream -> Ok stream
+                | Ok stream -> Ok(struct(calculateFileOffset info offset, stream))
                 | Error err -> Error(offset, err)
             | false, _ -> Error(offset, StreamOutOfBounds(i, header))
-        | ValueNone -> Ok(new 'Stream())
+        | ValueNone -> Ok(struct(FileOffset.Zero, new 'Stream()))
     match stream' with
-    | Ok stream' ->
+    | Ok(offset, stream') ->
         stream.Stream <- stream'
-        StructureReader.read reader stream' (noImpl "offset to first byte of stream") ustate next
+        StructureReader.read reader stream' offset ustate next
     | Error err -> Failure err
-
-let readStringsStream (section: inref<_>) info reader ustate =
-    readMetadataStream
-        &section
-        info
-        &info.StringsStream
-        ParsedStringsStream.tryCreate
-        reader.ReadStringsStream
-        ustate
-        ReadGuidStream
 
 let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
     match rstate with
@@ -221,7 +217,24 @@ let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
         // TODO: Consider returning an error if other reading functions depend on contents of stream or stream headers, but there are no streams defined.
         | _, 0us -> End
         | _, _ -> readStreamHeaders &section info reader ustate
-    | ReadStringsStream -> readStringsStream &section info reader ustate
+    | ReadStringsStream ->
+        readMetadataStream
+            &section
+            info
+            &info.StringsStream
+            ParsedStringsStream.tryCreate
+            reader.ReadStringsStream
+            ustate
+            ReadGuidStream
+    | ReadGuidStream ->
+        readMetadataStream
+            &section
+            info
+            &info.GuidStream
+            createMetadataStream
+            reader.ReadGuidStream
+            ustate
+            ReadUserStringStream
 
 let rec readMetadataLoop (section: inref<_>) info reader ustate rstate =
     match readMetadata &section info reader ustate rstate with

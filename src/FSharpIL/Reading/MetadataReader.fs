@@ -9,6 +9,7 @@ type MetadataReader<'State> =
       ReadMetadataRoot: StructureReader<ParsedCliMetadataRoot, 'State>
       ReadStreamHeaders: StructureReader<ImmutableArray<ParsedStreamHeader>, 'State>
       ReadStringsStream: StructureReader<ParsedStringsStream, 'State>
+      ReadGuidStream: StructureReader<ParsedGuidStream, 'State>
       HandleError: ErrorHandler<'State> }
 
 [<RequireQualifiedAccess>]
@@ -18,5 +19,6 @@ module MetadataReader =
           ReadMetadataRoot = ValueNone
           ReadStreamHeaders = ValueNone
           ReadStringsStream = ValueNone
+          ReadGuidStream = ValueNone
           HandleError = ErrorHandler.throwOnError }
         : MetadataReader<'State>
