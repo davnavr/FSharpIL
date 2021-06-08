@@ -2,6 +2,7 @@
 module FSharpIL.Reading.ReadCli
 
 open System
+open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 open System.Text
@@ -239,28 +240,89 @@ let readMetadataTables (info: CliInfo) =
                         else count
                     inner (valid >>> 1) count'
             inner valid 0
-        match stream.TrySlice(tablesHeaderFieldsSize + uint32(numRowCounts * sizeof<uint32>)) with
+        let tableRowsOffset = tablesHeaderFieldsSize + (uint32 numRowCounts * 4u)
+        match stream.TrySlice tableRowsOffset with
         | true, rows ->
             let rcounts = Array.zeroCreate<uint32> numRowCounts
             for rowi = 0 to numRowCounts - 1 do
                 rcounts.[rowi] <- ChunkedMemory.readU4 (tablesHeaderFieldsSize + (uint32 rowi * 4u)) &rows
 
-            info.Tables <-
-                ParsedMetadataTables (
-                    rows,
-                    { Reserved1 = ChunkedMemory.readU4 0u &stream
-                      MajorVersion = stream.[4u]
-                      MinorVersion = stream.[5u]
-                      HeapSizes = LanguagePrimitives.EnumOfValue stream.[6u]
-                      Reserved2 = stream.[7u]
-                      Valid = valid
-                      Sorted = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU8 16u &stream)
-                      Rows = createTableRowCounts (System.Collections.Generic.Dictionary numRowCounts) valid rcounts 0 0 }
-                )
+            let header =
+                { Reserved1 = ChunkedMemory.readU4 0u &stream
+                  MajorVersion = stream.[4u]
+                  MinorVersion = stream.[5u]
+                  HeapSizes = LanguagePrimitives.EnumOfValue stream.[6u]
+                  Reserved2 = stream.[7u]
+                  Valid = valid
+                  Sorted = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU8 16u &stream)
+                  Rows = createTableRowCounts (Dictionary numRowCounts) valid rcounts 0 0 :> IReadOnlyDictionary<_, _> }
 
-            None
+            match ParsedMetadataTables.tryCreate &rows header with
+            | Ok tables ->
+                info.Tables <- tables
+                None
+            | Error(offset, err) -> Some(info.TablesOffset + tableRowsOffset + offset, err)
         | false, _ -> outOfBounds tablesHeaderFieldsSize
     else outOfBounds 0u
+
+let rec readTableRowsLoop (roffset: FileOffset) (table: MetadataTableParser<_, _>) referenced i reader (ustate: byref<_>) =
+    if i <= table.RowCount then
+        match reader (struct(referenced, table.[{ TableIndex = i }])) (roffset + table.TableOffset) ustate with
+        | ValueSome ustate' ->
+            ustate <- ustate'
+            readTableRowsLoop roffset table referenced (i + 1u) reader &ustate
+        | ValueNone -> ()
+
+let readTablesSequential info reader ustate =
+    let mutable ustate' = ustate
+
+    let referenced =
+        { ReferencedMetadataStreams.Tables = info.Tables
+          Strings = info.StringsStream.Stream
+          Guid = info.GuidStream.Stream
+          UserString = info.UserStringStream.Stream
+          Blob = info.BlobStream.Stream }
+    let roffset =
+        calculateFileOffset info (info.TablesOffset + tablesHeaderFieldsSize + (uint32 info.Tables.Header.Rows.Count * 4u))
+
+    let inline readTableRows table (reader': TableRowReader<_, _>) =
+        match reader' with
+        | ValueSome reader' -> readTableRowsLoop roffset table referenced 1u reader' &ustate'
+        | ValueNone -> ()
+
+    readTableRows info.Tables.moduleTable reader.ReadModule
+    readTableRows info.Tables.typeRefTable reader.ReadTypeRef
+    readTableRows info.Tables.typeDefTable reader.ReadTypeDef
+    readTableRows info.Tables.fieldTable reader.ReadField
+    readTableRows info.Tables.methodDefTable reader.ReadMethodDef
+    readTableRows info.Tables.paramTable reader.ReadParam
+    readTableRows info.Tables.interfaceImplTable reader.ReadInterfaceImpl
+    readTableRows info.Tables.memberRefTable reader.ReadMemberRef
+    readTableRows info.Tables.constantTable reader.ReadConstant
+    readTableRows info.Tables.customAttributeTable reader.ReadCustomAttribute
+
+    readTableRows info.Tables.classLayoutTable reader.ReadClassLayout
+
+    readTableRows info.Tables.standAloneSigTable reader.ReadStandaloneSig
+
+    readTableRows info.Tables.propertyMapTable reader.ReadPropertyMap
+    readTableRows info.Tables.propertyTable reader.ReadProperty
+    readTableRows info.Tables.methodSemanticsTable reader.ReadMethodSemantics
+    readTableRows info.Tables.methodImplTable reader.ReadMethodImpl
+
+    readTableRows info.Tables.typeSpecTable reader.ReadTypeSpec
+
+    readTableRows info.Tables.fieldRvaTable reader.ReadFieldRva
+    readTableRows info.Tables.assemblyTable reader.ReadAssembly
+    readTableRows info.Tables.assemblyRefTable reader.ReadAssemblyRef
+
+    readTableRows info.Tables.manifestResourceTable reader.ReadManifestResource
+    readTableRows info.Tables.nestedClassTable reader.ReadNestedClass
+    readTableRows info.Tables.genericParamTable reader.ReadGenericParam
+    readTableRows info.Tables.methodSpecTable reader.ReadMethodSpec
+    readTableRows info.Tables.genericParamConstraintTable reader.ReadGenericParamConstraint
+
+    Success(ustate', MetadataReadFinished)
 
 let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
     match rstate with
@@ -322,6 +384,11 @@ let readMetadata (section: inref<ChunkedMemory>) info reader ustate rstate =
         match readMetadataTables info with
         | None -> Success(ustate, ReadTableRows)
         | Some err -> Failure err
+    | ReadTableRows ->
+        match reader.ReadTables with
+        | ValueSome(SequentialTableReader treader) -> readTablesSequential info treader ustate
+        | ValueNone -> End
+    | MetadataReadFinished -> End
 
 let rec readMetadataLoop (section: inref<_>) info reader ustate rstate =
     match readMetadata &section info reader ustate rstate with

@@ -6,11 +6,11 @@ open FSharpIL.Metadata.Tables
 type ReferencedMetadataStreams =
     { Strings: ParsedStringsStream
       Guid: ParsedGuidStream
-      //UserString: ParsedUserStringStream // NOTE: This would be needed for reading method bodies.
+      UserString: ParsedUserStringStream
       Blob: ParsedBlobStream
       Tables: ParsedMetadataTables }
 
-type TableRowReader<'Row, 'State> = StructureReader<struct(ReferencedMetadataStreams * 'Row), 'State>
+type TableRowReader<'Row, 'State> = StructureReader<struct(ReferencedMetadataStreams * 'Row), 'State> // ('Row -> ReferencedMetadataStreams -> FSharpIL.PortableExecutable.FileOffset -> 'State -> 'State voption) voption
 
 [<NoComparison; NoEquality>]
 type SequentialTableReader<'State> =
@@ -28,7 +28,7 @@ type SequentialTableReader<'State> =
       //ReadDeclSecurity: TableRowReader
       ReadClassLayout: TableRowReader<ClassLayoutRow, 'State>
       //FieldLayout: TableRowReader
-      ReadStandAloneSig: TableRowReader<StandaloneSigRow, 'State>
+      ReadStandaloneSig: TableRowReader<StandaloneSigRow, 'State>
       //ReadEventMap: TableRowReader<EventMapRow, 'State>
       //ReadEvent: TableRowReader<EventRow, 'State>
       ReadPropertyMap: TableRowReader<PropertyMapRow, 'State>
@@ -40,7 +40,7 @@ type SequentialTableReader<'State> =
       //ReadImplMap: TableRowReader
       ReadFieldRva: TableRowReader<FieldRvaRow, 'State>
       ReadAssembly: TableRowReader<AssemblyRow, 'State>
-      ReadReadRef: TableRowReader<AssemblyRefRow, 'State>
+      ReadAssemblyRef: TableRowReader<AssemblyRefRow, 'State>
       //ReadFile: TableRowReader<FileRow, 'State>
       //ReadExportedType: TableRowReader<ExportedTypeRow, 'State>
       ReadManifestResource: TableRowReader<ManifestResourceRow, 'State>
@@ -53,4 +53,5 @@ type SequentialTableReader<'State> =
 
 type MetadataTablesReader<'State> =
     //| AllAtOnce of (ReferencedMetadataStreams -> FileOffset -> 'State -> Result<'State, ReadError>)
+    /// The tables are read in the order that they appear.
     | SequentialTableReader of SequentialTableReader<'State>

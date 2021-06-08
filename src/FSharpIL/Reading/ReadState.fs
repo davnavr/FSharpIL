@@ -18,6 +18,7 @@ type MetadataReadState =
     | ReadTablesStream
     | ReadMetadataTables
     | ReadTableRows
+    | MetadataReadFinished
 
     override this.ToString() =
         match this with
@@ -32,6 +33,7 @@ type MetadataReadState =
         | ReadTablesStream -> "reading tables stream"
         | ReadMetadataTables -> "reading metadata tables"
         | ReadTableRows -> "reading table rows"
+        | MetadataReadFinished -> "the reading of metadata was finished"
 
     interface IReadState
 

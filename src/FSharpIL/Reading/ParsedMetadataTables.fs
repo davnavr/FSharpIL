@@ -17,11 +17,12 @@ type MetadataTableParser<'RowParser, 'Row
     and 'Row :> ITableRow>
     internal
     (
+        offset: uint32,
         rows: ChunkedMemory,
         parser: 'RowParser
     )
     =
-    static member val Empty = MetadataTableParser<'RowParser, 'Row>(ChunkedMemory.empty, Unchecked.defaultof<'RowParser>)
+    static member val Empty = MetadataTableParser<'RowParser, 'Row>(0u, ChunkedMemory.empty, Unchecked.defaultof<'RowParser>)
 
     member _.IsEmpty = rows.IsEmpty
     member _.RowCount = rows.Length / parser.Length
@@ -29,6 +30,8 @@ type MetadataTableParser<'RowParser, 'Row
     member _.RowLength = parser.Length
     /// The length of this metadata table, in bytes.
     member _.Length = rows.Length
+    /// Offset from the first byte of the table rows to the first byte of the first row of this table.
+    member _.TableOffset = offset
 
     /// <summary>Attempts to retrieve the row at the specified index.</summary>
     /// <returns>
@@ -139,9 +142,9 @@ module ParsedMetadataTables =
         let length = parser.Length * count
         match stream.TrySlice(offset, length) with
         | true, rows ->
-            table <- MetadataTableParser(rows, parser)
+            table <- MetadataTableParser(offset, rows, parser)
             Ok length
-        | false, _ -> Error(StructureOutOfBounds(ParsedMetadataStructure.MetadataTable tablei))
+        | false, _ -> Error(offset, StructureOutOfBounds(ParsedMetadataStructure.MetadataTable tablei))
 
     let rec private createTablesLoop offset (enumerator: byref<IEnumerator<_>>) tables =
         if enumerator.MoveNext() then
@@ -149,9 +152,9 @@ module ParsedMetadataTables =
 
             let inline checkTableHasOneRow() =
                 match count with
-                | 0u -> Some(TableIsEmpty table)
+                | 0u -> Some(offset, TableIsEmpty table)
                 | 1u -> None
-                | _ -> Some(TableHasMoreThanOneRow(table, count))
+                | _ -> Some(offset, TableHasMoreThanOneRow(table, count))
 
             let result =
                 match table with
