@@ -24,13 +24,17 @@
     <Compile Include="Metadata\HeapOffsets.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\Blobs\Offsets.fs" />
-    <Compile Include="Metadata\Blobs\Signatures.fs" />
-    <Compile Include="Metadata\Blobs\ConstantType.fs" />
+    <Compile Include="Metadata\Blobs\ElementType.fs" />
+    <Compile Include="Metadata\Blobs\CallingConventionFlags.fs" />
+    <Compile Include="Metadata\Blobs\CustomAttrib.fs" />
+    <Compile Include="Metadata\Blobs\ElemType.fs" />
     <Compile Include="Metadata\Tables\TableFlags.fs" />
     <Compile Include="Metadata\Tables\TablesHeader.fs" />
     <Compile Include="Metadata\Tables\TableIndex.fs" />
     <Compile Include="Metadata\Tables\CodedIndex.fs" />
     <Compile Include="Metadata\Tables\TableRows.fs" />
+    <Compile Include="Metadata\Signatures\CustomMod.fs" />
+    <Compile Include="Metadata\Signatures\Items.fs" />
     <Compile Include="Metadata\CliHeader.fs" />
     <Compile Include="Metadata\CliMetadataRoot.fs" />
     <Compile Include="XmlDoc\DocMember.fs" />
@@ -55,6 +59,7 @@
     <Compile Include="Reading\ReadState.fs" />
     <Compile Include="Reading\ParsedHeaders.fs" />
     <Compile Include="Reading\ReadError.fs" />
+    <Compile Include="Reading\ParseBlob.fsi" />
     <Compile Include="Reading\ParseBlob.fs" />
     <Compile Include="Reading\ParsedStringsStream.fs" />
     <Compile Include="Reading\ParsedGuidStream.fs" />
