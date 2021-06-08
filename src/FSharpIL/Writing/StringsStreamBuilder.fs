@@ -16,7 +16,7 @@ type StringsStreamBuilder (capacity: int32) =
     let strings = List<ReadOnlyMemory<char>> capacity
     let offsetLookup = Dictionary<ReadOnlyMemory<char>, StringOffset>(capacity, StringsStreamBuilder.StringComparer)
     let stringLookup = Dictionary<StringOffset, int32> capacity
-    do strings.Add ReadOnlyMemory.Empty
+    do strings.Add ReadOnlyMemory.Empty // First entry is the empty string.
     do offsetLookup.[ReadOnlyMemory.Empty] <- StringOffset.Zero
     do stringLookup.[StringOffset.Zero] <- 0
 
@@ -79,14 +79,16 @@ type StringsStreamBuilder (capacity: int32) =
             true
         | false, _ -> false
 
-    member internal _.Serialize(chunk: byref<ChunkedMemoryBuilder>) =
-        let mutable chars = ReadOnlySpan<char>()
-        let mutable buffer = Span.stackalloc<byte> 512
-        for str in strings do
-            chars <- str.Span
-            while chars.Length > 0 do
-                let length = min buffer.Length chars.Length
-                System.Text.Encoding.UTF8.GetBytes(chars, buffer) |> ignore
-                chunk.Write(buffer.Slice(0, length))
-                chars <- chars.Slice length
-            chunk.Write 0uy
+    interface IStreamBuilder with
+        member this.StreamLength = this.StreamLength
+        member _.Serialize builder =
+            let mutable chars = ReadOnlySpan<char>()
+            let mutable buffer = Span.stackalloc<byte> 512
+            for str in strings do
+                chars <- str.Span
+                while chars.Length > 0 do
+                    let length = min buffer.Length chars.Length
+                    System.Text.Encoding.UTF8.GetBytes(chars, buffer) |> ignore
+                    builder.Write(buffer.Slice(0, length))
+                    chars <- chars.Slice length
+                builder.Write 0uy

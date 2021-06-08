@@ -108,7 +108,7 @@ let readMetadataRoot info reader ustate =
     match readMetadataSignature info with
     | Ok signature ->
         match ChunkedMemory.tryReadU4 12u &root with
-        | ValueSome length when length > 255u || length &&& 4u <> 0u -> failure(InvalidMetadataVersionLength length)
+        | ValueSome length when length > 255u || length % 4u <> 0u -> failure(InvalidMetadataVersionLength length)
         | ValueSome length when root.HasFreeBytes(0u, 20u + length) ->
             match readMetadataVersion length 16u &root with
             | Ok version ->

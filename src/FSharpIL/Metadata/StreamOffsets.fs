@@ -13,7 +13,9 @@ type StringOffset =
 [<IsReadOnly; Struct>]
 type GuidIndex =
     internal { GuidIndex: uint32 }
+    member this.IsNull = this.GuidIndex = 0u
     static member op_Implicit { GuidIndex = offset } = offset
+    static member Zero = { GuidIndex = 0u }
 
 /// <summary>Represents an index into the <c>#US</c> metadata stream (II.24.2.4).</summary>
 [<IsReadOnly; Struct>]

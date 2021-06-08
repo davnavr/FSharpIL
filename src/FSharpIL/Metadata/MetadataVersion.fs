@@ -10,7 +10,7 @@ open FSharpIL
 
 /// Specifies what version of the CLI that the file is intended to execute on (II.24.2.1).
 [<IsReadOnly; Struct>]
-type MetadataVersion =
+type MetadataVersion = // TODO: Rename to RuntimeVersion
     internal { RoundedLength: uint8; MetadataVersion: ImmutableArray<byte> }
     override this.ToString() = Encoding.UTF8.GetString(this.MetadataVersion.AsSpan())
     /// The length of the version string including the null terminator, rounded up to a multiple of 4.
