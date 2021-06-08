@@ -13,6 +13,14 @@ type HeapSizes =
     /// <summary>Specifies that offsets into the <c>#Blob</c> stream should be 4 bytes wide.</summary>
     | Blob = 0x4uy
 
+[<AutoOpen>]
+module HeapSizes =
+    let inline private isLarge (flags: HeapSizes) heap = if flags.HasFlag heap then 4u else 2u
+    type HeapSizes with
+        member this.StringSize = isLarge this HeapSizes.String
+        member this.GuidSize = isLarge this HeapSizes.Guid
+        member this.BlobSize = isLarge this HeapSizes.Blob
+
 /// <summary>
 /// Represents the fields of the <c>#~</c> stream, which contain information about the metadata tables (II.24.2.6).
 /// </summary>

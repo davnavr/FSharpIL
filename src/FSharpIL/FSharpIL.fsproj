@@ -55,7 +55,6 @@
     <Compile Include="Reading\ReadState.fs" />
     <Compile Include="Reading\ParsedHeaders.fs" />
     <Compile Include="Reading\ReadError.fs" />
-    <Compile Include="Reading\ByteParser.fs" />
     <Compile Include="Reading\ParseBlob.fs" />
     <Compile Include="Reading\ParsedStringsStream.fs" />
     <Compile Include="Reading\ParsedGuidStream.fs" />
@@ -63,6 +62,8 @@
     <Compile Include="Reading\ParsedUserStringStream.fs" />
     <Compile Include="Reading\ParsedBlobStream.fs" />
     <Compile Include="Reading\ParsedMethodBodies.fs" />
+    <Compile Include="Reading\ByteParser.fs" />
+    <Compile Include="Reading\TableRowParsers.fs" />
     <Compile Include="Reading\ParsedMetadataTables.fs" />
     <Compile Include="Reading\ReadResult.fs" />
     <Compile Include="Reading\StructureReader.fs" />

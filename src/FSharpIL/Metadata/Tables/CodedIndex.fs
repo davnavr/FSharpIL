@@ -4,7 +4,7 @@
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type CodedIndex<'Tag when 'Tag : enum<uint8>> = struct
     val Tag: 'Tag
-    val internal Index: int32
+    val internal Index: uint32
     new (tag, index) = { Tag = tag; Index = index }
 end
 

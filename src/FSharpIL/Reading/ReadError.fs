@@ -17,6 +17,7 @@ type ParsedMetadataStructure =
     | MetadataSignature
     | StreamHeader of index: int32
     | MetadataTablesHeader
+    | MetadataTable of table: ValidTableFlags
 
     override this.ToString() =
         match this with
@@ -24,6 +25,7 @@ type ParsedMetadataStructure =
         | MetadataSignature -> "the CLI metadata signature"
         | StreamHeader i -> sprintf "the stream header (index %i)" i
         | MetadataTablesHeader -> "the metadata tables header"
+        | MetadataTable table -> sprintf "the %A metadata table" table
 
 // TODO: Move offset: uint32 to BlobError case in ReadError and use offset: ParsedBlob
 type BlobError =
@@ -111,6 +113,8 @@ type ReadError =
     | MissingStringStreamTerminator
     | InvalidGuidIndex of GuidIndex * max: GuidIndex
     | InvalidBlob of offset: uint32 * BlobError
+    | TableIsEmpty of ValidTableFlags
+    | TableHasMoreThanOneRow of ValidTableFlags * count: uint32
 
     override this.ToString() =
         match this with
@@ -150,6 +154,9 @@ type ReadError =
         | InvalidGuidIndex(offset, max) ->
             sprintf "Invalid index into the \"#GUID\" stream (%O), maximum valid index is (%O)" offset max
         | InvalidBlob(offset, err) -> sprintf "the blob at offset 0x%08X is invalid, %O" offset err
+        | TableIsEmpty table -> sprintf "The %A metadata table was unexpectedly empty" table
+        | TableHasMoreThanOneRow(table, count) ->
+            sprintf "The %A metadata table was expected to have one row, but actual has %i rows" table count
 
 [<RequireQualifiedAccess>]
 module ReadError =

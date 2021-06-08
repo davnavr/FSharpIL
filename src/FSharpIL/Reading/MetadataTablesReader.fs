@@ -28,7 +28,7 @@ type SequentialTableReader<'State> =
       //ReadDeclSecurity: TableRowReader
       ReadClassLayout: TableRowReader<ClassLayoutRow, 'State>
       //FieldLayout: TableRowReader
-      ReadStandAloneSig: TableRowReader<StandAloneSigRow, 'State>
+      ReadStandAloneSig: TableRowReader<StandaloneSigRow, 'State>
       //ReadEventMap: TableRowReader<EventMapRow, 'State>
       //ReadEvent: TableRowReader<EventRow, 'State>
       ReadPropertyMap: TableRowReader<PropertyMapRow, 'State>
@@ -52,5 +52,5 @@ type SequentialTableReader<'State> =
       }
 
 type MetadataTablesReader<'State> =
-    //| AllAtOnce
+    //| AllAtOnce of (ReferencedMetadataStreams -> FileOffset -> 'State -> Result<'State, ReadError>)
     | SequentialTableReader of SequentialTableReader<'State>

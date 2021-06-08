@@ -22,13 +22,13 @@ type [<IsReadOnly; Struct>] MemberRefSigOffset = internal { MemberRefSig: BlobOf
 type [<IsReadOnly; Struct>] ConstantOffset = internal { Constant: BlobOffset }
 
 /// <summary>An offset into the <c>#Blob</c> heap pointing to a <c>CustomAttrib</c> item (II.23.3).</summary>
-type [<IsReadOnly; Struct>] CustomAttributeOffset = private { CustomAttrib: BlobOffset }
+type [<IsReadOnly; Struct>] CustomAttributeOffset = internal { CustomAttrib: BlobOffset }
 
 /// <summary>
 /// An offset into the <c>#Blob</c> heap pointing to a <c>PropertySig</c> item, which describes the type of a property and its
 /// parameters (II.23.2.5).
 /// </summary>
-type [<IsReadOnly; Struct>] PropertySigOffset = private { PropertySig: BlobOffset }
+type [<IsReadOnly; Struct>] PropertySigOffset = internal { PropertySig: BlobOffset }
 
 /// <summary>
 /// An offset into the <c>#Blob</c> heap pointing to a <c>MethodSpec</c> item, which describes the generic arguments of a method
