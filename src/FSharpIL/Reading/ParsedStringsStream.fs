@@ -7,7 +7,7 @@ open System.Text
 open FSharpIL
 open FSharpIL.Metadata
 
-/// <summary>Represents the <c>#Strings</c> metadata heap, which contains null-terminated UTF-8 strings (II.24.2.3).</summary>
+/// <summary>Represents the <c>#Strings</c> metadata stream, which contains null-terminated UTF-8 strings (II.24.2.3).</summary>
 [<Sealed>]
 type ParsedStringsStream (stream: ChunkedMemory) =
     let mutable lookup = Dictionary<uint32, string>()

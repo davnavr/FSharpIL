@@ -21,8 +21,9 @@
     <Compile Include="ChunkedMemoryBuilder.fs" />
     <Compile Include="Rva.fs" />
     <Compile Include="Metadata\Magic.fs" />
-    <Compile Include="Metadata\HeapOffsets.fs" />
+    <Compile Include="Metadata\StreamOffsets.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
+    <Compile Include="Metadata\Identifier.fs" />
     <Compile Include="Metadata\Blobs\Offsets.fs" />
     <Compile Include="Metadata\Blobs\ElementType.fs" />
     <Compile Include="Metadata\Blobs\CallingConventionFlags.fs" />
@@ -50,6 +51,7 @@
     <Compile Include="PortableExecutable\PEFile.fs" />
     <Compile Include="PortableExecutable\SectionOffset.fs" />
     <Compile Include="Magic.fs" />
+    <Compile Include="Writing\StringsStreamBuilder.fs" />
     <Compile Include="Writing\WriteCli.fsi" />
     <Compile Include="Writing\WriteCli.fs" />
     <Compile Include="Writing\SectionBuilder.fs" />

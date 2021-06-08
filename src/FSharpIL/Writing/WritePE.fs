@@ -7,6 +7,8 @@ open System.IO
 
 open Microsoft.FSharp.Core.Operators.Checked
 
+open FSharpIL.Utilities
+
 open FSharpIL
 open FSharpIL.PortableExecutable
 
