@@ -54,6 +54,9 @@
     <Compile Include="Writing\IStreamBuilder.fs" />
     <Compile Include="Writing\StringsStreamBuilder.fs" />
     <Compile Include="Writing\GuidStreamBuilder.fs" />
+    <Compile Include="Writing\MetadataTablesBuilder.fs" />
+    <Compile Include="Writing\CliHeaderBuilder.fs" />
+    <Compile Include="Writing\CliMetadataBuilder.fs" />
     <Compile Include="Writing\WriteCli.fsi" />
     <Compile Include="Writing\WriteCli.fs" />
     <Compile Include="Writing\SectionBuilder.fs" />

@@ -140,8 +140,3 @@ type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageBasePlus, 'Ima
 // TODO: How will ImageBase work, since it is different sizes for PE32 and PE32+, and overflows should be prevented.
 // TODO: Better alias for optional header used in building PE files.
 type OptionalHeader = OptionalHeader<Omitted, Omitted, ImageBase, ImageBase, Omitted, Omitted>
-
-[<IsReadOnly; Struct>]
-type RvaAndSize =
-    { Rva: Rva; Size: uint32 }
-    static member inline Zero = { Rva = Rva.Zero; Size = 0u }

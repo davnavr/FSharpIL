@@ -8,27 +8,32 @@ open System.Runtime.CompilerServices
 open FSharpIL.Utilities
 
 // TODO: Should the builder type be a struct or reference type?
-/// Represents a mutable, non-contiguous region of memory split into chunks of equal sizes.
+/// Builds a non-contiguous region of memory split into chunks of equal sizes.
 type ChunkedMemoryBuilder = struct
     val mutable private current: LinkedListNode<byte[]>
     val mutable private pos: int32
+    val mutable private length: uint32
 
-    internal new (current, position) = { current = current; pos = position }
+    internal new (current, position, length) = { current = current; pos = position; length = length }
 
     /// <param name="size">The size of each chunk in bytes.</param>
     /// <exception cref="T:System.ArgumentOutOfRangeException">
     /// The <paramref name="size"/> of each chunk is less than two.
     /// </exception>
     new (size) =
-        if size <= 1 then
-            raise(ArgumentOutOfRangeException("size", size, "The size of each chunk must be greater than one"))
+        if size <= 1 then argOutOfRange "size" size "The size of each chunk must be greater than one"
         let chunks = LinkedList()
-        ChunkedMemoryBuilder(chunks.AddFirst(Array.zeroCreate size), 0)
+        ChunkedMemoryBuilder(chunks.AddFirst(Array.zeroCreate size), 0, 0u)
 
     member this.ChunkCount = this.current.List.Count
+    member this.ChunkPosition = this.pos
     member this.ChunkSize = this.current.Value.Length
     member this.FreeBytes = this.ChunkSize - this.pos
-    member this.Position = this.pos
+    member this.Length = this.length
+
+    member inline private this.IncrementPosition count =
+        this.pos <- this.pos + count
+        this.length <- this.length + uint32 count
 
     member private this.CheckNextChunk() =
         if this.pos >= this.current.Value.Length then
@@ -41,7 +46,7 @@ type ChunkedMemoryBuilder = struct
     member this.Write(value: uint8) =
         this.CheckNextChunk()
         this.current.Value.[this.pos] <- value
-        this.pos <- this.pos + 1
+        this.IncrementPosition 1
 
     member this.Write(data: ReadOnlySpan<byte>) =
         let mutable i = 0
@@ -51,7 +56,7 @@ type ChunkedMemoryBuilder = struct
             let destination = Span<_>(this.current.Value, this.pos, length)
             data.Slice(i, length).CopyTo destination
             i <- i + length
-        this.pos <- this.pos + data.Length
+        this.IncrementPosition data.Length
 
     // TODO: Avoid code duplication with ByteWriterExtensions methods.
     member inline this.Write(data: Span<byte>) = this.Write(Span<byte>.op_Implicit data)
@@ -71,17 +76,20 @@ type ChunkedMemoryBuilder = struct
             while remaining > 0 do
                 this.CheckNextChunk()
                 let skipped = min this.FreeBytes remaining
-                this.pos <- this.pos + skipped
+                this.IncrementPosition skipped
                 remaining <- remaining - skipped
 
+    /// <exception cref="T:System.ArgumentOutOfRangeException">
+    /// Thrown when the <paramref name="alignment"/> is negative.
+    /// </exception>
     member this.AlignTo alignment =
-        if alignment < 0 then
-            raise(ArgumentOutOfRangeException("alignment", alignment, "The alignment must not be negative"))
-        elif alignment > 0 then
-            this.SkipBytes((Round.upTo alignment this.pos) - this.pos)
+        if alignment < 0 then argOutOfRange "alignment" alignment "The alignment must not be negative"
+        elif alignment > 0 then this.SkipBytes((Round.upTo alignment this.pos) - this.pos)
 
     /// Moves the writer to the end of the current chunk.
-    member this.MoveToEnd() = this.pos <- this.ChunkSize
+    member this.MoveToEnd() =
+        this.length <- this.length + uint32(this.ChunkSize - this.pos)
+        this.pos <- this.ChunkSize
 
     override this.ToString() =
         let free = this.FreeBytes
@@ -94,9 +102,14 @@ type ChunkedMemoryBuilder = struct
     member this.ToImmutable() =
         let mutable chunks, chunki = Array.zeroCreate this.current.List.Count, 0
         for chunk in this.current.List do
-            chunks.[chunki] <- ImmutableArray.Create(items = chunk)
+            chunks.[chunki] <- ImmutableArray.Create<byte> chunk
             chunki <- chunki + 1
         ChunkedMemory(Unsafe.As<_, ImmutableArray<ImmutableArray<byte>>> &chunks)
+
+    member this.ReserveBytes count =
+        let clone = ChunkedMemoryBuilder(this.current, this.pos, 0u)
+        this.SkipBytes count
+        clone
 
     interface IByteWriter with member this.Write data = this.Write data
 end

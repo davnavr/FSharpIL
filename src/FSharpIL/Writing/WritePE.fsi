@@ -40,3 +40,5 @@ val toPath : path: string -> PEFile -> unit
 /// <exception cref="T:System.ArgumentNullException">The <paramref name="stream"/> is <see langword="null"/>.</exception>
 /// <exception cref="T:System.ObjectDisposedException">The <paramref name="stream"/> was already disposed.</exception>
 val toStream : stream: #Stream -> PEFile -> unit
+
+//val toChunkedBuilder : byref<ChunkedMemoryBuilder> -> PEFile -> unit

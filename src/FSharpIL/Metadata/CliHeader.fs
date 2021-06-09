@@ -17,36 +17,17 @@ type CorFlags =
 /// Describes the location of the CLI metadata root, resources, the strong name signature, and other miscellaneous information
 /// (II.25.3.3).
 /// </summary>
-[<NoComparison; StructuralEquality>]
-type CliHeader<'Cb, 'Flags, 'EntryPointToken, 'Metadata, 'Resources, 'StrongNameSignature, 'VTableFixups, 'Reserved> = // TODO: Don't make this a generic type.
+type CliHeader<'Cb, 'EntryPointToken> = // TODO: What to use for EntryPointToken? Remove 'EntryPointToken generic parameter
     { /// The size of the CLI header, in bytes
       Cb: 'Cb
       MajorRuntimeVersion: uint16
       MinorRuntimeVersion: uint16
-      Metadata: 'Metadata
-      Flags: 'Flags
+      Metadata: RvaAndSize
+      Flags: CorFlags
       EntryPointToken: 'EntryPointToken
-      Resources: 'Resources
-      StrongNameSignature: 'StrongNameSignature
-      CodeManagerTable: 'Reserved
-      VTableFixups: 'VTableFixups
-      ExportAddressTableJumps: 'Reserved
-      ManagedNativeHeader: 'Reserved }
-
-type CliHeader = CliHeader<Omitted, Omitted, Omitted, Omitted, Omitted, Omitted, Omitted, Omitted>
-
-[<RequireQualifiedAccess>]
-module CliHeader =
-    let defaultFields =
-        { Cb = Omitted
-          MajorRuntimeVersion = 2us
-          MinorRuntimeVersion = 5us
-          Metadata = Omitted
-          Flags = Omitted
-          EntryPointToken = Omitted
-          Resources = Omitted
-          StrongNameSignature = Omitted
-          CodeManagerTable = Omitted
-          VTableFixups = Omitted
-          ExportAddressTableJumps = Omitted
-          ManagedNativeHeader = Omitted }
+      Resources: RvaAndSize
+      StrongNameSignature: RvaAndSize
+      CodeManagerTable: RvaAndSize
+      VTableFixups: RvaAndSize
+      ExportAddressTableJumps: RvaAndSize
+      ManagedNativeHeader: RvaAndSize }

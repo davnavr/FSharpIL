@@ -35,3 +35,14 @@ module MetadataVersion =
     let asSpan { MetadataVersion = bytes } = bytes.AsSpan()
     let toBlock { MetadataVersion = bytes } = bytes
     let toArray { MetadataVersion = bytes } = bytes.AsSpan().ToArray()
+
+    /// Latest runtime version for files intended to be executed on Microsoft-specific implementations of the CLI such as .NET
+    /// Framework, .NET Core, or .NET.
+    let defaultLatest = ofStr "v4.0.3031"
+    /// Latest runtime version for files "intended to be executed on any conforming implementation of the CLI" (II.24.2.1).
+    let standardLatest = ofStr "Standard CLI 2005"
+
+    let write (builder: byref<ChunkedMemoryBuilder>) { RoundedLength = Convert.I4 len; MetadataVersion = version } =
+        let padding = Span.stackalloc<byte>(len - version.Length)
+        builder.Write version
+        builder.Write padding

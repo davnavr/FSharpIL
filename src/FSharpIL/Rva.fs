@@ -1,7 +1,9 @@
 ﻿namespace FSharpIL
 
+open System.Runtime.CompilerServices
+
 /// Represents a relative virtual address.
-[<System.Runtime.CompilerServices.IsReadOnly>]
+[<IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
 type Rva = struct
     val private value: uint32
@@ -18,3 +20,8 @@ type Rva = struct
     static member (-) (left: Rva, right: Rva) = Rva(left.value - right.value)
     override this.ToString() = sprintf "0x%08X" this.value
 end
+
+[<IsReadOnly; Struct>]
+type RvaAndSize =
+    { Rva: Rva; Size: uint32 }
+    static member inline Zero = { Rva = Rva.Zero; Size = 0u }
