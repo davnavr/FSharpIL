@@ -20,8 +20,6 @@ type StringsStreamBuilder (capacity: int32) =
     do offsetLookup.[ReadOnlyMemory.Empty] <- StringOffset.Zero
     do stringLookup.[StringOffset.Zero] <- 0
 
-    new () = StringsStreamBuilder 1024
-
     static member val private StringComparer =
         { new IEqualityComparer<ReadOnlyMemory<char>> with
             member _.Equals(x, y) =

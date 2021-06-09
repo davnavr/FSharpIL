@@ -14,7 +14,6 @@ type GuidStreamBuilder (capacity: int32) =
     let lookup = Dictionary<Guid, GuidIndex> capacity
     do guids.Add Guid.Empty // First GUID is at index 1, so 0 is treated as null.
     do lookup.[Guid.Empty] <- GuidIndex.Zero
-    new () = GuidStreamBuilder 1
     member _.IsEmpty = guids.Count = 1
     /// Gets the number of GUIDs stored in this stream.
     member _.Count = guids.Count - 1

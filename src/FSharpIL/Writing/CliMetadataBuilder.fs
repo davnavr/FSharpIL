@@ -12,7 +12,7 @@ type CliMetadataBuilder internal
         header: CliHeaderBuilder,
         root: CliMetadataRoot<Omitted, Omitted>,
         // methodBodies,
-        tables,
+        tables: MetadataTablesBuilder,
         strings: StringsStreamBuilder,
         us,
         guid: GuidStreamBuilder,
@@ -21,27 +21,20 @@ type CliMetadataBuilder internal
         //strongNameSignature,
         //vTableFixups
     ) =
-    new (header, root, stringsCapacity, guidCapacity, usCapacity, blobCapacity) =
+    new (moduleRow, header, root, stringsCapacity, guidCapacity, usCapacity, blobCapacity) =
+        let strings = StringsStreamBuilder stringsCapacity
+        let guids = GuidStreamBuilder guidCapacity
         CliMetadataBuilder (
             header,
             root,
-            noImpl "tables",
-            StringsStreamBuilder stringsCapacity,
+            MetadataTablesBuilder(moduleRow, strings, guids),
+            strings,
             noImpl "us",
-            GuidStreamBuilder guidCapacity,
+            guids,
             noImpl "blob"
         )
-    new (header, root) =
-        CliMetadataBuilder (
-            header,
-            root,
-            noImpl "tables",
-            StringsStreamBuilder(),
-            noImpl "us",
-            GuidStreamBuilder(),
-            noImpl "blob"
-        )
-    new () = CliMetadataBuilder(CliHeaderBuilder.defaultFields, CliMetadataRoot.defaultFields)
+    new (moduleRow, header, root) = CliMetadataBuilder(moduleRow, header, root, 1024, 1, (), ())
+    new (moduleRow) = CliMetadataBuilder(moduleRow, CliHeaderBuilder.defaultFields, CliMetadataRoot.defaultFields)
 
     member _.Header = header
     member _.Root = root
@@ -54,5 +47,5 @@ type CliMetadataBuilder internal
     member _.HeaderFlags =
         let mutable flags = CorFlags.ILOnly
         if header.Requires32Bit then flags <- flags ||| CorFlags.Requires32Bit
-        if (noImpl "is signed") then flags <- flags ||| CorFlags.StrongNameSigned
+        if (noImpl "is signed/has strong name signature") then flags <- flags ||| CorFlags.StrongNameSigned
         flags
