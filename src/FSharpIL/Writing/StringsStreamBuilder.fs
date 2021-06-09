@@ -37,6 +37,8 @@ type StringsStreamBuilder (capacity: int32) =
                 for c in str.Span do hash.Add c
                 hash.ToHashCode() }
 
+    member _.IsEmpty = strings.Count = 1
+
     /// <summary>The length of the <c>#Strings</c> metadata stream, in bytes.</summary>
     member _.StreamLength = offset.StringOffset
 
@@ -81,6 +83,7 @@ type StringsStreamBuilder (capacity: int32) =
 
     interface IStreamBuilder with
         member this.StreamLength = this.StreamLength
+        member _.StreamName = Magic.StreamNames.strings
         member _.Serialize builder =
             let mutable chars = ReadOnlySpan<char>()
             let mutable buffer = Span.stackalloc<byte> 512

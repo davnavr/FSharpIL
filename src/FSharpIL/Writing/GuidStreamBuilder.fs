@@ -15,6 +15,7 @@ type GuidStreamBuilder (capacity: int32) =
     do guids.Add Guid.Empty // First GUID is at index 1, so 0 is treated as null.
     do lookup.[Guid.Empty] <- GuidIndex.Zero
     new () = GuidStreamBuilder 1
+    member _.IsEmpty = guids.Count = 1
     /// Gets the number of GUIDs stored in this stream.
     member _.Count = guids.Count - 1
     /// <summary>The length of the <c>#GUID</c> metadata stream, in bytes.</summary>
@@ -29,6 +30,7 @@ type GuidStreamBuilder (capacity: int32) =
             i
     interface IStreamBuilder with
         member this.StreamLength = this.StreamLength
+        member _.StreamName = Magic.StreamNames.guid
         member this.Serialize builder =
             let mutable buffer = Span.stackalloc<byte> sizeof<Guid>
             for i = 0 to this.Count do

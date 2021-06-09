@@ -1,6 +1,9 @@
 ﻿namespace FSharpIL.Writing
 
-type IStreamBuilder = interface
+open FSharpIL
+
+type internal IStreamBuilder = interface
     abstract StreamLength: uint32
-    abstract Serialize: builder: byref<FSharpIL.ChunkedMemoryBuilder> -> unit
+    abstract StreamName: System.Collections.Immutable.ImmutableArray<byte>
+    abstract Serialize: builder: byref<ChunkedMemoryBuilder> -> unit
 end

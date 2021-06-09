@@ -12,11 +12,11 @@ type CliMetadataBuilder internal
         header: CliHeaderBuilder,
         root: CliMetadataRoot<Omitted, Omitted>,
         // methodBodies,
+        tables,
         strings: StringsStreamBuilder,
-        guid: GuidStreamBuilder,
         us,
-        blob,
-        tables //,
+        guid: GuidStreamBuilder,
+        blob //,
         //resources,
         //strongNameSignature,
         //vTableFixups
@@ -25,31 +25,31 @@ type CliMetadataBuilder internal
         CliMetadataBuilder (
             header,
             root,
+            noImpl "tables",
             StringsStreamBuilder stringsCapacity,
-            GuidStreamBuilder guidCapacity,
             noImpl "us",
-            noImpl "blob", 
-            noImpl "tables"
+            GuidStreamBuilder guidCapacity,
+            noImpl "blob"
         )
     new (header, root) =
         CliMetadataBuilder (
             header,
             root,
+            noImpl "tables",
             StringsStreamBuilder(),
-            GuidStreamBuilder(),
             noImpl "us",
-            noImpl "blob", 
-            noImpl "tables"
+            GuidStreamBuilder(),
+            noImpl "blob"
         )
     new () = CliMetadataBuilder(CliHeaderBuilder.defaultFields, CliMetadataRoot.defaultFields)
 
     member _.Header = header
     member _.Root = root
-    member _.Strings = strings
-    member _.Guid = guid
-    //member _.UserString = us
-    //member _.Blob = blob
     member _.Tables = tables
+    member _.Strings = strings
+    //member _.UserString = us
+    member _.Guid = guid
+    //member _.Blob = blob
 
     member _.HeaderFlags =
         let mutable flags = CorFlags.ILOnly
