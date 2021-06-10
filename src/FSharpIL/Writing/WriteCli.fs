@@ -99,11 +99,11 @@ let metadata (section: byref<ChunkedMemoryBuilder>) cliHeaderRva builder =
           StartOffset = section.Length
           Streams =
             let streams = List<IStreamBuilder> 5
-            //streams.Add builder.Tables
-            streams.Add builder.Strings
-            //streams.Add builder.UserString
-            streams.Add builder.Guid
-            //streams.Add builder.Blob
+            streams.Add builder.Tables
+            if not builder.Strings.IsEmpty then streams.Add builder.Strings
+            if not builder.UserString.IsEmpty then streams.Add builder.UserString
+            if not builder.Guid.IsEmpty then streams.Add builder.Guid
+            if not builder.Blob.IsEmpty then streams.Add builder.Blob
             streams }
     header info &section
 

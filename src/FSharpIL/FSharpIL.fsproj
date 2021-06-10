@@ -58,6 +58,7 @@
     <Compile Include="Writing\BlobWriter.fsi" />
     <Compile Include="Writing\BlobWriter.fs" />
     <Compile Include="Writing\UserStringStreamBuilder.fs" />
+    <Compile Include="Writing\BlobStreamBuilder.fs" />
     <Compile Include="Writing\MetadataTablesBuilder.fs" />
     <Compile Include="Writing\CliHeaderBuilder.fs" />
     <Compile Include="Writing\CliMetadataBuilder.fs" />

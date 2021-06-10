@@ -62,6 +62,9 @@ type ChunkedMemoryBuilder = struct
     member inline this.Write(data: Span<byte>) = this.Write(Span<byte>.op_Implicit data)
     member inline this.Write(data: byte[]) = this.Write(ReadOnlySpan data)
     member inline this.Write(data: ImmutableArray<byte>) = this.Write(data.AsSpan())
+    member inline this.Write(data: ReadOnlyMemory<byte>) = this.Write data.Span
+
+    member this.Write(data: ChunkedMemory) = for chunk in data.AsMemoryArray() do this.Write chunk
 
     /// Writes an unsigned 2-byte integer in little-endian format.
     member this.WriteLE(value: uint16) = ByteWriterExtensions.WriteLE(&this, value)
@@ -99,12 +102,16 @@ type ChunkedMemoryBuilder = struct
             Printf.bprintf sb " 0x%02X" this.current.Value.[i]
         sb.ToString()
 
-    member this.ToImmutable() =
-        let mutable chunks, chunki = Array.zeroCreate this.current.List.Count, 0
+    member internal this.MapChunksUnsafe mapping =
+        let mutable results = Array.zeroCreate this.current.List.Count
+        let mutable chunki = 0
         for chunk in this.current.List do
-            chunks.[chunki] <- ImmutableArray.Create<byte> chunk
+            results.[chunki] <- mapping chunk
             chunki <- chunki + 1
-        ChunkedMemory(Unsafe.As<_, ImmutableArray<ImmutableArray<byte>>> &chunks)
+        ChunkedMemory(Unsafe.As &results)
+
+    /// Copies the contents of this builder to a new non-contiguous region of memory.
+    member this.ToImmutable() = this.MapChunksUnsafe ImmutableArray.Create<byte>
 
     member this.ReserveBytes count =
         let clone = ChunkedMemoryBuilder(this.current, this.pos, 0u)

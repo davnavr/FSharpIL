@@ -16,7 +16,7 @@ type CliMetadataBuilder internal
         strings: StringsStreamBuilder,
         us: UserStringStreamBuilder,
         guid: GuidStreamBuilder,
-        blob //,
+        blob: BlobStreamBuilder //,
         //resources,
         //strongNameSignature,
         //vTableFixups
@@ -31,9 +31,9 @@ type CliMetadataBuilder internal
             strings,
             UserStringStreamBuilder usCapacity,
             guids,
-            noImpl "blob"
+            BlobStreamBuilder blobCapacity
         )
-    new (moduleRow, header, root) = CliMetadataBuilder(moduleRow, header, root, 1024, 1, 1, ())
+    new (moduleRow, header, root) = CliMetadataBuilder(moduleRow, header, root, 1024, 1, 1, 512)
     new (moduleRow) = CliMetadataBuilder(moduleRow, CliHeaderBuilder.defaultFields, CliMetadataRoot.defaultFields)
 
     member _.Header = header
@@ -42,7 +42,7 @@ type CliMetadataBuilder internal
     member _.Strings = strings
     member _.UserString = us
     member _.Guid = guid
-    //member _.Blob = blob
+    member _.Blob = blob
 
     member _.HeaderFlags =
         let mutable flags = CorFlags.ILOnly

@@ -23,7 +23,7 @@ type UserStringStreamBuilder (capacity: int32) =
     member _.IsEmpty = strings.Count = 1
 
     /// <summary>The length of the <c>#US</c> metadata stream, in bytes.</summary>
-    member _.StreamLength = offset |> noImpl "bad, does not include length of strings"
+    member _.StreamLength = offset
 
     member _.GetOrAdd str =
         match lookup.TryGetValue str with

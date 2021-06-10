@@ -7,6 +7,12 @@ open System.Runtime.CompilerServices
 open FSharpIL
 open FSharpIL.Utilities
 
+[<IsReadOnly; Struct>]
+type internal ChunkedMemoryIndex =
+    { /// Index into the list of chunks.
+      ListIndex: int32
+      ChunkIndex: int32 }
+
 /// Represents a non-contiguous region of memory split into chunks of equal sizes.
 [<IsReadOnly>]
 [<CustomEquality; NoComparison>]
@@ -26,11 +32,13 @@ type ChunkedMemory = struct
         if this.IsEmpty then invalidOp(sprintf "Cannot access offset 0x%08X, the memory is empty" offset)
         let offset', csize' = offset + this.soffset, uint32 this.ChunkSize
         let chunki = offset' / csize'
-        struct(int32 chunki, int32(offset' - chunki * csize'))
+        { ListIndex = int32 chunki; ChunkIndex = int32(offset' - chunki * csize') }
 
+    /// <summary>Gets the value of the byte at the specified offset.</summary>
+    /// <exception cref="T:System.InvalidOperationException">Thrown when the region of memory is empty.</exception>
     member this.Item with get offset =
-        let struct(chunki, i) = this.GetIndex offset
-        this.chunks.[chunki].[i]
+        let index = this.GetIndex offset
+        this.chunks.[index.ListIndex].[index.ChunkIndex]
 
     member this.IsValidOffset offset = offset < this.Length
     member inline this.HasFreeBytes(offset: uint32, length) = this.IsValidOffset(offset + length - 1u)
@@ -48,8 +56,8 @@ type ChunkedMemory = struct
     /// </returns>
     member private this.TrySpanChunk(offset, buffer: outref<ReadOnlySpan<byte>>) =
         if this.IsValidOffset offset then
-            let struct(chunki, i) = this.GetIndex offset
-            buffer <- this.chunks.[chunki].AsSpan().Slice i
+            let index = this.GetIndex offset
+            buffer <- this.chunks.[index.ListIndex].AsSpan().Slice index.ChunkIndex
             true
         else false
 
@@ -161,27 +169,27 @@ type ChunkedMemory with
     /// </exception>
     member inline this.Slice start = this.Slice(start, this.Length - start)
 
-    member this.ToImmutableArray() =
+    member this.AsMemoryArray() =
         match this.ChunkCount with
-        | 0 -> ImmutableArray.Empty
-        | 1 ->
-            failwith "TODO: Fix, this does not take into account the fact that the starting position might not be zero"
-            this.chunks.[0]
+        | 0 -> ImmutableArray<_>.Empty
+        | 1 -> ImmutableArray.Create(this.chunks.[0].AsMemory().Slice(int32 this.soffset, int32 this.Length))
         | _ ->
-            // TODO: If starting pos is zero, optimize by returning actual chunks instead of copying.
-            // TODO: Fix, where is soffset used here?
-            failwith "TODO: Fix, this does not take into account the fact that the starting position might not be zero"
-            let length = int32 this.Length
-            let mutable buffer = Array.zeroCreate<byte> length
-            let mutable struct(chunki, i), remaining = this.GetIndex 0u, buffer.Length
-            while remaining > 0 do
-                let copied = min remaining (this.chunks.[chunki].Length - i)
-                let destination = Span(buffer, length - remaining, copied)
-                this.chunks.[chunki].AsSpan().Slice(i, copied).CopyTo destination
-                i <- 0
-                chunki <- chunki + 1
-                remaining <- remaining - copied
-            Unsafe.As<_, ImmutableArray<byte>> &buffer
+            let starti = this.GetIndex this.soffset
+            let endi = this.GetIndex(this.soffset + this.Length)
+            let mutable chunks' = Array.zeroCreate<ReadOnlyMemory<byte>>(endi.ListIndex - starti.ListIndex + 1)
+            for chunki = starti.ListIndex to endi.ListIndex do
+                let current = &this.chunks.ItemRef chunki
+                let start = if chunki = starti.ListIndex then starti.ChunkIndex else 0
+                let length = if chunki = endi.ListIndex then endi.ChunkIndex + 1 else current.Length
+                chunks'.[chunki - starti.ListIndex] <- current.AsMemory().Slice(start, length)
+            Unsafe.As &chunks'
+
+    member this.ToImmutableArray() =
+        let mutable buffer, i = Array.zeroCreate<byte>(int32 this.Length), 0
+        for chunk in this.AsMemoryArray() do
+            chunk.Span.CopyTo(Span(buffer, i, chunk.Length))
+            i <- i + chunk.Length
+        Unsafe.As<_, ImmutableArray<byte>> &buffer
 
     // TODO: Have better ways for testing equality.
     member this.Equals(array: ImmutableArray<byte>) =
