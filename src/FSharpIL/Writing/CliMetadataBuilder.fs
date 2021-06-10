@@ -14,7 +14,7 @@ type CliMetadataBuilder internal
         // methodBodies,
         tables: MetadataTablesBuilder,
         strings: StringsStreamBuilder,
-        us,
+        us: UserStringStreamBuilder,
         guid: GuidStreamBuilder,
         blob //,
         //resources,
@@ -29,18 +29,18 @@ type CliMetadataBuilder internal
             root,
             MetadataTablesBuilder(moduleRow, strings, guids),
             strings,
-            noImpl "us",
+            UserStringStreamBuilder usCapacity,
             guids,
             noImpl "blob"
         )
-    new (moduleRow, header, root) = CliMetadataBuilder(moduleRow, header, root, 1024, 1, (), ())
+    new (moduleRow, header, root) = CliMetadataBuilder(moduleRow, header, root, 1024, 1, 1, ())
     new (moduleRow) = CliMetadataBuilder(moduleRow, CliHeaderBuilder.defaultFields, CliMetadataRoot.defaultFields)
 
     member _.Header = header
     member _.Root = root
     member _.Tables = tables
     member _.Strings = strings
-    //member _.UserString = us
+    member _.UserString = us
     member _.Guid = guid
     //member _.Blob = blob
 

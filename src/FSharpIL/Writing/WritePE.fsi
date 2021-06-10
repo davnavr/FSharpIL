@@ -36,9 +36,13 @@ val toPath : path: string -> PEFile -> unit
 /// <summary>
 /// Writes the Portable Executable file to the specified <see cref="T:System.IO.Stream"/> and leaves it open.
 /// </summary>
-/// <exception cref="T:System.ArgumentException">The <paramref name="stream"/> does not support writing.</exception>
-/// <exception cref="T:System.ArgumentNullException">The <paramref name="stream"/> is <see langword="null"/>.</exception>
-/// <exception cref="T:System.ObjectDisposedException">The <paramref name="stream"/> was already disposed.</exception>
+/// <exception cref="T:System.ArgumentException">Thrown when the <paramref name="stream"/> does not support writing.</exception>
+/// <exception cref="T:System.ArgumentNullException">
+/// Thrown when the <paramref name="stream"/> is <see langword="null"/>.
+/// </exception>
+/// <exception cref="T:System.ObjectDisposedException">
+/// Thrown when the <paramref name="stream"/> was already disposed.
+/// </exception>
 val toStream : stream: #Stream -> PEFile -> unit
 
 //val toChunkedBuilder : byref<ChunkedMemoryBuilder> -> PEFile -> unit

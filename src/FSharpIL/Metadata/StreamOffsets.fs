@@ -7,7 +7,6 @@ open System.Runtime.CompilerServices
 type StringOffset =
     internal { StringOffset: uint32 }
     static member op_Implicit { StringOffset = offset } = offset
-    static member Zero = { StringOffset = 0u }
 
 /// <summary>Represents an index into the <c>#GUID</c> metadata stream (II.24.2.5).</summary>
 [<IsReadOnly; Struct>]
