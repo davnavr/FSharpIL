@@ -24,14 +24,15 @@ type CliMetadataBuilder internal
     new (moduleRow, header, root, stringsCapacity, guidCapacity, usCapacity, blobCapacity) =
         let strings = StringsStreamBuilder stringsCapacity
         let guids = GuidStreamBuilder guidCapacity
+        let blobs = BlobStreamBuilder blobCapacity
         CliMetadataBuilder (
             header,
             root,
-            MetadataTablesBuilder(moduleRow, strings, guids),
+            MetadataTablesBuilder(moduleRow, strings, guids, blobs),
             strings,
             UserStringStreamBuilder usCapacity,
             guids,
-            BlobStreamBuilder blobCapacity
+            blobs
         )
     new (moduleRow, header, root) = CliMetadataBuilder(moduleRow, header, root, 1024, 1, 1, 512)
     new (moduleRow) = CliMetadataBuilder(moduleRow, CliHeaderBuilder.defaultFields, CliMetadataRoot.defaultFields)

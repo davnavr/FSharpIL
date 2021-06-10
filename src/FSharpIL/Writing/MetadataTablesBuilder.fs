@@ -3,11 +3,11 @@
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-type RowBuilder<'Row when 'Row :> ITableRow> = StringsStreamBuilder -> GuidStreamBuilder -> unit (*BlobStreamBuilder*) -> 'Row
+type RowBuilder<'Row when 'Row :> ITableRow> = StringsStreamBuilder -> GuidStreamBuilder -> BlobStreamBuilder -> 'Row
 
 /// <summary>Builds the metadata tables stored in the <c>#~</c> metadata stream (II.24.2.6 and II.22).</summary>
 [<Sealed>]
-type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid) =
+type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid, blob) =
     let [<Literal>] MaxSmallHeapOffset = 65535u
     let mutable valid, sorted = ValidTableFlags.Module, ValidTableFlags.None
 
@@ -15,10 +15,10 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid)
         let mutable flags = HeapSizes.None
         if strings.StreamLength > MaxSmallHeapOffset then flags <- flags ||| HeapSizes.String
         if guid.StreamLength > MaxSmallHeapOffset then flags <- flags ||| HeapSizes.Guid
-        //if blobs.StreamLength > MaxSmallHeapOffset then flags <- flags ||| HeapSizes.Blob
+        if blob.StreamLength > MaxSmallHeapOffset then flags <- flags ||| HeapSizes.Blob
         flags
 
-    member val Module = moduleBuilder strings guid ()
+    member val Module = moduleBuilder strings guid blob
 
     interface IStreamBuilder with
         member _.StreamName = Magic.StreamNames.metadata

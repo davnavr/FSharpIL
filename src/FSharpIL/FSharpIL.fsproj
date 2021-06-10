@@ -51,6 +51,10 @@
     <Compile Include="PortableExecutable\PEFile.fs" />
     <Compile Include="PortableExecutable\SectionOffset.fs" />
     <Compile Include="Magic.fs" />
+    <Compile Include="Writing\Tables\Collections\RowList.fs" />
+    <Compile Include="Writing\Tables\Collections\RowSet.fs" />
+    <Compile Include="Writing\Tables\ITableBuilder.fs" />
+    <Compile Include="Writing\Tables\TypeRefTableBuilder.fs" />
     <Compile Include="Writing\IStreamBuilder.fs" />
     <Compile Include="Writing\StringLookupComparer.fs" />
     <Compile Include="Writing\StringsStreamBuilder.fs" />
