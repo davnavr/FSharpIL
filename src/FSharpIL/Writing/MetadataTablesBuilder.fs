@@ -133,8 +133,7 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
     interface IStreamBuilder with
         member _.StreamName = Magic.StreamNames.metadata
         // TODO: Have length of metadata tables stream be calculated after it is written, store the corresponding ChunkedMemoryBuilder and use it to write the length later.
-        member _.StreamLength = // ValueNone
-            failwith "TODO: Calculate stream length"
+        member _.StreamLength = ValueNone
         member this.Serialize wr =
             // TODO: Use TablesHeader<_> type?
             wr.WriteLE 0u // Reserved

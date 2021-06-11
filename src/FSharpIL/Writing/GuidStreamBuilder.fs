@@ -28,7 +28,7 @@ type GuidStreamBuilder (capacity: int32) =
             guids.Add guid
             i
     interface IStreamBuilder with
-        member this.StreamLength = this.StreamLength
+        member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.guid
         member this.Serialize builder =
             let mutable buffer = Span.stackalloc<byte> sizeof<Guid>

@@ -48,7 +48,7 @@ type StringsStreamBuilder (capacity: int32) =
     member this.GetOrAddFolded(str: Identifier) = this.GetOrAddFolded(Identifier.asMemory str)
 
     interface IStreamBuilder with
-        member this.StreamLength = this.StreamLength
+        member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.strings
         member _.Serialize builder =
             let mutable chars = ReadOnlySpan<char>()

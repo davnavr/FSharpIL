@@ -78,19 +78,30 @@ let root info (wr: byref<ChunkedMemoryBuilder>) =
     wr.WriteLE(uint16 info.Streams.Count) // Streams
 
 let streams info (wr: byref<ChunkedMemoryBuilder>) =
-    let offsets = Array.zeroCreate<ChunkedMemoryBuilder> info.Streams.Count
-    for i = 0 to offsets.Length - 1 do
-        offsets.[i] <- wr.ReserveBytes 4
-        let stream = info.Streams.[i]
-        wr.WriteLE stream.StreamLength
-        wr.Write stream.StreamName
+    let headers = Array.zeroCreate<ChunkedMemoryBuilder> info.Streams.Count
+    for i = 0 to headers.Length - 1 do
+        headers.[i] <- wr.ReserveBytes 8
+        wr.Write info.Streams.[i].StreamName
 
-    for i = 0 to offsets.Length - 1 do
+    for i = 0 to headers.Length - 1 do
         let stream = info.Streams.[i]
-        offsets.[i].WriteLE(wr.Length - info.Metadata.StartOffset)
-        let length = wr.Length
+        let mutable header = &headers.[i]
+        header.WriteLE(wr.Length - info.Metadata.StartOffset) // Offset
+
+        let start = wr.Length
         stream.Serialize &wr
-        if stream.StreamLength <> wr.Length - length then failwithf "Exceeded expected stream length (%i bytes)" stream.StreamLength
+        let size = wr.Length - start
+
+        match stream.StreamLength with
+        | ValueSome expected when expected <> size ->
+            failwithf
+                "The \"%s\" stream was expected to have a length of %i bytes, but the actual length was %i bytes"
+                (System.Text.Encoding.ASCII.GetString(stream.StreamName.AsSpan()))
+                expected
+                size
+        | _ -> ()
+
+        header.WriteLE size // Size
 
 let metadata (section: byref<ChunkedMemoryBuilder>) cliHeaderRva builder =
     let info =

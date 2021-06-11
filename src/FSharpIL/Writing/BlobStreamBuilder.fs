@@ -50,7 +50,7 @@ type BlobStreamBuilder (capacity: int32) =
     member inline this.Add(bytes: ImmutableArray<byte>) = this.Add(bytes.AsSpan())
 
     interface IStreamBuilder with
-        member this.StreamLength = this.StreamLength
+        member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.blob
         member _.Serialize wr =
             let mutable offset', content' = 0u, content.MapChunksUnsafe Convert.unsafeTo<_, ImmutableArray<byte>>

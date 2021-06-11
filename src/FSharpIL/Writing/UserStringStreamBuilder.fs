@@ -45,7 +45,7 @@ type UserStringStreamBuilder (capacity: int32) =
         result
 
     interface IStreamBuilder with
-        member this.StreamLength = this.StreamLength
+        member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.us
         member _.Serialize wr =
             let encoder = encoding.GetEncoder()
