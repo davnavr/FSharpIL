@@ -11,5 +11,5 @@ type MethodImplTableBuilder internal () =
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(_, tsizes, row, wr) =
             TableIndex.write &wr tsizes ValidTableFlags.TypeDef row.Class
-            FSharpIL.Utilities.Fail.noImpl "TODO: coded index writing" row.MethodBody
-            FSharpIL.Utilities.Fail.noImpl "TODO: coded index writing" row.MethodDeclaration
+            CodedIndex.write &wr tsizes &CodedIndexKinds.MethodDefOrRef row.MethodBody
+            CodedIndex.write &wr tsizes &CodedIndexKinds.MethodDefOrRef row.MethodDeclaration

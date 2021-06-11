@@ -10,6 +10,6 @@ type CustomAttributeTableBuilder internal () =
         member _.Count = rows.Count
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(hsizes, tsizes, row, wr) =
-            FSharpIL.Utilities.Fail.noImpl "TODO: coded index writing" row.Parent
-            FSharpIL.Utilities.Fail.noImpl "TODO: coded index writing" row.Type
+            CodedIndex.write &wr tsizes &CodedIndexKinds.HasCustomAttribute row.Parent
+            CodedIndex.write &wr tsizes &CodedIndexKinds.CustomAttributeType row.Type
             StreamOffset.writeBlob &wr hsizes row.Value.CustomAttrib

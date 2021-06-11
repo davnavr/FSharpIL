@@ -1,7 +1,9 @@
 ﻿namespace FSharpIL.Metadata.Tables
 
+open System.Runtime.CompilerServices
+
 /// Represents a coded index, which represents an index into one of many possible multiple metadata tables (II.24.2.6).
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<IsReadOnly; Struct>]
 type CodedIndex<'Tag when 'Tag : enum<uint8>> = struct
     val Tag: 'Tag
     val Index: uint32
@@ -104,5 +106,119 @@ type CustomAttributeType = CodedIndex<CustomAttributeTypeTag>
 type ResolutionScope = CodedIndex<ResolutionScopeTag>
 type TypeOrMethodDef = CodedIndex<TypeOrMethodDefTag>
 
-// TODO: Create "Factory" type for coded indices that stores the flags corresponding to the tables that it uses, and the number of encoding bits since this information is used in writing and reading.
-// type CodedIndexKind<'Tag when 'Tag : enum<uint8>> = struct
+/// Describes the possible tables that a coded index can point to and the number of bits needed to encode its tag.
+[<IsReadOnly>]
+type CodedIndexKind<'Tag when 'Tag : enum<uint8>> = struct
+    val PossibleTables: ValidTableFlags
+    val NumEncodingBits: int32
+    val internal MaxSmallIndex: uint32
+    /// <param name="tables">A bit mask specifying the possible tables that the coded index can point to.</param>
+    /// <param name="n">The number of bits needed to encode the tag.</param>
+    internal new (tables, n) =
+        { PossibleTables = tables
+          NumEncodingBits = n
+          MaxSmallIndex = 0xFFFFu >>> n }
+
+    member this.IsLarge(counts: ITableRowCounts)=
+           let mutable large, n = false, 0
+           while not large && n < 64 do
+               let table = ValidTableFlags.Module <<< n
+               large <- table &&& this.PossibleTables <> ValidTableFlags.None && counts.RowCount table > this.MaxSmallIndex
+               n <- n + 1
+           large
+end
+
+[<AbstractClass; Sealed>]
+type CodedIndexKinds private () =
+    static let typeDefOrRef =
+        CodedIndexKind<TypeDefOrRefTag> (
+            ValidTableFlags.TypeDef
+            ||| ValidTableFlags.TypeRef
+            ||| ValidTableFlags.TypeSpec,
+            2
+        )
+
+    static let hasConstant =
+        CodedIndexKind<HasConstantTag>(ValidTableFlags.Field ||| ValidTableFlags.Param ||| ValidTableFlags.Property, 2)
+
+    static let hasCustomAttribute =
+        CodedIndexKind<HasCustomAttributeTag> (
+            ValidTableFlags.MethodDef
+            ||| ValidTableFlags.Field
+            ||| ValidTableFlags.TypeRef
+            ||| ValidTableFlags.TypeDef
+            ||| ValidTableFlags.Param
+            ||| ValidTableFlags.InterfaceImpl
+            ||| ValidTableFlags.MemberRef
+            ||| ValidTableFlags.Module
+            // ||| ValidTableFlags.Permission
+            ||| ValidTableFlags.Property
+            ||| ValidTableFlags.Event
+            ||| ValidTableFlags.StandAloneSig
+            ||| ValidTableFlags.ModuleRef
+            ||| ValidTableFlags.TypeSpec
+            ||| ValidTableFlags.Assembly
+            ||| ValidTableFlags.AssemblyRef
+            ||| ValidTableFlags.File
+            ||| ValidTableFlags.ExportedType
+            ||| ValidTableFlags.ManifestResource
+            ||| ValidTableFlags.GenericParam
+            ||| ValidTableFlags.GenericParamConstraint
+            ||| ValidTableFlags.MethodSpec,
+            5
+        )
+
+    static let hasFieldMarshal = CodedIndexKind<HasFieldMarshalTag>(ValidTableFlags.Field ||| ValidTableFlags.Param, 1)
+
+    static let hasDeclSecurity = CodedIndexKind<HasDeclSecurityTag>(ValidTableFlags.TypeDef ||| ValidTableFlags.MethodDef ||| ValidTableFlags.Assembly, 2)
+
+    static let memberRefParent =
+        CodedIndexKind<MemberRefParentTag> (
+            ValidTableFlags.TypeDef
+            ||| ValidTableFlags.TypeRef
+            ||| ValidTableFlags.ModuleRef
+            ||| ValidTableFlags.MethodDef
+            ||| ValidTableFlags.TypeSpec,
+            3
+        )
+
+    static let hasSemantics = CodedIndexKind<HasSemanticsTag>(ValidTableFlags.Event ||| ValidTableFlags.Property, 1)
+
+    static let methodDefOrRef = CodedIndexKind<MethodDefOrRefTag>(ValidTableFlags.MethodDef ||| ValidTableFlags.MemberRef, 1)
+
+    static let memberForwarded = CodedIndexKind<MemberForwardedTag>(ValidTableFlags.Field ||| ValidTableFlags.MethodDef, 1)
+
+    static let implementation =
+        CodedIndexKind<ImplementationTag> (
+            ValidTableFlags.File
+            ||| ValidTableFlags.AssemblyRef
+            ||| ValidTableFlags.ExportedType,
+            2
+        )
+
+    static let customAttributeType = CodedIndexKind<CustomAttributeTypeTag>(ValidTableFlags.MethodDef ||| ValidTableFlags.MemberRef, 3)
+
+    static let resolutionScope =
+        CodedIndexKind<ResolutionScopeTag> (
+            ValidTableFlags.Module
+            ||| ValidTableFlags.ModuleRef
+            ||| ValidTableFlags.AssemblyRef
+            ||| ValidTableFlags.TypeRef,
+            2
+        )
+
+    static let typeOrMethodDef = CodedIndexKind<TypeOrMethodDefTag>(ValidTableFlags.TypeDef ||| ValidTableFlags.MethodDef, 1)
+
+    static member TypeDefOrRef = &typeDefOrRef
+    static member HasConstant = &hasConstant
+    static member HasCustomAttribute = &hasCustomAttribute
+    static member HasFieldMarshal = &hasFieldMarshal
+    static member HasDeclSecurity = &hasDeclSecurity
+    static member MemberRefParent = &memberRefParent
+    static member HasSemantics = &hasSemantics
+    static member MethodDefOrRef = &methodDefOrRef
+    static member MemberForwarded = &memberForwarded
+    static member Implementation = &implementation
+    static member CustomAttributeType = &customAttributeType
+    static member ResolutionScope = &resolutionScope
+    static member TypeOrMethodDef = &typeOrMethodDef

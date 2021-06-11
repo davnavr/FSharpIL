@@ -13,6 +13,6 @@ type TypeDefTableBuilder internal () =
             wr.WriteLE(uint32 row.Flags)
             StreamOffset.writeString &wr hsizes row.TypeName
             StreamOffset.writeString &wr hsizes row.TypeNamespace
-            FSharpIL.Utilities.Fail.noImpl "TODO: coded index writing" row.Extends
+            CodedIndex.write &wr tsizes &CodedIndexKinds.TypeDefOrRef row.Extends
             TableIndex.write &wr tsizes ValidTableFlags.Field row.FieldList
             TableIndex.write &wr tsizes ValidTableFlags.Field row.MethodList

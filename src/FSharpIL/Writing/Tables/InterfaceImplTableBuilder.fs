@@ -11,4 +11,4 @@ type InterfaceImplTableBuilder internal () =
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(_, tsizes, row, wr) =
             TableIndex.write &wr tsizes ValidTableFlags.TypeDef row.Class
-            FSharpIL.Utilities.Fail.noImpl "TODO: coded index writing" row.Interface
+            CodedIndex.write &wr tsizes &CodedIndexKinds.TypeDefOrRef row.Interface

@@ -30,8 +30,8 @@
     <Compile Include="Metadata\Blobs\CustomAttrib.fs" />
     <Compile Include="Metadata\Blobs\ElemType.fs" />
     <Compile Include="Metadata\Tables\TableFlags.fs" />
-    <Compile Include="Metadata\Tables\TablesHeader.fs" />
     <Compile Include="Metadata\Tables\TableIndex.fs" />
+    <Compile Include="Metadata\Tables\TablesHeader.fs" />
     <Compile Include="Metadata\Tables\CodedIndex.fs" />
     <Compile Include="Metadata\Tables\TableRows.fs" />
     <Compile Include="Metadata\Tables\CodedIndexPatterns.fs" />
@@ -55,6 +55,7 @@
     <Compile Include="Writing\Tables\Collections\RowList.fs" />
     <Compile Include="Writing\Tables\Collections\RowSet.fs" />
     <Compile Include="Writing\Tables\TableIndex.fs" />
+    <Compile Include="Writing\Tables\CodedIndex.fs" />
     <Compile Include="Writing\Tables\TableBuilder.fs" />
     <Compile Include="Writing\Tables\StreamOffset.fs" />
     <Compile Include="Writing\Tables\ValidationResult.fs" />
@@ -97,6 +98,7 @@
     <Compile Include="Reading\ParsedMethodBodies.fs" />
     <Compile Include="Reading\ByteParser.fs" />
     <Compile Include="Reading\TableRowParsers.fs" />
+    <Compile Include="Reading\ParsedTableRowCounts.fs" />
     <Compile Include="Reading\ParsedMetadataTables.fs" />
     <Compile Include="Reading\ReadResult.fs" />
     <Compile Include="Reading\StructureReader.fs" />

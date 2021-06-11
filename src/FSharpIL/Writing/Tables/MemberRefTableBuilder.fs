@@ -10,6 +10,6 @@ type MemberRefTableBuilder internal () =
         member _.Count = rows.Count
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(hsizes, tsizes, row, wr) =
-            FSharpIL.Utilities.Fail.noImpl "TODO: coded index writing" row.Class
+            CodedIndex.write &wr tsizes &CodedIndexKinds.MemberRefParent row.Class
             StreamOffset.writeString &wr hsizes row.Name
             StreamOffset.writeBlob &wr hsizes row.Signature.MemberRefSig

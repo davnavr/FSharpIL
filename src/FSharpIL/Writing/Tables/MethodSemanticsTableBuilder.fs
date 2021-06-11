@@ -12,4 +12,4 @@ type MethodSemanticsTableBuilder internal () =
         member _.SerializeRow(_, tsizes, row, wr) =
             wr.WriteLE(uint16 row.Semantics)
             TableIndex.write &wr tsizes ValidTableFlags.MethodDef row.Method
-            FSharpIL.Utilities.Fail.noImpl "TODO: coded index writing" row.Association
+            CodedIndex.write &wr tsizes &CodedIndexKinds.HasSemantics row.Association

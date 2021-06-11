@@ -12,5 +12,5 @@ type ConstantTableBuilder internal () =
         member _.SerializeRow(hsizes, tsizes, row, wr) =
             wr.Write(uint8 row.Type)
             wr.Write 0uy // Padding
-            FSharpIL.Utilities.Fail.noImpl "TODO: coded index writing" row.Parent
+            CodedIndex.write &wr tsizes &CodedIndexKinds.HasConstant row.Parent
             StreamOffset.writeBlob &wr hsizes row.Value.Constant

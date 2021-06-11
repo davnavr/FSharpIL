@@ -212,9 +212,9 @@ type CliInfo with
 /// Size of the first 7 fields of the metadata tables header, in bytes (II.24.2.6).
 let tablesHeaderFieldsSize = 24u
 
-let rec createTableRowCounts (lookup: 'Lookup) (valid: ValidTableFlags) (counts: uint32[]) counti validi =
+let rec createTableRowCounts (lookup: Dictionary<_, _>) (valid: ValidTableFlags) (counts: uint32[]) counti validi =
     match valid with
-    | ValidTableFlags.None -> System.Collections.ObjectModel.ReadOnlyDictionary lookup
+    | ValidTableFlags.None -> ParsedTableRowCounts lookup
     | _ ->
         let counti' =
             if valid.HasFlag ValidTableFlags.Module then
@@ -255,7 +255,7 @@ let readMetadataTables (info: CliInfo) =
                   Reserved2 = stream.[7u]
                   Valid = valid
                   Sorted = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU8 16u &stream)
-                  Rows = createTableRowCounts (Dictionary numRowCounts) valid rcounts 0 0 :> IReadOnlyDictionary<_, _> }
+                  Rows = createTableRowCounts (Dictionary numRowCounts) valid rcounts 0 0 }
 
             match ParsedMetadataTables.tryCreate &rows header with
             | Ok tables ->

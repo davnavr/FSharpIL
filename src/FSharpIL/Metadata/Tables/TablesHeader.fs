@@ -24,7 +24,7 @@ module HeapSizes =
 /// <summary>
 /// Represents the fields of the <c>#~</c> stream, which contain information about the metadata tables (II.24.2.6).
 /// </summary>
-type TablesHeader<'RowCounts> =
+type TablesHeader<'RowCounts when 'RowCounts :> ITableRowCounts> =
     { Reserved1: uint32
       MajorVersion: uint8
       MinorVersion: uint8

@@ -44,6 +44,7 @@ type TypeRefTableBuilder internal () =
         member _.Count = rows.Count
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(hsizes, tsizes, row, wr) =
+            CodedIndex.write &wr tsizes &CodedIndexKinds.ResolutionScope row.ResolutionScope
             FSharpIL.Utilities.Fail.noImpl "TODO: coded index writing" row.ResolutionScope
             StreamOffset.writeString &wr hsizes row.TypeName
             StreamOffset.writeString &wr hsizes row.TypeNamespace

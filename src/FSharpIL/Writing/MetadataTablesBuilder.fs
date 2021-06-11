@@ -94,7 +94,7 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
 
     member val IndexSizes =
         { new ITableIndexSizes with
-            member _.SizeOf table =
+            member _.RowCount table =
                 match table with
                 | ValidTableFlags.Module -> 1u
                 | ValidTableFlags.TypeRef -> TableBuilder.indexSize builder.TypeRef

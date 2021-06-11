@@ -8,12 +8,10 @@ open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-type ParsedTableRowCounts = IReadOnlyDictionary<ValidTableFlags, uint32>
-
 [<IsReadOnly; Struct>]
-type internal TableIndexParser<'Row when 'Row :> ITableRow> (table: ValidTableFlags, counts: ParsedTableRowCounts) =
+type internal TableIndexParser<'Row when 'Row :> ITableRow> (table: ValidTableFlags, counts: ITableRowCounts) =
     interface IByteParser<TableIndex<'Row>> with
-        member _.Length = if counts.GetValueOrDefault table <= 0xFFFFu then 2u else 4u
+        member _.Length = if counts.RowCount table <= 0xFFFFu then 2u else 4u
         member _.Parse buffer =
             { TableIndex =
                 match buffer.Length with
@@ -23,113 +21,43 @@ type internal TableIndexParser<'Row when 'Row :> ITableRow> (table: ValidTableFl
 
 [<RequireQualifiedAccess>]
 module CodedIndex =
-    let private isLarge max (tables: ValidTableFlags) (counts: ParsedTableRowCounts) =
-        let mutable large, n = false, 0
-        while not large && n < 64 do
-            if counts.GetValueOrDefault((ValidTableFlags.Module <<< n) &&& tables) > max then
-                large <- true
-            n <- n + 1
-        large
-
-    let inline internal createCodedIndex (index: 'T) max n =
-        let filter = max <<< n
+    let inline internal createCodedIndex (index: 'T) cast (kind: inref<CodedIndexKind<'Tag>>) =
+        let n = kind.NumEncodingBits
+        let filter = cast kind.MaxSmallIndex <<< n
         CodedIndex<'Tag>(LanguagePrimitives.EnumOfValue(uint8(index &&& ~~~filter)), uint32((index &&& filter) >>> n))
 
     [<IsReadOnly; Struct>]
     type Parser<'Tag when 'Tag : enum<uint8>> = struct
         /// Gets a value indicating whether this coded index would occupy four bytes.
         val IsLarge: bool
-        val internal EncodingBits: int32
-        internal new (tables, counts, n: int32) =
-            { IsLarge = isLarge (0xFFFFu >>> n) tables counts
-              EncodingBits = n }
+        val Kind: CodedIndexKind<'Tag>
+
+        internal new (kind: inref<CodedIndexKind<'Tag>>, counts) =
+            { Kind = kind
+              IsLarge = kind.IsLarge counts }
+
         interface IByteParser<CodedIndex<'Tag>> with
             /// The number of bytes that this coded index would occupy.
             member this.Length = if this.IsLarge then 4u else 2u
             member this.Parse buffer =
                 if this.IsLarge
-                then createCodedIndex (ChunkedMemory.readU4 0u &buffer) UInt32.MaxValue this.EncodingBits
-                else createCodedIndex (ChunkedMemory.readU2 0u &buffer) UInt16.MaxValue this.EncodingBits
+                then createCodedIndex (ChunkedMemory.readU4 0u &buffer) uint32 &this.Kind
+                else createCodedIndex (ChunkedMemory.readU2 0u &buffer) uint16 &this.Kind
     end
-
-    let resolutionScopeParser counts =
-        Parser<ResolutionScopeTag> (
-            ValidTableFlags.Module
-            ||| ValidTableFlags.ModuleRef
-            ||| ValidTableFlags.AssemblyRef
-            ||| ValidTableFlags.TypeRef,
-            counts,
-            2
-        )
-
-    let typeDefOrRefOrSpec counts =
-        Parser<TypeDefOrRefTag> (
-            ValidTableFlags.TypeDef
-            ||| ValidTableFlags.TypeRef
-            ||| ValidTableFlags.TypeSpec,
-            counts,
-            2
-        )
-
-    let memberRefParent counts =
-        Parser<MemberRefParentTag> (
-            ValidTableFlags.TypeDef
-            ||| ValidTableFlags.TypeRef
-            ||| ValidTableFlags.ModuleRef
-            ||| ValidTableFlags.MethodDef
-            ||| ValidTableFlags.TypeSpec,
-            counts,
-            3
-        )
-
-    let hasConstant counts =
-        Parser<HasConstantTag>(ValidTableFlags.Field ||| ValidTableFlags.Param ||| ValidTableFlags.Property, counts, 2)
-
-    let hasCustomAttribute counts =
-        Parser<HasCustomAttributeTag> (
-            ValidTableFlags.MethodDef
-            ||| ValidTableFlags.Field
-            ||| ValidTableFlags.TypeRef
-            ||| ValidTableFlags.TypeDef
-            ||| ValidTableFlags.Param
-            ||| ValidTableFlags.InterfaceImpl
-            ||| ValidTableFlags.MemberRef
-            ||| ValidTableFlags.Module
-            // ||| ValidTableFlags.Permission
-            ||| ValidTableFlags.Property
-            ||| ValidTableFlags.Event
-            ||| ValidTableFlags.StandAloneSig
-            ||| ValidTableFlags.ModuleRef
-            ||| ValidTableFlags.TypeSpec
-            ||| ValidTableFlags.Assembly
-            ||| ValidTableFlags.AssemblyRef
-            ||| ValidTableFlags.File
-            ||| ValidTableFlags.ExportedType
-            ||| ValidTableFlags.ManifestResource
-            ||| ValidTableFlags.GenericParam
-            ||| ValidTableFlags.GenericParamConstraint
-            ||| ValidTableFlags.MethodSpec,
-            counts,
-            5
-        )
-
-    let customAttributeType counts =
-        Parser<CustomAttributeTypeTag>(ValidTableFlags.MethodDef ||| ValidTableFlags.MemberRef, counts, 3)
-
-    let hasSemantics counts = Parser<HasSemanticsTag>(ValidTableFlags.Event ||| ValidTableFlags.Property, counts, 1)
-
-    let methodDefOrRef counts = Parser<MethodDefOrRefTag>(ValidTableFlags.MethodDef ||| ValidTableFlags.MemberRef, counts, 1)
-
-    let implementation counts =
-        Parser<ImplementationTag> (
-            ValidTableFlags.File
-            ||| ValidTableFlags.AssemblyRef
-            ||| ValidTableFlags.ExportedType,
-            counts,
-            2
-        )
-
-    let typeOrMethodDef counts = Parser<TypeOrMethodDefTag>(ValidTableFlags.TypeDef ||| ValidTableFlags.MethodDef, counts, 1)
+    
+    let typeDefOrRef counts = Parser(&CodedIndexKinds.TypeDefOrRef, counts)
+    let hasConstant counts = Parser(&CodedIndexKinds.HasConstant, counts)
+    let hasCustomAttribute counts = Parser(&CodedIndexKinds.HasCustomAttribute, counts)
+    let hasFieldMarshal counts = Parser(&CodedIndexKinds.HasFieldMarshal, counts)
+    let hasDeclSecurity counts = Parser(&CodedIndexKinds.HasDeclSecurity, counts)
+    let memberRefParent counts = Parser(&CodedIndexKinds.MemberRefParent, counts)
+    let hasSemantics counts = Parser(&CodedIndexKinds.HasSemantics, counts)
+    let methodDefOrRef counts = Parser(&CodedIndexKinds.MethodDefOrRef, counts)
+    let memberForwarded counts = Parser(&CodedIndexKinds.MemberForwarded, counts)
+    let implementation counts = Parser(&CodedIndexKinds.Implementation, counts)
+    let customAttributeType counts = Parser(&CodedIndexKinds.CustomAttributeType, counts)
+    let resolutionScopeParser counts = Parser(&CodedIndexKinds.ResolutionScope, counts)
+    let typeOrMethodDef counts = Parser(&CodedIndexKinds.TypeOrMethodDef, counts)
 
 [<RequireQualifiedAccess>]
 module internal Offset =
@@ -171,7 +99,7 @@ type ModuleParser (sizes: HeapSizes) =
         member _.Length = 2u + sizes.StringSize + (3u * sizes.GuidSize)
 
 [<IsReadOnly; Struct>]
-type TypeRefParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
+type TypeRefParser (sizes: HeapSizes, counts: ITableRowCounts) =
     member inline private _.ResolutionScope = CodedIndex.resolutionScopeParser counts
     interface IByteParser<TypeRefRow> with
         member this.Parse buffer =
@@ -183,8 +111,8 @@ type TypeRefParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
         member this.Length = ByteParser.length this.ResolutionScope + (2u * sizes.StringSize)
 
 [<IsReadOnly; Struct>]
-type TypeDefParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
-    member inline private _.Extends = CodedIndex.typeDefOrRefOrSpec counts
+type TypeDefParser (sizes: HeapSizes, counts: ITableRowCounts) =
+    member inline private _.Extends = CodedIndex.typeDefOrRef counts
     member inline private _.FieldList = TableIndexParser(ValidTableFlags.Field, counts)
     member inline private _.MethodList = TableIndexParser(ValidTableFlags.MethodDef, counts)
     interface IByteParser<TypeDefRow> with
@@ -220,7 +148,7 @@ type FieldParser (sizes: HeapSizes) =
         member _.Length = 2u + sizes.StringSize + sizes.BlobSize
 
 [<IsReadOnly; Struct>]
-type MethodDefParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
+type MethodDefParser (sizes: HeapSizes, counts: ITableRowCounts) =
     member inline private _.ParamList = TableIndexParser(ValidTableFlags.Param, counts)
     interface IByteParser<MethodDefRow> with
         member this.Parse buffer =
@@ -242,9 +170,9 @@ type ParamParser (sizes: HeapSizes) =
         member _.Length = 4u + sizes.StringSize
 
 [<IsReadOnly; Struct>]
-type InterfaceImplParser (counts: ParsedTableRowCounts) =
+type InterfaceImplParser (counts: ITableRowCounts) =
     member inline private _.Class = TableIndexParser(ValidTableFlags.TypeDef, counts)
-    member inline private _.Interface = CodedIndex.typeDefOrRefOrSpec counts
+    member inline private _.Interface = CodedIndex.typeDefOrRef counts
     interface IByteParser<InterfaceImplRow> with
         member this.Parse buffer =
             let parent = this.Class
@@ -253,7 +181,7 @@ type InterfaceImplParser (counts: ParsedTableRowCounts) =
         member this.Length = ByteParser.length this.Class + ByteParser.length this.Interface
 
 [<IsReadOnly; Struct>]
-type MemberRefParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
+type MemberRefParser (sizes: HeapSizes, counts: ITableRowCounts) =
     member inline private _.Class = CodedIndex.memberRefParent counts
     interface IByteParser<MemberRefRow> with
         member this.Parse buffer =
@@ -265,7 +193,7 @@ type MemberRefParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
         member this.Length = ByteParser.length this.Class + sizes.StringSize + sizes.BlobSize
 
 [<IsReadOnly; Struct>]
-type ConstantParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
+type ConstantParser (sizes: HeapSizes, counts: ITableRowCounts) =
     member inline private _.Parent = CodedIndex.hasConstant counts
     interface IByteParser<ConstantRow> with
         member this.Parse buffer =
@@ -277,7 +205,7 @@ type ConstantParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
         member this.Length = 2u + ByteParser.length this.Parent + sizes.BlobSize
 
 [<IsReadOnly; Struct>]
-type CustomAttributeParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
+type CustomAttributeParser (sizes: HeapSizes, counts: ITableRowCounts) =
     member inline private _.Parent = CodedIndex.hasCustomAttribute counts
     member inline private _.Type = CodedIndex.customAttributeType counts
     interface IByteParser<CustomAttributeRow> with
@@ -294,7 +222,7 @@ type CustomAttributeParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
 
 
 [<IsReadOnly; Struct>]
-type ClassLayoutParser (counts: ParsedTableRowCounts) =
+type ClassLayoutParser (counts: ITableRowCounts) =
     member inline private _.Parent = TableIndexParser(ValidTableFlags.TypeDef, counts)
     interface IByteParser<ClassLayoutRow> with
         member this.Parse buffer =
@@ -314,7 +242,7 @@ type StandaloneSigParser (sizes: HeapSizes) =
 
 
 [<IsReadOnly; Struct>]
-type PropertyMapParser (counts: ParsedTableRowCounts) =
+type PropertyMapParser (counts: ITableRowCounts) =
     member inline private _.Parent = TableIndexParser(ValidTableFlags.TypeDef, counts)
     member inline private _.PropertyList = TableIndexParser(ValidTableFlags.Property, counts)
     interface IByteParser<PropertyMapRow> with
@@ -334,7 +262,7 @@ type PropertyParser (sizes: HeapSizes) =
         member _.Length = 2u + sizes.StringSize + sizes.BlobSize
 
 [<IsReadOnly; Struct>]
-type MethodSemanticsParser (counts: ParsedTableRowCounts) =
+type MethodSemanticsParser (counts: ITableRowCounts) =
     member inline private _.Method = TableIndexParser(ValidTableFlags.MethodDef, counts)
     member inline private _.Association = CodedIndex.hasSemantics counts
     interface IByteParser<MethodSemanticsRow> with
@@ -346,7 +274,7 @@ type MethodSemanticsParser (counts: ParsedTableRowCounts) =
         member this.Length = 2u + ByteParser.length this.Method + ByteParser.length this.Association
 
 [<IsReadOnly; Struct>]
-type MethodImplParser (counts: ParsedTableRowCounts) =
+type MethodImplParser (counts: ITableRowCounts) =
     member inline private _.Class = TableIndexParser(ValidTableFlags.TypeDef, counts)
     member inline private _.Method = CodedIndex.methodDefOrRef counts
     interface IByteParser<MethodImplRow> with
@@ -368,7 +296,7 @@ type TypeSpecParser (sizes: HeapSizes) =
         member _.Length = sizes.BlobSize
 
 [<IsReadOnly; Struct>]
-type FieldRvaParser (counts: ParsedTableRowCounts) =
+type FieldRvaParser (counts: ITableRowCounts) =
     member inline private _.Field = TableIndexParser(ValidTableFlags.Field, counts)
     interface IByteParser<FieldRvaRow> with
         member this.Parse buffer =
@@ -411,7 +339,7 @@ type AssemblyRefParser (sizes: HeapSizes) =
 
 
 [<IsReadOnly; Struct>]
-type ManifestResourceParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
+type ManifestResourceParser (sizes: HeapSizes, counts: ITableRowCounts) =
     member inline private _.Implementation = CodedIndex.implementation counts
     interface IByteParser<ManifestResourceRow> with
         member this.Parse buffer =
@@ -422,7 +350,7 @@ type ManifestResourceParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
         member this.Length = 8u + sizes.StringSize + ByteParser.length this.Implementation
 
 [<IsReadOnly; Struct>]
-type NestedClassParser (counts: ParsedTableRowCounts) =
+type NestedClassParser (counts: ITableRowCounts) =
     member inline private _.Class = TableIndexParser(ValidTableFlags.TypeDef, counts)
     interface IByteParser<NestedClassRow> with
         member this.Parse buffer =
@@ -432,7 +360,7 @@ type NestedClassParser (counts: ParsedTableRowCounts) =
         member this.Length = 2u * ByteParser.length this.Class
 
 [<IsReadOnly; Struct>]
-type GenericParamParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
+type GenericParamParser (sizes: HeapSizes, counts: ITableRowCounts) =
     member inline private _.Owner = CodedIndex.typeOrMethodDef counts
     interface IByteParser<GenericParamRow> with
         member this.Parse buffer =
@@ -444,7 +372,7 @@ type GenericParamParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
         member this.Length = 4u + ByteParser.length this.Owner + sizes.StringSize
 
 [<IsReadOnly; Struct>]
-type MethodSpecParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
+type MethodSpecParser (sizes: HeapSizes, counts: ITableRowCounts) =
     member inline private _.Method = CodedIndex.methodDefOrRef counts
     interface IByteParser<MethodSpecRow> with
         member this.Parse buffer =
@@ -454,9 +382,9 @@ type MethodSpecParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
         member this.Length = ByteParser.length this.Method + sizes.BlobSize
 
 [<IsReadOnly; Struct>]
-type GenericParamConstraintParser (counts: ParsedTableRowCounts) =
+type GenericParamConstraintParser (counts: ITableRowCounts) =
     member inline private _.Owner = TableIndexParser(ValidTableFlags.TypeDef, counts)
-    member inline private _.Constraint = CodedIndex.typeDefOrRefOrSpec counts
+    member inline private _.Constraint = CodedIndex.typeDefOrRef counts
     interface IByteParser<GenericParamConstraintRow> with
         member this.Parse buffer =
             let owner = this.Owner
@@ -466,7 +394,7 @@ type GenericParamConstraintParser (counts: ParsedTableRowCounts) =
 
 (*
 [<IsReadOnly; Struct>]
-type TemporarySomethingParser (sizes: HeapSizes, counts: ParsedTableRowCounts) =
+type TemporarySomethingParser (sizes: HeapSizes, counts: ITableRowCounts) =
     interface IByteParser<Object> with
         member _.Parse buffer =
             failwith "parsing not implemented"
