@@ -9,11 +9,14 @@ type TableIndex<'Row when 'Row :> ITableRow> =
     internal { TableIndex: uint32 }
     member this.IsNull = this.TableIndex = 0u
     static member Zero = { TableIndex = 0u }
+    static member op_Implicit { TableIndex = index } = index
 
 [<RequireQualifiedAccess>]
-module internal TableIndex =
+module TableIndex =
     [<GeneralizableValue>]
-    let maximum<'Row> =
+    let internal maximum<'Row> =
         // Maximum valid value is the maximum 3-byte unsigned integer value, since that is the maximum index that can be encoded
         // in a metadata token in a method body.
         { TableIndex = 0xFF_FF_FFu }
+
+    let ofIntUnsafe<'Row when 'Row :> ITableRow> index = { TableIndex = index }: TableIndex<'Row>

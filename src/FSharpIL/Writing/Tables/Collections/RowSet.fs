@@ -12,10 +12,10 @@ type RowSet<'Row when 'Row : equality and 'Row : struct and 'Row :> ITableRow> i
     let rows = ImmutableArray.CreateBuilder<'Row>()
     internal new () = RowSet<'Row> EqualityComparer.Default
     member _.Count = rows.Count
-    member _.TryAdd(row: inref<'Row>, offset: outref<TableIndex<'Row>>) =
-        let offset' = { TableIndex = uint32 rows.Count + 1u }
-        if lookup.TryAdd(row, offset') then
-            offset <- offset'
+    member _.TryAdd(row: inref<'Row>, index: outref<TableIndex<'Row>>) =
+        let index' = { TableIndex = uint32 rows.Count + 1u }
+        if lookup.TryAdd(row, index') then
+            index <- index'
             rows.Add row
             true
         else false

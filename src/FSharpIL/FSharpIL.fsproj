@@ -34,6 +34,7 @@
     <Compile Include="Metadata\Tables\TableIndex.fs" />
     <Compile Include="Metadata\Tables\CodedIndex.fs" />
     <Compile Include="Metadata\Tables\TableRows.fs" />
+    <Compile Include="Metadata\Tables\CodedIndexPatterns.fs" />
     <Compile Include="Metadata\Signatures\CustomMod.fs" />
     <Compile Include="Metadata\Signatures\Items.fs" />
     <Compile Include="Metadata\CliHeader.fs" />
@@ -53,7 +54,7 @@
     <Compile Include="Magic.fs" />
     <Compile Include="Writing\Tables\Collections\RowList.fs" />
     <Compile Include="Writing\Tables\Collections\RowSet.fs" />
-    <Compile Include="Writing\Tables\ITableBuilder.fs" />
+    <Compile Include="Writing\Tables\TableBuilder.fs" />
     <Compile Include="Writing\Tables\ValidationResult.fs" />
     <Compile Include="Writing\Tables\TypeRefTableBuilder.fs" />
     <Compile Include="Writing\IStreamBuilder.fs" />

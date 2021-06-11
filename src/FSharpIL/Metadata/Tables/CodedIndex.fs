@@ -4,8 +4,9 @@
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type CodedIndex<'Tag when 'Tag : enum<uint8>> = struct
     val Tag: 'Tag
-    val internal Index: uint32
-    new (tag, index) = { Tag = tag; Index = index }
+    val Index: uint32
+    internal new (tag, index) = { Tag = tag; Index = index }
+    member this.IsNull = this.Index = 0u
 end
 
 type TypeDefOrRefTag =
@@ -45,7 +46,6 @@ type HasCustomAttributeTag =
 type HasFieldMarshalTag =
     | Field = 0uy
     | Param = 1uy
-
 
 type HasDeclSecurityTag =
     | TypeDef = 0uy

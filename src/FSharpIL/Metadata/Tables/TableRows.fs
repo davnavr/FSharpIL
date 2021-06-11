@@ -362,7 +362,12 @@ type MethodImplRow =
       MethodDeclaration: MethodDefOrRef }
     interface ITableRow
 
-
+/// <summary>(0x1A) Represents a row in the <c>ModuleRef</c> table (II.22.31).</summary>
+[<RequireQualifiedAccess>]
+[<IsReadOnly; Struct>]
+type ModuleRefRow =
+    { Name: StringOffset }
+    interface ITableRow
 
 /// <summary>
 /// (0x1B) Represents a row in the <c>TypeSpec</c> table, which contains an offset into the <c>#Blob</c> heap pointing to a
