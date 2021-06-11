@@ -68,6 +68,13 @@
     <Compile Include="Writing\Tables\StandaloneSigTableBuilder.fs" />
     <Compile Include="Writing\Tables\MethodSemanticsTableBuilder.fs" />
     <Compile Include="Writing\Tables\MethodImplTableBuilder.fs" />
+    <Compile Include="Writing\Tables\ModuleRefTableBuilder.fs" />
+    <Compile Include="Writing\Tables\TypeSpecTableBuilder.fs" />
+    <Compile Include="Writing\Tables\AssemblyTableBuilder.fs" />
+    <Compile Include="Writing\Tables\AssemblyRefTableBuilder.fs" />
+    <Compile Include="Writing\Tables\FileTableBuilder.fs" />
+    <Compile Include="Writing\Tables\NestedClassTableBuilder.fs" />
+    <Compile Include="Writing\Tables\MethodSpecTableBuilder.fs" />
     <Compile Include="Writing\IStreamBuilder.fs" />
     <Compile Include="Writing\StringLookupComparer.fs" />
     <Compile Include="Writing\StringsStreamBuilder.fs" />

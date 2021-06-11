@@ -11,7 +11,7 @@ end
 
 [<RequireQualifiedAccess>]
 module TableBuilder =
-    let inline count (builder: #ITableBuilder<_>) = builder.Count
+    let inline count (builder: #ITableBuilder<_>) = uint32 builder.Count
     let inline get (builder: #ITableBuilder<_>) index = &builder.[index]
 
     let serialize (wr: byref<ChunkedMemoryBuilder>) hsizes tsizes (table: #ITableBuilder<_>) =

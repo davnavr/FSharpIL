@@ -28,7 +28,7 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
     /// (0x04)
     member val Field = ListTableBuilder<FieldRow>() // TryAdd for this table builder type should return a list of all indices added.
     /// (0x06)
-    member val Method = ListTableBuilder<MethodDefRow>()
+    member val MethodDef = ListTableBuilder<MethodDefRow>()
     /// (0x08)
     member val Param = ListTableBuilder<ParamRow>()
     /// (0x09)
@@ -52,52 +52,79 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
     /// (0x12)
     member val EventMap = OwnedMetadataTableBuilder<TypeDefRow, EventRow>()
     /// (0x14)
-    member this.Event = noImpl ""
+    member val Event = noImpl ""
     /// (0x15)
     member val PropertyMap = OwnedMetadataTableBuilder<TypeDefRow, PropertyRow>()
     /// (0x17)
-    member this.Property = noImpl ""
+    member val Property = noImpl ""
     /// (0x18)
     member val MethodSemantics = MethodSemanticsTableBuilder()
     /// (0x19)
     member val MethodImpl = MethodImplTableBuilder()
     /// (0x1A)
-    member val ModuleRef = RowArrayList<ModuleRef>.Create()
+    member val ModuleRef = ModuleRefTableBuilder()
     /// (0x1B)
-    member val TypeSpec = RowHashSet<TypeSpecRow>.Create()
+    member val TypeSpec = TypeSpecTableBuilder()
     // (0x1C)
     // member ImplMap
     // (0x1D)
     // member FieldRva
     /// <summary>Represents the <c>Assembly</c> table, which describes the current assembly (0x20).</summary>
-    member _.Assembly = invalidOp "bad"
+    member val Assembly = AssemblyTableBuilder()
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// <summary>Represents the <c>AssemblyRef</c> table, which contains references to other assemblies (0x23).</summary>
-    member val AssemblyRef = RowArrayList<AssemblyRef>.Create()
+    member val AssemblyRef = AssemblyRefTableBuilder()
     // AssemblyRefProcessor // 0x24 // Not used when writing a PE file
     // AssemblyRefOS // 0x25 // Not used when writing a PE file
     /// (0x26)
-    member val File = RowArrayList<File>.Create()
+    member val File = FileTableBuilder()
     // (0x27)
     // member ExportedType
     // (0x28)
     // member ManifestResource
     /// (0x29)
-    member val NestedClass = invalidOp "nope"
+    member val NestedClass = NestedClassTableBuilder()
     /// (0x2A)
-    member val GenericParam = GenericParamTableBuilder()
+    member val GenericParam = ListTableBuilder<GenericParamRow>()
     // (0x2B)
-    member val MethodSpec = RowHashSet<MethodSpecRow>.Create()
+    member val MethodSpec = MethodSpecTableBuilder()
     // (0x2C)
-    // member GenericParamConstraint
+    member val GenericParamConstraint = ListTableBuilder<GenericParamConstraintRow>()
 
     member val IndexSizes =
-        { new ITableIndexSizes with
+        { new ITableRowCounts with
             member _.RowCount table =
                 match table with
                 | ValidTableFlags.Module -> 1u
-                | ValidTableFlags.TypeRef -> TableBuilder.indexSize builder.TypeRef
+                | ValidTableFlags.TypeRef -> TableBuilder.count builder.TypeRef
+                | ValidTableFlags.TypeDef -> TableBuilder.count builder.TypeDef
+                | ValidTableFlags.Field -> TableBuilder.count builder.Field
+                | ValidTableFlags.MethodDef -> TableBuilder.count builder.MethodDef
+                | ValidTableFlags.Param -> TableBuilder.count builder.Param
+                | ValidTableFlags.InterfaceImpl -> TableBuilder.count builder.InterfaceImpl
+                | ValidTableFlags.MemberRef -> TableBuilder.count builder.MemberRef
+                | ValidTableFlags.Constant -> TableBuilder.count builder.Constant
+                | ValidTableFlags.CustomAttribute -> TableBuilder.count builder.CustomAttribute
+
+                | ValidTableFlags.StandAloneSig -> TableBuilder.count builder.StandAloneSig
+                | ValidTableFlags.EventMap -> TableBuilder.count builder.EventMap
+                | ValidTableFlags.Event -> TableBuilder.count builder.Event
+                | ValidTableFlags.PropertyMap -> TableBuilder.count builder.PropertyMap
+                | ValidTableFlags.Property -> TableBuilder.count builder.Property
+                | ValidTableFlags.MethodSemantics -> TableBuilder.count builder.MethodSemantics
+                | ValidTableFlags.MethodImpl -> TableBuilder.count builder.MethodImpl
+                | ValidTableFlags.ModuleRef -> TableBuilder.count builder.ModuleRef
+                | ValidTableFlags.TypeSpec -> TableBuilder.count builder.TypeSpec
+
+                | ValidTableFlags.Assembly -> TableBuilder.count builder.Assembly
+                | ValidTableFlags.AssemblyRef -> TableBuilder.count builder.AssemblyRef
+                | ValidTableFlags.File -> TableBuilder.count builder.File
+
+                | ValidTableFlags.NestedClass -> TableBuilder.count builder.NestedClass
+                | ValidTableFlags.GenericParam -> TableBuilder.count builder.GenericParam
+                | ValidTableFlags.MethodSpec -> TableBuilder.count builder.MethodSpec
+                | ValidTableFlags.GenericParamConstraint -> TableBuilder.count builder.GenericParamConstraint
                 | _ -> 0u }
 
     member inline private this.SerializeTable(wr: byref<_>, table: #ITableBuilder<_>) =
@@ -119,7 +146,7 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
 
             // Rows
             for i = 0 to 63 do
-                let size = this.IndexSizes.SizeOf(LanguagePrimitives.EnumOfValue(1UL <<< i))
+                let size = this.IndexSizes.RowCount(LanguagePrimitives.EnumOfValue(1UL <<< i))
                 if size > 0u then wr.WriteLE size
 
             // Module
@@ -132,7 +159,7 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
             this.SerializeTable(&wr, this.TypeRef)
             this.SerializeTable(&wr, this.TypeDef)
             this.SerializeTable(&wr, this.Field)
-            this.SerializeTable(&wr, this.Method)
+            this.SerializeTable(&wr, this.MethodDef)
             this.SerializeTable(&wr, this.Param)
             this.SerializeTable(&wr, this.InterfaceImpl)
             this.SerializeTable(&wr, this.MemberRef)

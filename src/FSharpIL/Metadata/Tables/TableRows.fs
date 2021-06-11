@@ -446,6 +446,22 @@ type AssemblyRefRow =
     interface ITableRow
 
 
+
+/// <summary>Specifies the contents of a <c>File</c> (II.23.1.6).</summary>
+type FileFlags =
+    | ContainsMetadata = 0u
+    | ContainsNoMetadata = 1u
+
+/// <summary>(0x26) Represents a row in the <c>File</c> table (II.22.19).</summary>
+[<IsReadOnly; Struct>]
+type FileRow =
+    { Flags: FileFlags
+      Name: StringOffset
+      HashValue: BlobOffset }
+    interface ITableRow
+
+
+
 /// <summary>Describes the visibility of a <c>ManifestResource</c> (II.23.1.9).</summary>
 [<Flags>]
 type ManifestResourceFlags =
