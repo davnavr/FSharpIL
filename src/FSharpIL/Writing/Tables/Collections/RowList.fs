@@ -12,4 +12,4 @@ type RowList<'Row when 'Row : equality and 'Row : struct and 'Row :> ITableRow> 
     member _.Add(row: inref<'Row>) =
         rows.Add row
         { TableIndex = uint32 rows.Count }
-    member _.Item with get { TableIndex = i } = &rows.ItemRef(int32 i - 1)
+    member _.Item with get (i: TableIndex<'Row>) = &rows.ItemRef(int32 i.TableIndex - 1)

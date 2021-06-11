@@ -103,3 +103,6 @@ type Implementation = CodedIndex<ImplementationTag>
 type CustomAttributeType = CodedIndex<CustomAttributeTypeTag>
 type ResolutionScope = CodedIndex<ResolutionScopeTag>
 type TypeOrMethodDef = CodedIndex<TypeOrMethodDefTag>
+
+// TODO: Create "Factory" type for coded indices that stores the flags corresponding to the tables that it uses, and the number of encoding bits since this information is used in writing and reading.
+// type CodedIndexKind<'Tag when 'Tag : enum<uint8>> = struct

@@ -8,7 +8,6 @@ type ITableRow = interface end
 type TableIndex<'Row when 'Row :> ITableRow> =
     internal { TableIndex: uint32 }
     member this.IsNull = this.TableIndex = 0u
-    static member Zero = { TableIndex = 0u }
     static member op_Implicit { TableIndex = index } = index
 
 [<RequireQualifiedAccess>]
