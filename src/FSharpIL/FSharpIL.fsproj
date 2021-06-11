@@ -54,6 +54,7 @@
     <Compile Include="Magic.fs" />
     <Compile Include="Writing\Tables\Collections\RowList.fs" />
     <Compile Include="Writing\Tables\Collections\RowSet.fs" />
+    <Compile Include="Writing\Tables\Collections\RangedRowList.fs" />
     <Compile Include="Writing\Tables\TableIndex.fs" />
     <Compile Include="Writing\Tables\CodedIndex.fs" />
     <Compile Include="Writing\Tables\TableBuilder.fs" />
@@ -61,11 +62,18 @@
     <Compile Include="Writing\Tables\ValidationResult.fs" />
     <Compile Include="Writing\Tables\TypeRefTableBuilder.fs" />
     <Compile Include="Writing\Tables\TypeDefTableBuilder.fs" />
+    <Compile Include="Writing\Tables\FieldTableBuilder.fs" />
+    <Compile Include="Writing\Tables\MethodDefTableBuilder.fs" />
+    <Compile Include="Writing\Tables\ParamTableBuilder.fs" />
     <Compile Include="Writing\Tables\InterfaceImplTableBuilder.fs" />
     <Compile Include="Writing\Tables\MemberRefTableBuilder.fs" />
     <Compile Include="Writing\Tables\ConstantTableBuilder.fs" />
     <Compile Include="Writing\Tables\CustomAttributeTableBuilder.fs" />
     <Compile Include="Writing\Tables\StandaloneSigTableBuilder.fs" />
+    <Compile Include="Writing\Tables\EventMapTableBuilder.fs" />
+    <Compile Include="Writing\Tables\EventTableBuilder.fs" />
+    <Compile Include="Writing\Tables\PropertyMapTableBuilder.fs" />
+    <Compile Include="Writing\Tables\PropertyTableBuilder.fs" />
     <Compile Include="Writing\Tables\MethodSemanticsTableBuilder.fs" />
     <Compile Include="Writing\Tables\MethodImplTableBuilder.fs" />
     <Compile Include="Writing\Tables\ModuleRefTableBuilder.fs" />
@@ -74,7 +82,9 @@
     <Compile Include="Writing\Tables\AssemblyRefTableBuilder.fs" />
     <Compile Include="Writing\Tables\FileTableBuilder.fs" />
     <Compile Include="Writing\Tables\NestedClassTableBuilder.fs" />
+    <Compile Include="Writing\Tables\GenericParamTableBuilder.fs" />
     <Compile Include="Writing\Tables\MethodSpecTableBuilder.fs" />
+    <Compile Include="Writing\Tables\GenericParamConstraintTableBuilder.fs" />
     <Compile Include="Writing\IStreamBuilder.fs" />
     <Compile Include="Writing\StringLookupComparer.fs" />
     <Compile Include="Writing\StringsStreamBuilder.fs" />

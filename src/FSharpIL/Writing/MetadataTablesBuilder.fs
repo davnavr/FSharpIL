@@ -26,11 +26,11 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
     /// (0x02)
     member val TypeDef = TypeDefTableBuilder()
     /// (0x04)
-    member val Field = ListTableBuilder<FieldRow>() // TryAdd for this table builder type should return a list of all indices added.
+    member val Field = FieldTableBuilder()
     /// (0x06)
-    member val MethodDef = ListTableBuilder<MethodDefRow>()
+    member val MethodDef = MethodDefTableBuilder()
     /// (0x08)
-    member val Param = ListTableBuilder<ParamRow>()
+    member val Param = ParamTableBuilder()
     /// (0x09)
     member val InterfaceImpl = InterfaceImplTableBuilder()
     /// (0x0A)
@@ -50,13 +50,13 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
     // (0x11)
     member val StandAloneSig = StandaloneSigTableBuilder()
     /// (0x12)
-    member val EventMap = OwnedMetadataTableBuilder<TypeDefRow, EventRow>()
+    member val EventMap = EventMapTableBuilder()
     /// (0x14)
-    member val Event = noImpl ""
+    member val Event = EventTableBuilder()
     /// (0x15)
-    member val PropertyMap = OwnedMetadataTableBuilder<TypeDefRow, PropertyRow>()
+    member val PropertyMap = PropertyMapTableBuilder()
     /// (0x17)
-    member val Property = noImpl ""
+    member val Property = PropertyTableBuilder()
     /// (0x18)
     member val MethodSemantics = MethodSemanticsTableBuilder()
     /// (0x19)
@@ -86,11 +86,11 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
     /// (0x29)
     member val NestedClass = NestedClassTableBuilder()
     /// (0x2A)
-    member val GenericParam = ListTableBuilder<GenericParamRow>()
+    member val GenericParam = GenericParamTableBuilder()
     // (0x2B)
     member val MethodSpec = MethodSpecTableBuilder()
     // (0x2C)
-    member val GenericParamConstraint = ListTableBuilder<GenericParamConstraintRow>()
+    member val GenericParamConstraint = GenericParamConstraintTableBuilder()
 
     member val IndexSizes =
         { new ITableRowCounts with
@@ -132,7 +132,8 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
 
     interface IStreamBuilder with
         member _.StreamName = Magic.StreamNames.metadata
-        member _.StreamLength =
+        // TODO: Have length of metadata tables stream be calculated after it is written, store the corresponding ChunkedMemoryBuilder and use it to write the length later.
+        member _.StreamLength = // ValueNone
             failwith "TODO: Calculate stream length"
         member this.Serialize wr =
             // TODO: Use TablesHeader<_> type?

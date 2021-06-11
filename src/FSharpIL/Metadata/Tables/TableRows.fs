@@ -300,6 +300,32 @@ type StandaloneSigRow =
     member this.Signature = this.StandAloneSig
     interface ITableRow
 
+/// <summary>Describes the attributes of an <c>Event</c> (II.23.1.4).</summary>
+[<Flags>]
+type EventFlags =
+    | None = 0us
+    | SpecialName = 0x200us
+    | RTSpecialName = 0x400us
+
+/// <summary>
+/// (0x14) Represents a row in the <c>Event</c> table (II.22.13).
+/// </summary>
+[<IsReadOnly; Struct>]
+type EventRow =
+    { EventFlags: EventFlags
+      Name: StringOffset
+      EventType: TypeDefOrRef }
+    interface ITableRow
+
+/// <summary>
+/// (0x12) Represents a row in the <c>EventMap</c> table, which specifies the events associated with a type (II.22.12).
+/// </summary>
+[<IsReadOnly; Struct>]
+type EventMapRow =
+    { Parent: TableIndex<TypeDefRow>
+      EventList: TableIndex<EventRow> }
+    interface ITableRow
+
 
 
 /// <summary>Describes the attributes of a <c>Property</c> (II.23.1.14).</summary>
@@ -320,11 +346,12 @@ type PropertyRow =
     interface ITableRow
 
 /// <summary>
-/// (0x15) Represents a row in the <c>PropertyMap</c> table, which describes which properties belong to which types (II.22.35).
+/// (0x15) Represents a row in the <c>PropertyMap</c> table, which specifies the properties associated with a type (II.22.35).
 /// </summary>
 [<IsReadOnly; Struct>] 
 type PropertyMapRow =
-    { Parent: TableIndex<TypeDefRow>; PropertyList: TableIndex<PropertyRow> }
+    { Parent: TableIndex<TypeDefRow>
+      PropertyList: TableIndex<PropertyRow> }
     interface ITableRow
 
 /// <summary>Describes what kind of method is associated with a <c>Property</c> or <c>Event</c> (II.23.1.12).</summary>
