@@ -312,20 +312,23 @@ let readCliSection (src: HeaderReader<_>) file =
     match findCliSection cliHeaderRva file.SectionHeaders 0 with
     | Ok i ->
         let header = file.SectionHeaders.[i]
-        let falignment = uint32 file.OptionalHeader.Alignment.FileAlignment
-        let mutable chunks =
-            let count = header.RawDataSize / falignment
-            if falignment * count < header.RawDataSize
-            then count + 1u
-            else count
-            |> int32
-            |> Array.zeroCreate<byte[]>
-        match copyCliSection src chunks falignment header.RawDataSize 0 with
+        match src.MoveTo header.RawDataPointer with
         | None ->
-            file.CliSectionIndex <- ValueSome i
-            file.CliHeaderOffset <- { SectionOffset = uint32(cliHeaderRva - header.VirtualAddress) }
-            file.CliSectionData <- ChunkedMemory(Unsafe.As &chunks, 0u, header.RawDataSize)
-            End
+            let falignment = file.OptionalHeader.Alignment.FileAlignment
+            let mutable chunks =
+                let count = header.RawDataSize / falignment
+                if falignment * count < header.RawDataSize
+                then count + 1u
+                else count
+                |> int32
+                |> Array.zeroCreate<byte[]>
+            match copyCliSection src chunks falignment header.RawDataSize 0 with
+            | None ->
+                file.CliSectionIndex <- ValueSome i
+                file.CliHeaderOffset <- { SectionOffset = uint32(cliHeaderRva - header.VirtualAddress) }
+                file.CliSectionData <- ChunkedMemory(Unsafe.As &chunks, 0u, header.RawDataSize)
+                End
+            | Some err -> Failure err
         | Some err -> Failure err
     | Error err -> Failure err
 

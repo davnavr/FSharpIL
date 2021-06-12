@@ -112,6 +112,11 @@ module ILOutput =
                 standardFieldsCommon std out
                 ntSpecificFields nt out
             newline out
+            //fprintfn wr ".imagebase 0x%08X" fields.ImageBase
+            //fprintfn wr ".file alignment 0x%08X" falignment
+            //fprintfn wr ".stackreserve 0x%08X" fields.StackReserveSize
+            //fprintfn wr ".subsystem 0x%04X" (uint16 fields.Subsystem)
+            newline out
             ValueSome out
 
         let private dataDirectoryNames =
@@ -176,6 +181,7 @@ module ILOutput =
             field "VTableFixups" Print.rvaAndSize header.VTableFixups out
             field "ExportAddressTableJumps" Print.rvaAndSize header.ExportAddressTableJumps out
             field "ManagedNativeHeader" Print.rvaAndSize header.ManagedNativeHeader out
+            newline out
             //".corflags 0x%08X" (uint32 header.Flags)
             newline out
             ValueSome out
