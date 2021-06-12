@@ -21,10 +21,12 @@ type HeaderReader<'Reader when 'Reader :> IHeaderReader> = class
 
     member this.Offset = this.pos
 
-    /// <returns>The number of bytes that were read and copied into the <paramref name="buffer"/>.</returns>
-    member this.Read buffer = this.reader.Read buffer = buffer.Length
+    member this.Read buffer =
+        let count = this.reader.Read buffer
+        this.pos <- this.pos + uint32 count
+        count = buffer.Length
 
-    member this.SkipBytes(count: uint32) = // TODO: Make skipping method work better.
+    member this.SkipBytes(count: uint32) =
         let buffer = Span.stackalloc<byte> 1
         let mutable cont, skipped = true, 0u
         while cont && skipped < count do

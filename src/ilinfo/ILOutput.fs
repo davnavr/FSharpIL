@@ -56,6 +56,10 @@ module ILOutput =
             | IncludeHeaders -> ValueSome printer
             | NoHeaders -> ValueNone
         { PEFileReader.defaultReader with
+            ReadLfanew = header (fun lfanew offset out ->
+                heading "DOS Header" offset out
+                field "lfanew" Print.integer (uint32 lfanew) out
+                ValueSome out)
             ReadCoffHeader = header Headers.coffHeader
             HandleError =
                 fun state error offset out ->
