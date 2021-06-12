@@ -132,7 +132,7 @@ let standardFieldsCommon (imageKind: ImageKind) fields info (writer: byref<#IByt
     writer.WriteLE 0u // EntryPointRva // TODO: Figure out what this value should be.
     writer.WriteLE(uint32 info.BaseOfCode) // RVA of the .text section
 
-let ntSpecificFieldsCommon (fields: NTSpecificFields<_, Alignment, _, _, _>) info (writer: byref<#IByteWriter>) =
+let ntSpecificFieldsCommon (fields: NTSpecificFields<_, _, _, _>) info (writer: byref<#IByteWriter>) =
     writer.WriteLE(uint32 fields.Alignment.SectionAlignment)
     writer.WriteLE(uint32 fields.Alignment.FileAlignment)
     writer.WriteLE fields.OSMajor

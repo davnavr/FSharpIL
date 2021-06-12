@@ -124,7 +124,11 @@ module OptionalHeader =
             |> Ok
         else Error UnexpectedEndOfFile
 
-    let readAlignment = noImpl "TODO: Read alignment"
+    let readAlignment offset (buffer: Span<byte>) =
+        let salignment, falignment = Bytes.toU4 offset buffer, Bytes.toU4 (offset + 4) buffer
+        match Alignment.tryCreate salignment falignment with
+        | ValueSome alignment -> Ok alignment
+        | ValueNone -> Error(InvalidAlignment(salignment, falignment))
 
     let readNTSpecificFields (src: HeaderReader<_>) standardFields =
         let buffer =
@@ -135,51 +139,57 @@ module OptionalHeader =
             Span.stackalloc<byte> size
         match src.Read buffer, standardFields with
         | true, Choice1Of2 standardFields -> // PE32
-            let fields =
-                { ImageBase = Bytes.toU4 0 buffer
-                  Alignment = readAlignment
-                  OSMajor = Bytes.toU2 12 buffer
-                  OSMinor = Bytes.toU2 14 buffer
-                  UserMajor = Bytes.toU2 16 buffer
-                  UserMinor = Bytes.toU2 18 buffer
-                  SubSysMajor = Bytes.toU2 20 buffer
-                  SubSysMinor = Bytes.toU2 22 buffer
-                  Win32VersionValue = Bytes.toU4 24 buffer
-                  ImageSize = Bytes.toU4 28 buffer
-                  HeadersSize = Bytes.toU4 32 buffer
-                  FileChecksum = Bytes.toU4 36 buffer
-                  Subsystem = LanguagePrimitives.EnumOfValue(Bytes.toU2 40 buffer)
-                  DllFlags = LanguagePrimitives.EnumOfValue(Bytes.toU2 42 buffer)
-                  StackReserveSize = Bytes.toU4 44 buffer
-                  StackCommitSize = Bytes.toU4 48 buffer
-                  HeapReserveSize = Bytes.toU4 52 buffer
-                  HeapCommitSize = Bytes.toU4 56 buffer
-                  LoaderFlags = Bytes.toU4 60 buffer
-                  NumberOfDataDirectories = Bytes.toU4 64 buffer }
-            Ok(ParsedOptionalHeader.PE32(standardFields, fields))
+            match readAlignment 4 buffer with
+            | Ok alignment ->
+                let fields =
+                    { ImageBase = Bytes.toU4 0 buffer
+                      Alignment = alignment
+                      OSMajor = Bytes.toU2 12 buffer
+                      OSMinor = Bytes.toU2 14 buffer
+                      UserMajor = Bytes.toU2 16 buffer
+                      UserMinor = Bytes.toU2 18 buffer
+                      SubSysMajor = Bytes.toU2 20 buffer
+                      SubSysMinor = Bytes.toU2 22 buffer
+                      Win32VersionValue = Bytes.toU4 24 buffer
+                      ImageSize = Bytes.toU4 28 buffer
+                      HeadersSize = Bytes.toU4 32 buffer
+                      FileChecksum = Bytes.toU4 36 buffer
+                      Subsystem = LanguagePrimitives.EnumOfValue(Bytes.toU2 40 buffer)
+                      DllFlags = LanguagePrimitives.EnumOfValue(Bytes.toU2 42 buffer)
+                      StackReserveSize = Bytes.toU4 44 buffer
+                      StackCommitSize = Bytes.toU4 48 buffer
+                      HeapReserveSize = Bytes.toU4 52 buffer
+                      HeapCommitSize = Bytes.toU4 56 buffer
+                      LoaderFlags = Bytes.toU4 60 buffer
+                      NumberOfDataDirectories = Bytes.toU4 64 buffer }
+                Ok(ParsedOptionalHeader.PE32(standardFields, fields))
+            | Error err -> Error err
         | true, Choice2Of2 standardFields -> // PE32+
-            let fields =
-                { ImageBase = Bytes.toU8 0 buffer
-                  Alignment = readAlignment
-                  OSMajor = Bytes.toU2 16 buffer
-                  OSMinor = Bytes.toU2 18 buffer
-                  UserMajor = Bytes.toU2 20 buffer
-                  UserMinor = Bytes.toU2 22 buffer
-                  SubSysMajor = Bytes.toU2 24 buffer
-                  SubSysMinor = Bytes.toU2 26 buffer
-                  Win32VersionValue = Bytes.toU4 28 buffer
-                  ImageSize = Bytes.toU4 32 buffer
-                  HeadersSize = Bytes.toU4 36 buffer
-                  FileChecksum = Bytes.toU4 40 buffer
-                  Subsystem = LanguagePrimitives.EnumOfValue(Bytes.toU2 44 buffer)
-                  DllFlags = LanguagePrimitives.EnumOfValue(Bytes.toU2 46 buffer)
-                  StackReserveSize = Bytes.toU8 48 buffer
-                  StackCommitSize = Bytes.toU8 56 buffer
-                  HeapReserveSize = Bytes.toU8 64 buffer
-                  HeapCommitSize = Bytes.toU8 72 buffer
-                  LoaderFlags = Bytes.toU4 80 buffer
-                  NumberOfDataDirectories = Bytes.toU4 84 buffer }
-            Ok(ParsedOptionalHeader.PE32Plus(standardFields, fields))
+            match readAlignment 8 buffer with
+            | Ok alignment ->
+                let fields =
+                    { ImageBase = Bytes.toU8 0 buffer
+                      Alignment = alignment
+                      OSMajor = Bytes.toU2 16 buffer
+                      OSMinor = Bytes.toU2 18 buffer
+                      UserMajor = Bytes.toU2 20 buffer
+                      UserMinor = Bytes.toU2 22 buffer
+                      SubSysMajor = Bytes.toU2 24 buffer
+                      SubSysMinor = Bytes.toU2 26 buffer
+                      Win32VersionValue = Bytes.toU4 28 buffer
+                      ImageSize = Bytes.toU4 32 buffer
+                      HeadersSize = Bytes.toU4 36 buffer
+                      FileChecksum = Bytes.toU4 40 buffer
+                      Subsystem = LanguagePrimitives.EnumOfValue(Bytes.toU2 44 buffer)
+                      DllFlags = LanguagePrimitives.EnumOfValue(Bytes.toU2 46 buffer)
+                      StackReserveSize = Bytes.toU8 48 buffer
+                      StackCommitSize = Bytes.toU8 56 buffer
+                      HeapReserveSize = Bytes.toU8 64 buffer
+                      HeapCommitSize = Bytes.toU8 72 buffer
+                      LoaderFlags = Bytes.toU4 80 buffer
+                      NumberOfDataDirectories = Bytes.toU4 84 buffer }
+                Ok(ParsedOptionalHeader.PE32Plus(standardFields, fields))
+            | Error err -> Error err
         | false, _ -> Error UnexpectedEndOfFile
 
     let read (src: HeaderReader<_>) (header: outref<ParsedOptionalHeader>) reader ustate =

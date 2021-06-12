@@ -99,6 +99,7 @@ type ReadError =
     | CannotMoveToPreviousOffset of offset: FileOffset
     | OptionalHeaderTooSmall of size: uint16
     | UnsupportedOptionalHeaderSize of size: uint16
+    | InvalidAlignment of salignment: uint32 * falignment: uint32
     | TooFewDataDirectories of count: uint32
     | StructureOutOfBounds of ParsedMetadataStructure
     | NoCliMetadata
@@ -130,6 +131,8 @@ type ReadError =
         | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset 0x%O" offset
         | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
         | UnsupportedOptionalHeaderSize size -> sprintf "the parser does not support an optional header size of %i bytes" size
+        | InvalidAlignment(salignment, falignment) ->
+            sprintf "the section alignment (0x%08X) and file alignment (0x%08X) are invalid" salignment falignment
         | TooFewDataDirectories count -> sprintf "the number of data directories (%i) is too small" count
         | StructureOutOfBounds structure -> sprintf "%O was out of bounds" structure
         | NoCliMetadata -> "the Portable Executable file does not contain any CLI metadata"

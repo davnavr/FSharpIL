@@ -1,8 +1,6 @@
 ﻿namespace FSharpIL.PortableExecutable
 
-open System.Runtime.CompilerServices
-
-[<Struct; IsReadOnly>]
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type Alignment =
     private { Section: uint16; File: uint16 }
     static member Default = { Section = 0x2000us; File = 0x200us; }
@@ -15,17 +13,16 @@ type Alignment =
 module Alignment =
     let private (|Valid|_|) alignment =
         match alignment with
-        | 512
-        | 1024
-        | 2048
-        | 4096
-        | 8192
-        | 16384
-        | 32768 -> uint16 alignment |> Some
+        | 512u
+        | 1024u
+        | 2048u
+        | 4096u
+        | 8192u
+        | 16384u
+        | 32768u -> uint16 alignment |> Some
         | _ -> None
 
-    let create salignment falignment =
+    let tryCreate salignment falignment =
         match (salignment, falignment) with
-        | Valid sa, Valid fa when salignment >= falignment ->
-            Some { Section = sa; File = fa }
-        | _ -> None
+        | Valid sa, Valid fa when salignment >= falignment -> ValueSome { Section = sa; File = fa }
+        | _ -> ValueNone

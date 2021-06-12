@@ -94,9 +94,9 @@ type PEFileFlags =
     | TerminalServerAware = 0x8000us
 
 /// Represents the NT-specific fields of the optional header of a PE32 exectuable (II.25.2.3.2).
-type NTSpecificFields<'ImageBase, 'Alignment, 'ImageSize, 'Size, 'NumDataDirectories> = // TODO: Don't make alignment a generic param.
+type NTSpecificFields<'ImageBase, 'ImageSize, 'Size, 'NumDataDirectories> =
     { ImageBase: 'ImageBase
-      Alignment: 'Alignment
+      Alignment: Alignment
       OSMajor: uint16
       OSMinor: uint16
       UserMajor: uint16
@@ -122,10 +122,10 @@ type NTSpecificFields<'ImageBase, 'Alignment, 'ImageSize, 'Size, 'NumDataDirecto
 type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageBasePlus, 'ImageSize, 'NumDataDirectories> =
     | PE32 of
         StandardFields<'ImageKind, 'StandardField, uint32> *
-        NTSpecificFields<'ImageBase, Alignment, 'ImageSize, uint32, 'NumDataDirectories>
+        NTSpecificFields<'ImageBase, 'ImageSize, uint32, 'NumDataDirectories>
     | PE32Plus of
         StandardFields<'ImageKind, 'StandardField, Omitted> *
-        NTSpecificFields<'ImageBasePlus, Alignment, 'ImageSize, uint64, 'NumDataDirectories>
+        NTSpecificFields<'ImageBasePlus, 'ImageSize, uint64, 'NumDataDirectories>
 
     member inline this.Alignment =
         match this with
@@ -137,6 +137,5 @@ type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageBasePlus, 'Ima
         | PE32(_, { NumberOfDataDirectories = count })
         | PE32Plus(_, { NumberOfDataDirectories = count }) -> count
 
-// TODO: How will ImageBase work, since it is different sizes for PE32 and PE32+, and overflows should be prevented.
 // TODO: Better alias for optional header used in building PE files.
 type OptionalHeader = OptionalHeader<Omitted, Omitted, ImageBase, ImageBase, Omitted, Omitted>
