@@ -52,6 +52,5 @@ type ChunkedMemoryStream (data: ChunkedMemory) =
         pos <- uint32 pos'
         this.Position
 
-    member inline private _.WritingIsUnsupported() = notSupported "The stream does not support writing"
-    override this.SetLength _ = this.WritingIsUnsupported()
-    override this.Write(_, _, _) = this.WritingIsUnsupported()
+    override _.SetLength _ = notSupported "Cannot set the length, the stream does not support writing"
+    override _.Write(_, _, _) = notSupported "The stream does not support writing"

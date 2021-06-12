@@ -78,7 +78,7 @@ type BlobError =
         | InvalidMethodSignatureCallingConvention(ValueSome cconv) ->
             sprintf
                 "the calling conventions of the method signature %A (0x%02X) are invalid"
-                (LanguagePrimitives.EnumOfValue<_, CallingConvention> cconv)
+                (LanguagePrimitives.EnumOfValue<_, CallConvFlags> cconv)
                 cconv
         | InvalidMethodSignatureCallingConvention ValueNone -> "expected method signature calling conventions but got empty blob"
         | InvalidPropertyMagic actual ->
@@ -120,10 +120,13 @@ type ReadError =
         match this with
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
         | InvalidMagic(expected, actual) ->
-            sprintf
-                "expected magic %s, but got %s"
-                (Bytes.print(expected.AsSpan()))
-                (Bytes.print(actual.AsSpan()))
+            let inline print () (bytes: ImmutableArray<byte>) =
+                let sb = StringBuilder(bytes.Length * 5 - 1)
+                for i = 0 to bytes.Length - 1 do
+                    if i > 0 then sb.Append ' ' |> ignore
+                    Printf.bprintf sb "0x%02X" bytes.[i]
+                sb.ToString()
+            sprintf "expected magic %a, but got %a" print expected print actual
         | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset 0x%O" offset
         | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
         | UnsupportedOptionalHeaderSize size -> sprintf "the parser does not support an optional header size of %i bytes" size

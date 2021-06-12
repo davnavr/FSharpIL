@@ -12,7 +12,7 @@ open FSharpIL.Metadata
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type internal BlobEntry = { Offset: BlobOffset; Length: uint32 }
 
-type BlobWriter = delegate of byref<ChunkedMemoryBuilder> -> unit
+type ByteBlobWriter = delegate of byref<ChunkedMemoryBuilder> -> unit
 
 /// <summary>Builds the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
 [<Sealed>]
@@ -35,7 +35,7 @@ type BlobStreamBuilder (capacity: int32) =
         entry.Offset
 
     // TODO: Add overload that accepts function pointer for adding byte blob when available.
-    member this.Add(writer: BlobWriter) =
+    member this.Add(writer: ByteBlobWriter) =
         let start = offset
         writer.Invoke &content
         this.AddEntry start

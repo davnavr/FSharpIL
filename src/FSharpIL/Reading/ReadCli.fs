@@ -212,6 +212,16 @@ type CliInfo with
 /// Size of the first 7 fields of the metadata tables header, in bytes (II.24.2.6).
 let tablesHeaderFieldsSize = 24u
 
+let rec calculateRowCounts valid count =
+    match valid with
+    | ValidTableFlags.None -> count
+    | _ ->
+        let count' =
+            if valid.HasFlag ValidTableFlags.Module
+            then count + 1
+            else count
+        calculateRowCounts (valid >>> 1) count'
+
 let rec createTableRowCounts (lookup: Dictionary<_, _>) (valid: ValidTableFlags) (counts: uint32[]) counti validi =
     match valid with
     | ValidTableFlags.None -> ParsedTableRowCounts lookup
@@ -229,17 +239,7 @@ let readMetadataTables (info: CliInfo) =
     let stream: inref<_> = &info.TablesStream.Stream
     if stream.HasFreeBytes(0u, tablesHeaderFieldsSize) then
         let valid = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU8 8u &stream)
-        let numRowCounts =
-            let rec inline inner valid count =
-                match valid with
-                | ValidTableFlags.None -> count
-                | _ ->
-                    let count' =
-                        if valid.HasFlag ValidTableFlags.Module
-                        then count + 1
-                        else count
-                    inner (valid >>> 1) count'
-            inner valid 0
+        let numRowCounts = calculateRowCounts valid 0
         let tableRowsOffset = tablesHeaderFieldsSize + (uint32 numRowCounts * 4u)
         match stream.TrySlice tableRowsOffset with
         | true, rows ->
