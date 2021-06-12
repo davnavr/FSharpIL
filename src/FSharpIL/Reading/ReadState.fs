@@ -39,7 +39,7 @@ type MetadataReadState =
 
 [<IsReadOnly; Struct>]
 type FileReadState =
-    | ReadPEMagic
+    | ReadDosMagic
     | MoveToLfanew
     /// <summary>The <c>lfanew</c> field pointing to the PE signature is being read (II.25.2.1).</summary>
     | ReadLfanew
@@ -54,7 +54,7 @@ type FileReadState =
 
     override this.ToString() =
         match this with
-        | ReadPEMagic -> "reading Portable Executable magic"
+        | ReadDosMagic -> "reading DOS magic"
         | MoveToLfanew -> "moving to lfanew field"
         | ReadLfanew -> "reading lfanew field"
         | MoveToPESignature -> "moving to PE signature"

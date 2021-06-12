@@ -33,7 +33,6 @@ type HeaderReader<'Reader when 'Reader :> IHeaderReader> = class
             if this.Read buffer
             then skipped <- skipped + 1u
             else cont <- false
-        this.pos <- this.pos + skipped
         skipped
 
     member this.MoveTo (offset: FileOffset) =
@@ -335,7 +334,7 @@ let readPE (src: HeaderReader<_>) file reader ustate rstate =
         | Some err -> Failure err
     let inline magic expected next = readMagic src expected ustate next
     match rstate with
-    | ReadPEMagic -> magic Magic.dosHeaderSignature MoveToLfanew
+    | ReadDosMagic -> magic Magic.dosHeaderSignature MoveToLfanew
     | MoveToLfanew -> moveToOffset offsetToLfanew ReadLfanew
     | ReadLfanew -> readLfanew src &file.Lfanew reader ustate
     | MoveToPESignature -> moveToOffset file.Lfanew ReadPESignature
@@ -373,7 +372,7 @@ let fromReader (source: #IHeaderReader) state reader =
                     file.CliHeaderOffset
                     ustate
                     reader'
-    pe state ReadPEMagic
+    pe state ReadDosMagic
 
 [<IsReadOnly; Struct>]
 type StreamHeaderReader<'Stream when 'Stream :> Stream> (stream: 'Stream) =
