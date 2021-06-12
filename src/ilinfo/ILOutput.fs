@@ -21,7 +21,7 @@ module ILOutput =
             comment wr'
             wr'.WriteLine()
     let inline heading name (offset: FileOffset) out = comment out (fun wr -> fprintf wr "%s (%O)" name offset)
-    let inline fieldf name size printer value out = comment out (fun wr -> fprintf wr "// %s (%i bytes) = %a" name size printer value)
+    let inline fieldf name size printer value out = comment out (fun wr -> fprintf wr "%s (%i bytes) = %a" name size printer value)
     let inline field name printer (value: 'Value) out = fieldf name sizeof<'Value> printer value out
 
     /// Outputs IL code as text.

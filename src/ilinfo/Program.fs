@@ -92,15 +92,14 @@ let main args =
                 | OutputFormat.Html ->
                     // TODO: Write HTML tag stuff.
                     ILOutput.html
-            let destination =
+            use destination =
                 match output with
                 | OutputKind.Console -> stdout
                 | OutputKind.File path -> new StreamWriter(path) :> TextWriter
             use reader = file.OpenRead()
-            use destination' = new IndentedTextWriter(destination, "    ")
 
             ILOutput.write args'.IncludeHeaders args'.IncludeMetadata args'.VisibilityFilter
-            |> FSharpIL.Reading.ReadPE.fromStream reader (output', destination')
+            |> FSharpIL.Reading.ReadPE.fromStream reader (output', new IndentedTextWriter(destination, "    "))
             |> ignore
             0
     with
