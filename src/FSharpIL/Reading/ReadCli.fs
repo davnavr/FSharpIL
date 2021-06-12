@@ -170,7 +170,7 @@ let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) info (offset: Sect
 
 /// Parses the stream headers of the CLI metadata root (II.24.2.2).
 let readStreamHeaders (section: inref<ChunkedMemory>) info reader ustate =
-    let mutable headers = Unsafe.As &info.StreamHeaders.Data
+    let mutable headers = &Unsafe.As &info.StreamHeaders.Data
     headers <- Array.zeroCreate(int32 info.MetadataRoot.Streams)
     match readStreamHeadersLoop &section info info.StreamHeaders.Offset headers 0 with
     | None ->

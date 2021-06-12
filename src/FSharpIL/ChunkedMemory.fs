@@ -174,14 +174,16 @@ type ChunkedMemory with
         | 0 -> ImmutableArray<_>.Empty
         | 1 -> ImmutableArray.Create(this.chunks.[0].AsMemory().Slice(int32 this.soffset, int32 this.Length))
         | _ ->
-            let starti = this.GetIndex this.soffset
-            let endi = this.GetIndex(this.soffset + this.Length)
+            let starti = this.GetIndex 0u
+            let endi = this.GetIndex this.Length
             let mutable chunks' = Array.zeroCreate<ReadOnlyMemory<byte>>(endi.ListIndex - starti.ListIndex + 1)
+            let mutable remaining = this.Length
             for chunki = starti.ListIndex to endi.ListIndex do
                 let current = &this.chunks.ItemRef chunki
                 let start = if chunki = starti.ListIndex then starti.ChunkIndex else 0
-                let length = if chunki = endi.ListIndex then endi.ChunkIndex + 1 else current.Length
-                chunks'.[chunki - starti.ListIndex] <- current.AsMemory().Slice(start, length)
+                let length = min remaining (uint32 current.Length)
+                chunks'.[chunki - starti.ListIndex] <- current.AsMemory().Slice(start, int32 length)
+                remaining <- remaining - length
             Unsafe.As &chunks'
 
     member this.ToImmutableArray() =
