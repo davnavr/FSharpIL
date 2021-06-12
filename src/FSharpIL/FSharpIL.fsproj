@@ -37,6 +37,7 @@
     <Compile Include="Metadata\Tables\CodedIndexPatterns.fs" />
     <Compile Include="Metadata\Signatures\CustomMod.fs" />
     <Compile Include="Metadata\Signatures\Items.fs" />
+    <Compile Include="Metadata\Cil\Headers.fs" />
     <Compile Include="Metadata\CliHeader.fs" />
     <Compile Include="Metadata\CliMetadataRoot.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />

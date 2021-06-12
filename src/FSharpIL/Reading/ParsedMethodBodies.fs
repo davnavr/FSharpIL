@@ -10,6 +10,7 @@ open FSharpIL
 open FSharpIL.Utilities
 
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Cil
 
 /// II.25.4.6
 [<IsReadOnly; Struct>]
@@ -413,16 +414,16 @@ type ParsedMethodBodies =
             | _ ->
                 let buffer = Span.stackalloc<byte> 12 // TODO: Don't use buffer for method body header
                 if this.Chunk.TryCopyTo(offset, buffer) then
-                    let flags = Bytes.readU2 0 buffer
+                    let flags = Bytes.toU2 0 buffer
                     match flags >>> 12 with
                     | 3us as size ->
                         Ok
                             { Flags = LanguagePrimitives.EnumOfValue(flags &&& 0xFFFus)
                               Size = uint8 size
-                              MaxStack = Bytes.readU2 2 buffer
-                              CodeSize = Bytes.readU4 4 buffer
+                              MaxStack = Bytes.toU2 2 buffer
+                              CodeSize = Bytes.toU4 4 buffer
                               LocalVarSigTok =
-                                Bytes.readU4 8 buffer
+                                Bytes.toU4 8 buffer
                                 ValueNone } // TODO: Read local variable signature
                     | size -> Error(InvalidFatMethodHeaderSize size)
                 else Error(MethodBodyOutOfSection offset)
