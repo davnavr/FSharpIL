@@ -115,14 +115,16 @@ module OptionalHeader =
           BaseOfData = baseOfData }
 
     let readStandardFields (src: HeaderReader<_>) =
-        let buffer = Span.stackalloc<byte> 28 // Size of standard fields for PE32, which is larger than size for PE32+
-        if src.Read(buffer.Slice(0, 2)) then
-            let magic = LanguagePrimitives.EnumOfValue<_, ImageKind>(Bytes.toU2 0 buffer)
-            let fields = buffer.Slice 2
-            if magic <> ImageKind.PE32Plus
-            then Choice1Of2(createStandardFields magic fields (Bytes.toU4 22 fields))
-            else Choice2Of2(createStandardFields magic fields Omitted)
-            |> Ok
+        let magic = Span.stackalloc<byte> 2
+        if src.Read magic then
+            let magic' = LanguagePrimitives.EnumOfValue<_, ImageKind>(Bytes.toU2 0 magic)
+            let fields = Span.stackalloc<byte>(if magic' = ImageKind.PE32Plus then 22 else 26)
+            if src.Read fields then
+                if magic' <> ImageKind.PE32Plus
+                then Choice1Of2(createStandardFields magic' fields (Bytes.toU4 22 fields))
+                else Choice2Of2(createStandardFields magic' fields Omitted)
+                |> Ok
+            else Error UnexpectedEndOfFile
         else Error UnexpectedEndOfFile
 
     let readAlignment offset (buffer: Span<byte>) =

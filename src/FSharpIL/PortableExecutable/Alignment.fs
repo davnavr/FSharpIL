@@ -5,9 +5,9 @@ type Alignment =
     private { Section: uint16; File: uint16 }
     static member Default = { Section = 0x2000us; File = 0x200us; }
     /// Always greater than the FileAlignment.
-    member this.SectionAlignment = this.Section
+    member this.SectionAlignment = uint32 this.Section
     // TODO: Specification says this should always be 0x200, should this be a fixed value?
-    member this.FileAlignment = this.File
+    member this.FileAlignment = uint32 this.File
 
 [<RequireQualifiedAccess>]
 module Alignment =
