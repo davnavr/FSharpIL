@@ -1,5 +1,8 @@
 ﻿namespace ILInfo
 
+open System.Collections.Immutable
+
+open FSharpIL
 open FSharpIL.PortableExecutable
 open FSharpIL.Reading
 
@@ -20,7 +23,7 @@ module ILOutput =
             wr'.Write "// "
             comment wr'
             wr'.WriteLine()
-    let inline heading name (offset: FileOffset) out = comment out (fun wr -> fprintf wr "%s (%O)" name offset)
+    let inline heading name (offset: FileOffset) out = comment out (fun wr -> fprintf wr "----- %s (%O)" name offset)
     let inline fieldf name size printer value out = comment out (fun wr -> fprintf wr "%s (%i bytes) = %a" name size printer value)
     let inline field name printer (value: 'Value) out = fieldf name sizeof<'Value> printer value out
     let inline newline (_, wr: IndentedTextWriter) = wr.WriteLine()
@@ -98,17 +101,106 @@ module ILOutput =
             ntSpecificFieldsRemaining nt out
 
         let optionalHeader header offset out =
-            newline out
             match header with
             | ParsedOptionalHeader.PE32(std, nt) ->
-                heading "Optional Header (PE32)" offset out
+                heading "PE32 Optional Header" offset out
                 standardFieldsCommon std out
                 field "BaseOfData" Print.integer std.BaseOfData out
                 ntSpecificFields nt out
             | ParsedOptionalHeader.PE32Plus(std, nt) ->
-                heading "Optional Header (PE32+)" offset out
+                heading "PE32+ Optional Header" offset out
                 standardFieldsCommon std out
                 ntSpecificFields nt out
+            newline out
+            ValueSome out
+
+        let private dataDirectoryNames =
+            [|
+                "Export Table"
+                "Import Table"
+                "Resource Table"
+                "Exception Table"
+                "Certificate Table"
+                "Base Relocation Table"
+                "Debug"
+                "Copyright"
+                "Global Pointer"
+                "TLS Table"
+                "Load Configuration Table"
+                "Bound Import"
+                "Import Address Table"
+                "Delay Import Descriptor"
+                "CLI Header"
+                "Reserved"
+            |]
+
+        let dataDirectories ((_, directories): ParsedDataDirectories) offset out =
+            heading "Data Directories" offset out
+            for i = 0 to directories.Length - 1 do
+                let name =
+                    if i < dataDirectoryNames.Length
+                    then sprintf "%s Table" dataDirectoryNames.[i]
+                    else "Unknown"
+                field name Print.rvaAndSize directories.[i] out
+            newline out
+            ValueSome out
+
+        let sectionHeaders (headers: ParsedSectionHeaders) (offset: FileOffset) out =
+            for i = 0 to headers.Length - 1 do
+                let header = headers.[i]
+                heading (sprintf "\"%O\" Section Header" header.SectionName) (offset + (uint32 i * Magic.sectionHeaderSize)) out
+                fieldf "Name" 8u (fun wr () -> wr.Write header.SectionName) () out
+                field "VirtualSize" Print.integer header.VirtualSize out
+                field "VirtualAddress" Print.uint32 header.VirtualAddress out
+                field "SizeOfRawData" Print.integer header.RawDataSize out
+                field "PointerToRawData" Print.uint32 header.RawDataPointer out
+                field "PointerToRelocations" Print.integer header.PointerToRelocations out
+                field "PointerToLineNumbers" Print.integer header.PointerToLineNumbers out
+                field "NumberOfRelocations" Print.integer header.NumberOfRelocations out
+                field "NumberOfLineNumbers" Print.integer header.NumberOfLineNumbers out
+                field "Characteristics" Print.bitfield header.Characteristics out
+                newline out
+            ValueSome out
+
+        let cliHeader (header: ParsedCliHeader) offset out =
+            heading "CLI Header" offset out
+            field "Cb" Print.integer header.Cb out
+            field "MajorRuntimeVersion" Print.integer header.MajorRuntimeVersion out
+            field "MinorRuntimeVersion" Print.integer header.MinorRuntimeVersion out
+            field "MetaData" Print.rvaAndSize header.Metadata out
+            field "Flags" Print.bitfield header.Flags out
+            field "EntryPointToken" Print.integer header.EntryPointToken out // TODO: Show what table the EntryPointToken refers to.
+            field "Resources" Print.rvaAndSize header.Resources out
+            field "StrongNameSignature" Print.rvaAndSize header.StrongNameSignature out
+            field "CodeManagerTable" Print.rvaAndSize header.CodeManagerTable out
+            field "VTableFixups" Print.rvaAndSize header.VTableFixups out
+            field "ExportAddressTableJumps" Print.rvaAndSize header.ExportAddressTableJumps out
+            field "ManagedNativeHeader" Print.rvaAndSize header.ManagedNativeHeader out
+            //".corflags 0x%08X" (uint32 header.Flags)
+            newline out
+            ValueSome out
+
+        let cliMetadataRoot (root: ParsedCliMetadataRoot) offset out =
+            heading "CLI Metadata Root" offset out
+            field "MajorVersion" Print.integer root.MajorVersion out
+            field "MinorVersion" Print.integer root.MinorVersion out
+            field "Reserved" Print.integer root.Reserved out
+            field "Length" Print.integer root.Version.Length out
+            fieldf "Version" root.Version.Length (fun wr () -> fprintf wr "\"%O\"" root.Version) () out
+            field "Flags" Print.integer root.Flags out
+            field "Streams" Print.integer root.Streams out
+            newline out
+            ValueSome out
+
+        let metadataStreamHeaders (headers: ImmutableArray<ParsedStreamHeader>) offset out =
+            for i = 0 to headers.Length - 1 do
+                let header = &headers.ItemRef i
+                let name = header.PrintedName
+                heading (sprintf "\"%s\" Stream Header" name) offset out
+                field "Offset" Print.integer (uint32 header.Offset) out
+                field "Size" Print.integer header.Size out
+                fieldf "Name" header.StreamName.Length (fun wr -> fprintf wr "\"%s\"") name out
+                newline out
             ValueSome out
 
     let write includeFileHeaders includeCilMetadata vfilter =
@@ -116,15 +208,31 @@ module ILOutput =
             match includeFileHeaders with
             | IncludeHeaders -> ValueSome printer
             | NoHeaders -> ValueNone
-        { PEFileReader.defaultReader with
-            ReadLfanew = header (fun lfanew offset out ->
-                heading "DOS Header" offset out
-                field "lfanew" Print.integer (uint32 lfanew) out
-                newline out
-                ValueSome out)
-            ReadCoffHeader = header Headers.coffHeader
-            ReadOptionalHeader = header Headers.optionalHeader
-            HandleError =
-                fun state error offset out ->
-                    eprintfn "error : %s" (ReadError.message state error offset)
-                    out }
+        let error state error offset out =
+            eprintfn "error : %s" (ReadError.message state error offset)
+            out
+        { ReadLfanew = header (fun lfanew offset out ->
+              heading "DOS Header" offset out
+              field "lfanew" Print.integer (uint32 lfanew) out
+              newline out
+              ValueSome out)
+          ReadCoffHeader = header Headers.coffHeader
+          ReadOptionalHeader = header Headers.optionalHeader
+          ReadDataDirectories = header Headers.dataDirectories
+          ReadSectionHeaders = header Headers.sectionHeaders
+          ReadCliMetadata =
+            match includeCilMetadata with
+            | IncludeMetadata ->
+                { ReadCliHeader = header Headers.cliHeader
+                  ReadMetadataRoot = header Headers.cliMetadataRoot
+                  ReadStreamHeaders = header Headers.metadataStreamHeaders
+                  // TODO: Read contents of streams if specified.
+                  ReadStringsStream = ValueNone
+                  ReadGuidStream = ValueNone
+                  ReadUserStringStream = ValueNone
+                  ReadBlobStream = ValueNone
+                  ReadTables = ValueNone // TODO: Read tables.
+                  HandleError = error }
+                |> ValueSome
+            | NoMetadata -> ValueNone
+          HandleError = error }

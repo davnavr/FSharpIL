@@ -10,6 +10,8 @@ open FSharpIL.Utilities
 [<StructuralComparison; StructuralEquality>]
 type SectionName =
     internal { SectionName: byte[] }
+    /// The length of the section name, including null padding.
+    member this.Length = this.SectionName.Length
     override this.ToString() = Encoding.UTF8.GetString(this.SectionName).TrimEnd '\000'
 
 [<RequireQualifiedAccess>]

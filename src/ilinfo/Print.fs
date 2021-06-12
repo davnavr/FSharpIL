@@ -8,7 +8,7 @@ open System.Reflection
 open Microsoft.FSharp.Core.Printf
 
 open FSharpIL
-open FSharpIL.Reading
+open FSharpIL.PortableExecutable
 
 [<AbstractClass; Sealed>]
 type private Enumeration<'Enum when 'Enum : struct and 'Enum :> Enum and 'Enum : equality> () =
@@ -43,5 +43,7 @@ let bitfield (wr: System.IO.TextWriter) (value: 'Enum when 'Enum :> Enum) =
         Enumeration<'Enum>.Cache.Value
     |> String.concat ", "
     |> fprintf wr "[ %s ]"
+
+let inline uint32 wr int = integer wr (uint32 int)
 
 let rvaAndSize wr { Rva = rva; Size = size } = fprintf wr "(RVA = %O, Size = 0x%08X)" rva size
