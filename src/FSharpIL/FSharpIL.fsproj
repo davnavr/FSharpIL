@@ -83,6 +83,13 @@
     <Compile Include="Writing\Tables\GenericParamTableBuilder.fs" />
     <Compile Include="Writing\Tables\MethodSpecTableBuilder.fs" />
     <Compile Include="Writing\Tables\GenericParamConstraintTableBuilder.fs" />
+    <Compile Include="Writing\Tables\Emit\TypeVisibility.fs" />
+    <Compile Include="Writing\Tables\Emit\Flags.fs" />
+    <Compile Include="Writing\Tables\Emit\MemberRef.fs" />
+    <Compile Include="Writing\Tables\Emit\TypeRef.fs" />
+    <Compile Include="Writing\Tables\Emit\DelegateDef.fs" />
+    <Compile Include="Writing\Tables\Emit\InterfaceDef.fs" />
+    <Compile Include="Writing\Tables\Emit\ClassDef.fs" />
     <Compile Include="Writing\IStreamBuilder.fs" />
     <Compile Include="Writing\StringLookupComparer.fs" />
     <Compile Include="Writing\StringsStreamBuilder.fs" />
