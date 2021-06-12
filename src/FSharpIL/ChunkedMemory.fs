@@ -187,8 +187,9 @@ type ChunkedMemory with
     member this.ToImmutableArray() =
         let mutable buffer, i = Array.zeroCreate<byte>(int32 this.Length), 0
         for chunk in this.AsMemoryArray() do
-            chunk.Span.CopyTo(Span(buffer, i, chunk.Length))
-            i <- i + chunk.Length
+            let length = min buffer.Length chunk.Length
+            chunk.Span.Slice(0, length).CopyTo(Span(buffer, i, length))
+            i <- i + length
         Unsafe.As<_, ImmutableArray<byte>> &buffer
 
     // TODO: Have better ways for testing equality.
