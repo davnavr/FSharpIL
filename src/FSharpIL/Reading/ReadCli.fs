@@ -74,7 +74,7 @@ let readCliHeader (section: inref<ChunkedMemory>) info reader ustate =
 
 let readHeaderDataPointer (section: inref<ChunkedMemory>) sectionRva { Rva = rva; Size = size } (data: outref<_>) =
     if rva >= sectionRva then
-        data <- { Offset = { SectionOffset = uint32(sectionRva - rva) } }
+        data <- { Offset = { SectionOffset = uint32(rva - sectionRva) } }
         if section.TrySlice(uint32 data.Offset, size, &data.Data)
         then None
         else Some(StructureOutOfBounds ParsedMetadataStructure.CliMetadataRoot)
