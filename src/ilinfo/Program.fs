@@ -5,14 +5,20 @@ open System.IO
 
 open Argu
 
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
+type OutputFormat =
+    | Text
+    | Html
+
 type Argument =
     | Headers
     | Heaps
-    | No_IL
+    | No_Metadata
     | Public_Only
     | Visibility of VisibilityFilter list
     | [<ExactlyOnce>] File of path: string
-    | [<Unique>] Format of Output.Format
+    | [<Unique>] Format of OutputFormat
     | Launch_Debugger
     | [<AltCommandLine "-o"; Unique>] Output of path: string
 
@@ -21,7 +27,7 @@ type Argument =
             match this with
             | Headers -> "Include fields of file headers in the output."
             | Heaps -> "Include the raw metadata heaps in the output."
-            | No_IL -> "Exclude IL output."
+            | No_Metadata -> "Exclude CIL metadata output."
             | Public_Only -> "Only include items with public visibility in the output."
             | Visibility _ -> "Only include items with the specified visibility."
             | File _ -> "Read input from the specified file."
@@ -31,10 +37,10 @@ type Argument =
 
 type ParsedArguments =
     { [<DefaultValue>] mutable IncludeHeaders: IncludeHeaders
-      [<DefaultValue>] mutable IncludeIL: IncludeIL
+      [<DefaultValue>] mutable IncludeMetadata: IncludeMetadata
       [<DefaultValue>] mutable InputFile: string
       [<DefaultValue>] mutable LaunchDebugger: bool
-      mutable Format: Output.Format
+      mutable OutputFormat: OutputFormat
       mutable OutputKind: OutputKind
       mutable VisibilityFilter: VisibilityFilter }
 
@@ -57,17 +63,17 @@ let main args =
     let parser = ArgumentParser.Create<Argument>()
     try
         let result = parser.ParseCommandLine args
-        let args' = { Format = Output.IL; OutputKind = OutputKind.Console; VisibilityFilter = VisibilityFilter.Public }
+        let args' = { OutputFormat = OutputFormat.Text; OutputKind = OutputKind.Console; VisibilityFilter = VisibilityFilter.Public }
 
         for arg in result.GetAllResults() do
             match arg with
             | Headers -> args'.IncludeHeaders <- IncludeHeaders
             | Heaps -> failwith "TODO: Allow printing of raw metadata heaps"
-            | No_IL -> args'.IncludeIL <- NoIL
+            | No_Metadata -> args'.IncludeMetadata <- NoMetadata
             | Public_Only -> args'.VisibilityFilter <- VisibilityFilter.Public
             | Visibility vis -> args'.VisibilityFilter <- List.reduce (|||) vis
             | File file -> args'.InputFile <- file
-            | Format format -> args'.Format <- format
+            | Format format -> args'.OutputFormat <- format
             | Launch_Debugger -> args'.LaunchDebugger <- true
             | Output file -> args'.OutputKind <- OutputKind.File file
 
@@ -79,14 +85,22 @@ let main args =
         | { OutputKind = OutputKind.File(InvalidPath path) } -> exitfn "The file \"%s\" is invalid." path
         | { InputFile = UnauthorizedAccess path }
         | { OutputKind = OutputKind.File(UnauthorizedAccess path) } -> exitfn "Cannot access the file \"%s\"." path
-        | { InputFile = ValidFile file; OutputKind = output } ->
-            use reader = file.OpenRead()
-            use output' =
+        | { InputFile = ValidFile file; OutputKind = output; OutputFormat = format } ->
+            let output' =
+                match format with
+                | OutputFormat.Text -> ILOutput.text
+                | OutputFormat.Html ->
+                    // TODO: Write HTML tag stuff.
+                    ILOutput.html
+            let destination =
                 match output with
                 | OutputKind.Console -> stdout
                 | OutputKind.File path -> new StreamWriter(path) :> TextWriter
-            Output.write args'.Format args'.IncludeHeaders args'.IncludeIL args'.VisibilityFilter
-            |> FSharpIL.ReadCli.fromStream reader output'
+            use reader = file.OpenRead()
+            use destination' = new IndentedTextWriter(destination, "    ")
+
+            ILOutput.write args'.IncludeHeaders args'.IncludeMetadata args'.VisibilityFilter
+            |> FSharpIL.Reading.ReadPE.fromStream reader (output', destination')
             |> ignore
             0
     with

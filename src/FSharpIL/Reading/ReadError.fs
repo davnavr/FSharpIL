@@ -109,7 +109,7 @@ type ReadError =
     | InvalidMetadataVersionLength of length: uint32
     | MissingNullTerminator of string
     | StreamOutOfBounds of index: int32 * ParsedStreamHeader
-    | InvalidStringOffset of StringOffset * max: StringOffset
+    | InvalidStringOffset of StringOffset * max: StringOffset // TODO: This case should be a BlobError case instead.
     | MissingStringStreamTerminator
     | InvalidGuidIndex of GuidIndex * max: GuidIndex
     | InvalidBlob of offset: uint32 * BlobError

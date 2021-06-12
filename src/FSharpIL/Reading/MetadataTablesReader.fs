@@ -10,6 +10,7 @@ type ReferencedMetadataStreams =
       Blob: ParsedBlobStream
       Tables: ParsedMetadataTables }
 
+// TODO: Allow function to return a ReadError/BlobError
 type TableRowReader<'Row, 'State> = StructureReader<struct(ReferencedMetadataStreams * 'Row), 'State> // ('Row -> ReferencedMetadataStreams -> FSharpIL.PortableExecutable.FileOffset -> 'State -> 'State voption) voption
 
 [<NoComparison; NoEquality>]

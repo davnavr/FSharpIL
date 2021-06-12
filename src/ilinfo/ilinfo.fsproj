@@ -12,10 +12,8 @@
     <Compile Include="Flags.fs" />
     <Compile Include="VisibilityFilter.fs" />
     <Compile Include="Print.fs" />
-    <Compile Include="TypeName.fs" />
     <Compile Include="IndentedTextWriter.fs" />
     <Compile Include="ILOutput.fs" />
-    <Compile Include="Output.fs" />
     <Compile Include="Program.fs" />
 
     <PackageReference Include="Argu" Version="6.1.1" />

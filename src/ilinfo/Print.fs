@@ -7,10 +7,11 @@ open System.Reflection
 
 open Microsoft.FSharp.Core.Printf
 
+open FSharpIL
 open FSharpIL.Reading
 
 [<AbstractClass; Sealed>]
-type private Enumeration<'Enum when 'Enum :> Enum and 'Enum : equality> () =
+type private Enumeration<'Enum when 'Enum : struct and 'Enum :> Enum and 'Enum : equality> () =
     static member val Cache =
         lazy
             let fields = typeof<'Enum>.GetFields(BindingFlags.Public ||| BindingFlags.Static)
@@ -43,8 +44,4 @@ let bitfield (wr: System.IO.TextWriter) (value: 'Enum when 'Enum :> Enum) =
     |> String.concat ", "
     |> fprintf wr "[ %s ]"
 
-let rvaAndSize wr { Rva = rva; Size = size } = fprintf wr "(RVA = 0x%08X, Size = 0x%08X)" rva size
-
-let identifier (stream: ParsedStringsStream) wr name = fprintf wr "'%s'" (stream.GetString name)
-
-let guid (stream: ParsedGuidStream) wr guid = fprintf wr "%O (%O)" (stream.GetGuid guid) guid
+let rvaAndSize wr { Rva = rva; Size = size } = fprintf wr "(RVA = %O, Size = 0x%08X)" rva size

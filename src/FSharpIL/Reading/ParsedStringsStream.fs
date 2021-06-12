@@ -4,6 +4,8 @@ open System
 open System.Collections.Generic
 open System.Text
 
+open FSharpIL.Utilities
+
 open FSharpIL
 open FSharpIL.Metadata
 
