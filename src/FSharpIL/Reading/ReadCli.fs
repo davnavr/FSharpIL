@@ -146,10 +146,11 @@ let rec readStreamNameSegment (data: inref<ChunkedMemory>) (offset: SectionOffse
 
 let readStreamName (data: inref<ChunkedMemory>) (offset: SectionOffset) headeri =
     // According to (II.24.2.2), the name of the stream is limited to 32 characters.
-    readStreamNameSegment &data offset headeri 0 (Span.stackalloc<byte> 32)
+    let buffer = Span.stackalloc<byte> 32
+    readStreamNameSegment &data offset headeri 0 buffer
 
 let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) info (offset: SectionOffset) (headers: ParsedStreamHeader[]) i =
-    if i <= headers.Length then
+    if i < headers.Length then
         let offset' = uint32 offset
         if section.HasFreeBytes(offset', 8u) then
             match readStreamName &section (offset + 8u) i with
@@ -169,7 +170,7 @@ let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) info (offset: Sect
 
 /// Parses the stream headers of the CLI metadata root (II.24.2.2).
 let readStreamHeaders (section: inref<ChunkedMemory>) info reader ustate =
-    let mutable headers = Unsafe.As &info.StreamHeaders
+    let mutable headers = Unsafe.As &info.StreamHeaders.Data
     headers <- Array.zeroCreate(int32 info.MetadataRoot.Streams)
     match readStreamHeadersLoop &section info info.StreamHeaders.Offset headers 0 with
     | None ->

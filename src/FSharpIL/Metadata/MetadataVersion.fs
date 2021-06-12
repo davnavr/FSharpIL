@@ -12,7 +12,7 @@ open FSharpIL
 [<IsReadOnly; Struct>]
 type MetadataVersion = // TODO: Rename to RuntimeVersion
     internal { RoundedLength: uint8; MetadataVersion: ImmutableArray<byte> }
-    override this.ToString() = Encoding.UTF8.GetString(this.MetadataVersion.AsSpan())
+    override this.ToString() = Encoding.UTF8.GetString(this.MetadataVersion.AsSpan()).TrimEnd '\000'
     /// The length of the version string including the null terminator, rounded up to a multiple of 4.
     member this.Length = uint32 this.RoundedLength
 
