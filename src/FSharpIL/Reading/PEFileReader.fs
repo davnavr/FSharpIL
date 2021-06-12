@@ -2,6 +2,7 @@
 
 open System.Collections.Immutable
 
+open FSharpIL
 open FSharpIL.PortableExecutable
 
 type ParsedCoffHeader = CoffHeader<uint16, uint16>

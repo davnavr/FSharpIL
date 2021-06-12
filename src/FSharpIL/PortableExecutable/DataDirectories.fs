@@ -1,5 +1,7 @@
 ﻿namespace FSharpIL.PortableExecutable
 
+open FSharpIL
+
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type CliHeaderDirectory = internal { CliHeader: RvaAndSize }
 // TODO: Add other special types for other data directories.
@@ -87,5 +89,4 @@ module DataDirectories =
             builder.Reserved
         )
 
-[<RequireQualifiedAccess>]
 type DataDirectoriesBuilder with member this.ToImmutable() = DataDirectories.ofBuilder this
