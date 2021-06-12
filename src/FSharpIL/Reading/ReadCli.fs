@@ -120,7 +120,7 @@ let readMetadataRoot info reader ustate =
                       Version = version
                       Flags = ChunkedMemory.readU2 (16u + length) &root
                       Streams = ChunkedMemory.readU2 (18u + length) &root }
-                info.StreamHeaders <- { Offset = { SectionOffset = 20u + length } }
+                info.StreamHeaders <- { Offset = info.CliMetadata.Offset + 20u + length }
                 StructureReader.read
                     reader.ReadMetadataRoot
                     info.MetadataRoot
