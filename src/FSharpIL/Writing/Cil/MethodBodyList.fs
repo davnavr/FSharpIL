@@ -8,12 +8,13 @@ open FSharpIL.Metadata.Tables
 /// Represents the method bodies of the CLI metadata (II.25.4).
 [<Sealed>]
 type MethodBodyList internal () =
+    let [<Literal>] BodyChunkSize = 64
     let bodies = ImmutableArray.CreateBuilder<MethodBodyBuilder>()
 
     member _.Add(maxStack, localVarSig, offset: outref<MethodBodyLocation>) =
         let i = bodies.Count
         offset <- MethodBodyLocation(uint32 i)
-        bodies.Add(failwith "method body")
+        bodies.Add(MethodBodyBuilder(BodyChunkSize, maxStack, localVarSig))
         &Unsafe.AsRef(&bodies.ItemRef i)
 
     /// Gets the number of method bodies.

@@ -4,8 +4,6 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
-open FSharpIL.Utilities
-
 open FSharpIL
 open FSharpIL.Metadata
 
@@ -53,7 +51,7 @@ type BlobStreamBuilder (capacity: int32) =
         member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.blob
         member _.Serialize wr =
-            let mutable offset', content' = 0u, content.MapChunksUnsafe Convert.unsafeTo<_, ImmutableArray<byte>>
+            let mutable offset', content' = 0u, content.AsImmutableUnsafe()
             for { Length = length } in entries do
                 BlobWriter.compressedUnsigned length &wr
                 wr.Write(content'.Slice(0u, length))

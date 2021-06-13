@@ -35,3 +35,9 @@ type [<IsReadOnly; Struct>] PropertySigOffset = internal { PropertySig: BlobOffs
 /// (II.23.2.15).
 /// </summary>
 type [<IsReadOnly; Struct>] MethodSpecOffset = internal { MethodSpec: BlobOffset }
+
+/// <summary>
+/// An offset into the <c>#Blob</c> heap pointing to a <c>LocalVarSig</c> item, which describes the types of the local variables
+/// of a method (II.23.2.6).
+/// </summary>
+type [<IsReadOnly; Struct>] LocalVarSigOffset = internal { LocalVarSig: BlobOffset }

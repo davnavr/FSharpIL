@@ -102,13 +102,15 @@ type ChunkedMemoryBuilder = struct
             Printf.bprintf sb " 0x%02X" this.current.Value.[i]
         sb.ToString()
 
-    member internal this.MapChunksUnsafe mapping =
+    member private this.MapChunksUnsafe mapping =
         let mutable results = Array.zeroCreate this.current.List.Count
         let mutable chunki = 0
         for chunk in this.current.List do
             results.[chunki] <- mapping chunk
             chunki <- chunki + 1
         ChunkedMemory(Unsafe.As &results)
+
+    member internal this.AsImmutableUnsafe() = this.MapChunksUnsafe Convert.unsafeTo<_, ImmutableArray<byte>>
 
     /// Copies the contents of this builder to a new non-contiguous region of memory.
     member this.ToImmutable() = this.MapChunksUnsafe ImmutableArray.Create<byte>

@@ -59,6 +59,8 @@ type Opcode =
     | Conv_u4 = 0x6Dus
     | Conv_u8 = 0x6Eus
 
+    | Ldstr = 0x72us
+
     | Conv_r_un = 0x76us
 
     | Throw = 0x7Aus
@@ -109,6 +111,8 @@ type Opcode =
     | Cgt_un = 0xFE_03us
     | Clt = 0xFE_04us
     | Clt_un = 0xFE_05us
+
+    | Ldarg = 0xFE_09us
 
     | Localloc = 0xFE_0Fus
 
