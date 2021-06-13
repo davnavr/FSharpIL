@@ -141,10 +141,16 @@ type ParamRow =
       Name: StringOffset }
     interface ITableRow
 
+[<IsReadOnly>]
+type MethodBodyLocation = struct
+    val Value: uint32
+    internal new (value) = { Value = value }
+end
+
 /// <summary>(0x06) Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<IsReadOnly; Struct>]
 type MethodDefRow =
-    { Rva: Rva // TODO: Use separate type for method body rva
+    { Rva: MethodBodyLocation
       ImplFlags: MethodImplFlags
       Flags: MethodDefFlags
       Name: StringOffset
@@ -409,13 +415,21 @@ type TypeSpecRow =
 
 
 
+/// Specifies where the initial value of a field is stored (II.22.18).
+[<IsReadOnly>]
+type FieldValueLocation = struct
+    val Value: uint32
+    internal new (value) = { Value = value }
+end
+
 /// <summary>
 /// (0x1D) Represents a row in the <c>FieldRVA</c> table, which contains a Relative Virtual Address specifying the initial value
 /// of a field (II.22.18).
 /// </summary>
 [<IsReadOnly; Struct>]
 type FieldRvaRow =
-    { Rva: Rva; Field: TableIndex<FieldRow> }
+    { Rva: FieldValueLocation
+      Field: TableIndex<FieldRow> }
     interface ITableRow
 
 /// <summary>Specifies the algorithm used to compute the hash for the contents of an assembly (II.23.1.1).</summary>

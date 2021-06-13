@@ -19,10 +19,10 @@
     <Compile Include="ChunkedMemoryStream.fs" />
     <Compile Include="IByteWriter.fs" />
     <Compile Include="ChunkedMemoryBuilder.fs" />
-    <Compile Include="Rva.fs" />
     <Compile Include="Metadata\Magic.fs" />
     <Compile Include="Metadata\StreamOffsets.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
+    <Compile Include="Metadata\Headers.fs" />
     <Compile Include="Metadata\Identifier.fs" />
     <Compile Include="Metadata\Blobs\Offsets.fs" />
     <Compile Include="Metadata\Blobs\ElementType.fs" />
@@ -38,8 +38,7 @@
     <Compile Include="Metadata\Signatures\CustomMod.fs" />
     <Compile Include="Metadata\Signatures\Items.fs" />
     <Compile Include="Metadata\Cil\Headers.fs" />
-    <Compile Include="Metadata\CliHeader.fs" />
-    <Compile Include="Metadata\CliMetadataRoot.fs" />
+    <Compile Include="PortableExecutable\Rva.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
     <Compile Include="PortableExecutable\Headers.fs" />

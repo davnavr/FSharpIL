@@ -1,11 +1,11 @@
-﻿namespace FSharpIL
+﻿namespace FSharpIL.PortableExecutable
 
 open System.Runtime.CompilerServices
 
 /// Represents a relative virtual address.
 [<IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
-type Rva = struct // TODO: Move Rva types to PortableExecutable namespace and create new type for MethodBodyRva.
+type Rva = struct
     val private value: uint32
     new (value) = { value = value }
     static member inline Zero = Rva 0u

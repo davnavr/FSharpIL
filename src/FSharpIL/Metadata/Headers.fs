@@ -14,6 +14,7 @@ type CliMetadataRoot<'Signature, 'Streams> =
       /// Specifies the number of stream headers after the CLI metadata root (II.24.2.1).
       Streams: 'Streams }
 
+[<RequireQualifiedAccess>]
 module CliMetadataRoot =
     let defaultFields =
         { Signature = Omitted
@@ -23,3 +24,14 @@ module CliMetadataRoot =
           Version = MetadataVersion.defaultLatest
           Flags = 0us
           Streams = Omitted }
+
+/// Flags that describe the runtime image (II.25.3.3.1).
+[<System.Flags>]
+type CorFlags =
+    | None = 0u
+    | ILOnly = 1u
+    | Requires32Bit = 2u
+    /// The image has a strong name signature.
+    | StrongNameSigned = 0x8u
+    | NativeEntryPoint = 0x10u
+    | TrackDebugData = 0x10000u

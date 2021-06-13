@@ -17,7 +17,7 @@ end
 [<NoEquality; NoComparison>]
 type CliInfo =
     { Builder: CliMetadataBuilder
-      StartRva: Rva
+      StartRva: FSharpIL.PortableExecutable.Rva
       StartOffset: uint32
       Streams: List<IStreamBuilder>
       [<DefaultValue>] mutable Metadata: RvaAndSizeWriter

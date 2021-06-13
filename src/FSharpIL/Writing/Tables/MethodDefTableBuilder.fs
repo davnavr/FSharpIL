@@ -10,7 +10,7 @@ type MethodDefTableBuilder internal () =
         member _.Count = rows.Count
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(hsizes, tsizes, row, wr) =
-            wr.WriteLE(uint32 row.Rva)
+            wr.WriteLE row.Rva.Value
             wr.WriteLE(uint16 row.ImplFlags)
             wr.WriteLE(uint16 row.Flags)
             StreamOffset.writeString &wr hsizes row.Name

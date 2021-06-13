@@ -4,9 +4,27 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
+open FSharpIL.PortableExecutable
 
-// TODO: What to use for EntryPointToken?
-type ParsedCliHeader = CliHeader<uint32, uint32>
+/// <summary>
+/// Describes the location of the CLI metadata root, resources, the strong name signature, and other miscellaneous information
+/// (II.25.3.3).
+/// </summary>
+type ParsedCliHeader =
+    { /// The size of the CLI header, in bytes
+      Cb: uint32
+      MajorRuntimeVersion: uint16
+      MinorRuntimeVersion: uint16
+      Metadata: RvaAndSize
+      Flags: CorFlags
+      EntryPointToken: uint32 // TODO: What to use for EntryPointToken?
+      Resources: RvaAndSize
+      StrongNameSignature: RvaAndSize
+      CodeManagerTable: RvaAndSize
+      VTableFixups: RvaAndSize
+      ExportAddressTableJumps: RvaAndSize
+      ManagedNativeHeader: RvaAndSize }
+
 type ParsedCliMetadataRoot = CliMetadataRoot<uint32, uint16>
 
 // TODO: Move these two types to Metadata namespace instead, and just have writing code use an immutable array of parsed stream headers?

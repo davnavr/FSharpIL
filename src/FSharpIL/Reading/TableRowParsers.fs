@@ -1,7 +1,5 @@
 ﻿namespace FSharpIL.Reading
 
-open System
-open System.Collections.Generic
 open System.Runtime.CompilerServices
 
 open FSharpIL
@@ -152,7 +150,7 @@ type MethodDefParser (sizes: HeapSizes, counts: ITableRowCounts) =
     member inline private _.ParamList = TableIndexParser(ValidTableFlags.Param, counts)
     interface IByteParser<MethodDefRow> with
         member this.Parse buffer =
-            { Rva = Rva(ChunkedMemory.readU4 0u &buffer)
+            { Rva = MethodBodyLocation(ChunkedMemory.readU4 0u &buffer)
               ImplFlags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU2 4u &buffer)
               Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU2 6u &buffer)
               Name = ByteParser.parse 8u &buffer (StringParser sizes)
@@ -300,7 +298,7 @@ type FieldRvaParser (counts: ITableRowCounts) =
     member inline private _.Field = TableIndexParser(ValidTableFlags.Field, counts)
     interface IByteParser<FieldRvaRow> with
         member this.Parse buffer =
-            { Rva = Rva(ChunkedMemory.readU4 0u &buffer)
+            { Rva = FieldValueLocation(ChunkedMemory.readU4 0u &buffer)
               Field = ByteParser.parse 4u &buffer this.Field }
         member this.Length = 4u + ByteParser.length this.Field
 
