@@ -35,8 +35,39 @@ module ClassExtends =
 [<IsReadOnly>]
 type ConcreteClassDef = struct
     val Definition: ClassDef
+    interface ITableRow
 end
 
-//type AbstractClassDef
-//type SealedClassDef
-//type StaticClassDef
+[<IsReadOnly>]
+type AbstractClassDef= struct
+   val Definition: ClassDef
+   interface ITableRow
+end
+
+[<IsReadOnly>]
+type SealedClassDef= struct
+   val Definition: ClassDef
+   interface ITableRow
+end
+
+[<IsReadOnly>]
+type StaticClassDef= struct
+   val Definition: ClassDef
+   interface ITableRow
+end
+
+[<RequireQualifiedAccess>]
+module ConcreteClass =
+    let typeIndex ({ TableIndex = index }: TableIndex<ConcreteClassDef>): TableIndex<TypeDefRow> = { TableIndex = index }
+
+[<RequireQualifiedAccess>]
+module AbstractClass =
+    let typeIndex ({ TableIndex = index }: TableIndex<AbstractClassDef>): TableIndex<TypeDefRow> = { TableIndex = index }
+
+[<RequireQualifiedAccess>]
+module SealedClass =
+    let typeIndex ({ TableIndex = index }: TableIndex<SealedClassDef>): TableIndex<TypeDefRow> = { TableIndex = index }
+
+[<RequireQualifiedAccess>]
+module StaticClass =
+    let typeIndex ({ TableIndex = index }: TableIndex<StaticClassDef>): TableIndex<TypeDefRow> = { TableIndex = index }

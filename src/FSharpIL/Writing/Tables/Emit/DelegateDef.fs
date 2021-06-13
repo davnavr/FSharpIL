@@ -39,6 +39,7 @@ type DelegateDef = struct
     /// Attributes applied to the <c>MethodDef</c> row corresponding to the <c>Invoke</c> method of the delegate type.
     /// </summary>
     val InvokeFlags: MethodDefFlags
+
     internal new (access, returnType, parameters, name, ns, tflags, mflags) =
         { Access = access
           ReturnType = returnType
@@ -47,10 +48,14 @@ type DelegateDef = struct
           Namespace = ns
           Flags = tflags
           InvokeFlags = mflags }
+
+    interface ITableRow
 end
 
 [<RequireQualifiedAccess>]
-module DelegateDef =
+module Delegate =
+    let typeIndex ({ TableIndex = index }: TableIndex<DelegateDef>): TableIndex<TypeDefRow> = { TableIndex = index }
+
     let create (access: TypeVisibility) returnType parameters delegateName delegateNamespace serializable mlayout mstrict =
         DelegateDef (
             access,
