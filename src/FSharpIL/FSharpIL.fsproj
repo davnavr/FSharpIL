@@ -37,7 +37,9 @@
     <Compile Include="Metadata\Tables\CodedIndexPatterns.fs" />
     <Compile Include="Metadata\Signatures\CustomMod.fs" />
     <Compile Include="Metadata\Signatures\Items.fs" />
+    <Compile Include="Metadata\Signatures\LocalVarSig.fs" />
     <Compile Include="Metadata\Cil\Headers.fs" />
+    <Compile Include="Metadata\Cil\Opcode.fs" />
     <Compile Include="PortableExecutable\Rva.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
@@ -49,6 +51,8 @@
     <Compile Include="PortableExecutable\PEFile.fs" />
     <Compile Include="PortableExecutable\SectionOffset.fs" />
     <Compile Include="Magic.fs" />
+    <Compile Include="Writing\Cil\MethodBodyBuilder.fs" />
+    <Compile Include="Writing\Cil\MethodBodyList.fs" />
     <Compile Include="Writing\Tables\Collections\RowList.fs" />
     <Compile Include="Writing\Tables\Collections\RowSet.fs" />
     <Compile Include="Writing\Tables\Collections\RangedRowList.fs" />

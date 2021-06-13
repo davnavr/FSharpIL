@@ -11,7 +11,7 @@ type CliMetadataBuilder internal
     (
         header: CliHeaderBuilder,
         root: CliMetadataRoot<Omitted, Omitted>,
-        // methodBodies,
+        methodBodies: FSharpIL.Writing.Cil.MethodBodyList,
         tables: MetadataTablesBuilder,
         strings: StringsStreamBuilder,
         us: UserStringStreamBuilder,
@@ -28,6 +28,7 @@ type CliMetadataBuilder internal
         CliMetadataBuilder (
             header,
             root,
+            FSharpIL.Writing.Cil.MethodBodyList(),
             MetadataTablesBuilder(moduleRow, strings, guids, blobs),
             strings,
             UserStringStreamBuilder usCapacity,
@@ -39,6 +40,7 @@ type CliMetadataBuilder internal
 
     member _.Header = header
     member _.Root = root
+    member _.MethodBodies = methodBodies
     member _.Tables = tables
     member _.Strings = strings
     member _.UserString = us

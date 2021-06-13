@@ -72,7 +72,7 @@ type ParamItemTag =
 type ParamItem = struct
     val Tag: ParamItemTag
     val CustomModifiers: CustomModifiers
-    val internal ParamType: EncodedType
+    val internal ParamType: EncodedType // TODO: For Params and ReturnTypes, use EncodedType voption to inline the active patterns.
     internal new (tag, modifiers, paramType) = { Tag = tag; CustomModifiers = modifiers; ParamType = paramType }
     member this.IsTypedByRef = this.Tag = ParamItemTag.TypedByRef
 end
