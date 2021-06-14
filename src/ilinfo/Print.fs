@@ -3,11 +3,11 @@ module ILInfo.Print
 
 open System
 open System.Collections.Generic
+open System.IO
 open System.Reflection
 
 open Microsoft.FSharp.Core.Printf
 
-open FSharpIL
 open FSharpIL.PortableExecutable
 
 [<AbstractClass; Sealed>]
@@ -32,7 +32,7 @@ let inline integer wr (value: 'Integer) = fprintf wr "0x%0*X" (2 * sizeof<'Integ
 let inline enumeration wr (value: 'Flag when 'Flag : enum<'Integer>) =
     fprintf wr "0x%0*X (%O)" sizeof<'Flag> (LanguagePrimitives.EnumToValue<_, 'Integer> value) value
 
-let bitfield (wr: System.IO.TextWriter) (value: 'Enum when 'Enum :> Enum) =
+let bitfield (wr: #TextWriter) (value: 'Enum when 'Enum :> Enum) =
     fprintf wr "0x%s " (value.ToString "X")
 
     Seq.choose

@@ -4,7 +4,6 @@ open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
-open FSharpIL
 open FSharpIL.Utilities
 
 [<IsReadOnly; Struct>]
@@ -23,7 +22,7 @@ type ChunkedMemory = struct
     val Length: uint32
     internal new (chunks, start, length) = { chunks = chunks; soffset = start; Length = length }
     internal new (chunks) = ChunkedMemory(chunks, 0u, uint32 chunks.Length * uint32 chunks.[0].Length)
-    member this.IsEmpty = this.chunks.IsEmpty || this.chunks.[0].IsEmpty
+    member this.IsEmpty = this.chunks.IsDefaultOrEmpty || this.chunks.[0].IsDefaultOrEmpty
     member this.ChunkCount = this.chunks.Length
     /// The length of each chunk except for the last chunk.
     member this.ChunkSize = if this.IsEmpty then 0 else this.chunks.[0].Length

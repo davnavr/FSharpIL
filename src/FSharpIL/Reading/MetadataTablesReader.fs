@@ -11,11 +11,14 @@ type ReferencedMetadataStreams =
       Tables: ParsedMetadataTables }
 
 // TODO: Allow function to return a ReadError/BlobError
+[<System.ObsoleteAttribute>]
 type TableRowReader<'Row, 'State> = StructureReader<struct(ReferencedMetadataStreams * 'Row), 'State> // ('Row -> ReferencedMetadataStreams -> FSharpIL.PortableExecutable.FileOffset -> 'State -> 'State voption) voption
 
+[<System.ObsoleteAttribute>]
 [<NoComparison; NoEquality>]
 type SequentialTableReader<'State> =
-    { ReadModule: TableRowReader<ModuleRow, 'State>
+    { ReadHeader: StructureReader<ParsedTablesHeader, 'State>
+      ReadModule: TableRowReader<ModuleRow, 'State>
       ReadTypeRef: TableRowReader<TypeRefRow, 'State>
       ReadTypeDef: TableRowReader<TypeDefRow, 'State>
       ReadField: TableRowReader<FieldRow, 'State>
@@ -55,4 +58,46 @@ type SequentialTableReader<'State> =
 type MetadataTablesReader<'State> =
     //| AllAtOnce of (ReferencedMetadataStreams -> FileOffset -> 'State -> Result<'State, ReadError>)
     /// The tables are read in the order that they appear.
-    | SequentialTableReader of SequentialTableReader<'State>
+    | [<System.ObsoleteAttribute>] SequentialTableReader of SequentialTableReader<'State>
+
+[<RequireQualifiedAccess>]
+module MetadataTablesReader =
+    [<System.ObsoleteAttribute>]
+    let defaultSequentialReader<'State> =
+        { ReadHeader = ValueNone
+          ReadModule = ValueNone
+          ReadTypeRef = ValueNone
+          ReadTypeDef = ValueNone
+          ReadField = ValueNone
+          ReadMethodDef = ValueNone
+          ReadParam = ValueNone
+          ReadInterfaceImpl = ValueNone
+          ReadMemberRef = ValueNone
+          ReadConstant = ValueNone
+          ReadCustomAttribute = ValueNone
+          //ReadFieldMarshal = ValueNone
+          //ReadDeclSecurity = ValueNone
+          ReadClassLayout = ValueNone
+          //FieldLayout = ValueNone
+          ReadStandaloneSig = ValueNone
+          //ReadEventMap = ValueNone
+          //ReadEvent = ValueNone
+          ReadPropertyMap = ValueNone
+          ReadProperty = ValueNone
+          ReadMethodSemantics = ValueNone
+          ReadMethodImpl = ValueNone
+          //ReadModuleRef = ValueNone
+          ReadTypeSpec = ValueNone
+          //ReadImplMap = ValueNone
+          ReadFieldRva = ValueNone
+          ReadAssembly = ValueNone
+          ReadAssemblyRef = ValueNone
+          //ReadFile = ValueNone
+          //ReadExportedType = ValueNone
+          ReadManifestResource = ValueNone
+          ReadNestedClass = ValueNone
+          ReadGenericParam = ValueNone
+          ReadMethodSpec = ValueNone
+          ReadGenericParamConstraint = ValueNone
+        }
+        : SequentialTableReader<'State>

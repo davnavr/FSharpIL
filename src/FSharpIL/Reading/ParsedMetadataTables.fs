@@ -40,7 +40,8 @@ type MetadataTableParser<'RowParser, 'Row
     /// </returns>
     member this.TryGetRow(index: TableIndex<'Row>) =
         match index with
-        | { TableIndex = i } when i <= this.RowCount && i > 0u -> ValueSome(ByteParser.parse (i * parser.Length) &rows parser )
+        | { TableIndex = i } when i <= this.RowCount && i > 0u ->
+            ValueSome(ByteParser.parse ((i - 1u) * parser.Length) &rows parser)
         | _ -> ValueNone
 
     /// <summary>Retrieves the row at the specified index.</summary>

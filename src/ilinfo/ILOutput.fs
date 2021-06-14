@@ -18,15 +18,48 @@ type ILOutput =
 [<RequireQualifiedAccess>]
 module ILOutput =
     let inline chars (str: string) (wr: IndentedTextWriter) = wr.Write str
-    let comment ({ Comment = print }, wr) comment =
+    let inline newline (_, wr: IndentedTextWriter) = wr.WriteLine()
+    let inline endn out =
+        newline out
+        ValueSome out
+
+    let comment ({ Comment = print }, wr) text =
         print wr <| fun wr' ->
             wr'.Write "// "
-            comment wr'
+            text wr'
             wr'.WriteLine()
+
+    let commentin ({ Comment = print }, wr) text =
+        print wr <| fun wr' ->
+            wr'.Write "/*"
+            text wr'
+            wr'.Write "*/"
+
+    let declaration ({ Declaration = print }, wr) (name: string) =
+        print wr <| fun wr' ->
+            wr'.Write '.'
+            wr'.Write name
+            wr'.Write ' '
+    let inline decleq ((_, wr) as out) name =
+        declaration out name
+        wr.Write "= "
+
+    let keyword ({ Keyword = print }, wr) (name: string) =
+        print wr <| fun wr' ->
+            wr'.Write name
+            wr'.Write ' '
+
     let inline heading name (offset: FileOffset) out = comment out (fun wr -> fprintf wr "----- %s (%O)" name offset)
     let inline fieldf name size printer value out = comment out (fun wr -> fprintf wr "%s (%i bytes) = %a" name size printer value)
     let inline field name printer (value: 'Value) out = fieldf name sizeof<'Value> printer value out
-    let inline newline (_, wr: IndentedTextWriter) = wr.WriteLine()
+
+    let inline startBlock (wr: IndentedTextWriter) =
+        wr.WriteLine '{'
+        wr.Indent()
+
+    let inline endBlock (wr: IndentedTextWriter) =
+        wr.Dedent()
+        wr.WriteLine '}'
 
     /// Outputs IL code as text.
     let text =
@@ -52,8 +85,7 @@ module ILOutput =
             field "SymbolCount" Print.integer header.SymbolCount out
             field "OptionalHeaderSize" Print.integer header.OptionalHeaderSize out
             field "Characteristics" Print.bitfield header.Characteristics out
-            newline out
-            ValueSome out
+            endn out
 
         let private standardFieldsCommon fields out =
             field "Magic" Print.enumeration fields.Magic out
@@ -116,8 +148,7 @@ module ILOutput =
             //fprintfn wr ".file alignment 0x%08X" falignment
             //fprintfn wr ".stackreserve 0x%08X" fields.StackReserveSize
             //fprintfn wr ".subsystem 0x%04X" (uint16 fields.Subsystem)
-            newline out
-            ValueSome out
+            endn out
 
         let private dataDirectoryNames =
             [|
@@ -147,8 +178,7 @@ module ILOutput =
                     then sprintf "%s Table" dataDirectoryNames.[i]
                     else "Unknown"
                 field name Print.rvaAndSize directories.[i] out
-            newline out
-            ValueSome out
+            endn out
 
         let sectionHeaders (headers: ParsedSectionHeaders) (offset: FileOffset) out =
             for i = 0 to headers.Length - 1 do
@@ -183,8 +213,7 @@ module ILOutput =
             field "ManagedNativeHeader" Print.rvaAndSize header.ManagedNativeHeader out
             newline out
             //".corflags 0x%08X" (uint32 header.Flags)
-            newline out
-            ValueSome out
+            endn out
 
         let cliMetadataRoot (root: ParsedCliMetadataRoot) offset out =
             heading "CLI Metadata Root" offset out
@@ -195,8 +224,7 @@ module ILOutput =
             fieldf "Version" root.Version.Length (fun wr () -> fprintf wr "\"%O\"" root.Version) () out
             field "Flags" Print.integer root.Flags out
             field "Streams" Print.integer root.Streams out
-            newline out
-            ValueSome out
+            endn out
 
         let metadataStreamHeaders (headers: ImmutableArray<ParsedStreamHeader>) offset out =
             for i = 0 to headers.Length - 1 do
@@ -209,6 +237,143 @@ module ILOutput =
                 newline out
             ValueSome out
 
+        let metadataTablesHeader (header: ParsedTablesHeader) offset out =
+            heading "Metadata Tables Header" offset out
+            field "Reserved" Print.integer header.Reserved1 out
+            field "MajorVersion" Print.integer header.MajorVersion out
+            field "MinorVersion" Print.integer header.MinorVersion out
+            field "HeapSizes" Print.bitfield header.HeapSizes out
+            field "Reserved" Print.integer header.Reserved2 out
+            field "Valid" Print.bitfield header.Valid out
+            field "Sorted" Print.bitfield header.Sorted out
+            // TODO: Ensure that row counts are printed in order.
+            fieldf
+                "Rows"
+                (4 * header.Rows.Count)
+                (fun wr () ->
+                    wr.Write "[ "
+                    Seq.map (fun (KeyValue(_, count)) -> sprintf "0x%08X" count) header.Rows
+                    |> String.concat ", "
+                    |> wr.Write
+                    wr.Write " ]")
+                ()
+                out
+            endn out
+
+    [<RequireQualifiedAccess>]
+    module Rows =
+        open FSharpIL.Metadata.Tables
+
+        /// Prints a string surrounded by double quotes (II.5.2).
+        let private qstring (wr: IndentedTextWriter) (str: string) =
+            wr.Write '"'
+            for i = 0 to str.Length - 1 do
+                match str.[i] with
+                | '\t' | '\n' as c ->
+                    wr.Write "\\"
+                    wr.Write c
+                | '"' | '\\' | '\r' | '\000' as c ->
+                    fprintf wr "\\%03o" (uint16 c)
+                | c -> wr.Write c
+            wr.Write '"'
+
+        let private identifier ((_, wr: IndentedTextWriter) as out) (strings: ParsedStringsStream) str =
+            match strings.TryGetString str with
+            | Ok str' ->
+                //let mutable quoted = false
+                // TODO: Quote SQSTRING when necessary.
+                //if quoted then wr.Write '`'
+                wr.Write str'
+                //if quoted then wr.Write '`'
+            | Error _ -> commentin out (fun wr -> wr.Write str)
+
+        let private declbytes ((_, wr) as out) name (blobs: ParsedBlobStream) offset =
+            match blobs.TryGetBytes offset with
+            | Ok bytes' when bytes'.IsEmpty -> ()
+            | result ->
+                decleq out name
+                wr.Write '('
+                match result with
+                | Ok bytes' ->
+                    let chunks = bytes'.AsMemoryArray()
+                    for chunki = 0 to chunks.Length - 1 do
+                        let chunk' = chunks.ItemRef(chunki).Span
+                        for i = 0 to chunk'.Length - 1 do
+                            if chunki > 0 || i > 0 then wr.Write ' '
+                            fprintf wr "%02X" chunk'.[i]
+                | Error _ -> commentin out (fun wr -> wr.Write offset)
+                wr.Write ')'
+                newline out
+
+        let moduleRow (struct({ Strings = strings; Guid = guids }, row: ModuleRow)) _ ((_, wr) as out) =
+            declaration out "module"
+            identifier out strings row.Name
+            wr.WriteLine()
+            comment out <| fun wr ->
+                wr.Write "Mvid = "
+                wr.Write row.Mvid
+                match guids.TryGetGuid row.Mvid with
+                | Ok mvid ->
+                    wr.Write " ("
+                    wr.Write mvid
+                    wr.Write ')'
+                | Error _ -> ()
+            newline out
+            ValueSome out
+
+        let private version (ver: System.Version) ((_, wr) as out) =
+            decleq out "ver"
+            wr.Write ver.Major
+            wr.Write ':'
+            wr.Write ver.Minor
+            wr.Write ':'
+            wr.Write ver.Build
+            wr.Write ':'
+            wr.Write ver.Revision
+            newline out
+
+        let private culture (strings: ParsedStringsStream) culture ((_, wr) as out) =
+            match strings.TryGetString culture with
+            | Ok "" -> ()
+            | result ->
+                decleq out "culture"
+                match result with
+                | Ok culture' -> qstring wr culture'
+                | Error _ -> commentin out (fun wr -> wr.Write culture)
+                newline out
+
+        let assemblyRow (struct({ Strings = strings; Blob = blobs }, row: AssemblyRow)) _ ((_, wr) as out) =
+            declaration out "assembly"
+            identifier out strings row.Name
+            newline out
+            startBlock wr
+            decleq out "hash algorithm"
+            fprintf wr "0x%08X" (uint32 row.HashAlgId)
+            wr.Write ' '
+            comment out (fun wr' -> wr'.Write row.HashAlgId)
+            culture strings row.Culture out
+            // TODO: Write public key of Assembly
+            version row.Version out
+            endBlock wr
+            endn out
+
+        let assemblyRefRow (struct({ Strings = strings; Blob = blobs }, row: AssemblyRefRow)) _ ((_, wr) as out) =
+            declaration out "assembly"
+            keyword out "extern"
+            identifier out strings row.Name
+            newline out
+            startBlock wr
+            declbytes out "hash" blobs row.HashValue
+            culture strings row.Culture out
+            declbytes
+                out
+                (if row.Flags.HasFlag AssemblyFlags.PublicKey then "publickey" else "publickeytoken")
+                blobs
+                row.PublicKeyOrToken
+            version row.Version out
+            endBlock wr
+            endn out
+
     let write includeFileHeaders includeCilMetadata vfilter =
         let inline header printer =
             match includeFileHeaders with
@@ -218,7 +383,7 @@ module ILOutput =
             eprintfn "error : %s" (ReadError.message state error offset)
             out
         { ReadLfanew = header (fun lfanew offset out ->
-              heading "DOS Header" offset out
+              heading "lfanew" offset out
               field "lfanew" Print.integer (uint32 lfanew) out
               newline out
               ValueSome out)
@@ -237,7 +402,14 @@ module ILOutput =
                   ReadGuidStream = ValueNone
                   ReadUserStringStream = ValueNone
                   ReadBlobStream = ValueNone
-                  ReadTables = ValueNone // TODO: Read tables.
+                  ReadTables =
+                    { MetadataTablesReader.defaultSequentialReader with
+                        ReadHeader = header Headers.metadataTablesHeader
+                        ReadModule = ValueSome Rows.moduleRow
+                        ReadAssembly = ValueSome Rows.assemblyRow
+                        ReadAssemblyRef = ValueSome Rows.assemblyRefRow }
+                    |> SequentialTableReader
+                    |> ValueSome
                   HandleError = error }
                 |> ValueSome
             | NoMetadata -> ValueNone

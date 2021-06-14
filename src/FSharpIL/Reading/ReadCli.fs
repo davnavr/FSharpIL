@@ -162,6 +162,9 @@ let rec readStreamHeadersLoop (section: inref<ChunkedMemory>) info (offset: Sect
 
                 if name = Magic.StreamNames.strings then info.StringsStream <- ParsedMetadataStream i
                 if name = Magic.StreamNames.guid then info.GuidStream <- ParsedMetadataStream i
+                if name = Magic.StreamNames.us then info.UserStringStream <- ParsedMetadataStream i
+                if name = Magic.StreamNames.blob then info.BlobStream <- ParsedMetadataStream i
+                if name = Magic.StreamNames.metadata then info.TablesStream <- ParsedMetadataStream i
 
                 readStreamHeadersLoop &section info (offset + 8u + uint32 name.Length) headers (i + 1)
             | Error err -> Some err
@@ -246,7 +249,7 @@ let readMetadataTables (info: CliInfo) =
         | true, rows ->
             let rcounts = Array.zeroCreate<uint32> numRowCounts
             for rowi = 0 to numRowCounts - 1 do
-                rcounts.[rowi] <- ChunkedMemory.readU4 (tablesHeaderFieldsSize + (uint32 rowi * 4u)) &rows
+                rcounts.[rowi] <- ChunkedMemory.readU4 (tablesHeaderFieldsSize + (uint32 rowi * 4u)) &stream
 
             let header =
                 { Reserved1 = ChunkedMemory.readU4 0u &stream
@@ -276,6 +279,17 @@ let rec readTableRowsLoop (roffset: FileOffset) (table: MetadataTableParser<_, _
 
 let readTablesSequential info reader ustate =
     let mutable ustate' = ustate
+
+    match reader.ReadHeader with
+    | ValueSome reader' ->
+        let foffset =
+            info.StreamHeaders.Data.ItemRef(info.TablesStream.Index.Value).Offset
+            |> offsetFromRoot info
+            |> calculateFileOffset info
+        match reader' info.Tables.Header foffset ustate' with
+        | ValueNone -> failwith "TODO: End reading early, since ValueNone was returned while reading tables header"
+        | ValueSome ustate'' -> ustate' <- ustate''
+    | ValueNone -> ()
 
     let referenced =
         { ReferencedMetadataStreams.Tables = info.Tables
