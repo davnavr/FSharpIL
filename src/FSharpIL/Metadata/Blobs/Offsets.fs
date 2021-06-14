@@ -40,4 +40,7 @@ type [<IsReadOnly; Struct>] MethodSpecOffset = internal { MethodSpec: BlobOffset
 /// An offset into the <c>#Blob</c> heap pointing to a <c>LocalVarSig</c> item, which describes the types of the local variables
 /// of a method (II.23.2.6).
 /// </summary>
-type [<IsReadOnly; Struct>] LocalVarSigOffset = internal { LocalVarSig: BlobOffset }
+[<IsReadOnly; Struct>]
+type LocalVarSigOffset =
+    internal { LocalVarSig: BlobOffset }
+    member this.IsNull = this.LocalVarSig.BlobOffset = 0u

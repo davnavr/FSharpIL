@@ -121,7 +121,7 @@ let metadata (section: byref<ChunkedMemoryBuilder>) cliHeaderRva builder =
     // TODO: Write strong name signature.
     // StrongNameSignature
 
-    noImpl "method bodies"
+    builder.MethodBodies.Serialize &section
 
     // Metadata
     root info &section
