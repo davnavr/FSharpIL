@@ -107,6 +107,7 @@ type ReadError =
     | InvalidCliHeaderLocation of Rva
     | CliHeaderOutOfSection of Rva
     | CliHeaderTooSmall of size: uint32
+    | InvalidEntryPointKind of MetadataTokenType
     | InvalidMetadataVersionLength of length: uint32
     | MissingNullTerminator of string
     | StreamOutOfBounds of index: int32 * ParsedStreamHeader
@@ -143,6 +144,8 @@ type ReadError =
         | CliHeaderOutOfSection rva ->
             sprintf "the CLI header at the Relative Virtual Address (0x%O) extends past the end of the section" rva
         | CliHeaderTooSmall size -> sprintf "the specified CLI header size is too small (%i)" size
+        | InvalidEntryPointKind kind ->
+            sprintf "the entry point token was expected to be null, MethodDef, or File, but got %A" kind
         | InvalidMetadataVersionLength length ->
             if length > 255u
             then "cannot exceed 255 bytes"

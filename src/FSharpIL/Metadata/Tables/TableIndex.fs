@@ -8,6 +8,7 @@ type TableIndex<'Row when 'Row :> ITableRow> =
     internal { TableIndex: uint32 }
     member this.IsNull = this.TableIndex = 0u
     static member op_Implicit { TableIndex = index } = index
+    override this.ToString() = sprintf "%s (0x%08X)" typeof<'Row>.Name this.TableIndex
 
 type ITableRowCounts = interface
     abstract RowCount: table: ValidTableFlags -> uint32

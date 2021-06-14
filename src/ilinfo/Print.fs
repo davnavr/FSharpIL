@@ -8,6 +8,7 @@ open System.Reflection
 
 open Microsoft.FSharp.Core.Printf
 
+open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
 
 [<AbstractClass; Sealed>]
@@ -47,3 +48,10 @@ let bitfield (wr: #TextWriter) (value: 'Enum when 'Enum :> Enum) =
 let inline uint32 wr int = integer wr (uint32 int)
 
 let rvaAndSize wr { Rva = rva; Size = size } = fprintf wr "(RVA = %O, Size = 0x%08X)" rva size
+
+let metadataToken wr (token: MetadataToken) =
+    fprintf wr "0x%08X" token.Value
+    if not token.IsNull then
+        wr.Write " [ "
+        wr.Write token
+        wr.Write " ]"

@@ -17,7 +17,7 @@ type ParsedCliHeader =
       MinorRuntimeVersion: uint16
       Metadata: RvaAndSize
       Flags: CorFlags
-      EntryPointToken: uint32 // TODO: What to use for EntryPointToken?
+      EntryPointToken: EntryPointToken
       Resources: RvaAndSize
       StrongNameSignature: RvaAndSize
       CodeManagerTable: RvaAndSize

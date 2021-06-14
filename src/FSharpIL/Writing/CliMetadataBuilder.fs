@@ -47,6 +47,8 @@ type CliMetadataBuilder internal
     member _.Guid = guid
     member _.Blob = blob
 
+    member val EntryPointToken: EntryPointToken voption = ValueNone with get, set
+
     member _.HeaderFlags =
         let mutable flags = CorFlags.ILOnly
         if header.Requires32Bit then flags <- flags ||| CorFlags.Requires32Bit

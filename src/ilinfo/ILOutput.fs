@@ -204,7 +204,7 @@ module ILOutput =
             field "MinorRuntimeVersion" Print.integer header.MinorRuntimeVersion out
             field "MetaData" Print.rvaAndSize header.Metadata out
             field "Flags" Print.bitfield header.Flags out
-            field "EntryPointToken" Print.integer header.EntryPointToken out // TODO: Show what table the EntryPointToken refers to.
+            field "EntryPointToken" Print.metadataToken header.EntryPointToken.Token out
             field "Resources" Print.rvaAndSize header.Resources out
             field "StrongNameSignature" Print.rvaAndSize header.StrongNameSignature out
             field "CodeManagerTable" Print.rvaAndSize header.CodeManagerTable out

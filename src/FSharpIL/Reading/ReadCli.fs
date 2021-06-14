@@ -54,20 +54,23 @@ let readCliHeader (section: inref<ChunkedMemory>) info reader ustate =
     | ValueSome cb when cb >= Magic.cliHeaderSize ->
         match section.TrySlice(uint32 offset + 4u) with
         | true, fields ->
-            info.CliHeader <-
-                { Cb = cb
-                  MajorRuntimeVersion = ChunkedMemory.readU2 0u &fields
-                  MinorRuntimeVersion = ChunkedMemory.readU2 2u &fields
-                  Metadata = readRvaAndSize 4u &fields
-                  Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU4 12u &fields)
-                  EntryPointToken = ChunkedMemory.readU4 16u &fields
-                  Resources = readRvaAndSize 20u &fields
-                  StrongNameSignature = readRvaAndSize 28u &fields
-                  CodeManagerTable = readRvaAndSize 36u &fields
-                  VTableFixups = readRvaAndSize 44u &fields
-                  ExportAddressTableJumps = readRvaAndSize 52u &fields
-                  ManagedNativeHeader = readRvaAndSize 60u &fields }
-            StructureReader.read reader.ReadCliHeader info.CliHeader (calculateFileOffset info offset) ustate FindMetadataRoot
+            match EntryPointToken.tryOfInt(ChunkedMemory.readU4 16u &fields) with
+            | Ok entryPointToken ->
+                info.CliHeader <-
+                    { Cb = cb
+                      MajorRuntimeVersion = ChunkedMemory.readU2 0u &fields
+                      MinorRuntimeVersion = ChunkedMemory.readU2 2u &fields
+                      Metadata = readRvaAndSize 4u &fields
+                      Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU4 12u &fields)
+                      EntryPointToken = entryPointToken
+                      Resources = readRvaAndSize 20u &fields
+                      StrongNameSignature = readRvaAndSize 28u &fields
+                      CodeManagerTable = readRvaAndSize 36u &fields
+                      VTableFixups = readRvaAndSize 44u &fields
+                      ExportAddressTableJumps = readRvaAndSize 52u &fields
+                      ManagedNativeHeader = readRvaAndSize 60u &fields }
+                StructureReader.read reader.ReadCliHeader info.CliHeader (calculateFileOffset info offset) ustate FindMetadataRoot
+            | Error bad -> failure(InvalidEntryPointKind bad)
         | false, _ -> CliHeaderOutOfSection(info.SectionRva + info.CliHeaderOffset + 4u) |> failure
     | ValueSome cb -> failure(CliHeaderTooSmall cb)
     | ValueNone -> CliHeaderOutOfSection(info.SectionRva + info.CliHeaderOffset) |> failure

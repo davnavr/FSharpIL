@@ -36,6 +36,8 @@
     <Compile Include="Metadata\Tables\CodedIndex.fs" />
     <Compile Include="Metadata\Tables\TableRows.fs" />
     <Compile Include="Metadata\Tables\CodedIndexPatterns.fs" />
+    <Compile Include="Metadata\MetadataToken.fs" />
+    <Compile Include="Metadata\EntryPointToken.fs" />
     <Compile Include="Metadata\Signatures\CustomMod.fs" />
     <Compile Include="Metadata\Signatures\Items.fs" />
     <Compile Include="Metadata\Signatures\LocalVarSig.fs" />
