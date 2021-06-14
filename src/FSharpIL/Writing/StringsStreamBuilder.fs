@@ -12,11 +12,12 @@ open FSharpIL.Metadata
 /// <summary>Builds the <c>#Strings</c> metadata stream, containing null-terminated UTF-8 strings (II.24.2.3).</summary>
 [<Sealed>]
 type StringsStreamBuilder (capacity: int32) =
+    static let empty = ReadOnlyMemory.Empty
     let mutable offset = { StringOffset = 1u }
     // NOTE: Avoid struct copying by somehow getting inref to values.
     let strings = RefArrayList<ReadOnlyMemory<char>> capacity
     let lookup = Dictionary<ReadOnlyMemory<char>, StringOffset>(capacity, StringLookupComparer.Instance)
-    do strings.Add ReadOnlyMemory.Empty |> ignore // First entry is the empty string.
+    do strings.Add &empty |> ignore // First entry is the empty string.
     do lookup.[ReadOnlyMemory.Empty] <- { StringOffset = 0u }
 
     member _.IsEmpty = strings.Count = 1

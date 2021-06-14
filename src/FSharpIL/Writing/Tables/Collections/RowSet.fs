@@ -17,7 +17,7 @@ type RowSet<'Row when 'Row : equality and 'Row : struct and 'Row :> ITableRow> i
         let index' = { TableIndex = uint32 rows.Count + 1u }
         if lookup.TryAdd(row, index') then
             index <- index'
-            rows.Add row |> ignore
+            rows.Add &row |> ignore
             true
         else false
     member _.Item with get (i: TableIndex<'Row>) = &rows.[int32 i.TableIndex - 1] // TODO: Avoid duplicate code with RowList

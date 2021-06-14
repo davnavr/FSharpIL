@@ -11,9 +11,10 @@ open FSharpIL.Metadata
 /// <summary>Builds the <c>#GUID</c> metadata stream (II.24.2.5).</summary>
 [<Sealed>]
 type GuidStreamBuilder (capacity: int32) =
+    static let empty = Guid.Empty
     let guids = RefArrayList<Guid> capacity
     let lookup = Dictionary<Guid, GuidIndex> capacity
-    do guids.Add Guid.Empty |> ignore // First GUID is at index 1, so 0 is treated as null.
+    do guids.Add &empty |> ignore // First GUID is at index 1, so 0 is treated as null.
     do lookup.[Guid.Empty] <- GuidIndex.Zero
     member _.IsEmpty = guids.Count = 1
     /// Gets the number of GUIDs stored in this stream.

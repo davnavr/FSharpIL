@@ -17,11 +17,12 @@ type ByteBlobWriter = delegate of byref<ChunkedMemoryBuilder> -> unit
 /// <summary>Builds the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
 [<Sealed>]
 type BlobStreamBuilder (capacity: int32) =
+    static let empty = Unchecked.defaultof<BlobEntry>
     let entries = RefArrayList<BlobEntry> capacity
     let mutable offset = 1u
     let mutable content = ChunkedMemoryBuilder capacity
     do content.Write 0uy
-    do entries.Add Unchecked.defaultof<_> |> ignore
+    do entries.Add &empty|> ignore
 
     member _.IsEmpty = entries.Count = 1
 

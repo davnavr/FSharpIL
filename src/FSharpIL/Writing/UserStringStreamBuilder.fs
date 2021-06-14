@@ -15,10 +15,11 @@ type UserStringEntry = { String: ReadOnlyMemory<char>; Length: uint32 }
 [<Sealed>]
 type UserStringStreamBuilder (capacity: int32) =
     static let encoding = System.Text.Encoding.Unicode
+    static let empty = Unchecked.defaultof<UserStringEntry>
     let mutable offset = 1u
     let strings = RefArrayList<UserStringEntry> capacity
     let lookup = Dictionary<ReadOnlyMemory<char>, UserStringOffset>(capacity, StringLookupComparer.Instance)
-    do strings.Add Unchecked.defaultof<_> |> ignore // First entry is empty blob.
+    do strings.Add &empty |> ignore // First entry is empty blob.
     do lookup.[ReadOnlyMemory.Empty] <- { UserStringOffset = 0u }
 
     member _.IsEmpty = strings.Count = 1

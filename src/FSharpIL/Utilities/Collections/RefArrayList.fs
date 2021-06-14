@@ -24,6 +24,5 @@ type RefArrayList<'T when 'T : struct> internal (capacity) =
         items.[i'] <- item
         i <- i + 1
         &items.[i']
-    member internal this.Add(item: 'T) = &this.Add &item
     member internal _.AsSpan() = ReadOnlySpan<'T>(items, 0, i)
     member internal _.AsMemory() = ReadOnlyMemory<'T>(items, 0, i)
