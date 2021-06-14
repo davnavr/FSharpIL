@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Writing.Tables.Emit
+﻿namespace FSharpIL.Writing.Abstractions
 
 open System.Runtime.CompilerServices
 
