@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 
 open FSharpIL.Utilities
+open FSharpIL.Utilities.Collections
 
 open FSharpIL
 open FSharpIL.Metadata
@@ -13,9 +14,9 @@ open FSharpIL.Metadata
 type StringsStreamBuilder (capacity: int32) =
     let mutable offset = { StringOffset = 1u }
     // NOTE: Avoid struct copying by somehow getting inref to values.
-    let strings = List<ReadOnlyMemory<char>> capacity
+    let strings = RefArrayList<ReadOnlyMemory<char>> capacity
     let lookup = Dictionary<ReadOnlyMemory<char>, StringOffset>(capacity, StringLookupComparer.Instance)
-    do strings.Add ReadOnlyMemory.Empty // First entry is the empty string.
+    do strings.Add ReadOnlyMemory.Empty |> ignore // First entry is the empty string.
     do lookup.[ReadOnlyMemory.Empty] <- { StringOffset = 0u }
 
     member _.IsEmpty = strings.Count = 1
@@ -27,7 +28,7 @@ type StringsStreamBuilder (capacity: int32) =
         let offset' = offset
         offset <- { StringOffset = offset.StringOffset + 1u + uint32 str.Length } |> noImpl "calculate length correctly"
         lookup.[str] <- offset'
-        strings.Add str
+        strings.Add &str |> ignore
         offset'
 
     // TODO: Better parameter validation to prevent null characters in string, maybe return ValueNone?
@@ -53,7 +54,8 @@ type StringsStreamBuilder (capacity: int32) =
         member _.Serialize builder =
             let mutable chars = ReadOnlySpan<char>()
             let mutable buffer = Span.stackalloc<byte> 512
-            for str in strings do
+            for i = 0 to strings.Count - 1 do do
+                let str = &strings.[i]
                 chars <- str.Span
                 while chars.Length > 0 do
                     let length = min buffer.Length chars.Length

@@ -1,7 +1,8 @@
 ﻿namespace FSharpIL.Writing.Tables.Collections
 
 open System.Collections.Generic
-open System.Collections.Immutable
+
+open FSharpIL.Utilities.Collections
 
 open FSharpIL.Metadata.Tables
 
@@ -9,14 +10,14 @@ open FSharpIL.Metadata.Tables
 [<Sealed>]
 type RowSet<'Row when 'Row : equality and 'Row : struct and 'Row :> ITableRow> internal (comparer: IEqualityComparer<'Row>) =
     let lookup = Dictionary<'Row, TableIndex<'Row>>(comparer) // TODO: Figure out how to force usage of inref for equality comparison.
-    let rows = ImmutableArray.CreateBuilder<'Row>()
+    let rows = RefArrayList<'Row>()
     internal new () = RowSet<'Row> EqualityComparer.Default
     member _.Count = rows.Count
     member _.TryAdd(row: inref<'Row>, index: outref<TableIndex<'Row>>) =
         let index' = { TableIndex = uint32 rows.Count + 1u }
         if lookup.TryAdd(row, index') then
             index <- index'
-            rows.Add row
+            rows.Add row |> ignore
             true
         else false
-    member _.Item with get (i: TableIndex<'Row>) = &rows.ItemRef(int32 i.TableIndex - 1) // TODO: Avoid duplicate code with RowList
+    member _.Item with get (i: TableIndex<'Row>) = &rows.[int32 i.TableIndex - 1] // TODO: Avoid duplicate code with RowList

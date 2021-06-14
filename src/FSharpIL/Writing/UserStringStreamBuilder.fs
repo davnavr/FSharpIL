@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 
 open FSharpIL.Utilities
+open FSharpIL.Utilities.Collections
 
 open FSharpIL.Metadata
 
@@ -15,9 +16,9 @@ type UserStringEntry = { String: ReadOnlyMemory<char>; Length: uint32 }
 type UserStringStreamBuilder (capacity: int32) =
     static let encoding = System.Text.Encoding.Unicode
     let mutable offset = 1u
-    let strings = List<UserStringEntry> capacity
+    let strings = RefArrayList<UserStringEntry> capacity
     let lookup = Dictionary<ReadOnlyMemory<char>, UserStringOffset>(capacity, StringLookupComparer.Instance)
-    do strings.Add Unchecked.defaultof<_> // First entry is empty blob.
+    do strings.Add Unchecked.defaultof<_> |> ignore // First entry is empty blob.
     do lookup.[ReadOnlyMemory.Empty] <- { UserStringOffset = 0u }
 
     member _.IsEmpty = strings.Count = 1
@@ -32,7 +33,7 @@ type UserStringStreamBuilder (capacity: int32) =
             let offset' = { UserStringOffset = offset } // TODO: Remove common code with #Strings metadata stream builder.
             let entry = { String = str; Length = uint32(encoding.GetByteCount str.Span) }
             offset <- offset + BlobWriter.compressedUnsignedSize entry.Length + entry.Length
-            strings.Add entry
+            strings.Add &entry |> ignore
             lookup.[str] <- offset'
             offset'
 
@@ -51,9 +52,10 @@ type UserStringStreamBuilder (capacity: int32) =
             let encoder = encoding.GetEncoder()
             let buffer = Span.stackalloc<byte> 512
             let mutable chars = ReadOnlySpan<char>()
-            for { String = str; Length = len } in strings do
-                BlobWriter.compressedUnsigned len &wr // Append length before string
-                chars <- str.Span
+            for i = 0 to strings.Count - 1 do
+                let entry = &strings.[i]
+                BlobWriter.compressedUnsigned entry.Length &wr // Append length before string
+                chars <- entry.String.Span
                 while chars.Length > 0 do
                     let length = min chars.Length buffer.Length
                     wr.Write(buffer.Slice(0, encoder.GetBytes(chars.Slice(0, length), buffer, (length = chars.Length))))

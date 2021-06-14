@@ -14,6 +14,8 @@
     <Compile Include="Utilities\Round.fs" />
     <Compile Include="Utilities\Span.fs" />
     <Compile Include="Utilities\Bytes.fs" />
+    <Compile Include="Utilities\Collections\RefEnumerable.fs" />
+    <Compile Include="Utilities\Collections\RefArrayList.fs" />
     <Compile Include="Omitted.fs" />
     <Compile Include="ChunkedMemory.fs" />
     <Compile Include="ChunkedMemoryStream.fs" />

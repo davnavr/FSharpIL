@@ -4,6 +4,8 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 
+open FSharpIL.Utilities.Collections
+
 open FSharpIL
 open FSharpIL.Metadata
 
@@ -15,11 +17,11 @@ type ByteBlobWriter = delegate of byref<ChunkedMemoryBuilder> -> unit
 /// <summary>Builds the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
 [<Sealed>]
 type BlobStreamBuilder (capacity: int32) =
-    let entries = List<BlobEntry> capacity
+    let entries = RefArrayList<BlobEntry> capacity
     let mutable offset = 1u
     let mutable content = ChunkedMemoryBuilder capacity
     do content.Write 0uy
-    do entries.Add Unchecked.defaultof<_>
+    do entries.Add Unchecked.defaultof<_> |> ignore
 
     member _.IsEmpty = entries.Count = 1
 
@@ -29,7 +31,7 @@ type BlobStreamBuilder (capacity: int32) =
     member private _.AddEntry start =
         let length = offset - start
         let entry = { Offset = { BlobOffset = start }; Length = BlobWriter.compressedUnsignedSize length + length }
-        entries.Add entry
+        entries.Add &entry |> ignore
         entry.Offset
 
     // TODO: Add overload that accepts function pointer for adding byte blob when available.
@@ -52,7 +54,8 @@ type BlobStreamBuilder (capacity: int32) =
         member _.StreamName = Magic.StreamNames.blob
         member _.Serialize wr =
             let mutable offset', content' = 0u, content.AsImmutableUnsafe()
-            for { Length = length } in entries do
+            for i = 0 to entries.Count - 1 do
+                let length = entries.[i].Length
                 BlobWriter.compressedUnsigned length &wr
                 wr.Write(content'.Slice(0u, length))
                 content' <- content'.Slice length
