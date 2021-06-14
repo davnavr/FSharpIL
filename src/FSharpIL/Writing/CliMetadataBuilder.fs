@@ -50,5 +50,5 @@ type CliMetadataBuilder internal
     member _.HeaderFlags =
         let mutable flags = CorFlags.ILOnly
         if header.Requires32Bit then flags <- flags ||| CorFlags.Requires32Bit
-        if (noImpl "is signed/has strong name signature") then flags <- flags ||| CorFlags.StrongNameSigned
+        //if (noImpl "is signed/has strong name signature") then flags <- flags ||| CorFlags.StrongNameSigned
         flags
