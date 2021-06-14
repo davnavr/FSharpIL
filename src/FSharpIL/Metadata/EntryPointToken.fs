@@ -9,7 +9,7 @@ open FSharpIL.Metadata.Tables
 [<System.Runtime.CompilerServices.IsReadOnly>]
 type EntryPointToken = struct
     val Token: MetadataToken
-    private new (token) = { Token = token }
+    internal new (token) = { Token = token }
     new (index: TableIndex<MethodDefRow>) = { Token = MetadataToken(MetadataTokenType.MethodDef, index.TableIndex) }
     new (index: TableIndex<FileRow>) = { Token = MetadataToken(MetadataTokenType.File, index.TableIndex) }
     member this.IsMethodDef = this.Token.Type = MetadataTokenType.MethodDef
@@ -36,8 +36,8 @@ module EntryPointToken =
     let tryOfToken token =
         match token with
         | MetadataToken.Null -> Ok Null
-        | MetadataToken.Token(MetadataTokenType.MethodDef, index) -> Ok(MethodDef { TableIndex = index })
-        | MetadataToken.Token(MetadataTokenType.File, index) -> Ok(File { TableIndex = index })
+        | MetadataToken.Token(MetadataTokenType.MethodDef, _)
+        | MetadataToken.Token(MetadataTokenType.File, _) -> Ok(EntryPointToken token)
         | MetadataToken.Token(table, _) -> Error table
 
     let tryOfInt value = tryOfToken(MetadataToken value)

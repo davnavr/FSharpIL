@@ -19,7 +19,7 @@ type MetadataToken internal (value: uint32) =
     static let [<Literal>] IndexMask = 0xFFFFFFu
     internal new (tag: MetadataTokenType, index) =
         if index > IndexMask then argOutOfRange "index" index "The index must be able to fit into 3 bytes"
-        MetadataToken((uint32 tag <<< 24) &&& index)
+        MetadataToken((uint32 tag <<< 24) ||| index)
     member _.Index = value &&& IndexMask
     member _.Type = LanguagePrimitives.EnumOfValue<_, MetadataTokenType>(uint8(value >>> 24))
     member _.IsNull = value = 0u
