@@ -13,3 +13,4 @@ type InterfaceDef =
 [<RequireQualifiedAccess>]
 module Interface =
     let typeIndex ({ TableIndex = index }: TableIndex<InterfaceDef>): TableIndex<TypeDefRow> = { TableIndex = index }
+

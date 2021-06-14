@@ -162,8 +162,10 @@ module MethodThisPatterns =
 
 [<IsReadOnly>]
 type CallingConventions = struct
-    val value: uint32
-    internal new (value) = { value = value }
+    val Tag: CallConvFlags
+    /// <summary>The number of generic parameters, stored in <c>GenParamCount</c> (II.23.2.1).</summary>
+    val Count: uint32
+    internal new (tag, count) = { Tag = tag; Count = count }
 end
 
 (*
@@ -171,24 +173,20 @@ end
 type CallingConventions =
     | Default
     | VarArg
-    | Generic of count: uint32
+    | Generic of Count: uint32
 *)
 
 [<AutoOpen>]
 module CallingConventionsPatterns =
-    let [<Literal>] private MaxValue = 0xFFFFFFu
     let inline (|Default|VarArg|Generic|) (cconv: CallingConventions) =
-        match LanguagePrimitives.EnumOfValue(uint8(cconv.value >>> 28)) with
+        match cconv.Tag with
         | CallConvFlags.VarArg -> VarArg
-        | CallConvFlags.Generic -> Generic(cconv.value &&& MaxValue)
+        | CallConvFlags.Generic -> Generic(cconv.Count)
         | CallConvFlags.Default
         | _ -> Default
-    let inline private create tag = uint32 tag <<< 28
-    let Default = CallingConventions(create CallConvFlags.Default)
-    let VarArg = CallingConventions(create CallConvFlags.VarArg)
-    let Generic count =
-        if count > MaxValue then failwith "TODO: Check that generic argument count does not overlap with tag bits"
-        CallingConventions(create CallConvFlags.Generic ||| count)
+    let Default = CallingConventions(CallConvFlags.Default, 0u)
+    let VarArg = CallingConventions(CallConvFlags.VarArg, 0u)
+    let Generic count = CallingConventions(CallConvFlags.Generic, count)
 
 /// <summary>Represents a <c>MethodDefSig</c>, which captures the signature of a method or global function (II.23.2.1).</summary>
 [<IsReadOnly; Struct>]

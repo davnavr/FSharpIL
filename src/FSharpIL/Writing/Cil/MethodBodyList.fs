@@ -13,14 +13,13 @@ type MethodBodyList internal () =
     let bodies = List<MethodBodyBuilder ref>()
 
     member _.Add(maxStack, localVarSig, offset: outref<MethodBodyLocation>) =
-        let i = bodies.Count
-        offset <- MethodBodyLocation(uint32 i)
         let body =
             { MethodBody = ChunkedMemoryBuilder BodyChunkSize
               BranchTargets = { Targets = ImmutableArray.CreateBuilder() }
               MaxStack = maxStack
               LocalVarSigTok = localVarSig }
             |> ref
+        offset <- MethodBodyLocation(uint32 bodies.Count)
         bodies.Add body
         &body.contents
 

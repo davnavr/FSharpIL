@@ -13,48 +13,37 @@ type ClassExtendsTag =
     | AbstractClassRef = 4uy
     | TypeSpec = 5uy
 
-[<IsReadOnly; Struct>]
-type ClassDef = struct
-    val Access: TypeVisibility
-    val Flags: TypeDefFlags
-    val ClassName: Identifier
-    val Namespace: string
-    val Extends: ClassExtends
-end
-
-and [<IsReadOnly; Struct>] ClassExtends =
+type [<IsReadOnly; Struct>] ClassExtends =
     val Tag: ClassExtendsTag
     val Index: uint32
     internal new (tag, index) = { Tag = tag; Index = index }
     member this.IsNull = this.Tag = ClassExtendsTag.Null
 
+[<IsReadOnly; Struct>]
+type ClassDef<'Kind> =
+    { Access: TypeVisibility
+      Flags: TypeDefFlags
+      ClassName: Identifier
+      Namespace: string
+      Extends: ClassExtends }
+
+    interface ITableRow
+
 [<RequireQualifiedAccess>]
 module ClassExtends =
     let Null = ClassExtends(ClassExtendsTag.Null, 0u)
 
-[<IsReadOnly>]
-type ConcreteClassDef = struct
-    val Definition: ClassDef
-    interface ITableRow
-end
+[<RequireQualifiedAccess>]
+module ClassKinds =
+    type Concrete = struct end
+    type Abstract = struct end
+    type Sealed = struct end
+    type Static = struct end
 
-[<IsReadOnly>]
-type AbstractClassDef= struct
-   val Definition: ClassDef
-   interface ITableRow
-end
-
-[<IsReadOnly>]
-type SealedClassDef= struct
-   val Definition: ClassDef
-   interface ITableRow
-end
-
-[<IsReadOnly>]
-type StaticClassDef= struct
-   val Definition: ClassDef
-   interface ITableRow
-end
+type ConcreteClassDef = ClassDef<ClassKinds.Concrete>
+type AbstractClassDef = ClassDef<ClassKinds.Abstract>
+type SealedClassDef = ClassDef<ClassKinds.Sealed>
+type StaticClassDef = ClassDef<ClassKinds.Static>
 
 [<RequireQualifiedAccess>]
 module ConcreteClass =

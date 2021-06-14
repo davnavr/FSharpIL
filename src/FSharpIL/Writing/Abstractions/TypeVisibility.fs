@@ -13,30 +13,6 @@ type TypeVisibility = struct
     member this.IsNested = not this.Parent.IsNull
 end
 
-[<IsReadOnly>]
-[<System.ObsoleteAttribute>]
-type NestedTypeVisibility = struct
-    val Visibility: TypeVisibility
-    internal new (flags, parent) = { Visibility = TypeVisibility(flags, parent) }
-    member this.Flags = this.Visibility.Flags
-    member this.Parent = this.Visibility.Parent
-end
-
-[<System.ObsoleteAttribute>]
-[<AutoOpen>]
-module NestedTypeVisiblity =
-    let inline (|NestedPublic|NestedPrivate|NestedFamily|NestedAssembly|NestedFamilyAndAssembly|NestedFamilyOrAssembly|)
-        (visibility: NestedTypeVisibility)
-        =
-        match visibility.Flags with
-        | TypeDefFlags.NestedPublic -> NestedPublic visibility.Parent
-        | TypeDefFlags.NestedFamily -> NestedFamily visibility.Parent
-        | TypeDefFlags.NestedAssembly -> NestedAssembly visibility.Parent
-        | TypeDefFlags.NestedFamAndAssem -> NestedFamilyAndAssembly visibility.Parent
-        | TypeDefFlags.NestedFamOrAssem -> NestedFamilyOrAssembly visibility.Parent
-        | TypeDefFlags.NestedPrivate
-        | _ -> NestedPrivate visibility.Parent
-
 [<RequireQualifiedAccess>]
 module TypeVisibility =
     let NotPublic = TypeVisibility TypeDefFlags.NotPublic
