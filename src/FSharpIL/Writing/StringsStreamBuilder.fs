@@ -36,18 +36,12 @@ type StringsStreamBuilder (capacity: int32) =
     member private this.GetOrAdd str =
         match lookup.TryGetValue str with
         | true, existing -> existing
-        | false, _ -> this.AddUnsafe &str
-
-    member private this.GetOrAddFolded str =
-        match lookup.TryGetValue str with
-        | true, existing -> existing
         | false, _ ->
             for i = 1 to str.Length - 1 do
                 lookup.[str.Slice i] <- { StringOffset = offset.StringOffset + uint32 i }
             this.AddUnsafe &str
 
     member this.GetOrAdd(str: Identifier) = this.GetOrAdd(Identifier.asMemory str)
-    member this.GetOrAddFolded(str: Identifier) = this.GetOrAddFolded(Identifier.asMemory str)
 
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength
