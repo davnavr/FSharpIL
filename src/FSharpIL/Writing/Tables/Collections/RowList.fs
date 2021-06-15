@@ -9,7 +9,7 @@ open FSharpIL.Metadata.Tables
 type RowList<'Row when 'Row : equality and 'Row : struct and 'Row :> ITableRow> internal () =
     let rows = RefArrayList<'Row>()
     member _.Count = rows.Count
-    member _.Add(row: inref<'Row>) =
+    member _.Add(row: inref<'Row>): TableIndex<'Row> =
         rows.Add &row |> ignore
         { TableIndex = uint32 rows.Count }
     member _.Item with get (i: TableIndex<'Row>) = &rows.[int32 i.TableIndex - 1]

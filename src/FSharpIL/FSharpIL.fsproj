@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <Compile Include="Utilities\Fail.fs" />
+    <Compile Include="Utilities\Flags.fs" />
     <Compile Include="Utilities\Convert.fs" />
     <Compile Include="Utilities\Result.fs" />
     <Compile Include="Utilities\Round.fs" />
@@ -89,6 +90,17 @@
     <Compile Include="Writing\Tables\GenericParamConstraintTableBuilder.fs" />
     <Compile Include="Writing\Cil\MethodBodyBuilder.fs" />
     <Compile Include="Writing\Cil\MethodBodyList.fs" />
+    <Compile Include="Writing\IStreamBuilder.fs" />
+    <Compile Include="Writing\StringLookupComparer.fs" />
+    <Compile Include="Writing\StringsStreamBuilder.fs" />
+    <Compile Include="Writing\GuidStreamBuilder.fs" />
+    <Compile Include="Writing\BlobWriter.fsi" />
+    <Compile Include="Writing\BlobWriter.fs" />
+    <Compile Include="Writing\UserStringStreamBuilder.fs" />
+    <Compile Include="Writing\BlobStreamBuilder.fs" />
+    <Compile Include="Writing\MetadataTablesBuilder.fs" />
+    <Compile Include="Writing\CliHeaderBuilder.fs" />
+    <Compile Include="Writing\CliMetadataBuilder.fs" />
     <Compile Include="Writing\Abstractions\TypeVisibility.fs" />
     <Compile Include="Writing\Abstractions\MemberVisibility.fs" />
     <Compile Include="Writing\Abstractions\Flags.fs" />
@@ -102,17 +114,6 @@
     <Compile Include="Writing\Abstractions\EnumDef.fs" />
     <Compile Include="Writing\Abstractions\InterfaceDef.fs" />
     <Compile Include="Writing\Abstractions\ClassDef.fs" />
-    <Compile Include="Writing\IStreamBuilder.fs" />
-    <Compile Include="Writing\StringLookupComparer.fs" />
-    <Compile Include="Writing\StringsStreamBuilder.fs" />
-    <Compile Include="Writing\GuidStreamBuilder.fs" />
-    <Compile Include="Writing\BlobWriter.fsi" />
-    <Compile Include="Writing\BlobWriter.fs" />
-    <Compile Include="Writing\UserStringStreamBuilder.fs" />
-    <Compile Include="Writing\BlobStreamBuilder.fs" />
-    <Compile Include="Writing\MetadataTablesBuilder.fs" />
-    <Compile Include="Writing\CliHeaderBuilder.fs" />
-    <Compile Include="Writing\CliMetadataBuilder.fs" />
     <Compile Include="Writing\WriteCli.fsi" />
     <Compile Include="Writing\WriteCli.fs" />
     <Compile Include="Writing\SectionBuilder.fs" />

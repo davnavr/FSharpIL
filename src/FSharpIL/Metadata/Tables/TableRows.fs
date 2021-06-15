@@ -3,7 +3,8 @@
 open System
 open System.Runtime.CompilerServices
 
-open FSharpIL
+open FSharpIL.Utilities
+
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Blobs
 
@@ -225,6 +226,8 @@ type TypeDefRow =
       FieldList: TableIndex<FieldRow>
       MethodList: TableIndex<MethodDefRow> }
     interface ITableRow
+
+    member this.IsInterface = Flags.set TypeDefFlags.Interface this.Flags
 
 /// <summary>(0x09) Represents a row in the <c>InterfaceImpl</c> table (II.22.23).</summary>
 [<IsReadOnly; Struct>]

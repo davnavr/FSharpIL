@@ -7,6 +7,16 @@
 /// <category>Errors</category>
 type IValidationError = interface end
 
+/// <summary>
+/// Error used when an invalid combination of flags is used in a metadata table row.
+/// </summary>
+/// <category>Errors</category>
+[<Sealed>]
+type InvalidFlagsCombination<'Enum when 'Enum :> System.Enum and 'Enum : struct> (flags: 'Enum) =
+    member _.Flags = flags
+    override _.ToString() = sprintf "The flags combination %A is invalid" flags
+    interface IValidationError
+
 type ValidationResult<'T> = Result<'T, IValidationError>
 
 exception ValidationErrorException
@@ -20,6 +30,8 @@ module ValidationError =
 
 [<RequireQualifiedAccess>]
 module ValidationResult =
+    let failure (error: #IValidationError) = ValidationResult.Error error
+
     /// <exception cref="T:FSharpIL.Writing.Tables.ValidationErrorException">
     /// Thrown when the <paramref name="result"/> is an error.
     /// </exception>
