@@ -8,6 +8,8 @@ open FSharpIL.Metadata
 open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
+// TODO: Figure out how to include parameter names.
+
 [<IsReadOnly>]
 type PInvokeMethodDef = struct
     val Visibility: MemberVisibility

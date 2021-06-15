@@ -93,10 +93,10 @@
     <Compile Include="Writing\Abstractions\MemberVisibility.fs" />
     <Compile Include="Writing\Abstractions\Flags.fs" />
     <Compile Include="Writing\Abstractions\Constant.fs" />
-    <Compile Include="Writing\Abstractions\Signatures.fs" />
     <Compile Include="Writing\Abstractions\MemberRef.fs" />
     <Compile Include="Writing\Abstractions\TypeRef.fs" />
     <Compile Include="Writing\Abstractions\MethodDef.fs" />
+    <Compile Include="Writing\Abstractions\ValidEntryPoint.fs" />
     <Compile Include="Writing\Abstractions\FieldDef.fs" />
     <Compile Include="Writing\Abstractions\DelegateDef.fs" />
     <Compile Include="Writing\Abstractions\EnumDef.fs" />
