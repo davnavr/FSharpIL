@@ -90,6 +90,8 @@ type MethodDefFlags =
     /// The method does not provide an implementation.
     | Abstract = 0x400us
     | SpecialName = 0x800us
+    | PInvokeImpl = 0x2000us
+    | UnmanagedExport = 0x8us
     /// Used by constructors and class constructors.
     | RTSpecialName = 0x1000us
     | HasSecurity = 0x4000us
@@ -146,6 +148,7 @@ type ParamRow =
 type MethodBodyLocation = struct
     val Value: uint32
     internal new (value) = { Value = value }
+    member this.IsZero = this.Value = 0u
 end
 
 /// <summary>(0x06) Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>

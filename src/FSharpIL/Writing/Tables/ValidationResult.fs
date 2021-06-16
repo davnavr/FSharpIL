@@ -1,5 +1,7 @@
 ﻿namespace FSharpIL.Writing.Tables
 
+open FSharpIL.Utilities
+
 /// <summary>
 /// Marker interface used to represent an <c>ERROR</c> check, which indicates that the generated CLI metadata is invalid
 /// (II.22.1).
@@ -31,6 +33,11 @@ module ValidationError =
 [<RequireQualifiedAccess>]
 module ValidationResult =
     let failure (error: #IValidationError) = ValidationResult.Error error
+
+    let inline internal (|CheckFlags|_|) flags actual =
+        if Flags.set flags actual
+        then Some(InvalidFlagsCombination flags :> IValidationError)
+        else None
 
     /// <exception cref="T:FSharpIL.Writing.Tables.ValidationErrorException">
     /// Thrown when the <paramref name="result"/> is an error.

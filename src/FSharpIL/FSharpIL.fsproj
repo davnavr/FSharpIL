@@ -55,6 +55,7 @@
     <Compile Include="PortableExecutable\PEFile.fs" />
     <Compile Include="PortableExecutable\SectionOffset.fs" />
     <Compile Include="Magic.fs" />
+    <Compile Include="Writing\Tables\ValidationResult.fs" />
     <Compile Include="Writing\Tables\Collections\RowList.fs" />
     <Compile Include="Writing\Tables\Collections\RowSet.fs" />
     <Compile Include="Writing\Tables\Collections\RangedRowList.fs" />
@@ -62,7 +63,6 @@
     <Compile Include="Writing\Tables\CodedIndex.fs" />
     <Compile Include="Writing\Tables\TableBuilder.fs" />
     <Compile Include="Writing\Tables\StreamOffset.fs" />
-    <Compile Include="Writing\Tables\ValidationResult.fs" />
     <Compile Include="Writing\Tables\TypeRefTableBuilder.fs" />
     <Compile Include="Writing\Tables\TypeDefTableBuilder.fs" />
     <Compile Include="Writing\Tables\FieldTableBuilder.fs" />

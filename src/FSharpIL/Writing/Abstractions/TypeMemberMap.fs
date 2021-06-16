@@ -83,6 +83,6 @@ module TypeMemberMap =
     let addTableRows (builder: MetadataTablesBuilder) { MemberMap = members } =
         for index in members.Keys do
             let members' = &members.ValueRef index
-            builder.Field
+            builder.Field.TryAdd(members'.Fields.ToImmutableArray())
             ()
         failwith "TODO: Add it"
