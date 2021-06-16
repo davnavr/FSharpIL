@@ -27,6 +27,8 @@ exception ValidationErrorException
 
 [<RequireQualifiedAccess>]
 module ValidationError =
+    /// <summary>Raises the specified validation error as an exception.</summary>
+    /// <exception cref="T:FSharpIL.Writing.Tables.ValidationErrorException">Thrown when this function is called.</exception>
     let inline throw (error: #IValidationError) = raise(ValidationErrorException error)
     let inline message (error: #IValidationError) = error.ToString()
 

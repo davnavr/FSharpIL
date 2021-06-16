@@ -7,6 +7,8 @@ open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata.Tables
 open FSharpIL.Writing
+open FSharpIL.Writing.Tables
+open FSharpIL.Writing.Tables.Collections
 
 [<IsReadOnly; Struct>]
 type MemberSet<'Member when 'Member : struct and 'Member :> ITableRow> =
@@ -80,9 +82,26 @@ module TypeMemberMap =
 
     let inline findMembers typeDefIndex (members: TypeMemberMap) = members.[typeDefIndex]
 
-    let addTableRows (builder: MetadataTablesBuilder) { MemberMap = members } =
-        for index in members.Keys do
-            let members' = &members.ValueRef index
-            builder.Field.TryAdd(members'.Fields.ToImmutableArray())
-            ()
-        failwith "TODO: Add it"
+    let inline private trySerizalizeMembers builder (members: MemberSet<'Row>) =
+        match (^Builder : (member TryAdd : ImmutableArray<'Row> -> ValidationResult<TableIndexRange<'Row>>) (builder, (members.ToImmutableArray()))) with
+        | Ok _ -> None
+        | Error err -> Some err
+
+    let trySerialize (builder: MetadataTablesBuilder) { MemberMap = members } =
+        Seq.tryPick
+            (fun index ->
+                let members' = &members.ValueRef index
+                match trySerizalizeMembers builder.Field members'.Fields with
+                | None ->
+                    // TODO: Also add properties and events
+                    trySerizalizeMembers builder.MethodDef members'.Methods
+                | err -> err)
+            members.Keys
+
+    /// <exception cref="T:FSharpIL.Writing.Tables.ValidationErrorException">
+    /// Thrown when a row could not be added to the <c>Field</c>, <c>MethodDef</c>, <c>Event</c>, or <c>Property</c> tables.
+    /// </exception>
+    let serialize builder members =
+        match trySerialize builder members with
+        | None -> ()
+        | Some err -> ValidationError.throw err
