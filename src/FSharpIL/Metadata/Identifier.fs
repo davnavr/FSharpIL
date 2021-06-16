@@ -22,8 +22,8 @@ module Identifier =
 
     /// <summary>Tries to create an identifier from the specified string.</summary>
     let tryOfStr str =
-        let inline none() = None
-        create none none none Some str
+        let inline none() = ValueNone
+        create none none none ValueSome str
 
     /// <summary>Creates an identifier from the specified string.</summary>
     /// <exception cref="T:System.ArgumentNullException">Thrown when the input string is <see langword="null"/>.</exception>

@@ -4,6 +4,7 @@ open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
+open FSharpIL.Writing
 
 type ClassExtendsTag =
     | Null = 0uy
@@ -19,10 +20,9 @@ type [<IsReadOnly; Struct>] ClassExtends =
     internal new (tag, index) = { Tag = tag; Index = index }
     member this.IsNull = this.Tag = ClassExtendsTag.Null
 
-[<IsReadOnly; Struct>]
 type ClassDef<'Kind> =
     { Access: TypeVisibility
-      Flags: TypeDefFlags
+      Flags: TypeDefFlags // TODO: Create custom flag type.
       ClassName: Identifier
       Namespace: string
       Extends: ClassExtends }
@@ -32,6 +32,11 @@ type ClassDef<'Kind> =
 [<RequireQualifiedAccess>]
 module ClassExtends =
     let Null = ClassExtends(ClassExtendsTag.Null, 0u)
+
+    let toCodedIndex (extends: ClassExtends) =
+        match extends.Tag with
+        | ClassExtendsTag.Null
+        | _ -> TypeDefOrRef()
 
 [<RequireQualifiedAccess>]
 module ClassKinds =
@@ -46,17 +51,16 @@ type SealedClassDef = ClassDef<ClassKinds.Sealed>
 type StaticClassDef = ClassDef<ClassKinds.Static>
 
 [<RequireQualifiedAccess>]
-module ConcreteClass =
-    let typeIndex ({ TableIndex = index }: TableIndex<ConcreteClassDef>): TableIndex<TypeDefRow> = { TableIndex = index }
-
-[<RequireQualifiedAccess>]
-module AbstractClass =
-    let typeIndex ({ TableIndex = index }: TableIndex<AbstractClassDef>): TableIndex<TypeDefRow> = { TableIndex = index }
-
-[<RequireQualifiedAccess>]
-module SealedClass =
-    let typeIndex ({ TableIndex = index }: TableIndex<SealedClassDef>): TableIndex<TypeDefRow> = { TableIndex = index }
-
-[<RequireQualifiedAccess>]
-module StaticClass =
-    let typeIndex ({ TableIndex = index }: TableIndex<StaticClassDef>): TableIndex<TypeDefRow> = { TableIndex = index }
+module private ClassDef =
+    let tryAddRow (builder: CliMetadataBuilder) (row: ClassDef<'Kind>) =
+        let row' =
+            { Flags = invalidOp "flags?"
+              TypeName = builder.Strings.GetOrAdd row.ClassName
+              TypeNamespace =
+                match Identifier.tryOfStr row.Namespace with
+                | ValueSome typeNamespace -> builder.Strings.GetOrAdd typeNamespace
+                | ValueNone -> Unchecked.defaultof<_>
+              Extends = ClassExtends.toCodedIndex row.Extends
+              FieldList = invalidOp "get fields?"
+              MethodList = invalidOp "get methods?" }
+        ()

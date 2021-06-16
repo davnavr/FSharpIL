@@ -113,6 +113,7 @@
     <Compile Include="Writing\Abstractions\DelegateDef.fs" />
     <Compile Include="Writing\Abstractions\EnumDef.fs" />
     <Compile Include="Writing\Abstractions\InterfaceDef.fs" />
+    <Compile Include="Writing\Abstractions\TypeMemberMap.fs" />
     <Compile Include="Writing\Abstractions\ClassDef.fs" />
     <Compile Include="Writing\WriteCli.fsi" />
     <Compile Include="Writing\WriteCli.fs" />
