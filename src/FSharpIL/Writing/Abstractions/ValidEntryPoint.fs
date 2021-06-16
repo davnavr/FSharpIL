@@ -68,4 +68,5 @@ type ValidEntryPoint =
 
 [<RequireQualifiedAccess>]
 module ValidEntryPoint =
+    // StaticMemberOwner
     ()

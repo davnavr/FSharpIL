@@ -13,12 +13,13 @@ open FSharpIL.Metadata
 [<Sealed>]
 type StringsStreamBuilder (capacity: int32) =
     static let empty = ReadOnlyMemory.Empty
+    static let emptyi = { StringOffset = 0u }
     let mutable offset = { StringOffset = 1u }
     // NOTE: Avoid struct copying by somehow getting inref to values.
     let strings = RefArrayList<ReadOnlyMemory<char>> capacity
     let lookup = Dictionary<ReadOnlyMemory<char>, StringOffset>(capacity, StringLookupComparer.Instance)
     do strings.Add &empty |> ignore // First entry is the empty string.
-    do lookup.[ReadOnlyMemory.Empty] <- { StringOffset = 0u }
+    do lookup.[empty] <- emptyi
 
     member _.IsEmpty = strings.Count = 1
 
@@ -33,7 +34,7 @@ type StringsStreamBuilder (capacity: int32) =
         offset'
 
     // TODO: Better parameter validation to prevent null characters in string, maybe return ValueNone?
-    member private this.GetOrAdd str =
+    member private this.Add str =
         match lookup.TryGetValue str with
         | true, existing -> existing
         | false, _ ->
@@ -41,7 +42,12 @@ type StringsStreamBuilder (capacity: int32) =
                 lookup.[str.Slice i] <- { StringOffset = offset.StringOffset + uint32 i }
             this.AddUnsafe &str
 
-    member this.GetOrAdd(str: Identifier) = this.GetOrAdd(Identifier.asMemory str)
+    member this.Add(str: Identifier) = this.Add(Identifier.asMemory str)
+
+    member this.Add(str: Identifier voption) =
+        match str with
+        | ValueSome str' -> this.Add str'
+        | ValueNone -> emptyi
 
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength

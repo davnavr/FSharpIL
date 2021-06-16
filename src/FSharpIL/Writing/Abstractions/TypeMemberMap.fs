@@ -10,17 +10,21 @@ open FSharpIL.Writing
 open FSharpIL.Writing.Tables
 open FSharpIL.Writing.Tables.Collections
 
-[<IsReadOnly; Struct>]
+[<Struct>]
 type MemberSet<'Member when 'Member : struct and 'Member :> ITableRow> =
-    private { Members: HashSet<'Member> }
+    private { mutable Members: HashSet<'Member> }
 
     member this.Count = if this.Members = null then 0 else this.Members.Count
     member this.IsEmpty = this.Count = 0
 
-    member this.Contains row =
+    member this.Contains(row: inref<'Member>) =
         if this.Members = null
         then false
         else this.Members.Contains row
+
+    member internal this.Add(row: inref<'Member>) =
+        if this.Members = null then this.Members <- HashSet()
+        this.Members.Add row
 
     member this.GetEnumerator() =
         if this.Members = null
@@ -34,7 +38,7 @@ type MemberSet<'Member when 'Member : struct and 'Member :> ITableRow> =
 
 #if NET5_0
     interface IReadOnlySet<'Member> with
-        member this.Contains item = this.Contains item
+        member this.Contains item = this.Contains &item
         member this.IsProperSubsetOf other = if this.Members = null then not(Seq.isEmpty other) else this.Members.IsProperSubsetOf other
         member this.IsProperSupersetOf other = if this.Members = null then false else this.Members.IsProperSupersetOf other
         member this.IsSubsetOf other = if this.Members = null then true else this.Members.IsSubsetOf other
@@ -43,7 +47,7 @@ type MemberSet<'Member when 'Member : struct and 'Member :> ITableRow> =
         member this.SetEquals other = if this.Members = null then Seq.isEmpty other else this.Members.SetEquals other
 #endif
 
-[<IsReadOnly; Struct>]
+[<Struct>]
 [<NoComparison; NoEquality>]
 type TypeMembers =
     { Fields: MemberSet<FieldRow>
@@ -80,6 +84,7 @@ type TypeMemberMap =
 module TypeMemberMap =
     let empty() = { MemberMap = ImmutableSortedDictionary.CreateBuilder() }
 
+    // TODO: get inref to existing entry instead?
     let inline findMembers typeDefIndex (members: TypeMemberMap) = members.[typeDefIndex]
 
     let inline private trySerizalizeMembers builder (members: MemberSet<'Row>) =

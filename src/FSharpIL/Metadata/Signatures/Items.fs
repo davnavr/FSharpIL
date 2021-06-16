@@ -72,7 +72,7 @@ type ParamItemTag =
 type ParamItem = struct
     val Tag: ParamItemTag
     val CustomModifiers: CustomModifiers
-    val internal ParamType: EncodedType // TODO: For Params and ReturnTypes, use EncodedType voption to inline the active patterns.
+    val ParamType: EncodedType voption
     internal new (tag, modifiers, paramType) = { Tag = tag; CustomModifiers = modifiers; ParamType = paramType }
     member this.IsTypedByRef = this.Tag = ParamItemTag.TypedByRef
 end
@@ -87,17 +87,17 @@ type ParamItem =
 
 [<RequireQualifiedAccess>]
 module ParamItem =
-    let (|Param|ByRef|TypedByRef|) (param: ParamItem) =
-        let ptype = struct(param.CustomModifiers, param.ParamType)
+    let inline (|Param|ByRef|TypedByRef|) (param: ParamItem) =
+        let inline ptype() = struct(param.CustomModifiers, param.ParamType.Value)
         match param.Tag with
-        | ParamItemTag.ByRef -> ByRef ptype
+        | ParamItemTag.ByRef -> ByRef(ptype())
         | ParamItemTag.TypedByRef -> TypedByRef param.CustomModifiers
         | ParamItemTag.Param
-        | _ -> Param ptype
+        | _ -> Param(ptype())
 
-    let Param (modifiers, paramType) = ParamItem(ParamItemTag.Param, modifiers, paramType)
-    let ByRef (modifiers, paramType) = ParamItem(ParamItemTag.ByRef, modifiers, paramType)
-    let TypedByRef modifiers = ParamItem(ParamItemTag.TypedByRef, modifiers, Unchecked.defaultof<EncodedType>)
+    let Param (modifiers, paramType) = ParamItem(ParamItemTag.Param, modifiers, ValueSome paramType)
+    let ByRef (modifiers, paramType) = ParamItem(ParamItemTag.ByRef, modifiers, ValueSome paramType)
+    let TypedByRef modifiers = ParamItem(ParamItemTag.TypedByRef, modifiers, ValueNone)
 
 type ReturnTypeTag =
     | Type = 0uy
@@ -259,7 +259,7 @@ type Pointer =
 module Pointer =
     let inline (|Type|Void|) { Modifiers = modifiers; PointerType = ptype } =
         match ptype with
-        | ValueSome ptype' -> Type(modifiers, ptype')
+        | ValueSome ptype' -> Type(struct(modifiers, ptype'))
         | ValueNone -> Void modifiers
 
     let inline Type(modifiers, ptype) = { Modifiers = modifiers; PointerType = ValueSome ptype }

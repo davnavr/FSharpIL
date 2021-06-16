@@ -78,6 +78,9 @@ type ZeroRvaMethodHasInvalidFlags =
         "Methods with a RVA of zero must either be abstract, have runtime implementation, or be a PInvoke method"
     interface IValidationError
 
+// 34
+// 35
+
 [<RequireQualifiedAccess>]
 module private MethodValidation =
     let nonAbstractMethod (row: inref<MethodDefRow>) =

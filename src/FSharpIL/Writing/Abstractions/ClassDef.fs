@@ -51,14 +51,16 @@ type SealedClassDef = ClassDef<ClassKinds.Sealed>
 type StaticClassDef = ClassDef<ClassKinds.Static>
 
 [<RequireQualifiedAccess>]
-module private ClassDef =
-    let tryAddRow (builder: CliMetadataBuilder) (row: ClassDef<'Kind>) =
+module ClassDef =
+    // let typeIndex<'Kind> ({ TableIndex = index }: TableIndex<ClassDef<'Kind>> = { TableIndex = index }: TableIndex<TypeDefRow>
+
+    let internal tryAddRow (builder: CliMetadataBuilder) (row: ClassDef<'Kind>) =
         let row' =
             { Flags = invalidOp "flags?"
-              TypeName = builder.Strings.GetOrAdd row.ClassName
+              TypeName = builder.Strings.Add row.ClassName
               TypeNamespace =
                 match Identifier.tryOfStr row.Namespace with
-                | ValueSome typeNamespace -> builder.Strings.GetOrAdd typeNamespace
+                | ValueSome typeNamespace -> builder.Strings.Add typeNamespace
                 | ValueNone -> Unchecked.defaultof<_>
               Extends = ClassExtends.toCodedIndex row.Extends
               FieldList = invalidOp "get fields?"
