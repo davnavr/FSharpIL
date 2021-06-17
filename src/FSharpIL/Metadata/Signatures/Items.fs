@@ -6,6 +6,9 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata.Blobs
 open FSharpIL.Metadata.Tables
 
+/// <summary>Represents an index into the <c>TypeDef</c>, <c>TypeRef</c> or <c>TypeSpec</c> table (II.23.2.8).</summary>
+type TypeDefOrRefOrSpecEncoded = TypeDefOrRef
+
 /// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
 [<RequireQualifiedAccess>]
 type EncodedType =
@@ -38,7 +41,7 @@ type EncodedType =
     /// <summary>The <see cref="T:System.UIntPtr"/> type.</summary>
     | U
     | Array of EncodedType * ArrayShape
-    | Class of TypeDefOrRef
+    | Class of TypeDefOrRefOrSpecEncoded
     /// A method pointer (II.14.5).
     //| FnPtr of FunctionPointer
     | GenericInst of GenericInst
@@ -52,7 +55,7 @@ type EncodedType =
     | String
     /// A single-dimensional array with a lower bound of zero, also known as a vector (I.8.9.1).
     | SZArray of CustomModifiers * EncodedType
-    | ValueType of TypeDefOrRef
+    | ValueType of TypeDefOrRefOrSpecEncoded
     /// A generic parameter in a generic type definition.
     | Var of index: uint32
 
@@ -74,7 +77,8 @@ type ParamItem = struct
     val CustomModifiers: CustomModifiers
     val ParamType: EncodedType voption
     internal new (tag, modifiers, paramType) = { Tag = tag; CustomModifiers = modifiers; ParamType = paramType }
-    member this.IsTypedByRef = this.Tag = ParamItemTag.TypedByRef
+    member inline this.IsTypedByRef = this.Tag = ParamItemTag.TypedByRef
+    member inline this.IsByRef = this.Tag = ParamItemTag.ByRef
 end
 
 (*
@@ -110,10 +114,11 @@ type ReturnTypeTag =
 type ReturnType = struct
     val Tag: ReturnTypeTag
     val CustomModifiers: CustomModifiers
-    val internal ReturnType: EncodedType
+    val ReturnType: EncodedType voption
     internal new (tag, modifiers, paramType) = { Tag = tag; CustomModifiers = modifiers; ReturnType = paramType }
     member this.IsTypedByRef = this.Tag = ReturnTypeTag.TypedByRef
     member this.IsVoid = this.Tag = ReturnTypeTag.Void
+    member this.IsByRef = this.Tag = ReturnTypeTag.ByRef
 end
 
 (*
@@ -127,19 +132,19 @@ type ReturnType =
 
 [<RequireQualifiedAccess>]
 module ReturnType =
-    let (|Type|ByRef|TypedByRef|Void|) (retType: ReturnType) =
-        let rtype = struct(retType.CustomModifiers, retType.ReturnType)
+    let inline (|Type|ByRef|TypedByRef|Void|) (retType: ReturnType) =
+        let inline rtype() = struct(retType.CustomModifiers, retType.ReturnType.Value)
         match retType.Tag with
-        | ReturnTypeTag.ByRef -> ByRef rtype
+        | ReturnTypeTag.ByRef -> ByRef(rtype())
         | ReturnTypeTag.TypedByRef -> TypedByRef retType.CustomModifiers
         | ReturnTypeTag.Void -> Void retType.CustomModifiers
         | ReturnTypeTag.Type
-        | _ -> Type rtype
+        | _ -> Type(rtype())
 
-    let Type (modifiers, paramType) = ReturnType(ReturnTypeTag.Type, modifiers, paramType)
-    let ByRef (modifiers, paramType) = ReturnType(ReturnTypeTag.ByRef, modifiers, paramType)
-    let TypedByRef modifiers = ReturnType(ReturnTypeTag.TypedByRef, modifiers, Unchecked.defaultof<EncodedType>)
-    let Void modifiers = ReturnType(ReturnTypeTag.TypedByRef, modifiers, Unchecked.defaultof<EncodedType>)
+    let Type (modifiers, paramType) = ReturnType(ReturnTypeTag.Type, modifiers, ValueSome paramType)
+    let ByRef (modifiers, paramType) = ReturnType(ReturnTypeTag.ByRef, modifiers, ValueSome paramType)
+    let TypedByRef modifiers = ReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
+    let Void modifiers = ReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
 
 type [<IsReadOnly; Struct>] MethodThis internal (tag: CallConvFlags) = member _.Tag = tag
 
@@ -206,7 +211,7 @@ type PropertySig =
 [<IsReadOnly; Struct>]
 type GenericArgList =
     internal { GenArgs: ImmutableArray<EncodedType> }
-    member this.Count = this.GenArgs.Length
+    member this.Count = uint32 this.GenArgs.Length
     member this.Item with get i = this.GenArgs.[i]
     member this.GetEnumerator() = this.GenArgs.GetEnumerator()
 
@@ -214,14 +219,14 @@ type GenericArgList =
 [<IsReadOnly; Struct>]
 type GenericInst =
     { IsValueType: bool
-      GenericType: TypeDefOrRef
+      GenericType: TypeDefOrRefOrSpecEncoded
       GenericArguments: GenericArgList }
 
 (*
 [<RequireQualifiedAccess>]
 type GenericInst =
-    | Class of GenericType: TypeDefOrRef * GenericArguments: GenericArgList
-    | ValueType of GenericType: TypeDefOrRef * GenericArguments: GenericArgList
+    | Class of GenericType: TypeDefOrRefOrSpecEncoded * GenericArguments: GenericArgList
+    | ValueType of GenericType: TypeDefOrRefOrSpecEncoded * GenericArguments: GenericArgList
 *)
 [<RequireQualifiedAccess>]
 module GenericInst =

@@ -1,18 +1,34 @@
 ﻿namespace FSharpIL.Writing
 
 open System
-open System.Collections.Generic
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
 open FSharpIL.Utilities.Collections
 
 open FSharpIL
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Blobs
+open FSharpIL.Metadata.Signatures
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<IsReadOnly; Struct>]
 type internal BlobEntry = { Offset: BlobOffset; Length: uint32 }
 
+type internal IBlobWriter<'Item> = interface
+    abstract Write: byref<ChunkedMemoryBuilder> * item: inref<'Item> -> unit
+end
+
 type ByteBlobWriter = delegate of byref<ChunkedMemoryBuilder> -> unit
+
+[<IsReadOnly>]
+type private DelegateBlobWriter = struct
+    interface IBlobWriter<ByteBlobWriter> with member _.Write(wr, writer) = writer.Invoke &wr
+end
+
+[<IsReadOnly>]
+type private MethodDefSigWriter = struct
+    interface IBlobWriter<MethodDefSig> with member _.Write(wr, signature) = BlobWriter.methodDefSig &signature &wr
+end
 
 /// <summary>Builds the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
 [<Sealed>]
@@ -36,10 +52,18 @@ type BlobStreamBuilder (capacity: int32) =
         entry.Offset
 
     // TODO: Add overload that accepts function pointer for adding byte blob when available.
-    member this.Add(writer: ByteBlobWriter) =
+    //member this.Add(writer: 
+
+    member internal this.Add<'Writer, 'Item
+        when 'Writer :> IBlobWriter<'Item>
+        and 'Writer : struct>
+        (item: inref<'Item>)
+        =
         let start = offset
-        writer.Invoke &content
+        Unchecked.defaultof<'Writer>.Write(&content, &item)
         this.AddEntry start
+
+    member this.Add(writer: ByteBlobWriter) = this.Add<DelegateBlobWriter, _> &writer
 
     member this.Add(bytes: ReadOnlySpan<byte>) =
         let start = offset
@@ -49,6 +73,8 @@ type BlobStreamBuilder (capacity: int32) =
     member inline this.Add(bytes: ReadOnlyMemory<byte>) = this.Add bytes.Span
     member inline this.Add(bytes: byte[]) = this.Add(ReadOnlySpan bytes)
     member inline this.Add(bytes: ImmutableArray<byte>) = this.Add(bytes.AsSpan())
+
+    member this.Add(signature: inref<_>) = { MethodDefSig = this.Add<MethodDefSigWriter, _> &signature }
 
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength

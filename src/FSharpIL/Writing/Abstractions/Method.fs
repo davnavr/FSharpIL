@@ -155,11 +155,12 @@ module Method =
                 ||| Unchecked.defaultof<'Kind>.RequiredFlags
               Name = strings.Add method.MethodName
               Signature =
-                { CallingConvention = cconv
-                  HasThis = Unchecked.defaultof<'Kind>.MethodThis
-                  ReturnType = method.ReturnType
-                  Parameters = paramSigItems }
-                |> failwith "TODO: Add Signature to blobs stream"
+                let signature =
+                    { CallingConvention = cconv
+                      HasThis = Unchecked.defaultof<'Kind>.MethodThis
+                      ReturnType = method.ReturnType
+                      Parameters = paramSigItems }
+                blobs.Add &signature
               ParamList = failwith "TODO: Get params" }
 
         entry.Methods.Add &method' |> ignore
