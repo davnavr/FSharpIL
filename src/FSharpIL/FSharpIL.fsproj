@@ -107,7 +107,7 @@
     <Compile Include="Writing\Abstractions\Constant.fs" />
     <Compile Include="Writing\Abstractions\MemberRef.fs" />
     <Compile Include="Writing\Abstractions\TypeRef.fs" />
-    <Compile Include="Writing\Abstractions\TypeMemberMap.fs" />
+    <Compile Include="Writing\Abstractions\ModuleBuilder.fs" />
     <Compile Include="Writing\Abstractions\ClassDef.fs" />
     <Compile Include="Writing\Abstractions\MemberOwner.fs" />
     <Compile Include="Writing\Abstractions\Parameter.fs" />

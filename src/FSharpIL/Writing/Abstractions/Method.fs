@@ -120,41 +120,39 @@ module Method =
         // TODO: Don't forget to check if function pointer types also use MVar.
         | _ -> false
 
-    let private parameters (method: inref<ManagedMethodDef<_, _, _>>) (paramTableBuilder: ParamTableBuilder) strings =
+    let private parameters (method: inref<ManagedMethodDef<_, _, _>>) builder =
         match method.Parameters.Length with
-        | 0 -> struct(Default, ImmutableArray<ParamItem>.Empty, paramTableBuilder.Next) // TODO: Is paramlist 0 or next value?
+        // TODO: Don't modify Param table yet.
+        | 0 -> struct(Default, ImmutableArray<ParamItem>.Empty, ImmutableArray<ParamRow>.Empty)
         | length ->
             let mutable items, rows, gcount = Array.zeroCreate<ParamItem> length, Array.zeroCreate<ParamRow> length, 0u
 
             for i = 0 to length - 1 do
                 let param = &method.Parameters.ItemRef i
                 let item = Parameter.item &param
-
-                rows.[i] <- Parameter.row (Checked.uint16 i + 1us) &param strings
-
+                rows.[i] <- Parameter.row (Checked.uint16 i + 1us) &param builder.Metadata.Strings
                 if isGenericParam param.Type then gcount <- gcount + 1u
-
                 items.[i] <- item
 
             let cconv =
                 match gcount with
-                | 0u ->  Default
+                | 0u -> Default
                 | _ -> Generic gcount
 
-            struct(cconv, Unsafe.As &items, paramTableBuilder.Add(Unsafe.As &rows).StartIndex)
+            struct(cconv, Unsafe.As &items, Unsafe.As &rows)
 
-    let private tryAddRow owner (method: inref<ManagedMethodDef<'Kind, _, _>>) (builder: CliMetadataBuilder) members =
-        let mutable entry = TypeMemberMap.findMembers owner members
-        let struct(cconv, paramSigItems, paramList) = parameters &method builder.Tables.Param builder.Strings
+    let private tryAddRow owner (method: inref<ManagedMethodDef<'Kind, _, _>>) builder =
+        let mutable members = builder.MemberMap.GetValueOrDefault owner
+        let struct(cconv, paramSigItems, paramRowList) = parameters &method builder
 
-        let method' =
-            { Rva = Unchecked.defaultof<'Kind>.MethodBody method.Body
+        let entry =
+            { Body = Unchecked.defaultof<'Kind>.MethodBody method.Body
               ImplFlags = MethodImplFlags.IL
               Flags =
                 MemberVisibility.ofMethod method.Visibility
                 ||| method.Flags.Flags
                 ||| Unchecked.defaultof<'Kind>.RequiredFlags
-              Name = builder.Strings.Add method.MethodName
+              MethodName = builder.Strings.Add method.MethodName
               Signature =
                 let signature =
                     { CallingConvention = cconv
@@ -162,11 +160,11 @@ module Method =
                       ReturnType = method.ReturnType
                       Parameters = paramSigItems }
                 builder.Blob.Add &signature
-              ParamList = paramList }
+              ParamList = paramRowList }
 
-        entry.Methods.Add &method' |> ignore
-        members.MemberMap.[owner] <- entry
-        failwith "TODO: Should duplicate checking happen when entry is modified, or when type member map is serialized?"
+        members.Methods.Add &entry
+        failwith "TODO: Should duplicate checking happen when members is modified, or when type member map is serialized?"
+        failwith "Update entry struct in MemberMap"
 
     let tryAddConcrete (MemberOwner owner: InstanceMemberOwner) (method: inref<ConcreteMethodDef>) builder members =
         tryAddRow owner &method builder members

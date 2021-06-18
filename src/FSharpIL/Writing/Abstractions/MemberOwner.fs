@@ -7,9 +7,8 @@ open FSharpIL.Metadata.Tables
 [<IsReadOnly>]
 type MemberOwner<'Kind when 'Kind : struct> = struct
     val Kind: 'Kind
-    val Index: TableIndex<TypeDefRow>
-    internal new (kind, index) = { Kind = kind; Index = { TableIndex = index }}
-    override this.ToString() = sprintf "%A (0x%08X)" this.Kind this.Index.TableIndex
+    val Index: TypeEntryIndex<unit>
+    internal new (kind, index) = { Kind = kind; Index = index }
 end
 
 [<RequireQualifiedAccess>]
@@ -49,8 +48,8 @@ type StaticMemberOwner = MemberOwner<MemberOwnerKinds.StaticMember>
 
 [<RequireQualifiedAccess>]
 module StaticMemberOwner =
-    let ConcreteClass (index: TableIndex<ConcreteClassDef>) =
-        StaticMemberOwner(MemberOwnerKinds.StaticMember.ConcreteClass, uint32 index)
+    let ConcreteClass (index: TypeEntryIndex<ConcreteClassDef>) =
+        StaticMemberOwner(MemberOwnerKinds.StaticMember.ConcreteClass, TypeEntryIndex.removeTag index)
     //let inline (|ConcreteClass|AbstractClass|SealedClass|ValueType|) (owner: ClassConstructorOwner) =
     //    match owner.Kind with
     //    | MemberOwnerKinds.ClassConstructor.ConcreteClass 

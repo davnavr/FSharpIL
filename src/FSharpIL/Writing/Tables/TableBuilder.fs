@@ -3,7 +3,7 @@
 open FSharpIL
 open FSharpIL.Metadata.Tables
 
-type ITableBuilder<'Row when 'Row : struct and 'Row  :> ITableRow> = interface
+type ITableBuilder<'Row when 'Row : struct and 'Row :> ITableRow> = interface
     abstract Count: int32
     abstract Item: TableIndex<'Row> -> inref<'Row> with get
     abstract SerializeRow: HeapSizes * ITableRowCounts * row: inref<'Row> * byref<ChunkedMemoryBuilder> -> unit

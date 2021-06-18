@@ -13,15 +13,15 @@ type internal ParamRowValidator =
 
 [<Sealed>]
 type ParamTableBuilder internal () =
-    static let comparer =
+    static let comparer = // TODO: Fix, comparison should prevent parameters with same sequence number (4).
         { new System.Collections.Generic.IEqualityComparer<ParamRow> with
             member _.GetHashCode row = row.GetHashCode()
             member _.Equals(_, _) = false }
     let rows = RangedRowList<ParamRow, ParamRowValidator> comparer
-    member _.Add parameters = ValidationResult.get(rows.TryAdd parameters) // TODO: Warning for gaps in sequence (5).
-    member internal _.Next: TableIndex<ParamRow> = { TableIndex = uint32 rows.Count + 1u }
+    member _.TryAdd parameters = rows.TryAdd parameters // TODO: Warning for gaps in sequence (5).
+    member _.Count = rows.Count
     interface ITableBuilder<ParamRow> with
-        member _.Count = rows.Count
+        member this.Count = this.Count
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(hsizes, _, row, wr) =
             wr.WriteLE(uint16 row.Flags)
