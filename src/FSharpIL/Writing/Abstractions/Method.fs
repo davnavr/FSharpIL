@@ -8,6 +8,7 @@ open FSharpIL.Metadata
 open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 open FSharpIL.Writing
+open FSharpIL.Writing.Tables
 
 //[<IsReadOnly>]
 //type PInvokeMethodDef = struct
@@ -119,17 +120,17 @@ module Method =
         // TODO: Don't forget to check if function pointer types also use MVar.
         | _ -> false
 
-    let private parameters (method: inref<ManagedMethodDef<_, _, _>>) strings =
+    let private parameters (method: inref<ManagedMethodDef<_, _, _>>) (paramTableBuilder: ParamTableBuilder) strings =
         match method.Parameters.Length with
-        | 0 -> struct(Default, ImmutableArray<ParamItem>.Empty)
+        | 0 -> struct(Default, ImmutableArray<ParamItem>.Empty, paramTableBuilder.Next) // TODO: Is paramlist 0 or next value?
         | length ->
-            let mutable items, gcount = Array.zeroCreate<ParamItem> length, 0u
+            let mutable items, rows, gcount = Array.zeroCreate<ParamItem> length, Array.zeroCreate<ParamRow> length, 0u
 
             for i = 0 to length - 1 do
                 let param = &method.Parameters.ItemRef i
                 let item = Parameter.item &param
 
-                Parameter.row (Checked.uint16 i) &param strings |> failwith "TODO: Add parameter rows"
+                rows.[i] <- Parameter.row (Checked.uint16 i + 1us) &param strings
 
                 if isGenericParam param.Type then gcount <- gcount + 1u
 
@@ -140,11 +141,11 @@ module Method =
                 | 0u ->  Default
                 | _ -> Generic gcount
 
-            struct(cconv, Unsafe.As &items)
+            struct(cconv, Unsafe.As &items, paramTableBuilder.Add(Unsafe.As &rows).StartIndex)
 
-    let private tryAddRow owner (method: inref<ManagedMethodDef<'Kind, _, _>>) strings (blobs: BlobStreamBuilder) members =
+    let private tryAddRow owner (method: inref<ManagedMethodDef<'Kind, _, _>>) (builder: CliMetadataBuilder) members =
         let mutable entry = TypeMemberMap.findMembers owner members
-        let struct(cconv, paramSigItems) = parameters &method strings
+        let struct(cconv, paramSigItems, paramList) = parameters &method builder.Tables.Param builder.Strings
 
         let method' =
             { Rva = Unchecked.defaultof<'Kind>.MethodBody method.Body
@@ -153,28 +154,28 @@ module Method =
                 MemberVisibility.ofMethod method.Visibility
                 ||| method.Flags.Flags
                 ||| Unchecked.defaultof<'Kind>.RequiredFlags
-              Name = strings.Add method.MethodName
+              Name = builder.Strings.Add method.MethodName
               Signature =
                 let signature =
                     { CallingConvention = cconv
                       HasThis = Unchecked.defaultof<'Kind>.MethodThis
                       ReturnType = method.ReturnType
                       Parameters = paramSigItems }
-                blobs.Add &signature
-              ParamList = failwith "TODO: Get params" }
+                builder.Blob.Add &signature
+              ParamList = paramList }
 
         entry.Methods.Add &method' |> ignore
         members.MemberMap.[owner] <- entry
         failwith "TODO: Should duplicate checking happen when entry is modified, or when type member map is serialized?"
 
-    let tryAddConcrete (MemberOwner owner: InstanceMemberOwner) (method: inref<ConcreteMethodDef>) strings blobs members =
-        tryAddRow owner &method strings blobs members
+    let tryAddConcrete (MemberOwner owner: InstanceMemberOwner) (method: inref<ConcreteMethodDef>) builder members =
+        tryAddRow owner &method builder members
 
     //let tryAddFinal
     //let tryAddVirtual
 
-    let tryAddAbstract (MemberOwner owner: AbstractMemberOwner) (method: inref<AbstractMethodDef>) strings blobs members =
-        tryAddRow owner &method strings blobs members
+    let tryAddAbstract (MemberOwner owner: AbstractMemberOwner) (method: inref<AbstractMethodDef>) builder members =
+        tryAddRow owner &method builder members
 
-    let tryAddStatic (MemberOwner owner: StaticMemberOwner) (method: inref<StaticMethodDef>) strings blobs members =
-        tryAddRow owner &method strings blobs members
+    let tryAddStatic (MemberOwner owner: StaticMemberOwner) (method: inref<StaticMethodDef>) builder members =
+        tryAddRow owner &method builder members

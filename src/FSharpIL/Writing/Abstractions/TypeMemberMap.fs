@@ -101,7 +101,7 @@ module TypeMemberMap =
                     // TODO: Also add properties and events
                     trySerizalizeMembers builder.MethodDef members'.Methods
                 | err -> err)
-            members.Keys
+            members.Keys // TODO: Iterate through TypeIndices of MetadataTablesBuilder instead to keep the indices in sync
 
     /// <exception cref="T:FSharpIL.Writing.Tables.ValidationErrorException">
     /// Thrown when a row could not be added to the <c>Field</c>, <c>MethodDef</c>, <c>Event</c>, or <c>Property</c> tables.

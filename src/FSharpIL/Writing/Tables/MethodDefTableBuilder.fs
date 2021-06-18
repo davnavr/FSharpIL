@@ -141,9 +141,10 @@ type internal MethodDefRowValidator =
 type MethodDefTableBuilder internal () =
     // TODO: Make MethodDefRow implement IComparable, since methods marked CompilerControlled are ignored in duplicate checking (18).
     let rows = RangedRowList<MethodDefRow, MethodDefRowValidator>()
+    member _.Count = rows.Count
     member _.TryAdd methods: ValidationResult<_> = rows.TryAdd methods
     interface ITableBuilder<MethodDefRow> with
-        member _.Count = rows.Count
+        member this.Count = this.Count
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(hsizes, tsizes, row, wr) =
             wr.WriteLE row.Rva.Value

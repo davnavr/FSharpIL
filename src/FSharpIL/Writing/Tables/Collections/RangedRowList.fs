@@ -12,7 +12,7 @@ open FSharpIL.Writing.Tables
 type TableIndexRange<'Row when 'Row : struct and 'Row :> ITableRow> =
     internal { Start: int32; End: int32 }
     member this.Count = this.End - this.Start + 1
-    member this.StartIndex = { TableIndex = uint32 this.Start }
+    member this.StartIndex: TableIndex<'Row> = { TableIndex = uint32 this.Start }
 
 type IRowRangeValidator<'Row when 'Row : struct and 'Row :> ITableRow> = interface
     abstract Validate: row: inref<'Row> -> IValidationError option
