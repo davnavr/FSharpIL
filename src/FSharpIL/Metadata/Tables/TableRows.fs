@@ -19,10 +19,12 @@ type ModuleRow =
 
 /// <summary>(0x01) Represents a row in the <c>TypeRef</c> table (II.22.38).</summary>
 [<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type TypeRefRow =
     { ResolutionScope: ResolutionScope
       TypeName: StringOffset
       TypeNamespace: StringOffset }
+
     interface ITableRow
 
 /// <summary>Describes the attributes of a <c>Field</c> (II.23.1.5).</summary>
@@ -54,11 +56,26 @@ type FieldFlags =
 
 /// <summary>(0x04) Represents a row in the <c>Field</c> table (II.22.15).</summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type FieldRow =
     { Flags: FieldFlags
       Name: StringOffset
       Signature: FieldSigOffset }
+
+    member this.Equals other =
+        if (this.Flags &&& other.Flags &&& FieldFlags.FieldAccessMask) = FieldFlags.CompilerControlled
+        then false
+        else this.Name = other.Name && this.Signature = other.Signature
+
+    override this.GetHashCode() = HashCode.Combine(this.Name, this.Signature)
+
+    override this.Equals obj =
+        match obj with
+        | :? FieldRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<FieldRow> with member this.Equals other = this.Equals other
 
 /// <summary>Describes the attributes of a <c>MethodDef</c> (II.23.1.10).</summary>
 [<Flags>]
@@ -138,11 +155,23 @@ type ParamFlags =
 
 /// <summary>(0x08) Represents a row in the <c>Param</c> table (II.22.33).</summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type ParamRow =
     { Flags: ParamFlags
       Sequence: uint16
       Name: StringOffset }
+
+    member this.Equals other = this.Sequence = other.Sequence
+
+    override this.GetHashCode() = int32 this.Sequence
+
+    override this.Equals obj =
+        match obj with
+        | :? ParamRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<ParamRow> with member this.Equals other = this.Equals other
 
 [<IsReadOnly>]
 type MethodBodyLocation = struct
@@ -153,6 +182,7 @@ end
 
 /// <summary>(0x06) Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type MethodDefRow =
     { Rva: MethodBodyLocation
       ImplFlags: MethodImplFlags
@@ -160,7 +190,21 @@ type MethodDefRow =
       Name: StringOffset
       Signature: MethodDefSigOffset
       ParamList: TableIndex<ParamRow> }
+
+    member this.Equals other =
+        if (this.Flags &&& other.Flags &&& MethodDefFlags.MemberAccessMask) = MethodDefFlags.CompilerControlled
+        then false
+        else this.Name = other.Name && this.Signature = other.Signature
+
+    override this.GetHashCode() = HashCode.Combine(this.Name, this.Signature)
+
+    override this.Equals obj =
+        match obj with
+        | :? MethodDefRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<MethodDefRow> with member this.Equals other = this.Equals other
 
 /// <summary>
 /// Describes the attributes of a <c>TypeDef</c>, such as its visibility, layout, string formatting, and other information
@@ -221,7 +265,7 @@ type TypeDefFlags =
 
 /// <summary>(0x02) Represents a row in the <c>TypeDef</c> table (II.22.37).</summary>
 [<IsReadOnly; Struct>]
-type TypeDefRow =
+type TypeDefRow = // TODO: Figure out how to handle equality for TypeDefRow, see TypeDefTableBuilder.fs
     { Flags: TypeDefFlags
       TypeName: StringOffset
       TypeNamespace: StringOffset
@@ -234,6 +278,7 @@ type TypeDefRow =
 
 /// <summary>(0x09) Represents a row in the <c>InterfaceImpl</c> table (II.22.23).</summary>
 [<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type InterfaceImplRow =
     { Class: TableIndex<TypeDefRow>; Interface: TypeDefOrRef }
     interface ITableRow
@@ -242,6 +287,7 @@ type InterfaceImplRow =
 /// (0x0A) Represents a row in the <c>MemberRef</c> table, which contains references to methods or fields (II.22.25).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type MemberRefRow =
     { Class: MemberRefParent
       Name: StringOffset
@@ -249,7 +295,7 @@ type MemberRefRow =
     interface ITableRow
 
 /// Specifies the type of a constant value (II.22.9).
-type ConstantType =
+type ConstantType = // TODO: Make ConstantType a struct DU.
     | Boolean = 0x2uy
     | Char = 0x3uy
     | I1 = 0x4uy
@@ -274,14 +320,27 @@ module ConstantType =
 /// and properties" (II.22.9).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type ConstantRow =
     { Type: ConstantType
       Parent: HasConstant
       Value: ConstantOffset }
+
+    member this.Equals other = this.Parent = other.Parent
+
+    override this.GetHashCode() = this.Parent.GetHashCode()
+
+    override this.Equals obj =
+        match obj with
+        | :? ConstantRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<ConstantRow> with member this.Equals other = this.Equals other
 
 /// <summary>(0x0C) Represents a row in the <c>CustomAttribute</c> table (II.22.10).</summary>
 [<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type CustomAttributeRow =
     { Parent: HasCustomAttribute
       Type: CustomAttributeType
@@ -295,11 +354,23 @@ type CustomAttributeRow =
 /// Language Infrastructure (II.22.8).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type ClassLayoutRow =
     { PackingSize: uint16
       ClassSize: uint32
       Parent: TableIndex<TypeDefRow> }
+
+    member this.Equals other = this.Parent = other.Parent
+
+    override this.GetHashCode() = this.Parent.GetHashCode()
+
+    override this.Equals obj =
+        match obj with
+        | :? ConstantRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<ClassLayoutRow> with member this.Equals other = this.Equals other
 
 
 
@@ -307,6 +378,7 @@ type ClassLayoutRow =
 /// (0x11) Represents a row in the <c>StandAloneSig</c> table, which contains an offset into the <c>#Blob</c> heap (II.22.36).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type StandaloneSigRow =
     internal { StandAloneSig: BlobOffset }
     member this.Signature = this.StandAloneSig
@@ -323,16 +395,29 @@ type EventFlags =
 /// (0x14) Represents a row in the <c>Event</c> table (II.22.13).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type EventRow =
     { EventFlags: EventFlags
       Name: StringOffset
       EventType: TypeDefOrRef }
+
+    member this.Equals other = this.Name = other.Name
+
+    override this.GetHashCode() = this.Name.GetHashCode()
+
+    override this.Equals obj =
+        match obj with
+        | :? EventRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<EventRow> with member this.Equals other = this.Equals other
 
 /// <summary>
 /// (0x12) Represents a row in the <c>EventMap</c> table, which specifies the events associated with a type (II.22.12).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type EventMapRow =
     { Parent: TableIndex<TypeDefRow>
       EventList: TableIndex<EventRow> }
@@ -351,16 +436,29 @@ type PropertyFlags =
 
 /// <summary>(0x17) Represents a row in the <c>Property</c> table (II.22.34).</summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type PropertyRow =
     { Flags: PropertyFlags
       Name: StringOffset
       Type: PropertySigOffset }
+
+    member this.Equals other = this.Name = other.Name && this.Type = other.Type
+
+    override this.GetHashCode() = HashCode.Combine(this.Name, this.Type)
+
+    override this.Equals obj =
+        match obj with
+        | :? PropertyRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<PropertyRow> with member this.Equals other = this.Equals other
 
 /// <summary>
 /// (0x15) Represents a row in the <c>PropertyMap</c> table, which specifies the properties associated with a type (II.22.35).
 /// </summary>
-[<IsReadOnly; Struct>] 
+[<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type PropertyMapRow =
     { Parent: TableIndex<TypeDefRow>
       PropertyList: TableIndex<PropertyRow> }
@@ -395,15 +493,28 @@ type MethodSemanticsRow =
 /// <summary>(0x19) Represents a row in the <c>MethodImpl</c> table (II.22.27).</summary>
 /// <remarks>Rows in this table are generated by the C# compiler for explicit interface implementations.</remarks>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type MethodImplRow =
     { Class: TableIndex<TypeDefRow>
       MethodBody: MethodDefOrRef
       MethodDeclaration: MethodDefOrRef }
+
+    member this.Equals other = this.Class = other.Class && this.MethodDeclaration = other.MethodDeclaration
+
+    override this.GetHashCode() = HashCode.Combine(this.Class, this.MethodDeclaration)
+
+    override this.Equals obj =
+        match obj with
+        | :? MethodImplRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<MethodImplRow> with member this.Equals other = this.Equals other
 
 /// <summary>(0x1A) Represents a row in the <c>ModuleRef</c> table (II.22.31).</summary>
 [<RequireQualifiedAccess>]
 [<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type ModuleRefRow =
     { Name: StringOffset }
     interface ITableRow
@@ -414,6 +525,7 @@ type ModuleRefRow =
 /// </summary>
 /// <remarks>Rows in this table are generated by the C# and F# compilers for generic instantiations of types.</remarks>
 [<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type TypeSpecRow =
     internal { TypeSpec: BlobOffset }
     member this.Signature = this.TypeSpec
@@ -433,10 +545,22 @@ end
 /// of a field (II.22.18).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type FieldRvaRow =
     { Rva: FieldValueLocation
       Field: TableIndex<FieldRow> }
+
+    member this.Equals other = this.Field = other.Field
+
+    override this.GetHashCode() = this.Field.GetHashCode()
+
+    override this.Equals obj =
+        match obj with
+        | :? FieldRvaRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<FieldRvaRow> with member this.Equals other = this.Equals other
 
 /// <summary>Specifies the algorithm used to compute the hash for the contents of an assembly (II.23.1.1).</summary>
 type AssemblyHashAlgorithm =
@@ -476,6 +600,7 @@ type AssemblyRow =
 /// module (II.22.5).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type AssemblyRefRow =
     { MajorVersion: uint16
       MinorVersion: uint16
@@ -490,7 +615,25 @@ type AssemblyRefRow =
     member this.Version =
         Version(int32 this.MajorVersion, int32 this.MinorVersion, int32 this.BuildNumber, int32 this.RevisionNumber)
 
+    member this.Equals other =
+        this.MajorVersion = other.MajorVersion
+        && this.MinorVersion = other.MinorVersion
+        && this.BuildNumber = other.BuildNumber
+        && this.RevisionNumber = other.RevisionNumber
+        && this.PublicKeyOrToken = other.PublicKeyOrToken
+        && this.Name = other.Name
+        && this.Culture = other.Culture
+
+    override this.GetHashCode() =
+        HashCode.Combine(this.MajorVersion, this.MinorVersion, this.BuildNumber, this.RevisionNumber, this.PublicKeyOrToken, this.Name, this.Culture)
+
+    override this.Equals obj =
+        match obj with
+        | :? AssemblyRefRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<AssemblyRefRow> with member this.Equals other = this.Equals other
 
 
 
@@ -501,11 +644,23 @@ type FileFlags =
 
 /// <summary>(0x26) Represents a row in the <c>File</c> table (II.22.19).</summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type FileRow =
     { Flags: FileFlags
       Name: StringOffset
       HashValue: BlobOffset }
+
+    member this.Equals other = this.Name = other.Name
+
+    override this.GetHashCode() = this.Name.GetHashCode()
+
+    override this.Equals obj =
+        match obj with
+        | :? FileRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<FileRow> with member this.Equals other = this.Equals other
 
 
 
@@ -518,22 +673,46 @@ type ManifestResourceFlags =
 
 /// <summary>(0x28) Represents a row in the <c>ManifestResource</c> table (II.22.24).</summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type ManifestResourceRow =
     { Offset: uint32
       Flags: ManifestResourceFlags
       Name: StringOffset
       Implementation: Implementation }
+
+    member this.Equals other = this.Name = other.Name
+
+    override this.GetHashCode() = this.Name.GetHashCode()
+
+    override this.Equals obj =
+        match obj with
+        | :? ManifestResourceRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<ManifestResourceRow> with member this.Equals other = this.Equals other
 
 /// <summary>
 /// (0x29) Represents a row in the <c>NestedClass</c> table, which specifies which types are nested inside other types in this
 /// assembly (II.22.32).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type NestedClassRow =
     { NestedClass: TableIndex<TypeDefRow>
       EnclosingClass: TableIndex<TypeDefRow> }
+
+    member this.Equals other = this.NestedClass = other.NestedClass
+
+    override this.GetHashCode() = this.NestedClass.GetHashCode()
+
+    override this.Equals obj =
+        match obj with
+        | :? NestedClassRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<NestedClassRow> with member this.Equals other = this.Equals other
 
 /// <summary>
 /// Specifies the attributes of a <c>GenericParam</c>, such as its variance and special constraints (II.23.1.7).
@@ -561,15 +740,28 @@ type GenericParamFlags =
 /// (0x2A) Represents a row in the <c>GenericParam</c> table, which describes a generic parameter of a type or method (II.22.20).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type GenericParamRow =
     { Number: uint16
       Flags: GenericParamFlags
       Owner: TypeOrMethodDef
       Name: StringOffset }
+
+    member this.Equals other = this.Owner = other.Owner && this.Number = other.Number
+
+    override this.GetHashCode() = HashCode.Combine(this.Owner, this.Number)
+
+    override this.Equals obj =
+        match obj with
+        | :? GenericParamRow as other -> this.Equals other
+        | _ -> false
+
     interface ITableRow
+    interface IEquatable<GenericParamRow> with member this.Equals other = this.Equals other
 
 /// <summary>(0x2B) Represents a row in the <c>MethodSpec</c> table (II.22.29).</summary>
 [<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type MethodSpecRow =
     { Method: MethodDefOrRef
       Instantiation: MethodSpecOffset }
@@ -580,6 +772,7 @@ type MethodSpecRow =
 /// generic parameter is constrained to implement or derive from (II.22.21).
 /// </summary>
 [<IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type GenericParamConstraintRow =
     { Owner: TableIndex<GenericParamRow>
       Constraint: TypeDefOrRef }

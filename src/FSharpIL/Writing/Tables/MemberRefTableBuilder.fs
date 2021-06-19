@@ -5,7 +5,7 @@ open FSharpIL.Writing.Tables.Collections
 
 [<Sealed>]
 type MemberRefTableBuilder internal () =
-    let rows = RowSet<MemberRefRow>()
+    let rows = RowSet<MemberRefRow>() // TODO: Fix, don't want errors if duplicates exist, only warnings (6).
     interface ITableBuilder<MemberRefRow> with
         member _.Count = rows.Count
         member _.Item with get i = &rows.[i]

@@ -12,6 +12,7 @@ open FSharpIL.Metadata.Tables
 open FSharpIL.Writing
 
 [<Struct>]
+[<NoComparison; NoEquality>]
 type internal MemberSet<'Member when 'Member : struct and 'Member : equality> =
     private { mutable Members: HashSet<'Member> }
 

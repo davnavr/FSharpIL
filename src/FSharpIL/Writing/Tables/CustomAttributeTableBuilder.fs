@@ -5,7 +5,7 @@ open FSharpIL.Writing.Tables.Collections
 
 [<Sealed>]
 type CustomAttributeTableBuilder internal () =
-    let rows = RowSet<CustomAttributeRow>()
+    let rows = RowList<CustomAttributeRow>()
     interface ITableBuilder<CustomAttributeRow> with
         member _.Count = rows.Count
         member _.Item with get i = &rows.[i]
