@@ -89,15 +89,16 @@ type internal TypeEntry =
 
 [<NoComparison; NoEquality>]
 type ModuleBuilder =
-    private
+    internal
         { Metadata: CliMetadataBuilder
-          Types: ImmutableSortedDictionary<TypeEntry, TypeEntryIndex<unit>>
+          Types: ImmutableSortedDictionary<TypeEntry, TypeEntryIndex<unit>>.Builder // TODO: How are types sorted? Make TypeEntry implement IComparable?
           MemberMap: ImmutableSortedDictionary<TypeEntryIndex<unit>, TypeMembers>.Builder }
 
     member this.Strings = this.Metadata.Strings
     member this.UserString = this.Metadata.UserString
     member this.Guid = this.Metadata.Guid
     member this.Blob = this.Metadata.Blob
+    member internal this.Globals = this.MemberMap.ValueRef { TypeEntry = 0 }
 
 [<RequireQualifiedAccess>]
 module TypeEntryIndex =
@@ -105,9 +106,25 @@ module TypeEntryIndex =
 
 [<RequireQualifiedAccess>]
 module ModuleBuilder =
-    let create moduleRow =
-        // TODO: Add <Module> type.
-        failwith "bad"
+    let private moduleTypeName = Identifier.ofStr "<Module>"
+
+    let create moduleRow header root =
+        let builder =
+            { Metadata = CliMetadataBuilder(moduleRow, header, root)
+              Types = ImmutableSortedDictionary.CreateBuilder()
+              MemberMap = ImmutableSortedDictionary.CreateBuilder() }
+
+        builder.Types.Add (
+            { Flags = Unchecked.defaultof<_>
+              TypeName = builder.Strings.Add moduleTypeName
+              TypeNamespace = Unchecked.defaultof<StringOffset>
+              Extends = Unchecked.defaultof<TypeDefOrRef>
+              EnclosingClass = ValueNone },
+            { TypeEntry = 0 }
+        )
+
+        failwith "TODO: Add <Module> type."
+        builder
 
     let internal tryAddType (entry: inref<TypeEntry>) builder =
         builder.Types.TryAdd(entry, { TypeEntry = builder.Types.Count })
