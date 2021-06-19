@@ -7,7 +7,7 @@ open FSharpIL.Writing.Tables.Collections
 
 /// <summary>Error used when an invalid combination of <c>MethodAttributes</c> is used (6, 7, 24).</summary>
 /// <category>Errors</category>
-type InvalidFieldAttributesCombination = InvalidFlagsCombination<MethodDefFlags>
+type InvalidMethodAttributesCombination = InvalidFlagsCombination<MethodDefFlags>
 
 [<RequireQualifiedAccess>]
 module private InvalidMethodFlags =
@@ -101,12 +101,12 @@ module private MethodValidation =
         conditions = 1uy
 
 [<Struct>]
-type internal MethodDefRowValidator =
+type private MethodDefRowValidator =
     interface IRowRangeValidator<MethodDefRow> with
         member _.Validate row =
             match row.Flags with
             | _ when row.Flags &&& MethodDefFlags.MemberAccessMask = MethodDefFlags.MemberAccessMask -> // 6
-                Some(InvalidFieldAttributesCombination MethodDefFlags.MemberAccessMask :> IValidationError)
+                Some(InvalidMethodAttributesCombination MethodDefFlags.MemberAccessMask :> IValidationError)
             | ValidationResult.CheckFlags InvalidMethodFlags.StaticFinal err // 7a
             | ValidationResult.CheckFlags InvalidMethodFlags.StaticVirtual err // 7b
             | ValidationResult.CheckFlags InvalidMethodFlags.StaticNewSlot err // 7c

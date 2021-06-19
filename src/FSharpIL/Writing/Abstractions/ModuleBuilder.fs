@@ -13,7 +13,7 @@ open FSharpIL.Writing
 
 [<Struct>]
 [<NoComparison; NoEquality>]
-type internal MemberSet<'Member when 'Member : struct and 'Member : equality> =
+type MemberSet<'Member when 'Member : struct and 'Member : equality> =
     private { mutable Members: HashSet<'Member> }
 
     member this.Count = if this.Members = null then 0 else this.Members.Count
@@ -57,11 +57,16 @@ type internal MethodEntry =
 
 [<Struct>]
 [<NoComparison; NoEquality>]
-type internal TypeMembers =
-    { Fields: MemberSet<FieldRow>
-      Methods: MemberSet<MethodEntry>
-      Events: MemberSet<EventRow>
-      Properties: MemberSet<PropertyRow> }
+type TypeMembers =
+    internal
+        { Fields: MemberSet<FieldRow>
+          Methods: MemberSet<MethodEntry>
+          Events: MemberSet<EventRow>
+          Properties: MemberSet<PropertyRow> }
+
+    member this.FieldList = this.Fields
+    member this.EventList = this.Events
+    member this.PropertyList = this.Properties
 
 type [<IsReadOnly; Struct>] TypeEntryIndex<'Tag> = internal { TypeEntry: int32 }
 
@@ -99,7 +104,7 @@ type ModuleBuilder =
     member this.UserString = this.Metadata.UserString
     member this.Guid = this.Metadata.Guid
     member this.Blob = this.Metadata.Blob
-    member internal this.Globals = this.MemberMap.ValueRef { TypeEntry = 0 }
+    member this.Globals = this.MemberMap.ValueRef { TypeEntry = 0 }
 
 [<RequireQualifiedAccess>]
 module TypeEntryIndex =

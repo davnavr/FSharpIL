@@ -722,6 +722,7 @@ type GenericParamFlags =
     | None = 0us
     | Covariant = 1us
     | Contravariant = 2us
+    | VarianceMask = 3us
     | SpecialConstraintMask = 0x1Cus
     /// <summary>Corresponds to the <c>class</c> constraint, which constrains the type to being a reference type.</summary>
     | ReferenceTypeConstraint = 4us
@@ -747,7 +748,7 @@ type GenericParamRow =
       Owner: TypeOrMethodDef
       Name: StringOffset }
 
-    member this.Equals other = this.Owner = other.Owner && this.Number = other.Number
+    member this.Equals other = this.Owner = other.Owner && (this.Number = other.Number || this.Name = other.Name)
 
     override this.GetHashCode() = HashCode.Combine(this.Owner, this.Number)
 
