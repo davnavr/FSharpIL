@@ -44,3 +44,21 @@ type [<IsReadOnly; Struct>] MethodSpecOffset = internal { MethodSpec: BlobOffset
 type LocalVarSigOffset =
     internal { LocalVarSig: BlobOffset }
     member this.IsNull = this.LocalVarSig.BlobOffset = 0u
+
+[<IsReadOnly; Struct>]
+type PublicKeyOrToken =
+    { IsPublicKey: bool
+      Token: BlobOffset }
+    member this.IsNull = this.Token.BlobOffset = 0u
+
+[<RequireQualifiedAccess>]
+module PublicKeyOrToken =
+    let PublicKey offset = { IsPublicKey = true; Token = offset }
+    let Token offset = { IsPublicKey = false; Token = offset }
+    let Null = Token Unchecked.defaultof<BlobOffset>
+
+    let inline (|Null|Token|PublicKey|) value =
+        match value with
+        | { Token = { BlobOffset = 0u }} -> Null
+        | { IsPublicKey = false; Token = offset } -> Token offset
+        | { IsPublicKey = true; Token = offset } -> PublicKey offset

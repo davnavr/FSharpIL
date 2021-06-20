@@ -596,8 +596,8 @@ type AssemblyRow =
       RevisionNumber: uint16
       Flags: AssemblyFlags
       PublicKey: BlobOffset
-      Name: StringOffset
-      Culture: StringOffset }
+      Name: StringOffset // TODO: Create special type for assembly name.
+      Culture: StringOffset } // TODO: Create special type for culture.
 
     member this.Version =
         Version(int32 this.MajorVersion, int32 this.MinorVersion, int32 this.BuildNumber, int32 this.RevisionNumber)
@@ -615,14 +615,15 @@ type AssemblyRefRow =
       MinorVersion: uint16
       BuildNumber: uint16
       RevisionNumber: uint16
-      Flags: AssemblyFlags
-      PublicKeyOrToken: BlobOffset
+      PublicKeyOrToken: PublicKeyOrToken
       Name: StringOffset
       Culture: StringOffset
       HashValue: BlobOffset }
 
     member this.Version =
         Version(int32 this.MajorVersion, int32 this.MinorVersion, int32 this.BuildNumber, int32 this.RevisionNumber)
+
+    member this.Flags = if this.PublicKeyOrToken.IsPublicKey then AssemblyFlags.PublicKey else AssemblyFlags.None
 
     member this.Equals other =
         this.MajorVersion = other.MajorVersion

@@ -83,7 +83,7 @@ module TypeEntryIndex =
     val removeTag : index: TypeEntryIndex<'Tag> -> TypeEntryIndex<unit>
 
 [<RequireQualifiedAccess>]
-module ModuleBuilder =
+module ModuleBuilder = // TODO: Replace public and internal functions with instance methods (except for create functions).
     val internal addTypeEntry: entry: inref<TypeEntry> -> builder: ModuleBuilder -> TypeEntryIndex<unit>
 
     val internal addMethodEntry:
@@ -105,6 +105,15 @@ module ModuleBuilder =
         header: CliHeader ->
         root: CliMetadataRoot<FSharpIL.Omitted, FSharpIL.Omitted> ->
         struct(ModuleBuilder * TableIndex<AssemblyRow>)
+
+    val addAssemblyRef:
+        version: Version ->
+        publicKeyOrToken: FSharpIL.Metadata.Blobs.PublicKeyOrToken ->
+        name: AssemblyName ->
+        culture: Identifier voption ->
+        hashValue: BlobOffset ->
+        builder: ModuleBuilder ->
+        TableIndex<AssemblyRefRow>
 
     val tryGetAssembly: assembly: outref<AssemblyRow> -> builder: ModuleBuilder -> bool
 

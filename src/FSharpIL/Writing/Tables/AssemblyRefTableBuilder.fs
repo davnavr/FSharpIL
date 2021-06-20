@@ -6,6 +6,7 @@ open FSharpIL.Writing.Tables.Collections
 [<Sealed>]
 type AssemblyRefTableBuilder internal () =
     let rows = RowList<AssemblyRefRow>()
+    member _.Add(row: inref<_>) = rows.Add &row
     interface ITableBuilder<AssemblyRefRow> with
         member _.Count = rows.Count
         member _.Item with get i = &rows.[i]
@@ -15,7 +16,7 @@ type AssemblyRefTableBuilder internal () =
             wr.WriteLE row.BuildNumber
             wr.WriteLE row.RevisionNumber
             wr.WriteLE(uint32 row.Flags)
-            StreamOffset.writeBlob &wr hsizes row.PublicKeyOrToken
+            StreamOffset.writeBlob &wr hsizes row.PublicKeyOrToken.Token
             StreamOffset.writeString &wr hsizes row.Name
             StreamOffset.writeString &wr hsizes row.Culture
             StreamOffset.writeBlob &wr hsizes row.HashValue

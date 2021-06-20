@@ -270,3 +270,22 @@ module ModuleBuilder =
                 | Error err -> Error err
             | Error err -> Error err
         | Error err  -> Error err
+
+    let addAssemblyRef
+        (version: Version)
+        publicKeyOrToken
+        (name: AssemblyName)
+        (culture: Identifier voption)
+        hashValue
+        (builder: ModuleBuilder)
+        =
+        let row =
+            { MajorVersion = Checked.uint16 version.Major
+              MinorVersion = Checked.uint16 version.Minor
+              BuildNumber = Checked.uint16 version.Build
+              RevisionNumber = Checked.uint16 version.Revision
+              PublicKeyOrToken = publicKeyOrToken
+              Name = builder.Strings.Add name
+              Culture = builder.Strings.Add culture
+              HashValue = hashValue }
+        builder.Metadata.Tables.AssemblyRef.Add &row

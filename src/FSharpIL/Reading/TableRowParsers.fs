@@ -2,6 +2,8 @@
 
 open System.Runtime.CompilerServices
 
+open FSharpIL.Utilities
+
 open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
@@ -323,12 +325,14 @@ type AssemblyRefParser (sizes: HeapSizes) =
         member _.Parse buffer =
             let blob = BlobParser sizes
             let str = StringParser sizes
+            let flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU4 8u &buffer) // TODO: Check that only PublicKey bit is set.
             { MajorVersion = ChunkedMemory.readU2 0u &buffer
               MinorVersion = ChunkedMemory.readU2 2u &buffer
               BuildNumber = ChunkedMemory.readU2 4u &buffer
               RevisionNumber = ChunkedMemory.readU2 6u &buffer
-              Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU4 8u &buffer)
-              PublicKeyOrToken  = ByteParser.parse 12u &buffer blob
+              PublicKeyOrToken =
+                { IsPublicKey = Flags.set AssemblyFlags.PublicKey flags
+                  Token = ByteParser.parse 12u &buffer blob }
               Name  = ByteParser.parse (12u + sizes.BlobSize) &buffer str
               Culture  = ByteParser.parse (12u + sizes.BlobSize + sizes.StringSize) &buffer str
               HashValue  = ByteParser.parse (12u + sizes.BlobSize + (2u * sizes.StringSize)) &buffer blob }
