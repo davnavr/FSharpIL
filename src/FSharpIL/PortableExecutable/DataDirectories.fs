@@ -7,7 +7,7 @@ type [<IsReadOnly; Struct; RequireQualifiedAccess>] CliHeaderDirectory = interna
 
 [<RequireQualifiedAccess>]
 module DataDirectory =
-    let inline (|CliHeader|) { CliHeaderDirectory.Directory = data } = data
+    let (|CliHeader|) { CliHeaderDirectory.Directory = data } = data
 
 /// Represents the data directories of a PE file (II.25.2.3.3).
 [<NoComparison; NoEquality>]

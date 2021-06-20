@@ -123,6 +123,10 @@ module ModuleBuilder =
 
         struct(builder, assemblyRowIndex)
 
+    let createAssembly moduleRow assemblyRow header root =
+        let struct(builder, assemblyRowIndex) = create moduleRow (ValueSome assemblyRow) header root
+        struct(builder, assemblyRowIndex.Value)
+
     let tryGetAssembly (assembly: outref<_>) { Metadata = builder } = builder.Tables.Assembly.TryGetRow &assembly
 
     let addTypeEntry (entry: inref<TypeEntry>) builder: TypeEntryIndex<unit> =

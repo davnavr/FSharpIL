@@ -7,17 +7,14 @@ module FSharpIL.HelloWorld
 open Expecto
 
 open Swensen.Unquote
-open System.IO
 
 open Mono.Cecil
-
-open FSharpIL
 #endif
 #endif
 (**
 # Hello World
 
-The following example creates a simple .NET 5 console application.
+The following example creates a file containing a simple .NET 5 console application.
 
 ## Example
 *)
@@ -25,128 +22,46 @@ open System
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Tables
 open FSharpIL.PortableExecutable
 
-// TODO: Make common setup code for examples by making this function a CliMetadataBuilder -> PEFile
+open FSharpIL.Writing
+open FSharpIL.Writing.Abstractions
+
 let example() =
-    let builder =
-        { Name = Identifier.ofStr "HelloWorld.exe"
-          Mvid = Guid.NewGuid() }
-        |> CliMetadataBuilder
+    let struct(builder, assembly) =
+        ModuleBuilder.createAssembly
+            (fun strings guid _ ->
+                (* Define information about the current module, see (II.6). *)
+                let name = strings.Add(Identifier.ofStr "HelloWorld.exe")
+                let mvid = guid.AddNew()
+                ModuleRow.create name mvid)
+            (fun strings _ blob ->
+                (* Define information about the current assembly.
+                   For the relationship between assemblies and modules, see (II.6.1). *)
+                { Name = strings.Add(AssemblyName.ofStr "HelloWorld")
+                  HashAlgId = AssemblyHashAlgorithm.None
+                  MajorVersion = 1us
+                  MinorVersion = 0us
+                  BuildNumber = 0us
+                  RevisionNumber = 0us
+                  Flags = AssemblyFlags.None
+                  Culture = strings.EmptyString
+                  PublicKey = blob.EmptyBlob })
+            CliHeader.defaultFields
+            CliMetadataRoot.defaultFields
 
-    (* Define information for the current assembly. *)
-    let assem =
-        { Name = AssemblyName.ofStr "HelloWorld"
-          HashAlgId = ()
-          Version = Version()
-          Flags = ()
-          PublicKey = None
-          Culture = NullCulture }
-        |> Assembly.setRow builder
+    failwith "TODO: Add hello world things"
 
-    (* This computation keeps track of warnings, CLS violations, and errors *)
-    validated {
-        (* Add references to other assemblies. *)
-        let! mscorlib =
-            let token =
-                PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
-                |> builder.Blobs.MiscBytes.GetOrAdd
-                |> PublicKeyOrToken
-            AssemblyRef (
-                Version(5, 0, 0, 0),
-                AssemblyName.ofStr "System.Private.CoreLib",
-                token
-            )
-            |> AssemblyRef.addRowChecked builder
+    let text (section: SectionBuilder) (directories: DataDirectoriesBuilder) =
+        directories.CliHeader <- section.AddData(failwith "TODO: Add CLI metadata": CliMetadataBuilder)
+        struct(SectionName.text, SectionCharacteristics.text)
 
-        let! consolelib =
-            let token =
-                PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-                |> builder.Blobs.MiscBytes.GetOrAdd
-                |> PublicKeyOrToken
-            AssemblyRef (
-                Version(5, 0, 0, 0),
-                AssemblyName.ofStr "System.Console",
-                token
-            )
-            |> AssemblyRef.addRowChecked builder
+    BuildPE.create
+        { DefaultHeaders.coffHeader with Characteristics = ImageFileFlags.exe }
+        DefaultHeaders.optionalHeader
+        (ImmutableArray.Create text)
 
-        (* Add references to types defined in referenced assemblies. *)
-        let! console = TypeRef.tryCreateReflectedRow builder (ResolutionScope.AssemblyRef consolelib) typeof<Console>
-        let! object = TypeRef.tryCreateReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<Object>
-        let! tfmattr =
-            TypeRef (
-                ResolutionScope.AssemblyRef mscorlib,
-                Identifier.ofStr "TargetFrameworkAttribute",
-                "System.Runtime.Versioning"
-            )
-            |> TypeRef.tryAddRowChecked builder
-
-        (* Add references to methods defined in the types of referenced assemblies. *)
-        let string = ParamItem.create EncodedType.String
-
-        // static member WriteLine(_: string): System.Void
-        let! writeLine =
-            let signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string)
-            { Class = MemberRefParent.TypeRef console
-              MemberName = Identifier.ofStr "WriteLine"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> MethodRef.addRowDefaultChecked builder
-        // new(_: string)
-        let! tfmctor =
-            let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string)
-            { Class = MemberRefParent.TypeRef tfmattr
-              MemberName = Identifier.ofStr ".ctor"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> MethodRef.addRowDefaultChecked builder
-
-        (* Defines a custom attribute on the current assembly specifying the target framework. *)
-        // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
-        { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
-          NamedArg = ImmutableArray.Empty }
-        |> builder.Blobs.CustomAttribute.GetOrAdd
-        |> ValueSome
-        |> CustomAttribute.createRow
-            builder
-            (CustomAttributeParent.Assembly assem)
-            (CustomAttributeType.MethodRefDefault tfmctor)
-
-        (* Create the class that will contain the entrypoint method. *)
-        // [<AbstractClass; Sealed>] type Program
-        let! program =
-            { Access = TypeVisibility.Public
-              ClassName = Identifier.ofStr "Program"
-              Extends = Extends.TypeRef object
-              Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass))
-              TypeNamespace = "HelloWorld" }
-            |> StaticClass.tryAddRow builder
-
-        (* Create the entrypoint method of the current assembly. *)
-        // [<EntryPoint>] static member Main(_: string[]): System.Void
-        let! main =
-            let body content =
-                let writer = MethodBodyWriter content
-                writer.Ldstr "Hello World!"
-                writer.Call writeLine
-                writer.Ret()
-                MethodBody(maxStack = 1us)
-            EntryPointMethod (
-                MethodBody.create ValueNone body,
-                Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
-                Identifier.ofStr "Main",
-                builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs
-            )
-            |> EntryPoint.tryAddRow builder (StaticClass.typeIndex program)
-
-        // (args)
-        let! _ = Parameters.tryNamed builder (EntryPoint.methodIndex main) [| "args" |]
-
-        EntryPoint.set builder main
-
-        return CliMetadata builder
-    }
-    |> ValidationResult.get
-    |> PEFile.ofMetadata ImageFileFlags.exe
 (*** hide ***)
 #if COMPILED && !BENCHMARK
 [<Tests>]
@@ -178,10 +93,7 @@ let tests =
                 metadata.Value.Types
                 |> Seq.map (fun tdef -> tdef.Namespace, tdef.Name)
                 |> List.ofSeq
-            <@
-                expected = actual
-            @>
-            |> test
+            test <@ expected = actual @>
 
         testCase "entrypoint has correct argument type" <| fun() ->
             let paramType = (Seq.head metadata.Value.EntryPoint.Parameters).ParameterType

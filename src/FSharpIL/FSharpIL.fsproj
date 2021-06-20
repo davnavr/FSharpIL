@@ -26,6 +26,7 @@
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\Headers.fs" />
     <Compile Include="Metadata\Identifier.fs" />
+    <Compile Include="Metadata\AssemblyName.fs" />
     <Compile Include="Metadata\Blobs\Offsets.fs" />
     <Compile Include="Metadata\Blobs\ElementType.fs" />
     <Compile Include="Metadata\Blobs\CallingConventionFlags.fs" />
@@ -100,7 +101,6 @@
     <Compile Include="Writing\UserStringStreamBuilder.fs" />
     <Compile Include="Writing\BlobStreamBuilder.fs" />
     <Compile Include="Writing\MetadataTablesBuilder.fs" />
-    <Compile Include="Writing\CliHeaderBuilder.fs" />
     <Compile Include="Writing\CliMetadataBuilder.fs" />
     <Compile Include="Writing\Abstractions\TypeVisibility.fs" />
     <Compile Include="Writing\Abstractions\MemberVisibility.fs" />

@@ -41,6 +41,7 @@ type BlobStreamBuilder (capacity: int32) =
     do entries.Add &empty|> ignore
 
     member _.IsEmpty = entries.Count = 1
+    member _.EmptyBlob = empty.Offset
 
     /// <summary>The length of the <c>#US</c> metadata stream, in bytes.</summary>
     member _.StreamLength = offset

@@ -49,3 +49,6 @@ let ntSpecificFields =
       HeapCommitSize = 0x1000u
       LoaderFlags = 0u
       NumberOfDataDirectories = Omitted }
+
+/// Default PE32 optional header.
+let optionalHeader = OptionalHeader.PE32(standardFields, ntSpecificFields)

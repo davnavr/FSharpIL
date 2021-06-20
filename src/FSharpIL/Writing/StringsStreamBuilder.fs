@@ -6,7 +6,6 @@ open System.Collections.Generic
 open FSharpIL.Utilities
 open FSharpIL.Utilities.Collections
 
-open FSharpIL
 open FSharpIL.Metadata
 
 /// <summary>Builds the <c>#Strings</c> metadata stream, containing null-terminated UTF-8 strings (II.24.2.3).</summary>
@@ -22,6 +21,7 @@ type StringsStreamBuilder (capacity: int32) =
     do lookup.[empty] <- emptyi
 
     member _.IsEmpty = strings.Count = 1
+    member _.EmptyString = emptyi
 
     /// <summary>The length of the <c>#Strings</c> metadata stream, in bytes.</summary>
     member _.StreamLength = offset.StringOffset
@@ -43,7 +43,9 @@ type StringsStreamBuilder (capacity: int32) =
             this.AddUnsafe &str
 
     member this.Add(str: Identifier) = this.Add(Identifier.asMemory str)
+    member this.Add { AssemblyName = name } = this.Add name
 
+    // NOTE: This might allow empty identifiers to be used in places where it is not allowed, remove this method?
     member this.Add(str: Identifier voption) =
         match str with
         | ValueSome str' -> this.Add str'

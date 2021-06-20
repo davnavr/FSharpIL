@@ -21,7 +21,8 @@ type GuidStreamBuilder (capacity: int32) =
     member _.Count = guids.Count - 1
     /// <summary>The length of the <c>#GUID</c> metadata stream, in bytes.</summary>
     member this.StreamLength = uint32 this.Count * 16u
-    member _.GetOrAdd guid =
+
+    member _.Add guid =
         match lookup.TryGetValue guid with
         | true, existing -> existing
         | false, _ ->
@@ -29,6 +30,10 @@ type GuidStreamBuilder (capacity: int32) =
             lookup.[guid] <- i
             guids.Add &guid |> ignore
             i
+
+    /// Generates a new GUID and adds it to the stream.
+    member inline this.AddNew() = this.Add(Guid.NewGuid())
+
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.guid

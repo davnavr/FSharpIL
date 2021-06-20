@@ -95,9 +95,16 @@ module ModuleBuilder =
     val create:
         moduleRow: RowBuilder<ModuleRow> ->
         assemblyRow: RowBuilder<AssemblyRow> voption ->
-        header: CliHeaderBuilder ->
+        header: CliHeader ->
         root: CliMetadataRoot<FSharpIL.Omitted, FSharpIL.Omitted> ->
         struct(ModuleBuilder * TableIndex<AssemblyRow> voption)
+
+    val createAssembly:
+        moduleRow: RowBuilder<ModuleRow> ->
+        assemblyRow: RowBuilder<AssemblyRow> ->
+        header: CliHeader ->
+        root: CliMetadataRoot<FSharpIL.Omitted, FSharpIL.Omitted> ->
+        struct(ModuleBuilder * TableIndex<AssemblyRow>)
 
     val tryGetAssembly: assembly: outref<AssemblyRow> -> builder: ModuleBuilder -> bool
 

@@ -17,9 +17,10 @@ type SectionBuilder internal (alignment: Alignment, voffset: Rva, foffset: FileO
 
     member _.AddData(data: ImmutableArray<byte>) = section.Write data
 
-    member this.AddCliMetadata(metadata: CliMetadataBuilder): CliHeaderDirectory =
+    member this.AddData(metadata: CliMetadataBuilder) =
+        let start = this.VirtualSize
         WriteCli.metadata &section this.VirtualAddress metadata
-        failwith "bad"
+        { CliHeaderDirectory.Directory = { Rva = voffset + start; Size = this.VirtualSize - start }}
 
     member _.ToImmutable header = Section(header, section.ToImmutable())
 

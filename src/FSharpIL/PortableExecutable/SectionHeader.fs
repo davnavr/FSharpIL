@@ -44,6 +44,10 @@ type SectionHeader =
       Characteristics: SectionCharacteristics }
 
 [<RequireQualifiedAccess>]
+module SectionCharacteristics =
+    let text = SectionCharacteristics.CntCode ||| SectionCharacteristics.MemExecute ||| SectionCharacteristics.MemRead
+
+[<RequireQualifiedAccess>]
 module SectionHeader =
     /// Determines whether the specified Relative Virtual Address is contain within the specfied section.
     let contains (rva: Rva) header = rva >= header.VirtualAddress && rva < (header.VirtualAddress + header.VirtualSize)

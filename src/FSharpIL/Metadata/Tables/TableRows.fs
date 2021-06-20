@@ -17,6 +17,15 @@ type ModuleRow =
       EncBaseId: GuidIndex }
     interface ITableRow
 
+[<RequireQualifiedAccess>]
+module ModuleRow =
+    let inline create name mvid =
+        { Generation = 0us
+          Name = name
+          Mvid = mvid
+          EncId = Unchecked.defaultof<_>
+          EncBaseId = Unchecked.defaultof<_> }
+
 /// <summary>(0x01) Represents a row in the <c>TypeRef</c> table (II.22.38).</summary>
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]

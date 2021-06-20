@@ -1,15 +1,27 @@
 ﻿namespace FSharpIL.Writing
 
-open FSharpIL.Utilities
-
 open FSharpIL
 open FSharpIL.Metadata
+
+// TODO: Come up with better name that shows how this type is only used when writing.
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type CliHeader =
+    { MajorRuntimeVersion: uint16
+      MinorRuntimeVersion: uint16
+      Requires32Bit: bool }
+
+[<RequireQualifiedAccess>]
+module CliHeader =
+    let defaultFields =
+        { MajorRuntimeVersion = 2us
+          MinorRuntimeVersion = 5us
+          Requires32Bit = false }
 
 /// <summary>Builds the CLI metadata stored in the <c>.text</c> section of a PE file (II.24).</summary>
 [<Sealed>]
 type CliMetadataBuilder internal
     (
-        header: CliHeaderBuilder,
+        header: CliHeader,
         root: CliMetadataRoot<Omitted, Omitted>,
         methodBodies: FSharpIL.Writing.Cil.MethodBodyList,
         tables: MetadataTablesBuilder,
@@ -36,7 +48,7 @@ type CliMetadataBuilder internal
             blobs
         )
     new (moduleRow, header, root) = CliMetadataBuilder(moduleRow, header, root, 1024, 1, 1, 512)
-    new (moduleRow) = CliMetadataBuilder(moduleRow, CliHeaderBuilder.defaultFields, CliMetadataRoot.defaultFields)
+    new (moduleRow) = CliMetadataBuilder(moduleRow, CliHeader.defaultFields, CliMetadataRoot.defaultFields)
 
     member _.Header = header
     member _.Root = root
