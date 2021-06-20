@@ -59,6 +59,6 @@ module PublicKeyOrToken =
 
     let inline (|Null|Token|PublicKey|) value =
         match value with
-        | { Token = { BlobOffset = 0u }} -> Null
+        | { Token = BlobOffset.IsZero } -> Null
         | { IsPublicKey = false; Token = offset } -> Token offset
         | { IsPublicKey = true; Token = offset } -> PublicKey offset

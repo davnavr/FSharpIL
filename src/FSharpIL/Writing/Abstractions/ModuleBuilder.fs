@@ -23,7 +23,7 @@ type MemberEntryIndex<'Tag> =
 [<NoComparison; CustomEquality>]
 type internal TypeEntry =
     { Flags: TypeDefFlags
-      TypeName: StringOffset
+      TypeName: IdentifierOffset
       TypeNamespace: StringOffset
       Extends: TypeDefOrRef // TODO: Fix, Extends should use TypeEntryIndex instead.
       EnclosingClass: TypeEntryIndex<unit> voption }
@@ -48,7 +48,7 @@ type MethodEntry =
         { Body: MethodBodyLocation
           ImplFlags: MethodImplFlags
           Flags: MethodDefFlags
-          MethodName: StringOffset
+          MethodName: IdentifierOffset
           Signature: FSharpIL.Metadata.Blobs.MethodDefSigOffset
           ParamList: ImmutableArray<ParamRow> }
 

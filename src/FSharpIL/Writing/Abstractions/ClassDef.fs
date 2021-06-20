@@ -25,7 +25,7 @@ type ClassDef<'Kind> =
     { Access: TypeVisibility
       Flags: TypeDefFlags // TODO: Create custom flag type.
       ClassName: Identifier
-      Namespace: string
+      Namespace: Identifier voption
       Extends: ClassExtends }
 
     interface ITableRow
@@ -57,10 +57,7 @@ module internal ClassDef =
         let entry =
             { Flags = invalidOp "flags?"
               TypeName = builder.Metadata.Strings.Add row.ClassName
-              TypeNamespace =
-                match Identifier.tryOfStr row.Namespace with
-                | ValueSome typeNamespace -> builder.Strings.Add typeNamespace
-                | ValueNone -> Unchecked.defaultof<_>
+              TypeNamespace = builder.Strings.Add row.Namespace
               Extends = ClassExtends.toCodedIndex row.Extends
               EnclosingClass = parent }
         ModuleBuilder.addTypeEntry &entry builder

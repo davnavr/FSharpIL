@@ -29,5 +29,10 @@ type UserStringOffset =
 [<IsReadOnly; Struct>]
 type BlobOffset =
     internal { BlobOffset: uint32 }
+    member this.IsZero = this.BlobOffset = 0u
     override this.ToString() = sprintf "0x%08X" this.BlobOffset
     static member op_Implicit { BlobOffset = offset } = offset
+
+[<RequireQualifiedAccess>]
+module BlobOffset =
+    let inline (|IsZero|NonZero|) (offset: BlobOffset) = if offset.IsZero then IsZero else NonZero(uint32 offset)

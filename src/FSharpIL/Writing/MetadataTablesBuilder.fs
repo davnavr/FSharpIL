@@ -150,7 +150,7 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
 
             // Module
             wr.WriteLE this.Module.Generation
-            StreamOffset.writeString &wr this.HeapSizes this.Module.Name
+            StreamOffset.writeString &wr this.HeapSizes this.Module.Name.Offset
             StreamOffset.writeGuid &wr this.HeapSizes this.Module.Mvid
             StreamOffset.writeGuid &wr this.HeapSizes this.Module.EncId
             StreamOffset.writeGuid &wr this.HeapSizes this.Module.EncBaseId
