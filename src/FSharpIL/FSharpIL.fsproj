@@ -92,7 +92,7 @@
     <Compile Include="Writing\Cil\MethodBodyBuilder.fs" />
     <Compile Include="Writing\Cil\MethodBodyList.fs" />
     <Compile Include="Writing\IStreamBuilder.fs" />
-    <Compile Include="Writing\StringLookupComparer.fs" />
+    <Compile Include="Writing\StringHelpers.fs" />
     <Compile Include="Writing\StringsStreamBuilder.fs" />
     <Compile Include="Writing\GuidStreamBuilder.fs" />
     <Compile Include="Writing\BlobWriter.fsi" />

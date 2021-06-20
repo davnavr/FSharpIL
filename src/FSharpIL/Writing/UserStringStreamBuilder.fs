@@ -3,13 +3,47 @@
 open System
 open System.Collections.Generic
 
-open FSharpIL.Utilities
-open FSharpIL.Utilities.Collections
-
 open FSharpIL.Metadata
 
+open FSharpIL.Utilities.Collections
+
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-type UserStringEntry = { String: ReadOnlyMemory<char>; Length: uint32 }
+type private UserStringEntry =
+    { String: ReadOnlyMemory<char>
+      /// The number of bytes allocated to hold the string, excluding the terminal byte.
+      Length: uint32
+      TerminalByte: uint8 }
+
+[<AutoOpen>]
+module private UserStringHelpers =
+    let inline (|IsNonZero|) value = value = 0us
+    let inline (|IsInRange|) min max value = value >= max && value <= min
+
+    /// Determines the terminal byte of a string (II.24.2.4).
+    let getTerminalByte (str: inref<ReadOnlyMemory<char>>) =
+        let chars = str.Span
+        let mutable i, terminal = 0, 0uy
+
+        while i < str.Length && terminal = 0uy do
+            let ch = uint16 chars.[i]
+            match ch >>> 8, ch &&& 0xFFus with
+            | IsNonZero true, _
+            | _, IsInRange 0x1us 0x8us true
+            | _, IsInRange 0xEus 0x1Fus true
+            | _, 0x27us
+            | _, 0x2Dus
+            | _, 0x7Fus -> terminal <- 1uy
+            | _ -> ()
+
+            i <- i + 1
+        terminal
+
+[<Struct>]
+type private UserStringSerializer =
+    interface StringHelpers.IStringSerializer<UserStringEntry> with
+        member _.WriteBefore(entry, wr) = BlobWriter.compressedUnsigned (entry.Length + 1u) &wr // Append length before string
+        member _.GetChars entry = &entry.String
+        member _.WriteAfter(entry, wr) = wr.Write entry.TerminalByte
 
 // <summary>Builds the <c>#US</c> metadata stream, containing length prefixed UTF-16 strings (II.24.2.4).</summary>
 [<Sealed>]
@@ -18,7 +52,7 @@ type UserStringStreamBuilder (capacity: int32) =
     static let empty = Unchecked.defaultof<UserStringEntry>
     let mutable offset = 1u
     let strings = RefArrayList<UserStringEntry> capacity
-    let lookup = Dictionary<ReadOnlyMemory<char>, UserStringOffset>(capacity, StringLookupComparer.Instance)
+    let lookup = Dictionary<ReadOnlyMemory<char>, UserStringOffset>(capacity, StringHelpers.comparer)
     do strings.Add &empty |> ignore // First entry is empty blob.
     do lookup.[ReadOnlyMemory.Empty] <- { UserStringOffset = 0u }
 
@@ -27,20 +61,23 @@ type UserStringStreamBuilder (capacity: int32) =
     /// <summary>The length of the <c>#US</c> metadata stream, in bytes.</summary>
     member _.StreamLength = offset
 
-    member _.GetOrAdd str =
+    member _.Add str =
         match lookup.TryGetValue str with
         | true, existing -> existing
         | false, _ ->
             let offset' = { UserStringOffset = offset } // TODO: Remove common code with #Strings metadata stream builder.
-            let entry = { String = str; Length = uint32(encoding.GetByteCount str.Span) }
+            let entry =
+                { String = str
+                  Length = uint32(encoding.GetByteCount str.Span)
+                  TerminalByte = getTerminalByte &str }
             offset <- offset + BlobWriter.compressedUnsignedSize entry.Length + entry.Length
             strings.Add &entry |> ignore
             lookup.[str] <- offset'
             offset'
 
-    member this.GetOrAddFolded str =
+    member this.AddFolded str =
         let mutable offset' = offset
-        let result = this.GetOrAdd str
+        let result = this.Add str
         for i = 1 to str.Length - 1 do
             offset' <- offset' + 1u
             lookup.[str.Slice i] <- { UserStringOffset = offset' }
@@ -49,15 +86,4 @@ type UserStringStreamBuilder (capacity: int32) =
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.us
-        member _.Serialize wr =
-            let encoder = encoding.GetEncoder()
-            let buffer = Span.stackalloc<byte> 512
-            let mutable chars = ReadOnlySpan<char>()
-            for i = 0 to strings.Count - 1 do
-                let entry = &strings.[i]
-                BlobWriter.compressedUnsigned entry.Length &wr // Append length before string
-                chars <- entry.String.Span
-                while chars.Length > 0 do
-                    let length = min chars.Length buffer.Length
-                    wr.Write(buffer.Slice(0, encoder.GetBytes(chars.Slice(0, length), buffer, (length = chars.Length))))
-                    chars <- chars.Slice length
+        member _.Serialize wr = StringHelpers.serializeStringHeap<UserStringSerializer, _> encoding &wr strings

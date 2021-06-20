@@ -3,10 +3,16 @@
 open System
 open System.Collections.Generic
 
-open FSharpIL.Utilities
+open FSharpIL.Metadata
+
 open FSharpIL.Utilities.Collections
 
-open FSharpIL.Metadata
+[<Struct>]
+type private StringsStreamSerializer =
+    interface StringHelpers.IStringSerializer<ReadOnlyMemory<char>> with
+        member _.WriteBefore(_, _) = ()
+        member _.GetChars str = &str
+        member _.WriteAfter(_, wr) = wr.Write 0uy
 
 /// <summary>Builds the <c>#Strings</c> metadata stream, containing null-terminated UTF-8 strings (II.24.2.3).</summary>
 [<Sealed>]
@@ -14,9 +20,8 @@ type StringsStreamBuilder (capacity: int32) =
     static let empty = ReadOnlyMemory.Empty
     static let emptyi = { StringOffset = 0u }
     let mutable offset = { StringOffset = 1u }
-    // NOTE: Avoid struct copying by somehow getting inref to values.
     let strings = RefArrayList<ReadOnlyMemory<char>> capacity
-    let lookup = Dictionary<ReadOnlyMemory<char>, StringOffset>(capacity, StringLookupComparer.Instance)
+    let lookup = Dictionary<ReadOnlyMemory<char>, StringOffset>(capacity, StringHelpers.comparer)
     do strings.Add &empty |> ignore // First entry is the empty string.
     do lookup.[empty] <- emptyi
 
@@ -28,7 +33,7 @@ type StringsStreamBuilder (capacity: int32) =
 
     member private _.AddUnsafe(str: inref<ReadOnlyMemory<_>>) =
         let offset' = offset
-        offset <- { StringOffset = offset.StringOffset + 1u + uint32 str.Length } |> noImpl "calculate length correctly"
+        offset <- { StringOffset = offset.StringOffset + 1u + uint32 str.Length }
         lookup.[str] <- offset'
         strings.Add &str |> ignore
         offset'
@@ -52,15 +57,4 @@ type StringsStreamBuilder (capacity: int32) =
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.strings
-        member _.Serialize builder =
-            let mutable chars = ReadOnlySpan<char>()
-            let mutable buffer = Span.stackalloc<byte> 512
-            for i = 0 to strings.Count - 1 do do
-                let str = &strings.[i]
-                chars <- str.Span
-                while chars.Length > 0 do
-                    let length = min buffer.Length chars.Length
-                    System.Text.Encoding.UTF8.GetBytes(chars, buffer) |> ignore // TODO: Use Encoder.GetBytes and Encoder.Reset, since strings are processed in chunks.
-                    builder.Write(buffer.Slice(0, length))
-                    chars <- chars.Slice length
-                builder.Write 0uy
+        member _.Serialize wr = StringHelpers.serializeStringHeap<StringsStreamSerializer, _> System.Text.Encoding.UTF8 &wr strings
