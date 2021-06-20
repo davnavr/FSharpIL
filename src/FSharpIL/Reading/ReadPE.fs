@@ -86,7 +86,7 @@ let readLfanew (src: HeaderReader<_>) (lfanew: byref<FileOffset>) reader ustate 
     else Failure UnexpectedEndOfFile
 
 let readCoffHeader (src: HeaderReader<_>) (coff: outref<_>) reader ustate =
-    let buffer = Span.stackalloc<byte>(int32 Magic.coffHeaderSize)
+    let buffer = Span.stackalloc<byte>(int32 Magic.CoffHeaderSize)
     let offset = src.Offset
     if src.Read buffer then
         coff <-
@@ -229,24 +229,22 @@ let readDataDirectories
             match reader.ReadCliMetadata with
             | ValueSome _ when count < cliHeaderIndex -> Error(TooFewDataDirectories(uint32 count))
             | ValueSome _ ->
-                DataDirectories (
-                    directories'.[0],
-                    directories'.[1],
-                    directories'.[2],
-                    directories'.[3],
-                    directories'.[4],
-                    directories'.[5],
-                    directories'.[6],
-                    directories'.[7],
-                    directories'.[8],
-                    directories'.[9],
-                    directories'.[10],
-                    directories'.[11],
-                    directories'.[12],
-                    directories'.[13],
-                    { CliHeader = directories'.[14] },
-                    if count > 15 then directories'.[15] else RvaAndSize.Zero
-                )
+                { ExportTable = directories'.[0]
+                  ImportTable = directories'.[1]
+                  ResourceTable = directories'.[2]
+                  ExceptionTable = directories'.[3]
+                  CertificateTable = directories'.[4]
+                  BaseRelocationTable = directories'.[5]
+                  DebugTable = directories'.[6]
+                  CopyrightTable = directories'.[7]
+                  GlobalPointerTable = directories'.[8]
+                  TLSTable = directories'.[9]
+                  LoadConfigTable = directories'.[10]
+                  BoundImportTable = directories'.[11]
+                  ImportAddressTable = directories'.[12]
+                  DelayImportDescriptor = directories'.[13]
+                  CliHeader = { CliHeaderDirectory.Directory = directories'.[14] }
+                  Reserved = if count > 15 then directories'.[15] else RvaAndSize.Zero }
                 |> ValueSome
                 |> Ok
             | ValueNone -> Ok ValueNone
@@ -276,7 +274,7 @@ let rec readSectionHeader (src: HeaderReader<_>) (buffer: Span<byte>) (headers: 
     else None
 
 let readSectionHeaders (src: HeaderReader<_>) (Convert.I4 count: uint16) (headers: outref<ParsedSectionHeaders>) reader ustate =
-    let buffer = Span.stackalloc<byte>(int32 Magic.sectionHeaderSize)
+    let buffer = Span.stackalloc<byte>(int32 Magic.SectionHeaderSize)
     let offset = src.Offset
     let headers': byref<SectionHeader[]> = &Unsafe.As &headers
     headers' <- Array.zeroCreate count
@@ -307,7 +305,7 @@ let rec copyCliSection (src: HeaderReader<_>) (chunks: byte[][]) falignment rema
 let readCliSection (src: HeaderReader<_>) file =
     let { Rva = cliHeaderRva } =
         match file.DataDirectories with
-        | (ValueSome directories, _) -> directories.CliHeader.CliHeader
+        | (ValueSome directories, _) -> directories.CliHeader.Directory
         | (_, directories) -> directories.[cliHeaderIndex]
     match findCliSection cliHeaderRva file.SectionHeaders 0 with
     | Ok i ->
@@ -346,7 +344,7 @@ let readPE (src: HeaderReader<_>) file reader ustate rstate =
     | ReadPESignature -> magic Magic.portableExecutableSignature ReadCoffHeader
     | ReadCoffHeader ->
         match readCoffHeader src &file.CoffHeader reader ustate with
-        | Success _ when file.CoffHeader.OptionalHeaderSize < Magic.optionalHeaderSize -> // TODO: How to stop reading optional fields according to size of optional header?
+        | Success _ when file.CoffHeader.OptionalHeaderSize < Magic.OptionalHeaderSize -> // TODO: How to stop reading optional fields according to size of optional header?
             Failure(OptionalHeaderTooSmall file.CoffHeader.OptionalHeaderSize)
         | result -> result
     | ReadOptionalHeader -> OptionalHeader.read src &file.OptionalHeader reader ustate

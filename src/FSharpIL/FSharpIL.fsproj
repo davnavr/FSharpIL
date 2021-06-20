@@ -44,6 +44,7 @@
     <Compile Include="Metadata\Signatures\LocalVarSig.fs" />
     <Compile Include="Metadata\Cil\Headers.fs" />
     <Compile Include="Metadata\Cil\Opcode.fs" />
+    <Compile Include="PortableExecutable\Magic.fs" />
     <Compile Include="PortableExecutable\Rva.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />
     <Compile Include="PortableExecutable\SectionName.fs" />
@@ -54,7 +55,6 @@
     <Compile Include="PortableExecutable\DataDirectories.fs" />
     <Compile Include="PortableExecutable\PEFile.fs" />
     <Compile Include="PortableExecutable\SectionOffset.fs" />
-    <Compile Include="Magic.fs" />
     <Compile Include="Writing\Tables\ValidationResult.fs" />
     <Compile Include="Writing\Tables\ValidationResultBuilder.fs" />
     <Compile Include="Writing\Tables\Collections\RowList.fs" />
@@ -122,8 +122,10 @@
     <Compile Include="Writing\Abstractions\InterfaceDef.fs" />
     <Compile Include="Writing\WriteCli.fsi" />
     <Compile Include="Writing\WriteCli.fs" />
+    <Compile Include="Writing\DataDirectoriesBuilder.fs" />
     <Compile Include="Writing\SectionBuilder.fs" />
-    <Compile Include="Writing\PEFileBuilder.fs" />
+    <Compile Include="Writing\BuildPE.fsi" />
+    <Compile Include="Writing\BuildPE.fs" />
     <Compile Include="Writing\WritePE.fsi" />
     <Compile Include="Writing\WritePE.fs" />
     <Compile Include="Reading\ReadState.fs" />

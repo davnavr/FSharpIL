@@ -183,7 +183,7 @@ module ILOutput =
         let sectionHeaders (headers: ParsedSectionHeaders) (offset: FileOffset) out =
             for i = 0 to headers.Length - 1 do
                 let header = headers.[i]
-                heading (sprintf "\"%O\" Section Header" header.SectionName) (offset + (uint32 i * Magic.sectionHeaderSize)) out
+                heading (sprintf "\"%O\" Section Header" header.SectionName) (offset + (uint32 i * Magic.SectionHeaderSize)) out
                 fieldf "Name" 8u (fun wr () -> wr.Write header.SectionName) () out
                 field "VirtualSize" Print.integer header.VirtualSize out
                 field "VirtualAddress" Print.uint32 header.VirtualAddress out

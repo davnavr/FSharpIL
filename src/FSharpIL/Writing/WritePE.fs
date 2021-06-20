@@ -12,28 +12,6 @@ open FSharpIL.Utilities
 open FSharpIL
 open FSharpIL.PortableExecutable
 
-/// The MS-DOS header, which contains a pointer to the PE signature (II.25.2.1).
-let msDosStub =
-    [|
-        0x4duy; 0x5auy; 0x90uy; 0x00uy; 0x03uy; 0x00uy; 0x00uy; 0x00uy;
-        0x04uy; 0x00uy; 0x00uy; 0x00uy; 0xFFuy; 0xFFuy; 0x00uy; 0x00uy;
-        0xb8uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x40uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x00uy; 0x00uy; 0x00uy; 0x00uy;
-        0x80uy; 0x00uy; 0x00uy; 0x00uy; // lfanew
-        0x0euy; 0x1fuy; 0xbauy; 0x0euy; 0x00uy; 0xb4uy; 0x09uy; 0xcduy;
-        0x21uy; 0xb8uy; 0x01uy; 0x4cuy; 0xcduy; 0x21uy; 0x54uy; 0x68uy;
-        0x69uy; 0x73uy; 0x20uy; 0x70uy; 0x72uy; 0x6fuy; 0x67uy; 0x72uy;
-        0x61uy; 0x6duy; 0x20uy; 0x63uy; 0x61uy; 0x6euy; 0x6euy; 0x6fuy;
-        0x74uy; 0x20uy; 0x62uy; 0x65uy; 0x20uy; 0x72uy; 0x75uy; 0x6euy;
-        0x20uy; 0x69uy; 0x6euy; 0x20uy; 0x44uy; 0x4fuy; 0x53uy; 0x20uy;
-        0x6duy; 0x6fuy; 0x64uy; 0x65uy; 0x2euy; 0x0duy; 0x0duy; 0x0auy;
-        0x24uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy; 0x00uy;
-    |]
-
 /// Contains information about the Portable Executable file.
 [<NoEquality; NoComparison>]
 type PEInfo =
@@ -57,16 +35,7 @@ let getFileInfo (file: PEFile) =
     let falignment, salignment =
         uint32 optionalHeader.Alignment.FileAlignment, uint32 optionalHeader.Alignment.SectionAlignment
 
-    let headersSize =
-        let optionalHeaderSize =
-            match optionalHeader with
-            | PE32 _ -> Magic.optionalHeaderSize
-            | PE32Plus _ -> failwith "TODO: Get size of PE32+ header"
-        uint32 msDosStub.Length
-        + uint32 Magic.portableExecutableSignature.Length
-        + uint32 optionalHeaderSize+ (Magic.sectionHeaderSize * uint32 sections.Length)
-        |> Round.upTo falignment
-    let mutable codeSize, initDataSize, uninitDataSize, imageSize = 0u, 0u, 0u, Round.upTo salignment headersSize
+    let mutable codeSize, initDataSize, uninitDataSize, imageSize = 0u, 0u, 0u, Round.upTo salignment file.SizeOfHeaders
     let mutable baseOfCode, baseOfData, rva = Rva.Zero, Rva.Zero, Rva salignment
 
     for section in sections do
@@ -91,9 +60,9 @@ let getFileInfo (file: PEFile) =
       FileAlignment = falignment
       SectionAlignment = salignment
       ImageSize = imageSize
-      HeadersSize = headersSize
+      HeadersSize = file.SizeOfHeaders
       Sections = file.Sections
-      CliHeaderRva = dataDirectories.CliHeader.CliHeader.Rva }
+      CliHeaderRva = dataDirectories.CliHeader.Directory.Rva }
 
 [<Struct>]
 type FileHeaderWriter<'Writer when 'Writer :> IByteWriter> = struct
@@ -116,7 +85,7 @@ let coffHeader info (writer: byref<#IByteWriter>) =
     writer.WriteLE coff.TimeDateStamp
     writer.WriteLE coff.SymbolTablePointer
     writer.WriteLE coff.SymbolCount
-    writer.WriteLE Magic.optionalHeaderSize
+    writer.WriteLE Magic.OptionalHeaderSize
     writer.WriteLE(uint16 coff.Characteristics)
 
 let standardFieldsCommon (imageKind: ImageKind) fields info (writer: byref<#IByteWriter>) =
@@ -174,11 +143,12 @@ let optionalHeader info (writer: byref<#IByteWriter>) =
         // NOTE: Duplicate code for LoaderFlags.
         writer.WriteLE nt.LoaderFlags
     writer.WriteLE 0x10u // NumberOfRvaAndSizes
+    noImpl "TODO: Write data directories"
 
 let internal write file output =
     let mutable output' = FileHeaderWriter output
     let info = getFileInfo file
-    output'.Write msDosStub
+    output'.Write Magic.msDosStub
     output'.Write Magic.portableExecutableSignature
     coffHeader info &output'
     optionalHeader info &output'
