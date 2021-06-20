@@ -119,9 +119,9 @@ type NTSpecificFields<'ImageBase, 'ImageSize, 'Size, 'NumDataDirectories> =
       NumberOfDataDirectories: 'NumDataDirectories }
 
 /// Represents the optional header of the PE file which, despite the name, is not optional (II.25.2.3).
-type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageBasePlus, 'ImageSize, 'NumDataDirectories> =
+type OptionalHeader<'ImageKind, 'StandardField, 'BaseOfData, 'ImageBase, 'ImageBasePlus, 'ImageSize, 'NumDataDirectories> =
     | PE32 of
-        StandardFields<'ImageKind, 'StandardField, uint32> *
+        StandardFields<'ImageKind, 'StandardField, 'BaseOfData> *
         NTSpecificFields<'ImageBase, 'ImageSize, uint32, 'NumDataDirectories>
     | PE32Plus of
         StandardFields<'ImageKind, 'StandardField, Omitted> *
@@ -138,4 +138,4 @@ type OptionalHeader<'ImageKind, 'StandardField, 'ImageBase, 'ImageBasePlus, 'Ima
         | PE32Plus(_, { NumberOfDataDirectories = count }) -> count
 
 // TODO: Better alias for optional header used in building PE files.
-type OptionalHeader = OptionalHeader<Omitted, Omitted, ImageBase, ImageBase, Omitted, Omitted>
+type OptionalHeader = OptionalHeader<Omitted, Omitted, Omitted, ImageBase, ImageBase, Omitted, Omitted>

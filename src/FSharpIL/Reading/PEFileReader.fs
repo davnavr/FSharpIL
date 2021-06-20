@@ -2,12 +2,11 @@
 
 open System.Collections.Immutable
 
-open FSharpIL
 open FSharpIL.PortableExecutable
 
 type ParsedCoffHeader = CoffHeader<uint16, uint16>
 /// Represents a PE file optional header that has been parsed (II.25.2.3).
-type ParsedOptionalHeader = OptionalHeader<ImageKind, uint32, uint32, uint64, uint32, uint32>
+type ParsedOptionalHeader = OptionalHeader<ImageKind, uint32, uint32, uint32, uint64, uint32, uint32>
 /// Represents the data directories of a PE File that have been parsed (II.25.2.3.3).
 type ParsedDataDirectories = DataDirectories voption * ImmutableArray<RvaAndSize>
 type ParsedSectionHeaders = ImmutableArray<SectionHeader>
