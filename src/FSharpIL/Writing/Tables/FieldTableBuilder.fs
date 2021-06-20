@@ -59,5 +59,5 @@ type FieldTableBuilder internal () =
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(hsizes, _, row, wr) =
             wr.WriteLE(uint16 row.Flags)
-            StreamOffset.writeString &wr hsizes row.Name
+            StreamOffset.writeString &wr hsizes row.Name.Offset
             StreamOffset.writeBlob &wr hsizes row.Signature.FieldSig

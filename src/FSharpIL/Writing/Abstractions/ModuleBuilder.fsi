@@ -109,7 +109,7 @@ module ModuleBuilder = // TODO: Replace public and internal functions with insta
     val addAssemblyRef:
         version: Version ->
         publicKeyOrToken: FSharpIL.Metadata.Blobs.PublicKeyOrToken ->
-        name: AssemblyName ->
+        name: FileName ->
         culture: Identifier voption ->
         hashValue: BlobOffset ->
         builder: ModuleBuilder ->

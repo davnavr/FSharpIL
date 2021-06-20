@@ -150,6 +150,6 @@ type MethodDefTableBuilder internal () =
             wr.WriteLE row.Rva.Value
             wr.WriteLE(uint16 row.ImplFlags)
             wr.WriteLE(uint16 row.Flags)
-            StreamOffset.writeString &wr hsizes row.Name
+            StreamOffset.writeString &wr hsizes row.Name.Offset
             StreamOffset.writeBlob &wr hsizes row.Signature.MethodDefSig
             TableIndex.write &wr tsizes ValidTableFlags.Param row.ParamList

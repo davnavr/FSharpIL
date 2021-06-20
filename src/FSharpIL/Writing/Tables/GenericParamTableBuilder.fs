@@ -32,4 +32,4 @@ type GenericParamTableBuilder internal () =
             wr.WriteLE row.Number
             wr.WriteLE(uint16 row.Flags)
             CodedIndex.write &wr tsizes &CodedIndexKinds.TypeOrMethodDef row.Owner
-            StreamOffset.writeString &wr hsizes row.Name
+            StreamOffset.writeString &wr hsizes row.Name.Offset

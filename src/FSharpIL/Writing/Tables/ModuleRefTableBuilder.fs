@@ -9,4 +9,4 @@ type ModuleRefTableBuilder internal () =
     interface ITableBuilder<ModuleRefRow> with
         member _.Count = rows.Count
         member _.Item with get i = &rows.[i]
-        member _.SerializeRow(hsizes, _, row, wr) = StreamOffset.writeString &wr hsizes row.Name
+        member _.SerializeRow(hsizes, _, row, wr) = StreamOffset.writeString &wr hsizes row.Name.Offset

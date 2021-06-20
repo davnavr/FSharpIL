@@ -11,5 +11,5 @@ type MemberRefTableBuilder internal () =
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(hsizes, tsizes, row, wr) =
             CodedIndex.write &wr tsizes &CodedIndexKinds.MemberRefParent row.Class
-            StreamOffset.writeString &wr hsizes row.Name
+            StreamOffset.writeString &wr hsizes row.Name.Offset
             StreamOffset.writeBlob &wr hsizes row.Signature.MemberRefSig

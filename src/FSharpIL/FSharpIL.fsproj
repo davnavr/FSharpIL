@@ -25,8 +25,7 @@
     <Compile Include="Metadata\StreamOffsets.fs" />
     <Compile Include="Metadata\MetadataVersion.fs" />
     <Compile Include="Metadata\Headers.fs" />
-    <Compile Include="Metadata\Identifier.fs" />
-    <Compile Include="Metadata\AssemblyName.fs" />
+    <Compile Include="Metadata\Strings.fs" />
     <Compile Include="Metadata\Blobs\Offsets.fs" />
     <Compile Include="Metadata\Blobs\ElementType.fs" />
     <Compile Include="Metadata\Blobs\CallingConventionFlags.fs" />

@@ -33,7 +33,6 @@ type StringsStreamBuilder (capacity: int32) =
         strings.Add &str |> ignore
         offset'
 
-    // TODO: Better parameter validation to prevent null characters in string, maybe return ValueNone?
     member private this.Add str =
         match lookup.TryGetValue str with
         | true, existing -> existing
@@ -42,13 +41,12 @@ type StringsStreamBuilder (capacity: int32) =
                 lookup.[str.Slice i] <- { StringOffset = offset.StringOffset + uint32 i }
             this.AddUnsafe &str
 
-    member this.Add(str: Identifier) = this.Add(Identifier.asMemory str)
-    member this.Add { AssemblyName = name } = this.Add name
+    member this.Add str = { IdentifierOffset.Offset = this.Add(Identifier.asMemory str) }
+    member this.Add { FileName = name } = { FileNameOffset.Offset = this.Add name }
 
-    // NOTE: This might allow empty identifiers to be used in places where it is not allowed, remove this method?
     member this.Add(str: Identifier voption) =
         match str with
-        | ValueSome str' -> this.Add str'
+        | ValueSome str' -> this.Add(str').Offset
         | ValueNone -> emptyi
 
     interface IStreamBuilder with

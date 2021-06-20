@@ -274,7 +274,7 @@ module ModuleBuilder =
     let addAssemblyRef
         (version: Version)
         publicKeyOrToken
-        (name: AssemblyName)
+        (name: FileName)
         (culture: Identifier voption)
         hashValue
         (builder: ModuleBuilder)

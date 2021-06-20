@@ -11,7 +11,7 @@ open FSharpIL.Metadata.Blobs
 [<IsReadOnly; Struct>]
 type ModuleRow =
     { Generation: uint16
-      Name: StringOffset
+      Name: IdentifierOffset
       Mvid: GuidIndex
       EncId: GuidIndex
       EncBaseId: GuidIndex }
@@ -31,7 +31,7 @@ module ModuleRow =
 [<StructuralComparison; StructuralEquality>]
 type TypeRefRow =
     { ResolutionScope: ResolutionScope
-      TypeName: StringOffset
+      TypeName: IdentifierOffset
       TypeNamespace: StringOffset }
 
     interface ITableRow
@@ -68,7 +68,7 @@ type FieldFlags =
 [<NoComparison; CustomEquality>]
 type FieldRow =
     { Flags: FieldFlags
-      Name: StringOffset
+      Name: IdentifierOffset
       Signature: FieldSigOffset }
 
     member this.Equals other =
@@ -196,7 +196,7 @@ type MethodDefRow =
     { Rva: MethodBodyLocation
       ImplFlags: MethodImplFlags
       Flags: MethodDefFlags
-      Name: StringOffset
+      Name: IdentifierOffset
       Signature: MethodDefSigOffset
       ParamList: TableIndex<ParamRow> }
 
@@ -276,7 +276,7 @@ type TypeDefFlags =
 [<IsReadOnly; Struct>]
 type TypeDefRow = // TODO: Figure out how to handle equality for TypeDefRow, see TypeDefTableBuilder.fs
     { Flags: TypeDefFlags
-      TypeName: StringOffset
+      TypeName: IdentifierOffset
       TypeNamespace: StringOffset
       Extends: TypeDefOrRef
       FieldList: TableIndex<FieldRow>
@@ -299,7 +299,7 @@ type InterfaceImplRow =
 [<StructuralComparison; StructuralEquality>]
 type MemberRefRow =
     { Class: MemberRefParent
-      Name: StringOffset
+      Name: IdentifierOffset
       Signature: MemberRefSigOffset }
     interface ITableRow
 
@@ -407,7 +407,7 @@ type EventFlags =
 [<NoComparison; CustomEquality>]
 type EventRow =
     { EventFlags: EventFlags
-      Name: StringOffset
+      Name: IdentifierOffset
       EventType: TypeDefOrRef }
 
     member this.Equals other = this.Name = other.Name
@@ -448,7 +448,7 @@ type PropertyFlags =
 [<NoComparison; CustomEquality>]
 type PropertyRow =
     { Flags: PropertyFlags
-      Name: StringOffset
+      Name: IdentifierOffset
       Type: PropertySigOffset }
 
     member this.Equals other = this.Name = other.Name && this.Type = other.Type
@@ -525,7 +525,8 @@ type MethodImplRow =
 [<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type ModuleRefRow =
-    { Name: StringOffset }
+    { Name: IdentifierOffset } // TODO: Make the value an offset into the File table instead, since a matching entry is required.
+    //member this.Name: FileNameOffset = this
     interface ITableRow
 
 /// <summary>
@@ -595,9 +596,9 @@ type AssemblyRow =
       BuildNumber: uint16
       RevisionNumber: uint16
       Flags: AssemblyFlags
-      PublicKey: BlobOffset
-      Name: StringOffset // TODO: Create special type for assembly name.
-      Culture: StringOffset } // TODO: Create special type for culture.
+      PublicKey: BlobOffset // TODO: Special type for PublicKey
+      Name: FileNameOffset
+      Culture: StringOffset }
 
     member this.Version =
         Version(int32 this.MajorVersion, int32 this.MinorVersion, int32 this.BuildNumber, int32 this.RevisionNumber)
@@ -616,7 +617,7 @@ type AssemblyRefRow =
       BuildNumber: uint16
       RevisionNumber: uint16
       PublicKeyOrToken: PublicKeyOrToken
-      Name: StringOffset
+      Name: FileNameOffset
       Culture: StringOffset
       HashValue: BlobOffset }
 
@@ -657,7 +658,7 @@ type FileFlags =
 [<NoComparison; CustomEquality>]
 type FileRow =
     { Flags: FileFlags
-      Name: StringOffset
+      Name: FileNameOffset
       HashValue: BlobOffset }
 
     member this.Equals other = this.Name = other.Name
@@ -687,7 +688,7 @@ type ManifestResourceFlags =
 type ManifestResourceRow =
     { Offset: uint32
       Flags: ManifestResourceFlags
-      Name: StringOffset
+      Name: IdentifierOffset
       Implementation: Implementation }
 
     member this.Equals other = this.Name = other.Name
@@ -756,7 +757,7 @@ type GenericParamRow =
     { Number: uint16
       Flags: GenericParamFlags
       Owner: TypeOrMethodDef
-      Name: StringOffset }
+      Name: IdentifierOffset }
 
     member this.Equals other = this.Owner = other.Owner && (this.Number = other.Number || this.Name = other.Name)
 

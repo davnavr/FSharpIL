@@ -74,6 +74,13 @@ type internal StringParser (sizes: HeapSizes) =
         member _.Length = sizes.StringSize
 
 [<IsReadOnly; Struct>]
+type internal FileNameParser (sizes: HeapSizes) =
+    interface IByteParser<FileNameOffset> with
+        member _.Parse buffer =
+            { FileNameOffset.Offset = { IdentifierOffset.Offset = ByteParser.parse 0u &buffer (StringParser sizes) } }
+        member _.Length = sizes.StringSize
+
+[<IsReadOnly; Struct>]
 type internal GuidParser (sizes: HeapSizes) =
     interface IByteParser<GuidIndex> with
         member _.Parse buffer = { GuidIndex = Offset.parse buffer }
@@ -92,7 +99,7 @@ type ModuleParser (sizes: HeapSizes) =
             let guid = GuidParser sizes
             let goffset = 2u + sizes.StringSize
             { Generation = ChunkedMemory.readU2 0u &buffer
-              Name = ByteParser.parse 2u &buffer (StringParser sizes)
+              Name = { IdentifierOffset.Offset = ByteParser.parse 2u &buffer (StringParser sizes) }
               Mvid = ByteParser.parse goffset &buffer guid
               EncId = ByteParser.parse (goffset + sizes.GuidSize) &buffer guid
               EncBaseId = ByteParser.parse (goffset + (2u * sizes.GuidSize)) &buffer guid }
@@ -106,7 +113,7 @@ type TypeRefParser (sizes: HeapSizes, counts: ITableRowCounts) =
             let str = StringParser sizes
             let rscope = this.ResolutionScope
             { ResolutionScope = ByteParser.parse 0u &buffer rscope
-              TypeName = ByteParser.parse (ByteParser.length rscope) &buffer str
+              TypeName = { IdentifierOffset.Offset = ByteParser.parse (ByteParser.length rscope) &buffer str }
               TypeNamespace = ByteParser.parse (ByteParser.length rscope + sizes.StringSize) &buffer str }
         member this.Length = ByteParser.length this.ResolutionScope + (2u * sizes.StringSize)
 
@@ -122,7 +129,7 @@ type TypeDefParser (sizes: HeapSizes, counts: ITableRowCounts) =
             let eoffset = 4u + (2u * sizes.StringSize)
             let field = this.FieldList
             { Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU4 0u &buffer)
-              TypeName = ByteParser.parse 4u &buffer str
+              TypeName = { IdentifierOffset.Offset = ByteParser.parse 4u &buffer str }
               TypeNamespace = ByteParser.parse (4u + sizes.StringSize) &buffer str
               Extends = ByteParser.parse eoffset &buffer extends
               FieldList = ByteParser.parse (eoffset + ByteParser.length extends) &buffer field
@@ -143,7 +150,7 @@ type FieldParser (sizes: HeapSizes) =
     interface IByteParser<FieldRow> with
         member _.Parse buffer =
             { Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU2 0u &buffer)
-              Name = ByteParser.parse 2u &buffer (StringParser sizes)
+              Name = { IdentifierOffset.Offset = ByteParser.parse 2u &buffer (StringParser sizes) }
               Signature = { FieldSig = ByteParser.parse (2u + sizes.StringSize) &buffer (BlobParser sizes) } }
         member _.Length = 2u + sizes.StringSize + sizes.BlobSize
 
@@ -155,7 +162,7 @@ type MethodDefParser (sizes: HeapSizes, counts: ITableRowCounts) =
             { Rva = MethodBodyLocation(ChunkedMemory.readU4 0u &buffer)
               ImplFlags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU2 4u &buffer)
               Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU2 6u &buffer)
-              Name = ByteParser.parse 8u &buffer (StringParser sizes)
+              Name = { IdentifierOffset.Offset = ByteParser.parse 8u &buffer (StringParser sizes) }
               Signature = { MethodDefSig = ByteParser.parse (8u + sizes.StringSize) &buffer (BlobParser sizes) }
               ParamList = ByteParser.parse (8u + sizes.StringSize + sizes.BlobSize) &buffer this.ParamList }
         member this.Length = 8u + sizes.StringSize + sizes.BlobSize + (ByteParser.length this.ParamList)
@@ -166,7 +173,7 @@ type ParamParser (sizes: HeapSizes) =
         member _.Parse buffer =
             { Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU2 0u &buffer)
               Sequence = ChunkedMemory.readU2 2u &buffer
-              Name  = ByteParser.parse 4u &buffer (StringParser sizes) }
+              Name = ByteParser.parse 4u &buffer (StringParser sizes) }
         member _.Length = 4u + sizes.StringSize
 
 [<IsReadOnly; Struct>]
@@ -187,7 +194,7 @@ type MemberRefParser (sizes: HeapSizes, counts: ITableRowCounts) =
         member this.Parse buffer =
             let parent = this.Class
             { Class = ByteParser.parse 0u &buffer parent
-              Name  = ByteParser.parse (ByteParser.length parent) &buffer (StringParser sizes)
+              Name = { IdentifierOffset.Offset = ByteParser.parse (ByteParser.length parent) &buffer (StringParser sizes) }
               Signature =
                 { MemberRefSig = ByteParser.parse (ByteParser.length parent + sizes.StringSize) &buffer (BlobParser sizes) } }
         member this.Length = ByteParser.length this.Class + sizes.StringSize + sizes.BlobSize
@@ -257,7 +264,7 @@ type PropertyParser (sizes: HeapSizes) =
     interface IByteParser<PropertyRow> with
         member _.Parse buffer =
             { Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU2 0u &buffer)
-              Name  = ByteParser.parse 2u &buffer (StringParser sizes)
+              Name  = { IdentifierOffset.Offset = ByteParser.parse 2u &buffer (StringParser sizes) }
               Type = { PropertySig = ByteParser.parse (2u + sizes.StringSize) &buffer (BlobParser sizes) } }
         member _.Length = 2u + sizes.StringSize + sizes.BlobSize
 
@@ -315,7 +322,7 @@ type AssemblyParser (sizes: HeapSizes) =
               RevisionNumber = ChunkedMemory.readU2 10u &buffer
               Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU4 12u &buffer)
               PublicKey  = ByteParser.parse 16u &buffer (BlobParser sizes)
-              Name  = ByteParser.parse (16u + sizes.BlobSize) &buffer (StringParser sizes)
+              Name = { FileNameOffset.Offset = { IdentifierOffset.Offset = ByteParser.parse (16u + sizes.BlobSize) &buffer (StringParser sizes) } }
               Culture  = ByteParser.parse (16u + sizes.BlobSize + sizes.StringSize) &buffer (StringParser sizes) }
         member _.Length = 16u + sizes.BlobSize + (2u * sizes.StringSize)
 
@@ -324,7 +331,6 @@ type AssemblyRefParser (sizes: HeapSizes) =
     interface IByteParser<AssemblyRefRow> with
         member _.Parse buffer =
             let blob = BlobParser sizes
-            let str = StringParser sizes
             let flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU4 8u &buffer) // TODO: Check that only PublicKey bit is set.
             { MajorVersion = ChunkedMemory.readU2 0u &buffer
               MinorVersion = ChunkedMemory.readU2 2u &buffer
@@ -333,8 +339,8 @@ type AssemblyRefParser (sizes: HeapSizes) =
               PublicKeyOrToken =
                 { IsPublicKey = Flags.set AssemblyFlags.PublicKey flags
                   Token = ByteParser.parse 12u &buffer blob }
-              Name  = ByteParser.parse (12u + sizes.BlobSize) &buffer str
-              Culture  = ByteParser.parse (12u + sizes.BlobSize + sizes.StringSize) &buffer str
+              Name  = ByteParser.parse (12u + sizes.BlobSize) &buffer (FileNameParser sizes)
+              Culture  = ByteParser.parse (12u + sizes.BlobSize + sizes.StringSize) &buffer (StringParser sizes)
               HashValue  = ByteParser.parse (12u + sizes.BlobSize + (2u * sizes.StringSize)) &buffer blob }
         member _.Length = 12u + (2u * sizes.StringSize) + (2u * sizes.BlobSize)
 
@@ -347,7 +353,7 @@ type ManifestResourceParser (sizes: HeapSizes, counts: ITableRowCounts) =
         member this.Parse buffer =
             { Offset = ChunkedMemory.readU4 0u &buffer
               Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU4 4u &buffer)
-              Name  = ByteParser.parse 8u &buffer (StringParser sizes)
+              Name = { IdentifierOffset.Offset = ByteParser.parse 8u &buffer (StringParser sizes) }
               Implementation = ByteParser.parse (8u + sizes.StringSize) &buffer this.Implementation }
         member this.Length = 8u + sizes.StringSize + ByteParser.length this.Implementation
 
@@ -370,7 +376,8 @@ type GenericParamParser (sizes: HeapSizes, counts: ITableRowCounts) =
             { Number = ChunkedMemory.readU2 0u &buffer
               Flags = LanguagePrimitives.EnumOfValue(ChunkedMemory.readU2 2u &buffer)
               Owner = ByteParser.parse 4u &buffer owner
-              Name  = ByteParser.parse (4u + ByteParser.length owner) &buffer (StringParser sizes) }
+              Name =
+                { IdentifierOffset.Offset =  ByteParser.parse (4u + ByteParser.length owner) &buffer (StringParser sizes) } }
         member this.Length = 4u + ByteParser.length this.Owner + sizes.StringSize
 
 [<IsReadOnly; Struct>]

@@ -41,7 +41,7 @@ let example() =
             (fun strings _ blob ->
                 (* Define information about the current assembly.
                    For the relationship between assemblies and modules, see (II.6.1). *)
-                { Name = strings.Add(AssemblyName.ofStr "HelloWorld")
+                { Name = strings.Add(FileName.ofStr "HelloWorld")
                   HashAlgId = AssemblyHashAlgorithm.None
                   MajorVersion = 1us
                   MinorVersion = 0us
@@ -62,7 +62,7 @@ let example() =
         ModuleBuilder.addAssemblyRef
             (Version(5, 0, 0, 0))
             (PublicKeyOrToken.Token token)
-            (AssemblyName.ofStr "System.Private.CoreLib")
+            (FileName.ofStr "System.Private.CoreLib")
             ValueNone
             builder.Blob.EmptyBlob
             builder
@@ -74,7 +74,7 @@ let example() =
         ModuleBuilder.addAssemblyRef
             (Version(5, 0, 0, 0))
             (PublicKeyOrToken.Token token)
-            (AssemblyName.ofStr "System.Console")
+            (FileName.ofStr "System.Console")
             ValueNone
             builder.Blob.EmptyBlob
             builder

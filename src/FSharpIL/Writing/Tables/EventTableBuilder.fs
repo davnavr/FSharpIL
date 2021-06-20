@@ -36,5 +36,5 @@ type EventTableBuilder internal () =
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(hsizes, tsizes, row, wr) =
             wr.WriteLE(uint16 row.EventFlags)
-            StreamOffset.writeString &wr hsizes row.Name
+            StreamOffset.writeString &wr hsizes row.Name.Offset
             CodedIndex.write &wr tsizes &CodedIndexKinds.TypeDefOrRef row.EventType

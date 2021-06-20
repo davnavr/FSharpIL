@@ -49,7 +49,7 @@ type TypeDefTableBuilder internal () =
         member _.Item with get i = &rows.[i]
         member _.SerializeRow(hsizes, tsizes, row, wr) =
             wr.WriteLE(uint32 row.Flags)
-            StreamOffset.writeString &wr hsizes row.TypeName
+            StreamOffset.writeString &wr hsizes row.TypeName.Offset
             StreamOffset.writeString &wr hsizes row.TypeNamespace
             CodedIndex.write &wr tsizes &CodedIndexKinds.TypeDefOrRef row.Extends
             TableIndex.write &wr tsizes ValidTableFlags.Field row.FieldList

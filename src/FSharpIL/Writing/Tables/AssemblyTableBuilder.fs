@@ -28,5 +28,5 @@ type AssemblyTableBuilder internal () =
             wr.WriteLE row.RevisionNumber
             wr.WriteLE(uint32 row.Flags)
             StreamOffset.writeBlob &wr hsizes row.PublicKey
-            StreamOffset.writeString &wr hsizes row.Name
+            StreamOffset.writeString &wr hsizes row.Name.Offset.Offset
             StreamOffset.writeString &wr hsizes row.Culture
