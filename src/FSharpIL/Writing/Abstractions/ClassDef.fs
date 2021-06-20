@@ -53,7 +53,7 @@ type StaticClassDef = ClassDef<ClassKinds.Static>
 
 [<RequireQualifiedAccess>]
 module internal ClassDef =
-    let tryAddRow (row: inref<ClassDef<'Kind>>) parent builder = // TODO: Make MemberOwner kind for types that can contain other types?
+    let add (row: inref<ClassDef<'Kind>>) parent builder = // TODO: Make MemberOwner kind for types that can contain other types?
         let entry =
             { Flags = invalidOp "flags?"
               TypeName = builder.Metadata.Strings.Add row.ClassName
@@ -63,5 +63,7 @@ module internal ClassDef =
                 | ValueNone -> Unchecked.defaultof<_>
               Extends = ClassExtends.toCodedIndex row.Extends
               EnclosingClass = parent }
-        ModuleBuilder.tryAddType &entry builder
-        failwith "TODO: Should duplicate checking happen when type list is modified, or when type member map is serialized?"
+        ModuleBuilder.addTypeEntry &entry builder
+
+module StaticClass =
+    let add (row: inref<StaticClassDef>) parent builder = ClassDef.add &row parent builder

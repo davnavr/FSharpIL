@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Writing.Tables
+﻿namespace FSharpIL.Writing.Tables // TODO: Move these types to the FSharpIL.Metadata namespace.
 
 open FSharpIL.Utilities
 
@@ -32,6 +32,11 @@ module ValidationError =
     let inline throw (error: #IValidationError) = raise(ValidationErrorException error)
     let inline message (error: #IValidationError) = error.ToString()
 
+    let inline toOption (result: ValidationResult<_>) =
+        match result with
+        | Ok _ -> None
+        | Error err -> Some err
+
 [<RequireQualifiedAccess>]
 module ValidationResult =
     let failure (error: #IValidationError) = ValidationResult.Error error
@@ -49,7 +54,7 @@ module ValidationResult =
         | Ok success -> success
         | Error err -> ValidationError.throw err
 
-    let toValueOption (result: ValidationResult<_>) =
+    let inline toValueOption (result: ValidationResult<_>) =
         match result with
         | Ok success -> ValueSome success
         | Error _ -> ValueNone

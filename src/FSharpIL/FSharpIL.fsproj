@@ -56,6 +56,7 @@
     <Compile Include="PortableExecutable\SectionOffset.fs" />
     <Compile Include="Magic.fs" />
     <Compile Include="Writing\Tables\ValidationResult.fs" />
+    <Compile Include="Writing\Tables\ValidationResultBuilder.fs" />
     <Compile Include="Writing\Tables\Collections\RowList.fs" />
     <Compile Include="Writing\Tables\Collections\RowSet.fs" />
     <Compile Include="Writing\Tables\Collections\RangedRowList.fs" />
@@ -107,6 +108,7 @@
     <Compile Include="Writing\Abstractions\Constant.fs" />
     <Compile Include="Writing\Abstractions\MemberRef.fs" />
     <Compile Include="Writing\Abstractions\TypeRef.fs" />
+    <Compile Include="Writing\Abstractions\ModuleBuilder.fsi" />
     <Compile Include="Writing\Abstractions\ModuleBuilder.fs" />
     <Compile Include="Writing\Abstractions\ClassDef.fs" />
     <Compile Include="Writing\Abstractions\MemberOwner.fs" />

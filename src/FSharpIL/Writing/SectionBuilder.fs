@@ -1,8 +1,9 @@
-﻿namespace FSharpIL.PortableExecutable // TODO: Might need to use functions from WriteCli module, so move to Writing namespace?
+﻿namespace FSharpIL.Writing
 
 open System.Collections.Immutable
 
 open FSharpIL
+open FSharpIL.PortableExecutable
 
 // TODO: To allow easy tracking of RVAs prevent modification of previous sections by ensuring PEFileBuilder only accepts Section instances?
 [<Sealed>]
@@ -26,7 +27,8 @@ type SectionBuilder internal (alignment: Alignment, name: SectionName, flags: Se
           NumberOfLineNumbers = 0us
           Characteristics = flags }
     member _.AddData(data: ImmutableArray<byte>) = section.Write data
-    //member this.AddCliMetadata(metadata: CliMetadata): CliHeaderDirectory =
-    //    
+    member this.AddCliMetadata(metadata: CliMetadataBuilder): CliHeaderDirectory =
+        WriteCli.metadata &section this.VirtualAddress metadata
+        failwith "bad"
     // NOTE: Changes to the underlying chunks would result in changes in the "immutable" version, but all Add methods so far do not modify existing data.
     member this.ToImmutable() = Section(this.CreateHeader(), section.ToImmutable())

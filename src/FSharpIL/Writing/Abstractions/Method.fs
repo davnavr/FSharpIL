@@ -141,10 +141,8 @@ module Method =
 
             struct(cconv, Unsafe.As &items, Unsafe.As &rows)
 
-    let private tryAddRow owner (method: inref<ManagedMethodDef<'Kind, _, _>>) builder =
-        let mutable members = builder.MemberMap.GetValueOrDefault owner
+    let private add owner (method: inref<ManagedMethodDef<'Kind, _, _>>) builder =
         let struct(cconv, paramSigItems, paramRowList) = parameters &method builder
-
         let entry =
             { Body = Unchecked.defaultof<'Kind>.MethodBody method.Body
               ImplFlags = MethodImplFlags.IL
@@ -162,18 +160,16 @@ module Method =
                 builder.Blob.Add &signature
               ParamList = paramRowList }
 
-        members.Methods.Add &entry
-        failwith "TODO: Should duplicate checking happen when members is modified, or when type member map is serialized?"
-        failwith "Update entry struct in MemberMap"
+        ModuleBuilder.addMethodEntry owner &entry builder
 
-    let tryAddConcrete (MemberOwner owner: InstanceMemberOwner) (method: inref<ConcreteMethodDef>) builder members =
-        tryAddRow owner &method builder members
+    let addConcrete (MemberOwner owner: InstanceMemberOwner) (method: inref<ConcreteMethodDef>) builder =
+        add owner &method builder
 
     //let tryAddFinal
     //let tryAddVirtual
 
-    let tryAddAbstract (MemberOwner owner: AbstractMemberOwner) (method: inref<AbstractMethodDef>) builder members =
-        tryAddRow owner &method builder members
+    let addAbstract (MemberOwner owner: AbstractMemberOwner) (method: inref<AbstractMethodDef>) builder =
+        add owner &method builder
 
-    let tryAddStatic (MemberOwner owner: StaticMemberOwner) (method: inref<StaticMethodDef>) builder members =
-        tryAddRow owner &method builder members
+    let addStatic (MemberOwner owner: StaticMemberOwner) (method: inref<StaticMethodDef>) builder =
+        add owner &method builder
