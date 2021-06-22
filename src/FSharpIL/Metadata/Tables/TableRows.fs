@@ -616,7 +616,7 @@ type AssemblyRefRow =
       MinorVersion: uint16
       BuildNumber: uint16
       RevisionNumber: uint16
-      PublicKeyOrToken: PublicKeyOrToken
+      PublicKeyOrToken: PublicKeyOrTokenOffset
       Name: FileNameOffset
       Culture: StringOffset
       HashValue: BlobOffset }

@@ -74,7 +74,7 @@ type BlobStreamBuilder (capacity: int32) =
     member inline this.Add(bytes: ReadOnlyMemory<byte>) = this.Add bytes.Span
     member inline this.Add(bytes: byte[]) = this.Add(ReadOnlySpan bytes)
     member inline this.Add(bytes: ImmutableArray<byte>) = this.Add(bytes.AsSpan())
-
+    // TODO: add Add method for PublicKeyOrToken
     member this.Add(signature: inref<_>) = { MethodDefSig = this.Add<MethodDefSigWriter, _> &signature }
 
     interface IStreamBuilder with

@@ -14,7 +14,8 @@ open Mono.Cecil
 (**
 # Hello World
 
-The following example creates a file containing a simple .NET 5 console application.
+The following example creates a file containing a simple .NET 5 console application. The corresponding F# code that would produce
+the same or similar CLI metadata as the example is shown as single line comments `//`.
 
 ## Example
 *)
@@ -59,9 +60,9 @@ let example() =
         let token = builder.Blob.Add [| 0x7cuy; 0xecuy; 0x85uy; 0xd7uy; 0xbeuy; 0xa7uy; 0x79uy; 0x8euy |]
 
         (* Contains core types such as System.Object or System.Int32 *)
-        ModuleBuilder.addAssemblyRef
+        ModuleBuilder.referenceAssembly
             (Version(5, 0, 0, 0))
-            (PublicKeyOrToken.Token token)
+            (PublicKeyOrTokenOffset.Token token)
             (FileName.ofStr "System.Private.CoreLib")
             ValueNone
             builder.Blob.EmptyBlob
@@ -71,9 +72,9 @@ let example() =
         let token = builder.Blob.Add [| 0xb0uy; 0x3fuy; 0x5fuy; 0x7fuy; 0x11uy; 0xd5uy; 0x0auy; 0x3auy |]
 
         (* Contains the System.Console type *)
-        ModuleBuilder.addAssemblyRef
+        ModuleBuilder.referenceAssembly
             (Version(5, 0, 0, 0))
-            (PublicKeyOrToken.Token token)
+            (PublicKeyOrTokenOffset.Token token)
             (FileName.ofStr "System.Console")
             ValueNone
             builder.Blob.EmptyBlob

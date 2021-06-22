@@ -46,13 +46,13 @@ type LocalVarSigOffset =
     member this.IsNull = this.LocalVarSig.BlobOffset = 0u
 
 [<IsReadOnly; Struct>]
-type PublicKeyOrToken =
+type PublicKeyOrTokenOffset =
     { IsPublicKey: bool
       Token: BlobOffset }
     member this.IsNull = this.Token.BlobOffset = 0u
 
 [<RequireQualifiedAccess>]
-module PublicKeyOrToken =
+module PublicKeyOrTokenOffset =
     let PublicKey offset = { IsPublicKey = true; Token = offset }
     let Token offset = { IsPublicKey = false; Token = offset }
     let Null = Token Unchecked.defaultof<BlobOffset>

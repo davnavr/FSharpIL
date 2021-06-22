@@ -80,7 +80,6 @@ module ManagedMethodKinds =
             member _.MethodThis = NoThis
             member _.RequiredFlags = MethodDefFlags.Static
 
-
 type ManagedMethodDef<'Kind, 'Flag, 'Body
     when 'Body : struct
     and 'Flag :> MethodFlagTags.Tag

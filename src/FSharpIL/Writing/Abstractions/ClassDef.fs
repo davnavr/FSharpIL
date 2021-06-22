@@ -21,7 +21,7 @@ type [<IsReadOnly; Struct>] ClassExtends =
     internal new (tag, index) = { Tag = tag; Index = index }
     member this.IsNull = this.Tag = ClassExtendsTag.Null
 
-type ClassDef<'Kind> =
+type ClassDef<'Kind when 'Kind :> TypeKinds.Kind> =
     { Access: TypeVisibility
       Flags: TypeDefFlags // TODO: Create custom flag type.
       ClassName: Identifier
@@ -39,17 +39,10 @@ module ClassExtends =
         | ClassExtendsTag.Null
         | _ -> TypeDefOrRef()
 
-[<RequireQualifiedAccess>]
-module ClassKinds =
-    type Concrete = struct end
-    type Abstract = struct end
-    type Sealed = struct end
-    type Static = struct end
-
-type ConcreteClassDef = ClassDef<ClassKinds.Concrete>
-type AbstractClassDef = ClassDef<ClassKinds.Abstract>
-type SealedClassDef = ClassDef<ClassKinds.Sealed>
-type StaticClassDef = ClassDef<ClassKinds.Static>
+type ConcreteClassDef = ClassDef<TypeKinds.ConcreteClass>
+type AbstractClassDef = ClassDef<TypeKinds.AbstractClass>
+type SealedClassDef = ClassDef<TypeKinds.SealedClass>
+type StaticClassDef = ClassDef<TypeKinds.StaticClass>
 
 [<RequireQualifiedAccess>]
 module internal ClassDef =

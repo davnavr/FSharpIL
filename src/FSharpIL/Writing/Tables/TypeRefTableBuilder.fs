@@ -24,6 +24,7 @@ type TypeRefUsesModuleResolutionScope =
 [<Sealed>]
 type TypeRefTableBuilder internal () =
     let rows = RowSet<TypeRefRow>()
+
     member _.TryAdd
         (
             row: inref<TypeRefRow>,
@@ -33,13 +34,14 @@ type TypeRefTableBuilder internal () =
         ) =
         match rows.TryAdd &row with
         | true, index' ->
-            index <- index'
-            if row.ResolutionScope.Tag = ResolutionScopeTag.Module then
+            if warnings <> null && row.ResolutionScope.Tag = ResolutionScopeTag.Module then
                 warnings.Add { TypeRefUsesModuleResolutionScope.Row = row }
+            index <- index'
             true
         | false, _ ->
             error <- { DuplicateTypeRef.Duplicate = row }
             false
+
     interface ITableBuilder<TypeRefRow> with
         member _.Count = rows.Count
         member _.Item with get i = &rows.[i]

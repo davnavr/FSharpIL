@@ -1,11 +1,11 @@
-﻿namespace FSharpIL.Writing.Abstractions
+﻿namespace rec FSharpIL.Cli
 
 open FSharpIL.Metadata
 
 [<RequireQualifiedAccess>]
 type TypeReferenceParent =
     | TypeRef of TypeReference
-    //| Assembly of AssemblyReference
+    | Assembly of AssemblyReference
     //| Module of ModuleReference
 
 and TypeReference =
@@ -13,11 +13,8 @@ and TypeReference =
       TypeName: Identifier
       TypeNamespace: Identifier voption }
 
-[<System.Runtime.CompilerServices.IsReadOnly>]
-type TypeReference<'Kind when 'Kind :> TypeKinds.Kind> = struct
-    val Reference: TypeReference
-    new (reference) = { Reference = reference }
-end
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type TypeReference<'Kind when 'Kind :> TypeKinds.Kind> = internal { TypeReference: TypeReference }
 
 type ConcreteClassRef = TypeReference<TypeKinds.ConcreteClass>
 type AbstractClassRef = TypeReference<TypeKinds.AbstractClass>
@@ -30,4 +27,4 @@ type ValueTypeRef = TypeReference<TypeKinds.ValueType>
 
 [<AutoOpen>]
 module TypeReferencePatterns =
-    let inline (|TypeReference|) (typeRef: TypeReference<'Kind>) = typeRef.Reference
+    val (|TypeReference|) : TypeReference<'Kind> -> TypeReference

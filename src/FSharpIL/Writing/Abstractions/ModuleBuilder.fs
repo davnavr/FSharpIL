@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Writing.Abstractions
+﻿namespace FSharpIL.Writing.Abstractions // TODO: Make an FSharpIL.Cli namespace
 
 open System
 open System.Collections
@@ -21,7 +21,7 @@ type MemberEntryIndex<'Tag> =
 
 [<IsReadOnly; Struct>]
 [<NoComparison; CustomEquality>]
-type internal TypeEntry =
+type internal TypeEntry = // TODO: Rename to TypeDefinition
     { Flags: TypeDefFlags
       TypeName: IdentifierOffset
       TypeNamespace: StringOffset
@@ -43,7 +43,7 @@ type internal TypeEntry =
     interface IEquatable<TypeEntry> with member this.Equals other = this.Equals other
 
 [<IsReadOnly; Struct>]
-type MethodEntry =
+type MethodEntry = // TODO: Rename to MethodDefinition
     internal
         { Body: MethodBodyLocation
           ImplFlags: MethodImplFlags
@@ -271,7 +271,7 @@ module ModuleBuilder =
             | Error err -> Error err
         | Error err  -> Error err
 
-    let addAssemblyRef
+    let referenceAssembly
         (version: Version)
         publicKeyOrToken
         (name: FileName)
@@ -289,3 +289,11 @@ module ModuleBuilder =
               Culture = builder.Strings.Add culture
               HashValue = hashValue }
         builder.Metadata.Tables.AssemblyRef.Add &row
+
+    [<System.Obsolete>]
+    let referenceType resolutionScope (typeName: Identifier) (typeNamespace: Identifier voption) (builder: ModuleBuilder) =
+        let row =
+            { ResolutionScope = resolutionScope
+              TypeName = builder.Strings.Add typeName
+              TypeNamespace = builder.Strings.Add typeNamespace } // TODO: Figure out how to handle warnings.
+        builder.Metadata.Tables.TypeRef.TryAdd(&row, null)

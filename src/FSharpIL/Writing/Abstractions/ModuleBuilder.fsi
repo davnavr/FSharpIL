@@ -106,9 +106,9 @@ module ModuleBuilder = // TODO: Replace public and internal functions with insta
         root: CliMetadataRoot<FSharpIL.Omitted, FSharpIL.Omitted> ->
         struct(ModuleBuilder * TableIndex<AssemblyRow>)
 
-    val addAssemblyRef:
+    val referenceAssembly:
         version: Version ->
-        publicKeyOrToken: FSharpIL.Metadata.Blobs.PublicKeyOrToken ->
+        publicKeyOrToken: FSharpIL.Metadata.Blobs.PublicKeyOrTokenOffset ->
         name: FileName ->
         culture: Identifier voption ->
         hashValue: BlobOffset ->
