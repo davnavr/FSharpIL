@@ -1,9 +1,20 @@
 ﻿namespace rec FSharpIL.Cli
 
+open System
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
+
+type ITypeDefinition = interface
+    inherit IEquatable<ITypeDefinition>
+    inherit IComparable<ITypeDefinition>
+    inherit IComparable
+
+    abstract TypeName: Identifier
+    abstract TypeNamespace: Identifier voption
+    abstract EnclosingClass: EnclosingClass voption
+end
 
 [<RequireQualifiedAccess>]
 [<NoComparison; StructuralEquality>]
@@ -14,16 +25,48 @@ type ClassExtends =
     | ConcreteRef of ConcreteClassRef
     | AbstractRef of AbstractClassRef
 
+[<AutoOpen>]
+module TypeDefinitionHelpers =
+    let inline (|TypeDefinition|) (def: #ITypeDefinition) = def :> ITypeDefinition
+
+    let inline getTypeDefinition< ^T when ^T : (member Definition : ITypeDefinition)> (case: ^T) = (^T : (member Definition : ITypeDefinition) case)
+
+    let inline castTypeDefinition< ^T when ^T : (member Definition : ITypeDefinition)> (obj: obj) =
+        match obj with
+        | :? ^T as other -> getTypeDefinition<'T> other
+        | _ -> obj :?> ITypeDefinition
+
+    let inline equalsTypeDefinition (current: ^T) (obj: obj) =
+        (castTypeDefinition< ^T> obj).Equals(getTypeDefinition current)
+
+    let inline compareTypeDefinition (current: ^T) (obj: obj) =
+        (castTypeDefinition< ^T> obj).CompareTo(getTypeDefinition current)
+
 [<RequireQualifiedAccess>]
-[<NoComparison; StructuralEquality>]
+[<CustomComparison; CustomEquality>]
 type EnclosingClass =
     | Concrete of ConcreteClassDef
     | Abstract of AbstractClassDef
     | Sealed of SealedClassDef
     | Static of StaticClassDef
     | Interface of InterfaceDef
+    | ValueType of ValueTypeDef
 
-[<NoComparison; StructuralEquality>]
+    member this.Definition =
+        match this with
+        | Concrete(TypeDefinition def)
+        | Abstract(TypeDefinition def)
+        | Sealed(TypeDefinition def)
+        | Static(TypeDefinition def)
+        | Interface(TypeDefinition def)
+        | ValueType(TypeDefinition def) -> def
+
+    override this.Equals obj = equalsTypeDefinition this obj
+    override this.GetHashCode() = this.Definition.GetHashCode()
+
+    interface IComparable with member this.CompareTo obj = compareTypeDefinition this obj
+
+[<CustomComparison; CustomEquality>]
 type TypeDefinition<'Flags, 'Kind when 'Flags :> IAttributeTag<TypeDefFlags> and 'Flags : struct and 'Kind :> TypeKinds.Kind> =
     { Visibility: TypeVisibility
       Flags: Attributes<'Flags, TypeDefFlags, AttributeKinds.U4, uint32>
@@ -33,59 +76,68 @@ type TypeDefinition<'Flags, 'Kind when 'Flags :> IAttributeTag<TypeDefFlags> and
       /// Gets the type that contains this nested type (II.22.32).
       EnclosingClass: EnclosingClass voption }
 
+    member this.Equals(other: TypeDefinition<_, _>) = this.Equals(other :> ITypeDefinition)
+
+    member this.Equals(other: ITypeDefinition) =
+        this.TypeNamespace = other.TypeNamespace &&
+        this.TypeName = other.TypeName &&
+        this.EnclosingClass = other.EnclosingClass
+
+    member this.CompareTo(other: #ITypeDefinition) =
+        match compare this.TypeNamespace other.TypeNamespace with
+        | 0 ->
+            match compare this.TypeName other.TypeName with
+            | 0 ->
+                match this.EnclosingClass, other.EnclosingClass with
+                | ValueNone, ValueNone -> 0
+                | ValueSome _, ValueNone -> 1
+                | ValueNone _, ValueSome _ -> -1
+                | ValueSome parent1, ValueSome parent2 -> compare parent1 parent2
+            | result -> result
+        | result -> result
+
+    override this.Equals obj =
+        match obj with
+        | :? ITypeDefinition as other -> this.Equals other
+        | _ -> false
+
+    override this.GetHashCode() = HashCode.Combine(this.TypeNamespace, this.TypeName, this.EnclosingClass)
+
+    interface ITypeDefinition with
+        member this.TypeName = this.TypeName
+        member this.TypeNamespace = this.TypeNamespace
+        member this.EnclosingClass = this.EnclosingClass
+        member this.Equals other = this.Equals other
+        member this.CompareTo other = this.CompareTo other
+        member this.CompareTo(obj: obj) = this.CompareTo(obj :?> ITypeDefinition)
+
 [<RequireQualifiedAccess>]
-[<CustomComparison; StructuralEquality>]
+[<CustomComparison; CustomEquality>]
 type DefinedType =
     | ConcreteClass of ConcreteClassDef
     | AbstractClass of AbstractClassDef
-    | SealedClassDef of SealedClassDef
-    | StaticClassDef of StaticClassDef
-    | DelegateDef of DelegateDef
-    | EnumDef of EnumDef
-    | InterfaceDef of InterfaceDef
-    | ValueTypeDef of ValueTypeDef
+    | SealedClass of SealedClassDef
+    | StaticClass of StaticClassDef
+    | Delegate of DelegateDef
+    | Enum of EnumDef
+    | Interface of InterfaceDef
+    | ValueType of ValueTypeDef
 
-    member this.TypeName =
+    member this.Definition =
         match this with
-        | ConcreteClass { TypeName = name }
-        | AbstractClass { TypeName = name }
-        | SealedClassDef { TypeName = name }
-        | StaticClassDef { TypeName = name }
-        | DelegateDef { TypeName = name }
-        | EnumDef { TypeName = name }
-        | InterfaceDef { TypeName = name }
-        | ValueTypeDef { TypeName = name } -> name
+        | ConcreteClass(TypeDefinition def)
+        | AbstractClass(TypeDefinition def)
+        | SealedClass(TypeDefinition def)
+        | StaticClass(TypeDefinition def)
+        | Delegate(TypeDefinition def)
+        | Enum(TypeDefinition def)
+        | Interface(TypeDefinition def)
+        | ValueType(TypeDefinition def) -> def
 
-    member this.TypeNamespace =
-        match this with
-        | ConcreteClass { TypeNamespace = name }
-        | AbstractClass { TypeNamespace = name }
-        | SealedClassDef { TypeNamespace = name }
-        | StaticClassDef { TypeNamespace = name }
-        | DelegateDef { TypeNamespace = name }
-        | EnumDef { TypeNamespace = name }
-        | InterfaceDef { TypeNamespace = name }
-        | ValueTypeDef { TypeNamespace = name } -> name
+    override this.Equals obj = equalsTypeDefinition this obj
+    override this.GetHashCode() = this.Definition.GetHashCode()
 
-    member this.EnclosingClass =
-        match this with
-        | ConcreteClass { EnclosingClass = parent }
-        | AbstractClass { EnclosingClass = parent }
-        | SealedClassDef { EnclosingClass = parent }
-        | StaticClassDef { EnclosingClass = parent }
-        | DelegateDef { EnclosingClass = parent }
-        | EnumDef { EnclosingClass = parent }
-        | InterfaceDef { EnclosingClass = parent }
-        | ValueTypeDef { EnclosingClass = parent } -> parent
-
-    interface System.IComparable<DefinedType> with
-        member this.CompareTo other =
-            match compare this.TypeNamespace other.TypeNamespace with
-            | 0 ->
-                match compare this.TypeName other.TypeName with
-                | 0 -> compare this.EnclosingClass other.EnclosingClass
-                | result -> result
-            | result -> result
+    interface IComparable with member this.CompareTo obj = compareTypeDefinition this obj
 
 [<RequireQualifiedAccess>]
 module TypeDefinitionFlags =

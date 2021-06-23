@@ -1,4 +1,4 @@
-﻿// TODO: Rename namespace to FSharpIL.Metadata.Bytecode or FSharpIL.Metadata.IntermediateLanguage or FSharpIL.IntermediateLanguage or FSharpIL.Metadata.InstructionSet
+﻿// TODO: Rename namespace to FSharpIL.Bytecode or FSharpIL.IntermediateLanguage or FSharpIL.InstructionSet
 namespace FSharpIL.Metadata.Cil
 
 open System

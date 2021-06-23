@@ -6,7 +6,7 @@ open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
 [<System.Runtime.CompilerServices.IsReadOnly>]
-type AssemblyVersion = struct
+type AssemblyVersion = struct // TODO: Move this type to FSharpIL.Metadata.Tables
     val Major: uint16
     val Minor: uint16
     val Build: uint16

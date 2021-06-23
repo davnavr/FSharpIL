@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Cli
+﻿namespace FSharpIL.Cli // TODO: Rename namespace to FSharpIL.CommonLanguageInfrastructure or FSharpIL.CommonTypeSystem or FSharpIL.Cts
 
 open FSharpIL.Metadata.Tables
 

@@ -1,9 +1,20 @@
 ﻿namespace rec FSharpIL.Cli
 
+open System
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
+
+type ITypeDefinition = interface
+    inherit IEquatable<ITypeDefinition>
+    inherit IComparable<ITypeDefinition>
+    inherit IComparable
+
+    abstract TypeName: Identifier
+    abstract TypeNamespace: Identifier voption
+    abstract EnclosingClass: EnclosingClass voption
+end
 
 /// Specifies the base class that a defined class inherits from (II.22.37).
 [<RequireQualifiedAccess>]
@@ -17,15 +28,21 @@ type ClassExtends =
     //| TypeSpec
 
 [<RequireQualifiedAccess>]
-[<NoComparison; StructuralEquality>]
+[<CustomComparison; CustomEquality>]
 type EnclosingClass =
     | Concrete of ConcreteClassDef
     | Abstract of AbstractClassDef
     | Sealed of SealedClassDef
     | Static of StaticClassDef
     | Interface of InterfaceDef
+    | ValueType of ValueTypeDef
 
-[<NoComparison; StructuralEquality>]
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
+
+    interface IComparable
+
+[<CustomComparison; CustomEquality>]
 type TypeDefinition<'Flags, 'Kind when 'Flags :> IAttributeTag<TypeDefFlags> and 'Flags : struct and 'Kind :> TypeKinds.Kind> =
     { Visibility: TypeVisibility
       Flags: Attributes<'Flags, TypeDefFlags, AttributeKinds.U4, uint32>
@@ -35,23 +52,34 @@ type TypeDefinition<'Flags, 'Kind when 'Flags :> IAttributeTag<TypeDefFlags> and
       /// Gets the type that contains this nested type (II.22.32).
       EnclosingClass: EnclosingClass voption }
 
+    member Equals<'OtherFlags, 'OtherKind
+        when 'OtherFlags :> IAttributeTag<TypeDefFlags>
+        and 'OtherFlags : struct
+        and 'OtherKind :> TypeKinds.Kind> :
+        other: TypeDefinition<'OtherFlags, 'OtherKind> -> bool
+
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
+
+    interface ITypeDefinition
+    interface IComparable
+
 [<RequireQualifiedAccess>]
-[<CustomComparison; StructuralEquality>]
+[<CustomComparison; CustomEquality>]
 type DefinedType =
     | ConcreteClass of ConcreteClassDef
     | AbstractClass of AbstractClassDef
-    | SealedClassDef of SealedClassDef
-    | StaticClassDef of StaticClassDef
-    | DelegateDef of DelegateDef
-    | EnumDef of EnumDef
-    | InterfaceDef of InterfaceDef
-    | ValueTypeDef of ValueTypeDef
+    | SealedClass of SealedClassDef
+    | StaticClass of StaticClassDef
+    | Delegate of DelegateDef
+    | Enum of EnumDef
+    | Interface of InterfaceDef
+    | ValueType of ValueTypeDef
 
-    member TypeName: Identifier
-    member TypeNamespace: Identifier voption
-    member EnclosingClass: EnclosingClass voption
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
 
-    interface System.IComparable<DefinedType>
+    interface IComparable
 
 [<RequireQualifiedAccess>]
 module TypeDefinitionFlags =
@@ -120,6 +148,7 @@ type InterfaceDef = TypeDefinition<TypeDefinitionFlags.Interface, TypeKinds.Inte
 type ValueTypeDef = TypeDefinition<TypeDefinitionFlags.ValueType, TypeKinds.ValueType>
 
 [<IsReadOnly>]
+[<StructuralComparison; StructuralEquality>]
 type TypeVisibility = struct
     val Flag: TypeDefFlags
     val internal EnclosingType: EnclosingClass

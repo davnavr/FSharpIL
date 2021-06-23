@@ -11,11 +11,14 @@ type [<IsReadOnly; Struct; RequireQualifiedAccess>] FileNameOffset = internal { 
 /// <summary>
 /// Represents a <see cref="T:System.String"/> that cannot be <see langword="null"/>, be empty, or contain any null characters.
 /// </summary>
-[<IsReadOnly; Struct>]
+[<IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
-type Identifier internal (identifier: string) =
-    member _.AsMemory() = identifier.AsMemory()
-    override _.ToString() = identifier
+type Identifier = struct
+    val private identifier: string
+    internal new (identifier) = { identifier = identifier }
+    member this.AsMemory() = this.identifier.AsMemory()
+    override this.ToString() = this.identifier
+end
 
 /// Represents the name of an assembly (II.22.2) or file (II.22.19).
 [<IsReadOnly; Struct>]
