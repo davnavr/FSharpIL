@@ -146,6 +146,8 @@ module ReturnType =
     let TypedByRef modifiers = ReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
     let Void modifiers = ReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
 
+    let unmodifiedVoid = Void ImmutableArray.Empty
+
 type [<IsReadOnly; Struct>] MethodThis internal (tag: CallConvFlags) = member _.Tag = tag
 
 (*
@@ -182,7 +184,7 @@ type CallingConventions =
 *)
 
 [<AutoOpen>]
-module CallingConventionsPatterns =
+module CallingConventions =
     let inline (|Default|VarArg|Generic|) (cconv: CallingConventions) =
         match cconv.Tag with
         | CallConvFlags.VarArg -> VarArg
@@ -200,6 +202,46 @@ type MethodDefSig =
       CallingConvention: CallingConventions
       ReturnType: ReturnType
       Parameters: ImmutableArray<ParamItem> }
+
+[<IsReadOnly>]
+type MethodRefSig = struct
+    val Signature: MethodDefSig
+    val VarArgParams: ImmutableArray<ParamItem>
+
+    internal new (signature, varArgParams) = { Signature = signature; VarArgParams = varArgParams }
+
+    member this.HasThis = this.Signature.HasThis
+    member this.CallingConvention = this.Signature.CallingConvention
+    member this.ReturnType = this.Signature.ReturnType
+    member this.Parameters = this.Signature.Parameters
+end
+
+[<RequireQualifiedAccess>]
+module MethodRefSig =
+    let ofMethodDefSig signature = MethodRefSig(signature, ImmutableArray.Empty)
+
+    let inline Default(hasThis, returnType, parameters) =
+        ofMethodDefSig
+            { HasThis = hasThis
+              CallingConvention = CallingConventions.Default
+              ReturnType = returnType
+              Parameters = parameters }
+
+    let inline Generic(hasThis, returnType, genParamCount, parameters) =
+        ofMethodDefSig
+            { HasThis = hasThis
+              CallingConvention = CallingConventions.Generic genParamCount
+              ReturnType = returnType
+              Parameters = parameters }
+
+    let VarArg(hasThis, returnType, parameters, varArgParams) =
+        MethodRefSig (
+            { HasThis = hasThis
+              CallingConvention = CallingConventions.VarArg
+              ReturnType = returnType
+              Parameters = parameters },
+            varArgParams
+        )
 
 [<IsReadOnly; Struct>]
 type PropertySig =
@@ -269,3 +311,13 @@ module Pointer =
 
     let inline Type(modifiers, ptype) = { Modifiers = modifiers; PointerType = ValueSome ptype }
     let inline Void modifiers = { Modifiers = modifiers; PointerType = ValueNone }
+
+[<RequireQualifiedAccess>]
+module EncodedType =
+    /// Gets a value indicating whether the specified type is or references a generic parameter in a method.
+    let rec isMethodVar (etype: EncodedType) =
+        match etype with
+        | EncodedType.MVar _ -> true
+        | EncodedType.SZArray(_, t)
+        | EncodedType.Array(t, _)
+        | EncodedType.Ptr(Pointer.Type(_, t)) -> isMethodVar t

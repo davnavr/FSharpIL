@@ -1,8 +1,11 @@
 ﻿namespace FSharpIL.Cli // TODO: Rename namespace to FSharpIL.CommonLanguageInfrastructure or FSharpIL.CommonTypeSystem or FSharpIL.Cts
 
+open System.Runtime.CompilerServices
+
 open FSharpIL.Metadata.Tables
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+/// Specifies the visibility of a defined member.
+[<IsReadOnly; Struct>]
 type MemberVisibility =
     | CompilerControlled
     /// The containing type can access this member.
@@ -19,7 +22,7 @@ type MemberVisibility =
 
 [<RequireQualifiedAccess>]
 module MemberVisibility =
-    let ofMethod (visibility: MemberVisibility) =
+    let inline ofMethod (visibility: MemberVisibility) =
         match visibility with
         | CompilerControlled -> MethodDefFlags.CompilerControlled
         | Private -> MethodDefFlags.Private
@@ -29,7 +32,7 @@ module MemberVisibility =
         | FamilyAndAssembly -> MethodDefFlags.FamAndAssem
         | FamilyOrAssembly -> MethodDefFlags.FamOrAssem
 
-    let ofField (visibility: MemberVisibility) =
+    let inline ofField (visibility: MemberVisibility) =
         match visibility with
         | CompilerControlled -> FieldFlags.CompilerControlled
         | Private -> FieldFlags.Private
@@ -38,3 +41,22 @@ module MemberVisibility =
         | Assembly -> FieldFlags.Assembly
         | FamilyAndAssembly -> FieldFlags.FamAndAssem
         | FamilyOrAssembly -> FieldFlags.FamOrAssem
+
+/// Specifies the visibility of a referenced member or type.
+[<IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
+type ExternalVisibility =
+    | Public
+    | Family
+
+[<RequireQualifiedAccess>]
+module ExternalVisibility =
+    let inline asMemberVisibility visibility =
+        match visibility with
+        | ExternalVisibility.Public -> Public
+        | ExternalVisibility.Family -> Family
+
+    let inline ofMethod visibility =
+        match visibility with
+        | ExternalVisibility.Public -> MethodDefFlags.Public
+        | ExternalVisibility.Family -> MethodDefFlags.Family

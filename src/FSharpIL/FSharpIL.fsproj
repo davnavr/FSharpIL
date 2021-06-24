@@ -55,9 +55,10 @@
     <Compile Include="Cli\TypeReference.fs" />
     <Compile Include="Cli\TypeDefinition.fsi" />
     <Compile Include="Cli\TypeDefinition.fs" />
+    <Compile Include="Cli\Constant.fs" />
     <Compile Include="Cli\Parameter.fs" />
-    <Compile Include="Cli\DefinedMember.fsi" />
-    <Compile Include="Cli\DefinedMember.fs" />
+    <Compile Include="Cli\Method.fsi" />
+    <Compile Include="Cli\Method.fs" />
     <Compile Include="PortableExecutable\Magic.fs" />
     <Compile Include="PortableExecutable\Rva.fs" />
     <Compile Include="PortableExecutable\Alignment.fs" />

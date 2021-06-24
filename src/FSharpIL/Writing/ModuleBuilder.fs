@@ -18,32 +18,38 @@ type DefinedTypeMembers internal (warnings) =
 type ReferencedTypeMembers internal (warnings) = class end
 
 [<Sealed>]
-type TypeMemberLookup<'Type, 'Members, 'Validator
-    when 'Type : equality
-    and 'Type : not struct
-    and 'Validator :> IMetadataValidator<'Type>
-    and 'Validator : struct>
-    (
-        capacity: int32,
-        init,
-        warnings
-    )
-    =
-    let lookup = Dictionary<'Type, 'Members> capacity
+type DefinedTypeCollection internal (capacity: int32, warnings) =
+    let lookup = Dictionary<DefinedType, DefinedTypeMembers> capacity
 
     member _.Count = lookup.Count
-    member _.Add t =
-        match lookup.TryGetValue t with
-        | true, _ -> Error(Unchecked.defaultof<'Validator>.Duplicate t)
-        | false, _ ->
-            match Unchecked.defaultof<'Validator>.Validate(t, warnings) with
-            | None ->
-                let members = init warnings
-                lookup.[t] <- members
-                Ok members
-            | Some err -> Error err
 
-type DefinedTypeCollection = TypeMemberLookup<DefinedType, DefinedTypeMembers, DefinedTypeValidator>
+    member private _.Validate t =
+        None
+
+    member private this.AddUnsafe t =
+        validated {
+            do! this.Validate t
+            let members = DefinedTypeMembers warnings
+            lookup.[t] <- members
+            return members
+        }
+
+    member internal this.GetOrAdd t =
+        match lookup.TryGetValue t with
+        | true, existing -> Ok existing
+        | false, _ -> this.AddUnsafe t
+
+    member this.Add t =
+        match lookup.TryGetValue t with
+        | true, _ ->
+            failwith "TODO: Error case for duplicate typedef"
+        | false, _ ->
+            validated {
+                let! members = this.GetOrAdd t
+                let! _ = failwith "How to check that extends is in the ModuleBuilder, since it uses TypeDefs and Refs"
+                return members
+            }
+
 type ReferencedTypeCollection = TypeMemberLookup<ReferencedType, ReferencedTypeMembers, ReferencedTypeValidator>
 
 [<Sealed>]
