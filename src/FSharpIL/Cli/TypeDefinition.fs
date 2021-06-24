@@ -6,7 +6,7 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-type ITypeDefinition = interface
+type internal ITypeDefinition = interface
     inherit IEquatable<ITypeDefinition>
     inherit IComparable<ITypeDefinition>
     inherit IComparable
@@ -29,9 +29,10 @@ type ClassExtends =
 module TypeDefinitionHelpers =
     let inline (|TypeDefinition|) (def: #ITypeDefinition) = def :> ITypeDefinition
 
-    let inline getTypeDefinition< ^T when ^T : (member Definition : ITypeDefinition)> (case: ^T) = (^T : (member Definition : ITypeDefinition) case)
+    let inline getTypeDefinition< ^T when ^T : (member internal Definition : ITypeDefinition)> (case: ^T) =
+        (^T : (member internal Definition : ITypeDefinition) case)
 
-    let inline castTypeDefinition< ^T when ^T : (member Definition : ITypeDefinition)> (obj: obj) =
+    let inline castTypeDefinition< ^T when ^T : (member internal Definition : ITypeDefinition)> (obj: obj) =
         match obj with
         | :? ^T as other -> getTypeDefinition<'T> other
         | _ -> obj :?> ITypeDefinition
@@ -111,7 +112,6 @@ type TypeDefinition<'Flags, 'Kind when 'Flags :> IAttributeTag<TypeDefFlags> and
         member this.CompareTo other = this.CompareTo other
         member this.CompareTo(obj: obj) = this.CompareTo(obj :?> ITypeDefinition)
 
-[<RequireQualifiedAccess>]
 [<CustomComparison; CustomEquality>]
 type DefinedType =
     | ConcreteClass of ConcreteClassDef
@@ -142,58 +142,70 @@ type DefinedType =
 [<RequireQualifiedAccess>]
 module TypeDefinitionFlags =
     type ConcreteClass = struct
-        interface IAttributeTag<TypeDefFlags> with member _.RequiredFlags = Unchecked.defaultof<_>
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = Unchecked.defaultof<_>
     end
 
     type AbstractClass = struct
-        interface IAttributeTag<TypeDefFlags> with member _.RequiredFlags = TypeDefFlags.Abstract
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Abstract
     end
 
     type SealedClass = struct
-        interface IAttributeTag<TypeDefFlags> with member _.RequiredFlags = TypeDefFlags.Sealed
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
     end
 
     type StaticClass = struct
-        interface IAttributeTag<TypeDefFlags> with member _.RequiredFlags = TypeDefFlags.Abstract ||| TypeDefFlags.Sealed
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Abstract ||| TypeDefFlags.Sealed
     end
 
     type Delegate = struct
-        interface IAttributeTag<TypeDefFlags> with member _.RequiredFlags = TypeDefFlags.Sealed
         interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
     end
 
     type Enum = struct
-        interface IAttributeTag<TypeDefFlags> with member _.RequiredFlags = TypeDefFlags.Abstract
         interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Abstract
     end
 
     type Interface = struct
-        interface IAttributeTag<TypeDefFlags> with member _.RequiredFlags = TypeDefFlags.Abstract ||| TypeDefFlags.Interface
         interface TypeAttributes.IHasStaticMethods
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    TypeDefFlags.Abstract ||| TypeDefFlags.Interface
     end
 
     type ValueType = struct
-        interface IAttributeTag<TypeDefFlags> with member _.RequiredFlags = TypeDefFlags.Sealed
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
     end
 
 type ConcreteClassDef = TypeDefinition<TypeDefinitionFlags.ConcreteClass, TypeKinds.ConcreteClass>

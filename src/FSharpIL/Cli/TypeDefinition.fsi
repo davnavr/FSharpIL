@@ -6,7 +6,7 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-type ITypeDefinition = interface
+type internal ITypeDefinition = interface
     inherit IEquatable<ITypeDefinition>
     inherit IComparable<ITypeDefinition>
     inherit IComparable
@@ -37,6 +37,7 @@ type EnclosingClass =
     | Interface of InterfaceDef
     | ValueType of ValueTypeDef
 
+    member internal Definition: ITypeDefinition
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
@@ -62,9 +63,7 @@ type TypeDefinition<'Flags, 'Kind when 'Flags :> IAttributeTag<TypeDefFlags> and
     override GetHashCode: unit -> int32
 
     interface ITypeDefinition
-    interface IComparable
 
-[<RequireQualifiedAccess>]
 [<CustomComparison; CustomEquality>]
 type DefinedType =
     | ConcreteClass of ConcreteClassDef
@@ -76,6 +75,7 @@ type DefinedType =
     | Interface of InterfaceDef
     | ValueType of ValueTypeDef
 
+    member internal Definition: ITypeDefinition
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 

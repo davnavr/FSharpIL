@@ -1,20 +1,37 @@
 ﻿namespace rec FSharpIL.Cli
 
+open System
+
 open FSharpIL.Metadata
 
+type internal ITypeReference = interface
+    inherit IEquatable<ITypeReference>
+    inherit IComparable<ITypeReference>
+    inherit IComparable
+
+    abstract ResolutionScope: TypeReferenceParent
+    abstract TypeName: Identifier
+    abstract TypeNamespace: Identifier voption
+end
+
 [<RequireQualifiedAccess>]
+[<StructuralComparison; StructuralEquality>]
 type TypeReferenceParent =
-    | TypeRef of TypeReference
+    | TypeRef of ReferencedType
     | Assembly of AssemblyReference
     //| Module of ModuleReference
 
-and TypeReference =
+[<CustomComparison; CustomEquality>]
+type TypeReference<'Kind when 'Kind :> TypeKinds.Kind> =
     { ResolutionScope: TypeReferenceParent
       TypeName: Identifier
       TypeNamespace: Identifier voption }
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-type TypeReference<'Kind when 'Kind :> TypeKinds.Kind> = internal { TypeReference: TypeReference }
+    member Equals<'OtherKind when 'OtherKind :> TypeKinds.Kind> : other: TypeReference<'OtherKind> -> bool
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
+
+    interface ITypeReference
 
 type ConcreteClassRef = TypeReference<TypeKinds.ConcreteClass>
 type AbstractClassRef = TypeReference<TypeKinds.AbstractClass>
@@ -25,6 +42,13 @@ type EnumRef = TypeReference<TypeKinds.Enum>
 type InterfaceRef = TypeReference<TypeKinds.Interface>
 type ValueTypeRef = TypeReference<TypeKinds.ValueType>
 
-[<AutoOpen>]
-module TypeReferencePatterns =
-    val (|TypeReference|) : TypeReference<'Kind> -> TypeReference
+[<RequireQualifiedAccess>]
+[<CustomComparison; CustomEquality>]
+type ReferencedType =
+    | ConcreteClass of ConcreteClassRef
+
+    member internal Reference: ITypeReference
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
+
+    interface IComparable

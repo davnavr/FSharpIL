@@ -156,7 +156,7 @@ type MethodThis =
 *)
 
 [<AutoOpen>]
-module MethodThisPatterns =
+module MethodThis =
     let inline (|NoThis|HasThis|ExplicitThis|) (this: MethodThis) =
         if this.Tag.HasFlag CallConvFlags.ExplicitThis then ExplicitThis
         elif this.Tag.HasFlag CallConvFlags.HasThis then HasThis

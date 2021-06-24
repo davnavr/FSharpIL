@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Writing.Tables // TODO: Move these types to the FSharpIL.Metadata namespace.
+﻿namespace FSharpIL.Metadata
 
 [<Sealed>]
 type ValidationResultBuilder internal () =

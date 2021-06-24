@@ -1,5 +1,7 @@
 ﻿namespace FSharpIL.Cli
 
+open System.Runtime.CompilerServices
+
 open Microsoft.FSharp.Core.LanguagePrimitives
 
 open FSharpIL.Metadata.Tables
@@ -9,10 +11,10 @@ type IBitwiseOperand<'T when 'T : struct> = interface
 end
 
 type IAttributeTag<'Flags> = interface
-    abstract RequiredFlags: 'Flags
+    abstract member RequiredFlags : 'Flags with get
 end
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<IsReadOnly; Struct>]
 [<StructuralComparison; StructuralEquality>]
 type Attributes<'Tag, 'Flags, 'Op, 'Num
     when 'Flags : enum<'Num>
@@ -38,8 +40,17 @@ type Attributes<'Tag, 'Flags, 'Op, 'Num
 
 [<RequireQualifiedAccess>]
 module AttributeKinds =
-    type [<Struct>] U2 = interface IBitwiseOperand<uint16> with member _.Or(left, right) = left ||| right
-    type [<Struct>] U4 = interface IBitwiseOperand<uint32> with member _.Or(left, right) = left ||| right
+    type U2 = struct
+        interface IBitwiseOperand<uint16> with
+            [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+            member _.Or(left, right) = left ||| right
+    end
+
+    type U4 = struct
+        interface IBitwiseOperand<uint32> with
+            [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+            member _.Or(left, right) = left ||| right
+    end
 
 type TypeAttributes<'Tag when 'Tag :> IAttributeTag<TypeDefFlags> and 'Tag : struct> =
     Attributes<'Tag, TypeDefFlags, AttributeKinds.U4, uint32>
