@@ -3,7 +3,9 @@
 open System.Collections.Immutable
 
 open FSharpIL
+open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
+
 open FSharpIL.Reading
 
 type WriteString = IndentedTextWriter -> (IndentedTextWriter -> unit) -> unit
@@ -307,7 +309,7 @@ module ILOutput =
 
         let moduleRow (struct({ Strings = strings; Guid = guids }, row: ModuleRow)) _ ((_, wr) as out) =
             declaration out "module"
-            identifier out strings row.Name
+            identifier out strings ((|IdentifierOffset|) row.Name)
             wr.WriteLine()
             comment out <| fun wr ->
                 wr.Write "Mvid = "
@@ -344,7 +346,7 @@ module ILOutput =
 
         let assemblyRow (struct({ Strings = strings; Blob = blobs }, row: AssemblyRow)) _ ((_, wr) as out) =
             declaration out "assembly"
-            identifier out strings row.Name
+            identifier out strings ((|FileNameOffset|) row.Name)
             newline out
             startBlock wr
             decleq out "hash algorithm"
@@ -360,7 +362,7 @@ module ILOutput =
         let assemblyRefRow (struct({ Strings = strings; Blob = blobs }, row: AssemblyRefRow)) _ ((_, wr) as out) =
             declaration out "assembly"
             keyword out "extern"
-            identifier out strings row.Name
+            identifier out strings ((|FileNameOffset|) row.Name)
             newline out
             startBlock wr
             declbytes out "hash" blobs row.HashValue
@@ -369,7 +371,7 @@ module ILOutput =
                 out
                 (if row.Flags.HasFlag AssemblyFlags.PublicKey then "publickey" else "publickeytoken")
                 blobs
-                row.PublicKeyOrToken
+                row.PublicKeyOrToken.Token
             version row.Version out
             endBlock wr
             endn out
