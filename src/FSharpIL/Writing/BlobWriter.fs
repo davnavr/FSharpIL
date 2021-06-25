@@ -8,7 +8,7 @@ open System.Collections.Immutable
 open FSharpIL
 open FSharpIL.Metadata.Blobs
 open FSharpIL.Metadata.Signatures
-open FSharpIL.Metadata.Tables
+open FSharpIL.Metadata.Signatures.MetadataSignatures
 
 let [<Literal>] MaxCompressedUnsigned = 0x1FFF_FFFFu
 let [<Literal>] MaxCompressedSigned = 268435455
@@ -65,6 +65,8 @@ let typeDefOrRefOrSpec (item: TypeDefOrRefOrSpecEncoded) (wr: byref<ChunkedMemor
     if item.Index > 0xFFFFFFu then argOutOfRange "item" item "The type index must be able to fit into 3 bytes"
     compressedUnsigned (uint32 item.Tag ||| (item.Index <<< 2)) &wr
 
+let inline typeDefOrRef item (wr: byref<_>) = typeDefOrRefOrSpec (TypeDefOrRefEncoded.toCodedIndex item) &wr
+
 let customMod (modifier: CustomMod) (wr: byref<ChunkedMemoryBuilder>) =
     elem (if modifier.Required then ElementType.CModReqd else ElementType.CModOpt) &wr
     typeDefOrRefOrSpec modifier.ModifierType &wr
@@ -105,7 +107,7 @@ let rec etype (t: EncodedType) (wr: byref<ChunkedMemoryBuilder>) =
         | EncodedType.Class _ -> elem ElementType.Class &wr
         | EncodedType.ValueType _
         | _ -> elem ElementType.ValueType &wr
-        typeDefOrRefOrSpec tref &wr
+        typeDefOrRef tref &wr
     //| EncodedType.FnPtr ptr ->
     | EncodedType.GenericInst inst -> genericInst inst &wr
     | EncodedType.MVar num
@@ -131,7 +133,7 @@ let rec etype (t: EncodedType) (wr: byref<ChunkedMemoryBuilder>) =
 and genericInst (inst: GenericInst) (wr: byref<ChunkedMemoryBuilder>) =
     elem ElementType.GenericInst &wr
     elem (if inst.IsValueType then ElementType.ValueType else ElementType.Class) &wr
-    typeDefOrRefOrSpec inst.GenericType &wr
+    typeDefOrRef inst.GenericType &wr
     compressedUnsigned inst.GenericArguments.Count &wr // GenArgCount
     for arg in inst.GenericArguments do etype arg &wr
 

@@ -10,6 +10,7 @@ open FSharpIL.Metadata.Tables
 
 open FSharpIL.Metadata.Blobs
 open FSharpIL.Metadata.Signatures
+open FSharpIL.Metadata.Signatures.MetadataSignatures
 
 let inline ensureLastItem (chunk: inref<ChunkedMemory>) result =
     match result with
@@ -47,6 +48,13 @@ let typeDefOrRefOrSpec (chunk: byref<ChunkedMemory>) =
     match compressedUnsigned &chunk with
     | Ok(_, value) ->
         TypeDefOrRef(LanguagePrimitives.EnumOfValue(uint8(value &&& 0b11u)), value >>> 2 ) |> Ok
+    | Error err -> Error err
+
+let typeDefOrRef (chunk: byref<_>) =
+    match typeDefOrRefOrSpec &chunk with
+    | Ok(TypeDefOrRef.Def tdef) -> Ok(TypeDefOrRefEncoded.Def tdef)
+    | Ok(TypeDefOrRef.Ref tref) -> Ok(TypeDefOrRefEncoded.Ref tref)
+    | Ok(TypeDefOrRef.Spec tspec) -> Error(UnexpectedTypeSpec tspec)
     | Error err -> Error err
 
 let rec customMod (chunk: byref<ChunkedMemory>) (modifiers: ImmutableArray<CustomMod>.Builder) =
@@ -90,7 +98,7 @@ let rec etype (chunk: byref<ChunkedMemory>) =
     | ElementType.String -> Ok EncodedType.String
     | ElementType.Class
     | ElementType.ValueType ->
-        match typeDefOrRefOrSpec &chunk with
+        match typeDefOrRef &chunk with
         | Ok t ->
             match elem with
             | ElementType.Class -> EncodedType.Class t
@@ -148,7 +156,7 @@ and genericInst (chunk: byref<ChunkedMemory>) =
         match LanguagePrimitives.EnumOfValue chunk'.[0u] with
         | ElementType.Class
         | ElementType.ValueType as kind ->
-            match typeDefOrRefOrSpec &chunk with
+            match typeDefOrRef &chunk with
             | Ok t ->
                 match compressedUnsigned &chunk with
                 | Ok(_, 0u) -> Error MissingGenericArguments

@@ -2,7 +2,7 @@
 
 open FSharpIL
 open FSharpIL.Metadata.Blobs
-open FSharpIL.Metadata.Signatures
+open FSharpIL.Metadata.Signatures.MetadataSignatures
 
 val internal compressedUnsigned : chunk: byref<ChunkedMemory> -> Result<struct(byte * uint32), BlobError>
 

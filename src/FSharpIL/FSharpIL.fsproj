@@ -43,6 +43,7 @@
     <Compile Include="Metadata\Signatures\CustomMod.fs" />
     <Compile Include="Metadata\Signatures\Items.fs" />
     <Compile Include="Metadata\Signatures\LocalVarSig.fs" />
+    <Compile Include="Metadata\Signatures\MetadataSignatures.fs" />
     <Compile Include="Metadata\Cil\Headers.fs" />
     <Compile Include="Metadata\Cil\Opcode.fs" />
     <Compile Include="Metadata\PublicKeyOrToken.fs" />
@@ -55,6 +56,7 @@
     <Compile Include="Cli\TypeReference.fs" />
     <Compile Include="Cli\TypeDefinition.fsi" />
     <Compile Include="Cli\TypeDefinition.fs" />
+    <Compile Include="Cli\Signatures.fs" />
     <Compile Include="Cli\Constant.fs" />
     <Compile Include="Cli\Parameter.fs" />
     <Compile Include="Cli\Method.fsi" />

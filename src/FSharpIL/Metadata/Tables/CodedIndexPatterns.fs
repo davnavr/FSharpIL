@@ -13,3 +13,16 @@ module ResolutionScope =
         | ResolutionScopeTag.Module -> Module(TableIndex.ofIntUnsafe<ModuleRow> rscope.Index)
         | ResolutionScopeTag.AssemblyRef -> AssemblyRef(TableIndex.ofIntUnsafe<AssemblyRefRow> rscope.Index)
         | bad -> invalidCodedIndex bad
+
+[<RequireQualifiedAccess>]
+module TypeDefOrRef =
+    let inline (|Def|Ref|Spec|) (index: TypeDefOrRef) =
+        match index.Tag with
+        | TypeDefOrRefTag.TypeRef -> Ref(TableIndex.ofIntUnsafe<TypeRefRow> index.Index)
+        | TypeDefOrRefTag.TypeSpec -> Spec(TableIndex.ofIntUnsafe<TypeSpecRow> index.Index)
+        | TypeDefOrRefTag.TypeDef
+        | _ -> Def(TableIndex.ofIntUnsafe<TypeDefRow> index.Index)
+
+    let Def ({ TableIndex = index }: TableIndex<TypeDefRow>) = TypeDefOrRef(TypeDefOrRefTag.TypeDef, index)
+    let Ref ({ TableIndex = index }: TableIndex<TypeDefRow>) = TypeDefOrRef(TypeDefOrRefTag.TypeRef, index)
+    //let Spec

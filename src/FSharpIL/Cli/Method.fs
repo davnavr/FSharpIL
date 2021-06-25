@@ -8,6 +8,8 @@ open FSharpIL.Metadata
 open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
+open FSharpIL.Cli.Signatures
+
 [<IsReadOnly>]
 type MethodName = struct
     val Name: Identifier
@@ -204,7 +206,7 @@ type ConstructorDef = struct
     val Parameters: ImmutableArray<Parameter>
 
     new (visibility, parameterTypes: ImmutableArray<ParamItem>, parameterList: ParameterList) =
-        let struct(signature, parameters) = methodDefSig HasThis ReturnType.unmodifiedVoid parameterTypes parameterList
+        let struct(signature, parameters) = methodDefSig HasThis ReturnType.RVoid parameterTypes parameterList
         { Definition =
             Method (
                 MemberVisibility.ofMethod visibility ||| MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName,
@@ -222,7 +224,7 @@ type ConstructorRef = struct
         { Reference =
             Method (
                 ExternalVisibility.ofMethod visibility ||| MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName,
-                methodRefSig HasThis ReturnType.unmodifiedVoid parameterTypes,
+                methodRefSig HasThis ReturnType.RVoid parameterTypes,
                 MethodName.ctor
             ) }
 end

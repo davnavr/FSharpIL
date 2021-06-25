@@ -3,7 +3,8 @@
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Signatures
+
+open FSharpIL.Cli.Signatures
 
 [<IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]

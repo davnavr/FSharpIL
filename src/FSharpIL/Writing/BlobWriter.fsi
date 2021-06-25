@@ -2,7 +2,7 @@
 module FSharpIL.Writing.BlobWriter
 
 open FSharpIL
-open FSharpIL.Metadata.Signatures
+open FSharpIL.Metadata.Signatures.MetadataSignatures
 
 [<Literal>] val MaxCompressedUnsigned : uint32 = 0x1FFF_FFFFu
 [<Literal>] val MaxCompressedSigned : int32 = 0x0FFFFFFF

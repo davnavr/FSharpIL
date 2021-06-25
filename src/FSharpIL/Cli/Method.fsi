@@ -8,6 +8,8 @@ open FSharpIL.Metadata
 open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
+open FSharpIL.Cli.Signatures
+
 [<IsReadOnly>]
 type MethodName = struct
     val internal Name: Identifier

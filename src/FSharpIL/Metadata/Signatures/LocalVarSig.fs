@@ -14,18 +14,21 @@ type Constraint =
     | Pinned
 
 /// <summary>Represents a single local variable in a <c>LocalVarSig</c> item (II.23.2.6).</summary>
-[<IsReadOnly>]
-type LocalVariable = struct
-    val CustomMod: CustomModifiers
-    val Constraints: Constraint list
-    val Tag: LocalVariableTag
-    val Type: EncodedType voption
-    internal new (modifiers, constraints, tag, ltype) =
-        { CustomMod = modifiers
-          Constraints = constraints
-          Tag = tag
-          Type = ltype }
-end
+[<IsReadOnly; Struct>]
+type LocalVariable<'TDefOrRef, 'TDefOrRefOrSpec> internal
+    (
+        modifiers: CustomModifiers<'TDefOrRefOrSpec>,
+        constraints: Constraint list,
+        tag: LocalVariableTag,
+        ltype: EncodedType<'TDefOrRef, 'TDefOrRefOrSpec> voption
+    )
+    =
+    member _.CustomMod = modifiers
+    member _.Constraints = constraints
+    member _.Tag = tag
+    member _.Type = ltype
+    static member val TypedByRef =
+        LocalVariable<'TDefOrRef, 'TDefOrRefOrSpec>(ImmutableArray.Empty, List.empty, LocalVariableTag.TypedByRef, ValueNone)
 
 (*
 [<RequireQualifiedAccess>]
@@ -38,18 +41,21 @@ type LocalVariable =
 
 [<RequireQualifiedAccess>]
 module LocalVariable =
-    let inline (|Local|ByRef|TypedByRef|) (local: LocalVariable) =
+    let inline (|Local|ByRef|TypedByRef|) (local: LocalVariable<_, _>) =
         let inline info() = struct(local.CustomMod, local.Constraints, local.Type.Value)
         match local.Tag with
         | LocalVariableTag.TypedByRef -> TypedByRef
         | LocalVariableTag.ByRef -> ByRef(info())
         | LocalVariableTag.Type
         | _ -> Local(info())
-    let Local (modifiers, constraints, localType) = LocalVariable(modifiers, constraints, LocalVariableTag.Type, ValueSome localType)
-    let ByRef (modifiers, constraints, localType) = LocalVariable(modifiers, constraints, LocalVariableTag.ByRef, ValueSome localType)
-    let TypedByRef = LocalVariable(ImmutableArray.Empty, List.empty, LocalVariableTag.TypedByRef, ValueNone)
+
+    let Local(modifiers, constraints, localType) =
+        LocalVariable(modifiers, constraints, LocalVariableTag.Type, ValueSome localType)
+
+    let ByRef(modifiers, constraints, localType) =
+        LocalVariable(modifiers, constraints, LocalVariableTag.ByRef, ValueSome localType)
 
 /// <summary>
 /// Represents a <c>LocalVarSig</c> item, which describes the types of all of the local variables of a method (II.23.2.6).
 /// </summary>
-type LocalVarSig = ImmutableArray<LocalVariable>
+type LocalVarSig<'TDefOrRef, 'TDefOrRefOrSpec> = ImmutableArray<LocalVariable<'TDefOrRef, 'TDefOrRefOrSpec>>
