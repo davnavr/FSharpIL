@@ -18,27 +18,12 @@ let inline private encodedTypeEquality (MatchValue current: ^T) (obj: obj) =
         | _, _ -> false
     | _ -> false
 
-let inline (|EncodedTypeTag|) (value: obj) =
-    match value with
-    | :? DefinedType -> 0
-    | :? ReferencedType -> 1
-    //| :? TypeSpec
-    | _ -> 2
-
-let inline private encodedTypeComparison (MatchValue current: ^T) (obj: obj) =
-    match current, (|MatchValue|) (obj :?> 'T) with
-    | (:? DefinedType as x), (:? DefinedType as y) -> compare x y
-    | (:? ReferencedType as x), (:? ReferencedType as y) -> compare x y
-    //| (:? TypeSpec as x), (:? TypeSpec as y) -> compare x y
-    | EncodedTypeTag t1, EncodedTypeTag t2 -> t1 - t2
-
 [<IsReadOnly; Struct>]
-[<CustomComparison; CustomEquality>]
+[<NoComparison; CustomEquality>]
 type TypeDefOrRefEncoded internal (encoded: obj) =
     member _.MatchValue = encoded
     override _.GetHashCode() = encoded.GetHashCode()
     override this.Equals obj = encodedTypeEquality this obj
-    interface System.IComparable with member this.CompareTo obj = encodedTypeComparison this obj
 
 [<RequireQualifiedAccess>]
 module TypeDefOrRefEncoded =
@@ -55,12 +40,11 @@ module TypeDefOrRefEncoded =
     let Ref (tref: ReferencedType) = TypeDefOrRefEncoded tref
 
 [<IsReadOnly; Struct>]
-[<CustomComparison; CustomEquality>]
+[<NoComparison; CustomEquality>]
 type TypeDefOrRefOrSpecEncoded internal (encoded: obj) =
     member _.MatchValue = encoded
     override _.GetHashCode() = encoded.GetHashCode()
     override this.Equals obj = encodedTypeEquality this obj
-    interface System.IComparable with member this.CompareTo obj = encodedTypeComparison this obj
 
 type CustomMod = CustomMod<TypeDefOrRefOrSpecEncoded>
 type CustomModifiers = CustomModifiers<TypeDefOrRefOrSpecEncoded>

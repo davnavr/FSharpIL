@@ -44,15 +44,24 @@ module MethodName =
 module MethodNamePatterns =
     val (|MethodName|) : name: MethodName -> Identifier
 
-[<Sealed>]
+[<AbstractClass>]
 type Method =
-    member Flags: MethodDefFlags
-    member Signature: MethodDefSig // TOOD: Fix, can't use Sig because it uses indices and stuff.
-    member MethodName: Identifier
+    val Flags: MethodDefFlags
+    val HasThis: MethodThis
+    val CallingConvention: CallingConventions
+    val Name: Identifier
+    val ReturnType: ReturnType
+    val ParameterTypes: ImmutableArray<ParamItem>
 
-    internal new: MethodDefFlags * MethodDefSig * Identifier -> Method
+    internal new:
+        MethodDefFlags *
+        MethodThis *
+        CallingConventions *
+        Identifier *
+        ReturnType *
+        ImmutableArray<ParamItem> -> Method
 
-    member Equals: Method -> bool
+    member Equals: #Method -> bool
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
@@ -70,79 +79,155 @@ module MethodKinds =
     type [<Struct>] Final = interface IKind
     type [<Struct>] Static = interface IKind
     type [<Struct>] Abstract = interface IKind
+    type [<Struct>] ObjectConstructor = interface IKind
+    type [<Struct>] ClassConstructor = interface IKind
 
-[<IsReadOnly>]
-type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> = struct
-    val Definition: Method
-    val Parameters: ImmutableArray<Parameter>
-
-    new:
-        visibility: MemberVisibility *
-        flags: MethodAttributes<'Kind> *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
-        parameterList: ParameterList -> MethodDefinition<'Kind>
-end
-
-type InstanceMethodDef = MethodDefinition<MethodKinds.Instance>
-type VirtualMethodDef = MethodDefinition<MethodKinds.Virtual>
-type FinalMethodDef = MethodDefinition<MethodKinds.Final>
-type StaticMethodDef = MethodDefinition<MethodKinds.Static>
-type AbstractMethodDef = MethodDefinition<MethodKinds.Abstract>
-
-[<IsReadOnly>]
-type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> = struct
-    val Reference: Method
-
-    new:
-        visibility: ExternalVisibility *
-        flags: MethodAttributes<'Kind> *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<'Kind>
-end
-
-type InstanceMethodRef = MethodReference<MethodKinds.Instance>
-type VirtualMethodRef = MethodReference<MethodKinds.Virtual>
-type FinalMethodRef = MethodReference<MethodKinds.Final>
-type StaticMethodRef = MethodReference<MethodKinds.Static>
-type AbstractMethodRef = MethodReference<MethodKinds.Abstract>
-
-[<IsReadOnly>]
-type ConstructorDef = struct
-    val Definition: Method
-    val Parameters: ImmutableArray<Parameter>
-
-    new:
-        visibility: MemberVisibility *
-        parameterTypes: ImmutableArray<ParamItem> *
-        parameterList: ParameterList -> ConstructorDef
-end
-
-[<IsReadOnly>]
-type ConstructorRef = struct
-    val Reference: Method
-
-    new: visibility: ExternalVisibility * parameterTypes: ImmutableArray<ParamItem> -> ConstructorRef
-end
-
-[<RequireQualifiedAccess>]
+[<AbstractClass>]
 type DefinedMethod =
-    | Instance of InstanceMethodDef
-    | Virtual of VirtualMethodDef
-    | Final of FinalMethodDef
-    | Static of StaticMethodDef
-    | ObjectConstructor of ConstructorDef
-    | ClassConstructor // of ?
-    | Abstract of AbstractMethodDef
-    //| PInvokeMethod
+    inherit Method
+
+    val Parameters: ImmutableArray<Parameter>
+
+    internal new:
+        MethodDefFlags *
+        MethodThis *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> *
+        ParameterList -> DefinedMethod
+
+[<Sealed>]
+type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> =
+    inherit DefinedMethod
+
+    internal new:
+        MemberVisibility *
+        MethodAttributes<'Kind> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> *
+        ParameterList -> MethodDefinition<'Kind>
+
+type DefinedMethod with
+    static member Instance:
+        MemberVisibility *
+        MethodAttributes<MethodKinds.Instance> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> *
+        ParameterList -> MethodDefinition<MethodKinds.Instance>
+
+    static member Virtual:
+        MemberVisibility *
+        MethodAttributes<MethodKinds.Virtual> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> *
+        ParameterList -> MethodDefinition<MethodKinds.Virtual>
+
+    static member Final:
+        MemberVisibility *
+        MethodAttributes<MethodKinds.Final> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> *
+        ParameterList -> MethodDefinition<MethodKinds.Final>
+
+    static member Static:
+        MemberVisibility *
+        MethodAttributes<MethodKinds.Static> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> *
+        ParameterList -> MethodDefinition<MethodKinds.Static>
+
+    static member Abstract:
+        MemberVisibility *
+        MethodAttributes<MethodKinds.Abstract> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> *
+        ParameterList -> MethodDefinition<MethodKinds.Abstract>
+
+    static member Constructor:
+        MemberVisibility *
+        MethodAttributes<MethodKinds.ObjectConstructor> *
+        ImmutableArray<ParamItem> *
+        ParameterList -> MethodDefinition<MethodKinds.ObjectConstructor>
+
+    static member ClassConstructor: MethodDefinition<MethodKinds.ClassConstructor>
+
+[<AbstractClass>]
+type ReferencedMethod =
+    inherit Method
+
+    internal new:
+        MethodDefFlags *
+        MethodThis *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> -> ReferencedMethod
+
+// TODO: Also keep track of method names to allow languages to use named parameters, maybe move val Parameters: ImmutableArray<Parameter> in MethodDefinition to Method base class?
+[<Sealed>]
+type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> =
+    inherit ReferencedMethod
+
+    internal new:
+        ExternalVisibility *
+        MethodAttributes<'Kind> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> -> MethodReference<'Kind>
+
+type ReferencedMethod with
+    static member Instance:
+        ExternalVisibility *
+        MethodAttributes<MethodKinds.Instance> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Instance>
+
+    static member Virtual:
+        ExternalVisibility *
+        MethodAttributes<MethodKinds.Virtual> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Virtual>
+
+    static member Final:
+        ExternalVisibility *
+        MethodAttributes<MethodKinds.Final> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Final>
+
+    static member Static:
+        ExternalVisibility *
+        MethodAttributes<MethodKinds.Static> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Static>
+
+    static member Abstract:
+        ExternalVisibility *
+        MethodAttributes<MethodKinds.Abstract> *
+        ReturnType *
+        MethodName *
+        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Abstract>
+
+    static member Constructor:
+        ExternalVisibility *
+        MethodAttributes<MethodKinds.ObjectConstructor> *
+        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.ObjectConstructor>
 
 [<RequireQualifiedAccess>]
-type ReferencedMethod =
-    | Instance of InstanceMethodRef
-    | Virtual of VirtualMethodRef
-    | Final of FinalMethodRef
-    | Static of StaticMethodRef
-    | ObjectConstructor of ConstructorRef
-    | Abstract of AbstractMethodRef
+module ReferencedMethod =
+    val inline (|Instance|Virtual|Final|Static|Abstract|Constructor|):
+        ReferencedMethod ->
+            Choice<MethodReference<MethodKinds.Instance>,
+                   MethodReference<MethodKinds.Virtual>,
+                   MethodReference<MethodKinds.Final>,
+                   MethodReference<MethodKinds.Static>,
+                   MethodReference<MethodKinds.Abstract>,
+                   MethodReference<MethodKinds.ObjectConstructor>>

@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Cli // TODO: Rename namespace to FSharpIL.CommonLanguageInfrastructure or FSharpIL.CommonTypeSystem or FSharpIL.Cts
+﻿namespace FSharpIL.Cli // TODO: Rename namespace to FSharpIL.CommonLanguageInfrastructure or FSharpIL.CommonTypeSystem or FSharpIL.Cts or FSharpIL.Architecture
 
 open System.Runtime.CompilerServices
 

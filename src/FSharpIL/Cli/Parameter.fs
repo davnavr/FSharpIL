@@ -19,7 +19,7 @@ type Parameter =
       DefaultValue: Constant voption
       ParamName: Identifier voption }
 
-type ParameterList = int32 -> ParamItem -> Parameter voption
+type ParameterList = int32 -> ParamItem -> Parameter
 
 // TODO: Allow more efficient ways of generating parameter list
 (*

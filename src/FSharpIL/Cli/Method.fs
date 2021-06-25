@@ -4,6 +4,7 @@ open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
+open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
@@ -44,68 +45,79 @@ module MethodName =
 [<AutoOpen>]
 module MethodNamePatterns = let (|MethodName|) name = MethodName.toIdentifier name
 
-[<Sealed>]
-type Method internal (flags: MethodDefFlags, signature: MethodDefSig, name: Identifier) =
-    member _.Flags = flags
-    member _.Signature = signature
-    member _.MethodName = name
+[<AbstractClass>]
+type Method =
+    val Flags: MethodDefFlags
+    val HasThis: MethodThis
+    val CallingConvention: CallingConventions
+    val Name: Identifier
+    val ReturnType: ReturnType
+    val ParameterTypes: ImmutableArray<ParamItem>
 
-    member _.Equals(other: Method) =
-        if flags ||| other.Flags &&& MethodDefFlags.MemberAccessMask = MethodDefFlags.CompilerControlled
+    new (flags, mthis, cconv, name, rtype, ptypes) =
+        { Flags = flags
+          HasThis = mthis
+          CallingConvention = cconv
+          Name = name
+          ReturnType = rtype
+          ParameterTypes = ptypes }
+
+    member this.Equals(other: #Method) =
+        if this.Flags ||| other.Flags &&& MethodDefFlags.MemberAccessMask = MethodDefFlags.CompilerControlled
         then false
-        else name = other.MethodName && signature = other.Signature
+        else
+            this.Name = other.Name
+            && this.ParameterTypes = other.ParameterTypes
+            && this.HasThis = other.HasThis
+            && this.ReturnType = other.ReturnType
+            && this.CallingConvention = other.CallingConvention
 
     override this.Equals obj =
         match obj with
         | :? Method as other -> this.Equals other
         | _ -> false
 
-    override _.GetHashCode() = HashCode.Combine(name, signature)
+    override this.GetHashCode() =
+        HashCode.Combine(this.HasThis, this.CallingConvention, this.Name, this.ReturnType, this.ParameterTypes)
 
     interface IEquatable<Method> with member this.Equals other = this.Equals other
 
 [<AutoOpen>]
 module MethodHelpers =
-    let private incGenParamCount (gcount: byref<uint32>) (ptype: inref<ParamItem>) =
-        match ptype with
-        | ParamItem.Param(_, t)
-        | ParamItem.ByRef(_, t) when EncodedType.isMethodVar t -> gcount <- gcount + 1u
-        |  _ -> ()
+    type IParameterIterator<'State> = interface
+        abstract Update: int32 * 'State * inref<ParamItem> -> unit
+    end
 
-    let private getCallingConventions gcount =
-        match gcount with
-        | 0u -> Default
-        | _ -> Generic gcount
+    type EmptyParameterIterator = struct
+        interface IParameterIterator<Omitted> with
+            [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+            member _.Update(_, _, _) = ()
+    end
 
-    let methodRefSig hasThis returnType (parameterTypes: ImmutableArray<_>) =
+    type MethodDefParamIterator = struct
+        interface IParameterIterator<struct(Parameter[] * ParameterList)> with
+            [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+            member _.Update(i, (parameters, generator), ptype) = parameters.[i] <- generator i ptype
+    end
+
+    let checkMethodSig<'Iter, 'State when 'Iter :> IParameterIterator<'State> and 'Iter : struct>
+        (state: 'State)
+        (parameterTypes: ImmutableArray<ParamItem>)
+        =
         let mutable gcount = 0u
-        for i = 0 to parameterTypes.Length do
-            incGenParamCount &gcount (&parameterTypes.ItemRef i)
-
-        { HasThis = hasThis
-          CallingConvention = getCallingConventions gcount
-          ReturnType = returnType
-          Parameters = parameterTypes }
-
-    let methodDefSig hasThis returnType (parameterTypes: ImmutableArray<_>) parameterList =
-        let mutable parameters = Array.zeroCreate<Parameter> parameterTypes.Length
-        let mutable gcount = 0u
-
         for i = 0 to parameterTypes.Length do
             let ptype = &parameterTypes.ItemRef i
-            incGenParamCount &gcount &ptype
-            parameters.[i] <-
-                match parameterList i ptype with
-                | ValueSome parameter -> parameter
-                | ValueNone -> Unchecked.defaultof<_>
 
-        struct (
-            { HasThis = hasThis
-              CallingConvention = getCallingConventions gcount
-              ReturnType = returnType
-              Parameters = parameterTypes },
-            Unsafe.As<_, ImmutableArray<Parameter>> &parameters
-        )
+            match ptype with
+            | ParamItem.Param(_, t)
+            | ParamItem.ByRef(_, t) when EncodedType.isMethodVar t -> gcount <- gcount + 1u
+            |  _ -> ()
+
+            Unchecked.defaultof<'Iter>.Update(i, state, &ptype)
+
+        if gcount > 0u
+        then CallingConventions.Generic gcount
+        else CallingConventions.Default
 
 [<RequireQualifiedAccess>]
 module MethodKinds =
@@ -129,12 +141,12 @@ module MethodKinds =
     type Final = struct
         interface IKind with
             member _.MethodThis
-                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
-                    HasThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+                    get() = HasThis
 
             member _.RequiredFlags
-                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
-                    MethodDefFlags.Virtual ||| MethodDefFlags.Final
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+                    get() = MethodDefFlags.Virtual ||| MethodDefFlags.Final
     end
 
     type Static = struct
@@ -146,105 +158,180 @@ module MethodKinds =
     type Abstract = struct
         interface IKind with
             member _.MethodThis
-                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
-                    HasThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+                    get() = HasThis
 
             member _.RequiredFlags
-                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
-                    MethodDefFlags.Virtual ||| MethodDefFlags.Abstract
+                with[<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+                    get() = MethodDefFlags.Virtual ||| MethodDefFlags.Abstract
     end
 
-[<IsReadOnly>]
-type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> = struct
-    val Definition: Method
+    type ObjectConstructor = struct
+        interface IKind with
+            member _.MethodThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+                    get() = HasThis
+
+            member _.RequiredFlags
+                with[<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+                    get() = MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName
+    end
+
+    type ClassConstructor = struct
+        interface IKind with
+            member _.MethodThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+                    get() = NoThis
+
+            member _.RequiredFlags
+                with[<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+                    get() = MethodDefFlags.Static ||| MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName
+    end
+
+[<AbstractClass>]
+type DefinedMethod =
+    inherit Method
+
     val Parameters: ImmutableArray<Parameter>
 
-    new
-        (
+    new (flags, mthis, rtype, MethodName name, parameterTypes: ImmutableArray<_>, parameterList) =
+        let mutable parameters = Array.zeroCreate parameterTypes.Length
+        let cconv = checkMethodSig<MethodDefParamIterator, _> (parameters, parameterList) parameterTypes
+        { inherit Method (
+            flags,
+            mthis,
+            cconv,
+            name,
+            rtype,
+            parameterTypes
+          )
+          Parameters = Unsafe.As &parameters }
+
+[<Sealed>]
+type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>
+    (
+        visibility,
+        flags: MethodAttributes<'Kind>,
+        name,
+        rtype,
+        parameterTypes,
+        parameterList
+    )
+    =
+    inherit DefinedMethod (
+        flags.Flags ||| MemberVisibility.ofMethod visibility,
+        Unchecked.defaultof<'Kind>.MethodThis,
+        name,
+        rtype,
+        parameterTypes,
+        parameterList
+    )
+
+type DefinedMethod with
+    static member Instance(visibility, flags, returnType, name, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.Instance>(visibility, flags, returnType, name, parameterTypes, parameterList)
+
+    static member Abstract(visibility, flags, returnType, name, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.Abstract>(visibility, flags, returnType, name, parameterTypes, parameterList)
+
+    static member Final(visibility, flags, returnType, name, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.Final>(visibility, flags, returnType, name, parameterTypes, parameterList)
+
+    static member Static(visibility, flags, returnType, name, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.Static>(visibility, flags, returnType, name, parameterTypes, parameterList)
+
+    static member Virtual(visibility, flags, returnType, name, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.Virtual>(visibility, flags, returnType, name, parameterTypes, parameterList)
+
+    static member Constructor(visibility, flags, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.ObjectConstructor> (
             visibility,
-            flags: MethodAttributes<'Kind>,
-            returnType,
-            MethodName name,
-            parameterTypes: ImmutableArray<_>,
+            flags,
+            ReturnType.RVoid,
+            MethodName MethodName.ctor,
+            parameterTypes,
             parameterList
         )
-        =
-        let struct(signature, parameters) =
-            methodDefSig Unchecked.defaultof<'Kind>.MethodThis returnType parameterTypes parameterList
-        { Definition = Method(flags.Flags ||| MemberVisibility.ofMethod visibility, signature, name)
-          Parameters = parameters }
-end
 
-type InstanceMethodDef = MethodDefinition<MethodKinds.Instance>
-type VirtualMethodDef = MethodDefinition<MethodKinds.Virtual>
-type FinalMethodDef = MethodDefinition<MethodKinds.Final>
-type StaticMethodDef = MethodDefinition<MethodKinds.Static>
-type AbstractMethodDef = MethodDefinition<MethodKinds.Abstract>
+[<AutoOpen>]
+module ConstructorHelpers =
+    let classConstructorDef =
+        new MethodDefinition<MethodKinds.ClassConstructor> (
+            MemberVisibility.Private,
+            MethodAttributes(),
+            ReturnType.RVoid,
+            MethodName MethodName.cctor,
+            ImmutableArray.Empty,
+            Unchecked.defaultof<_>
+        )
 
-[<IsReadOnly>]
-type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> = struct
-    val Reference: Method
+type DefinedMethod with static member ClassConstructor = classConstructorDef
 
-    new (visibility, flags: MethodAttributes<'Kind>, returnType, MethodName name, parameterTypes) =
-        { Reference =
-            Method (
-                flags.Flags ||| ExternalVisibility.ofMethod visibility,
-                methodRefSig Unchecked.defaultof<'Kind>.MethodThis returnType parameterTypes,
-                name
-            ) }
-end
-
-type InstanceMethodRef = MethodReference<MethodKinds.Instance>
-type VirtualMethodRef = MethodReference<MethodKinds.Virtual>
-type FinalMethodRef = MethodReference<MethodKinds.Final>
-type StaticMethodRef = MethodReference<MethodKinds.Static>
-type AbstractMethodRef = MethodReference<MethodKinds.Abstract>
-
-[<IsReadOnly>]
-type ConstructorDef = struct
-    val Definition: Method
-    val Parameters: ImmutableArray<Parameter>
-
-    new (visibility, parameterTypes: ImmutableArray<ParamItem>, parameterList: ParameterList) =
-        let struct(signature, parameters) = methodDefSig HasThis ReturnType.RVoid parameterTypes parameterList
-        { Definition =
-            Method (
-                MemberVisibility.ofMethod visibility ||| MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName,
-                signature,
-                MethodName.ctor
-            )
-          Parameters = parameters }
-end
-
-[<IsReadOnly>]
-type ConstructorRef = struct
-    val Reference: Method
-
-    new (visibility, parameterTypes) =
-        { Reference =
-            Method (
-                ExternalVisibility.ofMethod visibility ||| MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName,
-                methodRefSig HasThis ReturnType.RVoid parameterTypes,
-                MethodName.ctor
-            ) }
-end
-
-[<RequireQualifiedAccess>]
-type DefinedMethod =
-    | Instance of InstanceMethodDef
-    | Virtual of VirtualMethodDef
-    | Final of FinalMethodDef
-    | Static of StaticMethodDef
-    | ObjectConstructor of ConstructorDef
-    | ClassConstructor // of ?
-    | Abstract of AbstractMethodDef
-    //| PInvokeMethod
-
-[<RequireQualifiedAccess>]
+[<AbstractClass>]
 type ReferencedMethod =
-    | Instance of InstanceMethodRef
-    | Virtual of VirtualMethodRef
-    | Final of FinalMethodRef
-    | Static of StaticMethodRef
-    | ObjectConstructor of ConstructorRef
-    | Abstract of AbstractMethodRef
+    inherit Method
+
+    new (flags, mthis, rtype, MethodName name, parameterTypes: ImmutableArray<_>) =
+        let cconv = checkMethodSig<EmptyParameterIterator, _> Omitted parameterTypes
+        { inherit Method (
+            flags,
+            mthis,
+            cconv,
+            name,
+            rtype,
+            parameterTypes
+          ) }
+
+[<Sealed>]
+type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>
+    (
+        visibility,
+        flags: MethodAttributes<'Kind>,
+        returnType,
+        name,
+        parameterTypes
+    )
+    =
+    inherit ReferencedMethod (
+        flags.Flags ||| ExternalVisibility.ofMethod visibility,
+        Unchecked.defaultof<'Kind>.MethodThis,
+        returnType,
+        name,
+        parameterTypes
+    )
+
+type ReferencedMethod with
+    static member Instance(visibility, flags, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Instance>(visibility, flags, returnType, name, parameterTypes)
+
+    static member Abstract(visibility, flags, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Abstract>(visibility, flags, returnType, name, parameterTypes)
+
+    static member Final(visibility, flags, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Final>(visibility, flags, returnType, name, parameterTypes)
+
+    static member Static(visibility, flags, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Static>(visibility, flags, returnType, name, parameterTypes)
+
+    static member Virtual(visibility, flags, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Virtual>(visibility, flags, returnType, name, parameterTypes)
+
+    static member Constructor(visibility, flags, parameterTypes) =
+        new MethodReference<MethodKinds.ObjectConstructor> (
+            visibility,
+            flags,
+            ReturnType.RVoid,
+            MethodName MethodName.ctor,
+            parameterTypes
+        )
+
+[<RequireQualifiedAccess>]
+module ReferencedMethod =
+    let inline (|Instance|Virtual|Final|Static|Abstract|Constructor|) (method: ReferencedMethod) =
+        match method with
+        | :? MethodReference<MethodKinds.Instance> as method' -> Instance method'
+        | :? MethodReference<MethodKinds.Virtual> as method' -> Virtual method'
+        | :? MethodReference<MethodKinds.Final> as method' -> Final method'
+        | :? MethodReference<MethodKinds.Static> as method' -> Static method'
+        | :? MethodReference<MethodKinds.Abstract> as method' -> Abstract method'
+        | _ -> Constructor(method :?> MethodReference<MethodKinds.ObjectConstructor>)

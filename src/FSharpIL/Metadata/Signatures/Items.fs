@@ -70,7 +70,7 @@ type ParamItemTag =
 
 /// <summary>Represents a <c>Param</c> item used in method signatures (II.23.2.10).</summary>
 [<IsReadOnly>]
-type ParamItem<'TDefOrRef, 'TDefOrRefOrSpec> = struct
+type ParamItem<'TDefOrRef, 'TDefOrRefOrSpec> = struct // TODO: Rename to Param
     val Tag: ParamItemTag
     val CustomModifiers: CustomModifiers<'TDefOrRefOrSpec>
     val ParamType: EncodedType<'TDefOrRef, 'TDefOrRefOrSpec> voption
@@ -109,7 +109,7 @@ type ReturnTypeTag =
 
 /// <summary>Represents a <c>RetType</c> item used in method signatures (II.23.2.11).</summary>
 [<IsReadOnly; Struct>]
-type ReturnType<'TDefOrRef, 'TDefOrRefOrSpec>
+type ReturnType<'TDefOrRef, 'TDefOrRefOrSpec> // TODO: Rename to RetType
     internal
     (
         tag: ReturnTypeTag,

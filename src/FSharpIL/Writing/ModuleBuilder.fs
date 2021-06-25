@@ -14,7 +14,14 @@ open FSharpIL.Utilities.Collections
 [<Sealed>]
 type DefinedTypeMembers internal (owner, warnings) =
     let mutable methods = HybridHashSet<DefinedMethod>()
+
     member _.MethodCount = methods.Count
+
+    member _.AddMethod method =
+        match owner with
+        | DefinedType.Enum _ -> noImpl "error for enum cannot have methods"
+        | DefinedType.Delegate _ -> noImpl "error for delegate cannot have additional methods maybe go check if ECMA-335 prohibits this in the list of rules, since section I says so"
+        | _ -> noImpl "bad"
 
 [<Sealed>]
 type ReferencedTypeMembers internal (warnings) = class end

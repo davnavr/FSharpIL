@@ -17,7 +17,7 @@ type DefinedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
-    //member AddMethod: DefinedMethod * ValidationResult<CallTarget>
+    member AddMethod: DefinedMethod -> ValidationResult<unit> // TODO: Have return type be an object that allows the calling of the method in a method body.
 
 //[<Sealed>]
 //type ReferencedTypeMembers =
