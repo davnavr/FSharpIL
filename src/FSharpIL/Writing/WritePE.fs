@@ -117,11 +117,15 @@ let ntSpecificFieldsCommon (fields: NTSpecificFields<_, _, _, _>) info (writer: 
     writer.WriteLE(uint16 fields.Subsystem)
     writer.WriteLE(uint16 fields.DllFlags)
 
+let inline dataDirectory (dir: inref<RvaAndSize>) (writer: byref<#IByteWriter>) =
+    writer.WriteLE(uint32 dir.Rva)
+    writer.WriteLE dir.Size
+
 /// Writes the PE optional header (II.25.2.3).
-let optionalHeader info (writer: byref<#IByteWriter>) =
+let optionalHeader ({ DataDirectories = directories } as info) (writer: byref<#IByteWriter>) =
     match info.OptionalHeader with
     | PE32(standard, nt) ->
-        standardFieldsCommon ImageKind.PE32Plus standard info &writer
+        standardFieldsCommon ImageKind.PE32 standard info &writer
         writer.WriteLE(uint32 info.BaseOfData) // RVA of the .rsrc section
 
         writer.WriteLE(uint32 nt.ImageBase)
@@ -143,7 +147,47 @@ let optionalHeader info (writer: byref<#IByteWriter>) =
         // NOTE: Duplicate code for LoaderFlags.
         writer.WriteLE nt.LoaderFlags
     writer.WriteLE 0x10u // NumberOfRvaAndSizes
-    noImpl "TODO: Write data directories"
+    dataDirectory &directories.ExportTable &writer
+    dataDirectory &directories.ImportTable &writer
+    dataDirectory &directories.ResourceTable &writer
+    dataDirectory &directories.ExceptionTable &writer
+    dataDirectory &directories.CertificateTable &writer
+    dataDirectory &directories.BaseRelocationTable &writer
+    dataDirectory &directories.DebugTable &writer
+    dataDirectory &directories.CopyrightTable &writer
+    dataDirectory &directories.GlobalPointerTable &writer
+    dataDirectory &directories.TLSTable &writer
+    dataDirectory &directories.LoadConfigTable &writer
+    dataDirectory &directories.BoundImportTable &writer
+    dataDirectory &directories.ImportAddressTable &writer
+    dataDirectory &directories.DelayImportDescriptor &writer
+    dataDirectory &directories.CliHeader.Directory &writer
+    dataDirectory &directories.Reserved &writer
+
+let sectionHeaders info (writer: byref<#IByteWriter>) =
+    for i = 0 to info.Sections.Length - 1 do
+        let section = &info.Sections.ItemRef i
+        let header = section.Header
+        writer.Write(SectionName.asSpan header.SectionName)
+        writer.WriteLE header.VirtualSize
+        writer.WriteLE(uint32 header.VirtualAddress)
+        writer.WriteLE header.RawDataSize
+        writer.WriteLE(uint32 header.RawDataPointer)
+        writer.WriteLE header.PointerToRelocations
+        writer.WriteLE header.PointerToLineNumbers
+        writer.WriteLE header.NumberOfRelocations
+        writer.WriteLE header.NumberOfLineNumbers
+        writer.WriteLE(uint32 header.Characteristics)
+
+let sectionData info (writer: byref<#IByteWriter>) =
+    for section in info.Sections do
+        let data = Span.stackalloc<byte> section.Data.ChunkSize
+        let mutable remaining = section.Data.Length
+        while remaining > 0u do
+            section.Data.CopyTo(section.Data.Length - remaining, data)
+            writer.Write data
+            remaining <- remaining - uint32 data.Length
+            // Padding bytes are already included.
 
 let internal write file output =
     let mutable output' = FileHeaderWriter output
@@ -152,6 +196,7 @@ let internal write file output =
     output'.Write Magic.portableExecutableSignature
     coffHeader info &output'
     optionalHeader info &output'
+    sectionHeaders info &output'
 
     // Padding to start of section data
     let mutable padding = (Round.upTo info.FileAlignment output'.Position) - output'.Position
@@ -161,11 +206,8 @@ let internal write file output =
         output'.Write padding'
         padding <- padding - uint32 padding'.Length
 
-    // Section data
-    for section in info.Sections do
-        let data = Span.stackalloc<byte> section.Data.ChunkSize
-        section.Data.CopyTo(0u, data)
-        output'.Write data
+    sectionData info &output'
+
     output'.Output
 
 let chunkedMemory file = (write file (ChunkedMemoryBuilder(int32 file.OptionalHeader.Alignment.FileAlignment))).ToImmutable()

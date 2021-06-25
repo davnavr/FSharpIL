@@ -21,7 +21,7 @@ type AssemblyReference =
       PublicKeyOrToken: PublicKeyOrToken
       Name: FileName
       Culture: Identifier voption
-      HashValue: ImmutableArray<byte> voption }
+      HashValue: ImmutableArray<byte> }
 
     member Flags: AssemblyFlags
 
@@ -29,6 +29,6 @@ type AssemblyReference =
 type AssemblyDefinition =
     { Version: AssemblyVersion
       //Flags: AssemblyFlags
-      PublicKey: ImmutableArray<byte> voption
+      PublicKey: ImmutableArray<byte>
       Name: FileName
       Culture: Identifier voption }

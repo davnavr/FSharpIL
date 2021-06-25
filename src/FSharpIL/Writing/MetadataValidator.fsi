@@ -3,7 +3,7 @@
 open FSharpIL.Cli
 open FSharpIL.Metadata
 
-type IMetadataValidator<'T> = interface
+type IMetadataValidator<'T when 'T : not struct> = interface
     abstract Validate: 'T * ValidationWarningsBuilder option -> IValidationError option
     abstract Duplicate: 'T -> IValidationError
 end

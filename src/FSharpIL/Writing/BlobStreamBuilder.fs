@@ -12,7 +12,10 @@ open FSharpIL.Metadata.Blobs
 open FSharpIL.Metadata.Signatures
 
 [<IsReadOnly; Struct>]
-type internal BlobEntry = { Offset: BlobOffset; Length: uint32 }
+type internal BlobEntry =
+    { Offset: BlobOffset; DataLength: uint32 }
+
+    member this.TotalLength = (BlobWriter.compressedUnsignedSize this.DataLength) + this.DataLength
 
 type internal IBlobWriter<'Item> = interface
     abstract Write: byref<ChunkedMemoryBuilder> * item: inref<'Item> -> unit
@@ -37,8 +40,7 @@ type BlobStreamBuilder (capacity: int32) =
     let entries = RefArrayList<BlobEntry> capacity
     let mutable offset = 1u
     let mutable content = ChunkedMemoryBuilder capacity
-    do content.Write 0uy
-    do entries.Add &empty|> ignore
+    do entries.Add &empty |> ignore
 
     member _.IsEmpty = entries.Count = 1
     member _.EmptyBlob = empty.Offset
@@ -47,8 +49,10 @@ type BlobStreamBuilder (capacity: int32) =
     member _.StreamLength = offset
 
     member private _.AddEntry start =
-        let length = offset - start
-        let entry = { Offset = { BlobOffset = start }; Length = BlobWriter.compressedUnsignedSize length + length }
+        let length = content.Length - start
+        let entry = { Offset = { BlobOffset = offset }; DataLength = length }
+
+        offset <- offset + entry.TotalLength
         entries.Add &entry |> ignore
         entry.Offset
 
@@ -60,21 +64,30 @@ type BlobStreamBuilder (capacity: int32) =
         and 'Writer : struct>
         (item: inref<'Item>)
         =
-        let start = offset
+        let start = content.Length
         Unchecked.defaultof<'Writer>.Write(&content, &item)
         this.AddEntry start
 
     member this.Add(writer: ByteBlobWriter) = this.Add<DelegateBlobWriter, _> &writer
 
     member this.Add(bytes: ReadOnlySpan<byte>) =
-        let start = offset
-        content.Write bytes
-        this.AddEntry start
+        if bytes.Length = 0
+        then this.EmptyBlob
+        else
+            let start = content.Length
+            content.Write bytes
+            this.AddEntry start
 
     member inline this.Add(bytes: ReadOnlyMemory<byte>) = this.Add bytes.Span
     member inline this.Add(bytes: byte[]) = this.Add(ReadOnlySpan bytes)
     member inline this.Add(bytes: ImmutableArray<byte>) = this.Add(bytes.AsSpan())
-    // TODO: add Add method for PublicKeyOrToken
+    member this.Add(token: PublicKeyOrToken) =
+        { IsPublicKey =
+            match token with
+            | PublicKeyToken _
+            | NoPublicKeyOrToken -> false
+            | PublicKey _ -> true
+          Token = this.Add(PublicKeyOrToken.toBlock token) }
     member this.Add(signature: inref<_>) = { MethodDefSig = this.Add<MethodDefSigWriter, _> &signature }
 
     interface IStreamBuilder with
@@ -83,7 +96,7 @@ type BlobStreamBuilder (capacity: int32) =
         member _.Serialize wr =
             let mutable offset', content' = 0u, content.AsImmutableUnsafe()
             for i = 0 to entries.Count - 1 do
-                let length = entries.[i].Length
+                let length = entries.[i].DataLength
                 BlobWriter.compressedUnsigned length &wr
                 wr.Write(content'.Slice(0u, length))
                 content' <- content'.Slice length

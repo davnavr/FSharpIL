@@ -1,9 +1,10 @@
 ﻿namespace FSharpIL.Writing.Tables
 
-open FSharpIL.Utilities
-
+open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 open FSharpIL.Writing.Tables.Collections
+
+open FSharpIL.Utilities
 
 [<RequireQualifiedAccess>]
 module private InvalidFieldFlags =

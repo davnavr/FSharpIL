@@ -56,7 +56,9 @@ let header info (wr: byref<ChunkedMemoryBuilder>) =
     wr.WriteLE header.MinorRuntimeVersion
     info.Metadata <- RvaAndSizeWriter &wr
     wr.WriteLE(uint32 info.Builder.HeaderFlags) // Flags
-    noImpl "TODO: Write EntryPointToken"
+
+    wr.WriteLE 0u // noImpl "TODO: Write EntryPointToken"
+
     info.Resources <- RvaAndSizeWriter &wr
     info.StrongNameSignature <- RvaAndSizeWriter &wr
     wr.WriteLE 0UL // CodeManagerTable

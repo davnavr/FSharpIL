@@ -16,12 +16,15 @@ type internal ByteWriterExtensions =
 
     [<Extension>]
     static member WriteLE(this: byref<#IByteWriter>, value) =
-        this.Write(Span.asReadOnly(Bytes.ofU2 (Span.stackalloc<byte> 2) value))
+        let span = Span.stackalloc<byte> 2
+        this.Write(Span.asReadOnly(Bytes.ofU2 span value))
 
     [<Extension>]
     static member WriteLE(this: byref<#IByteWriter>, value) =
-        this.Write(Span.asReadOnly(Bytes.ofU4 (Span.stackalloc<byte> 4) value))
+        let span = Span.stackalloc<byte> 4
+        this.Write(Span.asReadOnly(Bytes.ofU4 span value))
 
     [<Extension>]
     static member WriteLE(this: byref<#IByteWriter>, value) =
-        this.Write(Span.asReadOnly(Bytes.ofU8 (Span.stackalloc<byte> 8) value))
+        let span = Span.stackalloc<byte> 8
+        this.Write(Span.asReadOnly(Bytes.ofU8 span value))

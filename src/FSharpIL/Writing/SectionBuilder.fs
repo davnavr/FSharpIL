@@ -22,6 +22,8 @@ type SectionBuilder internal (alignment: Alignment, voffset: Rva, foffset: FileO
         WriteCli.metadata &section this.VirtualAddress metadata
         { CliHeaderDirectory.Directory = { Rva = voffset + start; Size = this.VirtualSize - start }}
 
+    member this.AddData(metadata: ModuleBuilder) = this.AddData(metadata.Serialize())
+
     member _.ToImmutable header = Section(header, section.ToImmutable())
 
 /// Generates a section in a Portable Executable file.

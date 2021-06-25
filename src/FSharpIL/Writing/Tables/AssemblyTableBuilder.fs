@@ -13,6 +13,7 @@ type AssemblyTableBuilder internal () =
         exists
     member _.SetRow(assembly: inref<_>) =
         row <- assembly
+        exists <- true
         { TableIndex = 1u }: TableIndex<AssemblyRow>
     interface ITableBuilder<AssemblyRow> with
         member _.Count = if exists then 1 else 0

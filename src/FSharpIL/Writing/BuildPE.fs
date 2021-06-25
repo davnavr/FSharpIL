@@ -20,7 +20,7 @@ let create fileHeader (optionalHeader: OptionalHeader) (sections: ImmutableArray
 
     let mutable voffset = Rva(Round.upTo alignment.SectionAlignment fileHeadersSize)
     let mutable foffset = { FileOffset = fileHeadersSize }
-    for i = 0 to sections'.Length do
+    for i = 0 to sections'.Length - 1 do
         let builder = SectionBuilder(alignment, voffset, foffset)
         let struct(name, flags) = sections.[i] builder dataDirectories
 

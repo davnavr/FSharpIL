@@ -129,7 +129,7 @@ type ReadError =
                     Printf.bprintf sb "0x%02X" bytes.[i]
                 sb.ToString()
             sprintf "expected magic %a, but got %a" print expected print actual
-        | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset 0x%O" offset
+        | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset %O" offset
         | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
         | UnsupportedOptionalHeaderSize size -> sprintf "the parser does not support an optional header size of %i bytes" size
         | InvalidAlignment(salignment, falignment) ->
@@ -140,9 +140,9 @@ type ReadError =
         | RvaNotInCliSection rva ->
             sprintf "the Relative Virtual Address (%O) does not point into the same section containing the CLI header" rva
         | InvalidCliHeaderLocation rva ->
-            sprintf "the CLI header at the Relative Virtual Address (0x%O) is not contained within any section" rva
+            sprintf "the CLI header at the Relative Virtual Address (%O) is not contained within any section" rva
         | CliHeaderOutOfSection rva ->
-            sprintf "the CLI header at the Relative Virtual Address (0x%O) extends past the end of the section" rva
+            sprintf "the CLI header at the Relative Virtual Address (%O) extends past the end of the section" rva
         | CliHeaderTooSmall size -> sprintf "the specified CLI header size is too small (%i)" size
         | InvalidEntryPointKind kind ->
             sprintf "the entry point token was expected to be null, MethodDef, or File, but got %A" kind

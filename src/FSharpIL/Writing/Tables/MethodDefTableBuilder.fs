@@ -1,9 +1,10 @@
 ﻿namespace FSharpIL.Writing.Tables
 
-open FSharpIL.Utilities
-
+open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 open FSharpIL.Writing.Tables.Collections
+
+open FSharpIL.Utilities
 
 /// <summary>Error used when an invalid combination of <c>MethodAttributes</c> is used (6, 7, 24).</summary>
 /// <category>Errors</category>

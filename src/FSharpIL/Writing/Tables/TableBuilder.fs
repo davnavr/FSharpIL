@@ -13,6 +13,7 @@ end
 module TableBuilder =
     let inline count (builder: #ITableBuilder<_>) = uint32 builder.Count
     let inline get (builder: #ITableBuilder<_>) index = &builder.[index]
+    let inline isNotEmpty builder = count builder > 0u
 
     let serialize (wr: byref<ChunkedMemoryBuilder>) hsizes tsizes (table: #ITableBuilder<_>) =
         for i = 1 to table.Count do

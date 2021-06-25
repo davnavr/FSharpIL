@@ -19,75 +19,54 @@ the same or similar CLI metadata as the example is shown as single line comments
 
 ## Example
 *)
-open System
 open System.Collections.Immutable
 
+open FSharpIL.Cli
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Blobs
-open FSharpIL.Metadata.Tables
 open FSharpIL.PortableExecutable
 
 open FSharpIL.Writing
-open FSharpIL.Writing.Abstractions
-open FSharpIL.Writing.Tables
 
 let example() =
-    let struct(builder, assembly) =
-        ModuleBuilder.createAssembly
-            (fun strings guid _ ->
-                (* Define information about the current module, see (II.6). *)
-                let name = strings.Add(Identifier.ofStr "HelloWorld.exe")
-                let mvid = guid.AddNew()
-                ModuleRow.create name mvid)
-            (fun strings _ blob ->
-                (* Define information about the current assembly.
-                   For the relationship between assemblies and modules, see (II.6.1). *)
-                { Name = strings.Add(FileName.ofStr "HelloWorld")
-                  HashAlgId = AssemblyHashAlgorithm.None
-                  MajorVersion = 1us
-                  MinorVersion = 0us
-                  BuildNumber = 0us
-                  RevisionNumber = 0us
-                  Flags = AssemblyFlags.None
-                  Culture = strings.EmptyString
-                  PublicKey = blob.EmptyBlob })
-            CliHeader.defaultFields
-            CliMetadataRoot.defaultFields
+    let builder =
+        ModuleBuilder (
+            name = Identifier.ofStr "HelloWorld.exe",
+            assembly =
+                { AssemblyDefinition.Version = AssemblyVersion(1us, 0us, 0us, 0us)
+                  PublicKey = ImmutableArray.Empty
+                  Name = FileName.ofStr "HelloWorld"
+                  Culture = ValueNone }
+        )
 
     (* Add references to other assemblies. *)
     let mscorlib =
-        // TODO: Create special PublicKeyToken type that is only 8 bytes long.
-        let token = builder.Blob.Add [| 0x7cuy; 0xecuy; 0x85uy; 0xd7uy; 0xbeuy; 0xa7uy; 0x79uy; 0x8euy |]
-
         (* Contains core types such as System.Object or System.Int32 *)
-        ModuleBuilder.referenceAssembly
-            (Version(5, 0, 0, 0))
-            (PublicKeyOrTokenOffset.Token token)
-            (FileName.ofStr "System.Private.CoreLib")
-            ValueNone
-            builder.Blob.EmptyBlob
-            builder
+        { AssemblyReference.Version = AssemblyVersion(5us, 0us, 0us, 0us)
+          PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
+          Name = FileName.ofStr "System.Private.CoreLib"
+          Culture = ValueNone
+          HashValue = ImmutableArray.Empty }
+
+    builder.ReferenceAssembly mscorlib
 
     let consolelib =
-        let token = builder.Blob.Add [| 0xb0uy; 0x3fuy; 0x5fuy; 0x7fuy; 0x11uy; 0xd5uy; 0x0auy; 0x3auy |]
-
         (* Contains the System.Console type *)
-        ModuleBuilder.referenceAssembly
-            (Version(5, 0, 0, 0))
-            (PublicKeyOrTokenOffset.Token token)
-            (FileName.ofStr "System.Console")
-            ValueNone
-            builder.Blob.EmptyBlob
-            builder
+        { AssemblyReference.Version = AssemblyVersion(5us, 0us, 0us, 0us)
+          PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+          Name = FileName.ofStr "System.Console"
+          Culture = ValueNone
+          HashValue = ImmutableArray.Empty }
 
-    validated {
+    builder.ReferenceAssembly consolelib
+
+    //validated {
         
 
-        return failwith "TODO: Add hello world things"
-    }
+    //    return failwith "TODO: Add hello world things"
+    //}
 
     let text (section: SectionBuilder) (directories: DataDirectoriesBuilder) =
-        directories.CliHeader <- section.AddData(failwith "TODO: Add CLI metadata": CliMetadataBuilder)
+        directories.CliHeader <- section.AddData builder
         struct(SectionName.text, SectionCharacteristics.text)
 
     BuildPE.create
@@ -105,7 +84,7 @@ let tests =
     afterRunTests <| fun() -> if metadata.IsValueCreated then metadata.Value.Dispose()
 
     testList "hello world" [
-        testCase "has entrypoint" <| fun() ->
+        ftestCase "has entrypoint" <| fun() ->
             metadata.Value.EntryPoint.Name =! "Main"
 
         testCase "has method references only" <| fun() ->
@@ -132,7 +111,7 @@ let tests =
             let paramType = (Seq.head metadata.Value.EntryPoint.Parameters).ParameterType
             test <@ paramType.IsArray && paramType.GetElementType() = metadata.Value.TypeSystem.String @>
 
-        testCaseExec example' "runs correctly" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
+        ftestCaseExec example' "runs correctly" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
             let out = dotnet.StandardOutput.ReadLine()
             dotnet.StandardError.ReadToEnd() |> stderr.Write
 

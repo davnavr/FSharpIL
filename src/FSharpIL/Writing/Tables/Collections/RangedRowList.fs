@@ -3,10 +3,10 @@
 open System.Collections.Generic
 open System.Collections.Immutable
 
-open FSharpIL.Utilities.Collections
-
+open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
-open FSharpIL.Writing.Tables
+
+open FSharpIL.Utilities.Collections
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type TableIndexRange<'Row when 'Row : struct and 'Row :> ITableRow> =

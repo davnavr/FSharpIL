@@ -10,7 +10,6 @@ type RowBuilder<'Row when 'Row :> ITableRow> = StringsStreamBuilder -> GuidStrea
 [<Sealed>]
 type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid, blob) as builder =
     let [<Literal>] MaxSmallHeapOffset = 65535u
-    let mutable valid, sorted = ValidTableFlags.Module, ValidTableFlags.None
 
     member _.HeapSizes =
         let mutable flags = HeapSizes.None
@@ -134,6 +133,13 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
         member _.StreamName = Magic.StreamNames.metadata
         member _.StreamLength = ValueNone
         member this.Serialize wr =
+            let mutable valid = ValidTableFlags.Module
+
+            // TODO: Set valid flags for other table types.
+
+            if TableBuilder.isNotEmpty this.Assembly then valid <- valid ||| ValidTableFlags.Assembly
+            if TableBuilder.isNotEmpty this.AssemblyRef then valid <- valid ||| ValidTableFlags.AssemblyRef
+
             // TODO: Use TablesHeader<_> type?
             wr.WriteLE 0u // Reserved
             wr.Write 2uy // MajorVersion
@@ -141,7 +147,7 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
             wr.Write(uint8 this.HeapSizes)
             wr.Write 0uy // Reserved
             wr.WriteLE(uint64 valid) // Valid
-            wr.WriteLE(uint64 sorted) // Sorted
+            wr.WriteLE(uint64 ValidTableFlags.None) // Sorted // TODO: Set the flags for tables that are required to be sorted.
 
             // Rows
             for i = 0 to 63 do
