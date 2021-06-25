@@ -59,7 +59,7 @@ type CliMetadataBuilder internal
     member _.Guid = guid
     member _.Blob = blob
 
-    member val EntryPointToken: EntryPointToken voption = ValueNone with get, set
+    member val EntryPointToken: EntryPointToken = EntryPointToken.Null with get, set
 
     member _.HeaderFlags =
         let mutable flags = CorFlags.ILOnly
