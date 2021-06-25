@@ -1,15 +1,42 @@
 ﻿namespace FSharpIL.Writing
 
+open System.Collections.Immutable
+
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
-open FSharpIL.Writing.Tables
 
 type RowBuilder<'Row when 'Row :> ITableRow> = StringsStreamBuilder -> GuidStreamBuilder -> BlobStreamBuilder -> 'Row
+
+[<Sealed>]
+type RowTableBuilder<'Row, 'Serializer
+    when 'Row :> ITableRow
+    and 'Serializer :> RowSerializers.ISerializer<'Row>
+    and 'Row : struct>
+    internal
+    (
+        valid: ValidTableFlags ref,
+        table: ValidTableFlags
+    )
+    =
+    let rows = ImmutableArray.CreateBuilder<'Row>()
+    member _.Table = table
+    member _.Count = rows.Count
+    member _.Item with get ({ TableIndex = i }: TableIndex<'Row>) = &rows.ItemRef(int32(i - 1u))
+    member this.IsEmpty = this.Count = 0
+    member this.Add(row: inref<'Row>): TableIndex<'Row> =
+        if this.IsEmpty then valid := !valid ||| table
+        rows.Add row
+        { TableIndex = uint32 this.Count }
 
 /// <summary>Builds the metadata tables stored in the <c>#~</c> metadata stream (II.24.2.6 and II.22).</summary>
 [<Sealed>]
 type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid, blob) as builder =
-    let [<Literal>] MaxSmallHeapOffset = 65535u
+    static let [<Literal>] MaxSmallHeapOffset = 65535u
+    let valid = ref ValidTableFlags.Module
+
+    member _.Valid = !valid
+
+    member val Sorted = ValidTableFlags.None with get, set
 
     member _.HeapSizes =
         let mutable flags = HeapSizes.None
@@ -21,23 +48,23 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
     /// (0x00)
     member val Module = moduleBuilder strings guid blob
     /// (0x01)
-    member val TypeRef = TypeRefTableBuilder()
+    member val TypeRef = RowTableBuilder<_, RowSerializers.TypeRef>(valid, ValidTableFlags.TypeRef)
     /// (0x02)
-    member val TypeDef = TypeDefTableBuilder()
+    member val TypeDef = RowTableBuilder<_, RowSerializers.TypeDef>(valid, ValidTableFlags.TypeDef)
     /// (0x04)
-    member val Field = FieldTableBuilder()
+    member val Field = RowTableBuilder<_, RowSerializers.Field>(valid, ValidTableFlags.Field)
     /// (0x06)
-    member val MethodDef = MethodDefTableBuilder()
+    member val MethodDef = RowTableBuilder<_, RowSerializers.MethodDef>(valid, ValidTableFlags.MethodDef)
     /// (0x08)
-    member val Param = ParamTableBuilder()
+    member val Param = RowTableBuilder<_, RowSerializers.Param>(valid, ValidTableFlags.Param)
     /// (0x09)
-    member val InterfaceImpl = InterfaceImplTableBuilder()
+    member val InterfaceImpl = RowTableBuilder<_, RowSerializers.InterfaceImpl>(valid, ValidTableFlags.InterfaceImpl)
     /// (0x0A)
-    member val MemberRef = MemberRefTableBuilder()
+    member val MemberRef = RowTableBuilder<_, RowSerializers.MemberRef>(valid, ValidTableFlags.MemberRef)
     /// (0x0B)
-    member val Constant = ConstantTableBuilder()
+    member val Constant = RowTableBuilder<_, RowSerializers.Constant>(valid, ValidTableFlags.Constant)
     /// (0x0C)
-    member val CustomAttribute = CustomAttributeTableBuilder()
+    member val CustomAttribute = RowTableBuilder<_, RowSerializers.CustomAttribute>(valid, ValidTableFlags.CustomAttribute)
     // (0x0D)
     // member FieldMarshal
     // (0x0E)
@@ -47,107 +74,102 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
     // (0x10)
     // member FieldLayout
     // (0x11)
-    member val StandAloneSig = StandaloneSigTableBuilder()
+    member val StandAloneSig = RowTableBuilder<_, RowSerializers.StandAloneSig>(valid, ValidTableFlags.StandAloneSig)
     /// (0x12)
-    member val EventMap = EventMapTableBuilder()
+    member val EventMap = RowTableBuilder<_, RowSerializers.EventMap>(valid, ValidTableFlags.EventMap)
     /// (0x14)
-    member val Event = EventTableBuilder()
+    member val Event = RowTableBuilder<_, RowSerializers.Event>(valid, ValidTableFlags.Event)
     /// (0x15)
-    member val PropertyMap = PropertyMapTableBuilder()
+    member val PropertyMap = RowTableBuilder<_, RowSerializers.PropertyMap>(valid, ValidTableFlags.PropertyMap)
     /// (0x17)
-    member val Property = PropertyTableBuilder()
+    member val Property = RowTableBuilder<_, RowSerializers.Property>(valid, ValidTableFlags.Property)
     /// (0x18)
-    member val MethodSemantics = MethodSemanticsTableBuilder()
+    member val MethodSemantics = RowTableBuilder<_, RowSerializers.MethodSemantics>(valid, ValidTableFlags.MethodSemantics)
     /// (0x19)
-    member val MethodImpl = MethodImplTableBuilder()
+    member val MethodImpl = RowTableBuilder<_, RowSerializers.MethodImpl>(valid, ValidTableFlags.MethodImpl)
     /// (0x1A)
-    member val ModuleRef = ModuleRefTableBuilder()
+    member val ModuleRef = RowTableBuilder<_, RowSerializers.ModuleRef>(valid, ValidTableFlags.ModuleRef)
     /// (0x1B)
-    member val TypeSpec = TypeSpecTableBuilder()
+    member val TypeSpec = RowTableBuilder<_, RowSerializers.TypeSpec>(valid, ValidTableFlags.TypeSpec)
     // (0x1C)
     // member ImplMap
     // (0x1D)
     // member FieldRva
     /// <summary>Represents the <c>Assembly</c> table, which describes the current assembly (0x20).</summary>
-    member val Assembly = AssemblyTableBuilder()
+    member val Assembly = RowTableBuilder<_, RowSerializers.Assembly>(valid, ValidTableFlags.Assembly)
     // AssemblyProcessor // 0x21 // Not used when writing a PE file
     // AssemblyOS // 0x22 // Not used when writing a PE file
     /// <summary>Represents the <c>AssemblyRef</c> table, which contains references to other assemblies (0x23).</summary>
-    member val AssemblyRef = AssemblyRefTableBuilder()
+    member val AssemblyRef = RowTableBuilder<_, RowSerializers.AssemblyRef>(valid, ValidTableFlags.AssemblyRef)
     // AssemblyRefProcessor // 0x24 // Not used when writing a PE file
     // AssemblyRefOS // 0x25 // Not used when writing a PE file
     /// (0x26)
-    member val File = FileTableBuilder()
+    member val File = RowTableBuilder<_, RowSerializers.File>(valid, ValidTableFlags.File)
     // (0x27)
     // member ExportedType
     // (0x28)
     // member ManifestResource
     /// (0x29)
-    member val NestedClass = NestedClassTableBuilder()
+    member val NestedClass = RowTableBuilder<_, RowSerializers.NestedClass>(valid, ValidTableFlags.NestedClass)
     /// (0x2A)
-    member val GenericParam = GenericParamTableBuilder()
+    member val GenericParam = RowTableBuilder<_, RowSerializers.GenericParam>(valid, ValidTableFlags.GenericParam)
     // (0x2B)
-    member val MethodSpec = MethodSpecTableBuilder()
+    member val MethodSpec = RowTableBuilder<_, RowSerializers.MethodSpec>(valid, ValidTableFlags.MethodSpec)
     // (0x2C)
-    member val GenericParamConstraint = GenericParamConstraintTableBuilder()
+    member val GenericParamConstraint = RowTableBuilder<_, RowSerializers.GenericParamConstraint>(valid, ValidTableFlags.GenericParamConstraint)
 
     member val IndexSizes =
         { new ITableRowCounts with
             member _.RowCount table =
+                let inline count (table: RowTableBuilder<_, _>) = uint32 table.Count
                 match table with
                 | ValidTableFlags.Module -> 1u
-                | ValidTableFlags.TypeRef -> TableBuilder.count builder.TypeRef
-                | ValidTableFlags.TypeDef -> TableBuilder.count builder.TypeDef
-                | ValidTableFlags.Field -> TableBuilder.count builder.Field
-                | ValidTableFlags.MethodDef -> TableBuilder.count builder.MethodDef
-                | ValidTableFlags.Param -> TableBuilder.count builder.Param
-                | ValidTableFlags.InterfaceImpl -> TableBuilder.count builder.InterfaceImpl
-                | ValidTableFlags.MemberRef -> TableBuilder.count builder.MemberRef
-                | ValidTableFlags.Constant -> TableBuilder.count builder.Constant
-                | ValidTableFlags.CustomAttribute -> TableBuilder.count builder.CustomAttribute
+                | ValidTableFlags.TypeRef -> count builder.TypeRef
+                | ValidTableFlags.TypeDef -> count builder.TypeDef
+                | ValidTableFlags.Field -> count builder.Field
+                | ValidTableFlags.MethodDef -> count builder.MethodDef
+                | ValidTableFlags.Param -> count builder.Param
+                | ValidTableFlags.InterfaceImpl -> count builder.InterfaceImpl
+                | ValidTableFlags.MemberRef -> count builder.MemberRef
+                | ValidTableFlags.Constant -> count builder.Constant
+                | ValidTableFlags.CustomAttribute -> count builder.CustomAttribute
 
-                | ValidTableFlags.StandAloneSig -> TableBuilder.count builder.StandAloneSig
-                | ValidTableFlags.EventMap -> TableBuilder.count builder.EventMap
-                | ValidTableFlags.Event -> TableBuilder.count builder.Event
-                | ValidTableFlags.PropertyMap -> TableBuilder.count builder.PropertyMap
-                | ValidTableFlags.Property -> TableBuilder.count builder.Property
-                | ValidTableFlags.MethodSemantics -> TableBuilder.count builder.MethodSemantics
-                | ValidTableFlags.MethodImpl -> TableBuilder.count builder.MethodImpl
-                | ValidTableFlags.ModuleRef -> TableBuilder.count builder.ModuleRef
-                | ValidTableFlags.TypeSpec -> TableBuilder.count builder.TypeSpec
+                | ValidTableFlags.StandAloneSig -> count builder.StandAloneSig
+                | ValidTableFlags.EventMap -> count builder.EventMap
+                | ValidTableFlags.Event -> count builder.Event
+                | ValidTableFlags.PropertyMap -> count builder.PropertyMap
+                | ValidTableFlags.Property -> count builder.Property
+                | ValidTableFlags.MethodSemantics -> count builder.MethodSemantics
+                | ValidTableFlags.MethodImpl -> count builder.MethodImpl
+                | ValidTableFlags.ModuleRef -> count builder.ModuleRef
+                | ValidTableFlags.TypeSpec -> count builder.TypeSpec
 
-                | ValidTableFlags.Assembly -> TableBuilder.count builder.Assembly
-                | ValidTableFlags.AssemblyRef -> TableBuilder.count builder.AssemblyRef
-                | ValidTableFlags.File -> TableBuilder.count builder.File
+                | ValidTableFlags.Assembly -> count builder.Assembly
+                | ValidTableFlags.AssemblyRef -> count builder.AssemblyRef
+                | ValidTableFlags.File -> count builder.File
 
-                | ValidTableFlags.NestedClass -> TableBuilder.count builder.NestedClass
-                | ValidTableFlags.GenericParam -> TableBuilder.count builder.GenericParam
-                | ValidTableFlags.MethodSpec -> TableBuilder.count builder.MethodSpec
-                | ValidTableFlags.GenericParamConstraint -> TableBuilder.count builder.GenericParamConstraint
+                | ValidTableFlags.NestedClass -> count builder.NestedClass
+                | ValidTableFlags.GenericParam -> count builder.GenericParam
+                | ValidTableFlags.MethodSpec -> count builder.MethodSpec
+                | ValidTableFlags.GenericParamConstraint -> count builder.GenericParamConstraint
                 | _ -> 0u }
 
-    member inline private this.SerializeTable(wr: byref<_>, table: #ITableBuilder<_>) =
-        TableBuilder.serialize &wr this.HeapSizes this.IndexSizes table
+    member private this.SerializeTable(wr: byref<_>, table: RowTableBuilder<_, 'Serializer>) =
+        for i = 1 to table.Count do
+            Unchecked.defaultof<'Serializer>.Serialize(this.HeapSizes, this.IndexSizes, &table.[{ TableIndex = uint32 i }], &wr)
 
     interface IStreamBuilder with
         member _.StreamName = Magic.StreamNames.metadata
         member _.StreamLength = ValueNone
         member this.Serialize wr =
-            let mutable valid = ValidTableFlags.Module
-
-            // TODO: Set valid flags for other table types.
-
-            if TableBuilder.isNotEmpty this.Assembly then valid <- valid ||| ValidTableFlags.Assembly
-            if TableBuilder.isNotEmpty this.AssemblyRef then valid <- valid ||| ValidTableFlags.AssemblyRef
-
             // TODO: Use TablesHeader<_> type?
             wr.WriteLE 0u // Reserved
             wr.Write 2uy // MajorVersion
             wr.Write 0uy // MinorVersion
             wr.Write(uint8 this.HeapSizes)
             wr.Write 0uy // Reserved
-            wr.WriteLE(uint64 valid) // Valid
-            wr.WriteLE(uint64 ValidTableFlags.None) // Sorted // TODO: Set the flags for tables that are required to be sorted.
+            wr.WriteLE(uint64 !valid)
+            wr.WriteLE(uint64 this.Sorted)
 
             // Rows
             for i = 0 to 63 do
@@ -156,10 +178,10 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
 
             // Module
             wr.WriteLE this.Module.Generation
-            StreamOffset.writeString &wr this.HeapSizes this.Module.Name.Offset
-            StreamOffset.writeGuid &wr this.HeapSizes this.Module.Mvid
-            StreamOffset.writeGuid &wr this.HeapSizes this.Module.EncId
-            StreamOffset.writeGuid &wr this.HeapSizes this.Module.EncBaseId
+            WriteIndex.string &wr this.HeapSizes this.Module.Name.Offset
+            WriteIndex.guid &wr this.HeapSizes this.Module.Mvid
+            WriteIndex.guid &wr this.HeapSizes this.Module.EncId
+            WriteIndex.guid &wr this.HeapSizes this.Module.EncBaseId
 
             this.SerializeTable(&wr, this.TypeRef)
             this.SerializeTable(&wr, this.TypeDef)

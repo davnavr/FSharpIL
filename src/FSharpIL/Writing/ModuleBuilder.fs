@@ -76,7 +76,7 @@ type ModuleBuilder
                       Name = builder.Strings.Add assem.Name
                       Culture = builder.Strings.Add assem.Culture }
 
-                ValueSome(builder.Tables.Assembly.SetRow &row)
+                ValueSome(builder.Tables.Assembly.Add &row)
             | None -> ValueNone
 
         for assem in assemblyRefs do

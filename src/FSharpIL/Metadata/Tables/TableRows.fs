@@ -183,6 +183,7 @@ type ParamRow =
     interface IEquatable<ParamRow> with member this.Equals other = this.Equals other
 
 [<IsReadOnly>]
+[<System.ObsoleteAttribute("Use Rva instead")>]
 type MethodBodyLocation = struct
     val Value: uint32
     internal new (value) = { Value = value }
@@ -521,13 +522,10 @@ type MethodImplRow =
     interface IEquatable<MethodImplRow> with member this.Equals other = this.Equals other
 
 /// <summary>(0x1A) Represents a row in the <c>ModuleRef</c> table (II.22.31).</summary>
-[<RequireQualifiedAccess>]
 [<IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
 [<StructuralComparison; StructuralEquality>]
-type ModuleRefRow =
-    { Name: IdentifierOffset } // TODO: Make the value an offset into the File table instead, since a matching entry is required.
-    //member this.Name: FileNameOffset = this
-    interface ITableRow
+type ModuleRefRow = { Name: IdentifierOffset } interface ITableRow
 
 /// <summary>
 /// (0x1B) Represents a row in the <c>TypeSpec</c> table, which contains an offset into the <c>#Blob</c> heap pointing to a
@@ -545,6 +543,7 @@ type TypeSpecRow =
 
 /// Specifies where the initial value of a field is stored (II.22.18).
 [<IsReadOnly>]
+[<System.ObsoleteAttribute("Use Rva instead")>]
 type FieldValueLocation = struct
     val Value: uint32
     internal new (value) = { Value = value }

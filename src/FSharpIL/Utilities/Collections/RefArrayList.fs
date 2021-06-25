@@ -4,6 +4,7 @@ open System
 
 open FSharpIL.Utilities
 
+[<Obsolete("Use ImmutableArray`1.Builder instead")>]
 [<Sealed>]
 type RefArrayList<'T when 'T : struct> internal (capacity) =
     static let [<Literal>] DefaultCapacity = 4
