@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Utilities.Collections
+﻿namespace rec FSharpIL.Utilities.Collections
 
 open System.Collections.Generic
 
@@ -54,4 +54,70 @@ type internal HybridHashSet<'T when 'T : not struct and 'T : equality> = struct
             this.ItemsEqual(this.item1, item) ||
             this.ItemsEqual(this.item2, item) ||
             (if isNull this.inner then false else this.inner.Contains item)
+
+    member this.GetEnumerator() =
+        { Inner = if isNull this.inner then Unchecked.defaultof<_> else this.inner.GetEnumerator()
+          HasInner = not(isNull this.inner)
+          State = EnumeratorState.NotStarted
+          Item0 = this.item0
+          Item1 = this.item1
+          Item2 = this.item2 }
+
+    interface IReadOnlyCollection<'T> with
+        member this.Count = this.Count
+        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
+        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
 end
+
+type private EnumeratorState =
+    | NotStarted = 0uy
+    | First = 1uy
+    | Second = 2uy
+    | Third = 3uy
+    | Rest = 4uy
+    | ReachedEnd = 5uy
+
+[<Struct>]
+type HybridHashSetEnumerator<'T when 'T : not struct and 'T : equality> =
+    private
+        { mutable Inner: HashSet<'T>.Enumerator
+          mutable HasInner: bool
+          mutable State: EnumeratorState
+          Item0: 'T
+          Item1: 'T
+          Item2: 'T }
+
+    member this.Current =
+        match this.State with
+        | EnumeratorState.NotStarted -> enumeratorNotStarted()
+        | EnumeratorState.First -> this.Item0
+        | EnumeratorState.Second -> this.Item1
+        | EnumeratorState.Third -> this.Item2
+        | EnumeratorState.Rest -> this.Inner.Current
+        | EnumeratorState.ReachedEnd
+        | _ -> enumeratorReachedEnd()
+
+    member this.MoveNext() =
+        match this.State with
+        | EnumeratorState.NotStarted
+        | EnumeratorState.First
+        | EnumeratorState.Second
+        | EnumeratorState.Third ->
+            this.State <- this.State + EnumeratorState.First
+            true
+        | EnumeratorState.Rest when not this.HasInner ->
+            this.State <- EnumeratorState.ReachedEnd
+            false
+        | EnumeratorState.Rest ->
+            let moved = this.Inner.MoveNext()
+            if not moved then this.State <- EnumeratorState.ReachedEnd
+            moved
+        | EnumeratorState.ReachedEnd
+        | _ -> false
+
+    interface IEnumerator<'T> with
+        member this.Current = this.Current
+        member this.Current = this.Current :> obj
+        member this.MoveNext() = this.MoveNext()
+        member _.Reset() = enumeratorCannotReset()
+        member _.Dispose() = ()

@@ -192,19 +192,21 @@ module MethodKinds =
 type DefinedMethod =
     inherit Method
 
+    val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
 
-    new (flags, mthis, rtype, MethodName name, parameterTypes: ImmutableArray<_>, parameterList) =
+    new (iflags, flags, mthis, rtype, MethodName name, parameterTypes: ImmutableArray<_>, parameterList) =
         let mutable parameters = Array.zeroCreate parameterTypes.Length
         let cconv = checkMethodSig<MethodDefParamIterator, _> (parameters, parameterList) parameterTypes
         { inherit Method (
-            flags,
-            mthis,
-            cconv,
-            name,
-            rtype,
-            parameterTypes
+              flags,
+              mthis,
+              cconv,
+              name,
+              rtype,
+              parameterTypes
           )
+          ImplFlags = iflags
           Parameters = Unsafe.As &parameters }
 
 [<Sealed>]
@@ -219,6 +221,7 @@ type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>
     )
     =
     inherit DefinedMethod (
+        MethodImplFlags.IL, // TODO: Set PInvokeImpl flag for PInvoke methods.
         flags.Flags ||| MemberVisibility.ofMethod visibility,
         Unchecked.defaultof<'Kind>.MethodThis,
         name,

@@ -23,10 +23,13 @@ type RowTableBuilder<'Row, 'Serializer
     member _.Count = rows.Count
     member _.Item with get ({ TableIndex = i }: TableIndex<'Row>) = &rows.ItemRef(int32(i - 1u))
     member this.IsEmpty = this.Count = 0
+    /// Adds the row at the specified address to the metadata table.
     member this.Add(row: inref<'Row>): TableIndex<'Row> =
         if this.IsEmpty then valid := !valid ||| table
         rows.Add row
         { TableIndex = uint32 this.Count }
+     /// Adds the specified row to the metadata table.
+    member this.Add(row: 'Row) = this.Add &row
 
 /// <summary>Builds the metadata tables stored in the <c>#~</c> metadata stream (II.24.2.6 and II.22).</summary>
 [<Sealed>]

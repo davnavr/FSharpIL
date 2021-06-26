@@ -86,9 +86,11 @@ module MethodKinds =
 type DefinedMethod =
     inherit Method
 
+    val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
 
     internal new:
+        MethodImplFlags *
         MethodDefFlags *
         MethodThis *
         ReturnType *

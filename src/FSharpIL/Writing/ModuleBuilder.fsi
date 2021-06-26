@@ -11,7 +11,10 @@ open FSharpIL.Utilities.Collections
 
 [<Sealed>]
 type DefinedTypeMembers =
+    val mutable internal methods: HybridHashSet<DefinedMethod>
+
     internal new: owner: DefinedType * warnings: ValidationWarningsBuilder option -> DefinedTypeMembers
+
     //member FieldCount: int32
     member MethodCount: int32
     //member PropertyCount: int32

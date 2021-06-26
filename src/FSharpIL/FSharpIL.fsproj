@@ -15,6 +15,7 @@
     <Compile Include="Utilities\Round.fs" />
     <Compile Include="Utilities\Span.fs" />
     <Compile Include="Utilities\Bytes.fs" />
+    <Compile Include="Utilities\Collections\CollectionFail.fs" />
     <Compile Include="Utilities\Collections\HybridHashSet.fs" />
     <Compile Include="Utilities\Collections\RefArrayList.fs" />
     <Compile Include="Omitted.fs" />
