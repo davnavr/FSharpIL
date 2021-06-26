@@ -88,6 +88,7 @@ type DefinedMethod =
 
     val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
+    //member Visibility: MemberVisibility
 
     internal new:
         MethodImplFlags *
@@ -113,48 +114,48 @@ type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> 
 type DefinedMethod with
     static member Instance:
         MemberVisibility *
-        MethodAttributes<MethodKinds.Instance> *
+        flags: MethodAttributes<MethodKinds.Instance> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<ParamItem> *
         ParameterList -> MethodDefinition<MethodKinds.Instance>
 
     static member Virtual:
         MemberVisibility *
-        MethodAttributes<MethodKinds.Virtual> *
+        flags: MethodAttributes<MethodKinds.Virtual> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<ParamItem> *
         ParameterList -> MethodDefinition<MethodKinds.Virtual>
 
     static member Final:
         MemberVisibility *
-        MethodAttributes<MethodKinds.Final> *
+        flags: MethodAttributes<MethodKinds.Final> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<ParamItem> *
         ParameterList -> MethodDefinition<MethodKinds.Final>
 
     static member Static:
         MemberVisibility *
-        MethodAttributes<MethodKinds.Static> *
+        flags: MethodAttributes<MethodKinds.Static> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<ParamItem> *
         ParameterList -> MethodDefinition<MethodKinds.Static>
 
     static member Abstract:
         MemberVisibility *
-        MethodAttributes<MethodKinds.Abstract> *
+        flags: MethodAttributes<MethodKinds.Abstract> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<ParamItem> *
         ParameterList -> MethodDefinition<MethodKinds.Abstract>
 
     static member Constructor:
         MemberVisibility *
-        MethodAttributes<MethodKinds.ObjectConstructor> *
-        ImmutableArray<ParamItem> *
+        flags: MethodAttributes<MethodKinds.ObjectConstructor> *
+        parameterTypes: ImmutableArray<ParamItem> *
         ParameterList -> MethodDefinition<MethodKinds.ObjectConstructor>
 
     static member ClassConstructor: MethodDefinition<MethodKinds.ClassConstructor>
@@ -177,51 +178,51 @@ type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> =
 
     internal new:
         ExternalVisibility *
-        MethodAttributes<'Kind> *
+        flags: MethodAttributes<'Kind> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> -> MethodReference<'Kind>
+        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<'Kind>
 
 type ReferencedMethod with
     static member Instance:
         ExternalVisibility *
-        MethodAttributes<MethodKinds.Instance> *
+        flags: MethodAttributes<MethodKinds.Instance> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Instance>
+        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Instance>
 
     static member Virtual:
         ExternalVisibility *
-        MethodAttributes<MethodKinds.Virtual> *
+        flags: MethodAttributes<MethodKinds.Virtual> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Virtual>
+        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Virtual>
 
     static member Final:
         ExternalVisibility *
-        MethodAttributes<MethodKinds.Final> *
+        flags: MethodAttributes<MethodKinds.Final> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Final>
+        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Final>
 
     static member Static:
         ExternalVisibility *
-        MethodAttributes<MethodKinds.Static> *
+        flags: MethodAttributes<MethodKinds.Static> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Static>
+        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Static>
 
     static member Abstract:
         ExternalVisibility *
-        MethodAttributes<MethodKinds.Abstract> *
+        flags: MethodAttributes<MethodKinds.Abstract> *
         ReturnType *
         MethodName *
-        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Abstract>
+        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Abstract>
 
     static member Constructor:
         ExternalVisibility *
-        MethodAttributes<MethodKinds.ObjectConstructor> *
-        ImmutableArray<ParamItem> -> MethodReference<MethodKinds.ObjectConstructor>
+        flags: MethodAttributes<MethodKinds.ObjectConstructor> *
+        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.ObjectConstructor>
 
 [<RequireQualifiedAccess>]
 module ReferencedMethod =

@@ -52,11 +52,8 @@
     <Compile Include="Cli\Attributes.fs" />
     <Compile Include="Cli\Assembly.fsi" />
     <Compile Include="Cli\Assembly.fs" />
-    <Compile Include="Cli\TypeKinds.fs" />
-    <Compile Include="Cli\TypeReference.fsi" />
-    <Compile Include="Cli\TypeReference.fs" />
-    <Compile Include="Cli\TypeDefinition.fsi" />
-    <Compile Include="Cli\TypeDefinition.fs" />
+    <Compile Include="Cli\Type.fsi" />
+    <Compile Include="Cli\Type.fs" />
     <Compile Include="Cli\Signatures.fs" />
     <Compile Include="Cli\Constant.fs" />
     <Compile Include="Cli\Parameter.fs" />

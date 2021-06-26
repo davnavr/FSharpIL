@@ -21,11 +21,11 @@ type DefinedTypeMembers =
 
     new (owner, warnings) = { owner = owner; warnings = warnings }
 
-    member this.AddMethod(method: DefinedMethod) =
+    member this.AddMethod(method: DefinedMethod) = // TODO: return something like a struct(DefinedType * DefinedMethod)
         match this.owner with
-        | DefinedType.Enum _ -> noImpl "error for enum cannot have methods"
-        | DefinedType.Delegate _ -> noImpl "error for delegate cannot have additional methods maybe go check if ECMA-335 prohibits this in the list of rules, since section I says so"
-        | DefinedType.StaticClass _ ->
+        //| DefinedType.Enum _ -> noImpl "error for enum cannot have methods"
+        //| DefinedType.Delegate _ -> noImpl "error for delegate cannot have additional methods maybe go check if ECMA-335 prohibits this in the list of rules, since section I says so"
+        | :? TypeDefinition<TypeKinds.StaticClass> ->
             match method with
             | :? MethodDefinition<MethodKinds.Static> ->
                 if this.methods.Add method
@@ -109,35 +109,11 @@ type ModuleBuilder
                       Culture = builder.Strings.Add assem.Culture
                       HashValue = builder.Blob.Add assem.HashValue }
 
-        ModuleBuilder.addTypeDefinitions definedTypes definedTypeLookup builder
-
-        builder
-
-[<RequireQualifiedAccess>]
-module ModuleBuilder =
-    [<Flags>]
-    type MemberSetFlags =
-        | None = 0uy
-        | Field = 1uy
-        | Method = 2uy
-        | Property = 3uy
-        | Event = 4uy
-
-    let inline private setMemberFlag flag (current: byref<MemberSetFlags>) added (next: byref<TableIndex<_>>) =
-        if not(Flags.set flag current) then
-            current <- current ||| flag
-            next <- added
-
-    let addTypeDefinitions
-        (definedTypes: Dictionary<DefinedType, DefinedTypeMembers>)
-        (lookup: Dictionary<DefinedType, _>)
-        (builder: CliMetadataBuilder)
-        =
         let mutable fieldList, methodList, propertyList, eventList =
             Unchecked.defaultof<_>, Unchecked.defaultof<_>, Unchecked.defaultof<_>, Unchecked.defaultof<_>
 
         for KeyValue(tdef, members) in definedTypes do
-            let mutable updated = MemberSetFlags.None
+            let methods = Dictionary<DefinedMethod, TableIndex<MethodDefRow>> members.MethodCount
 
             for method in members.methods do
                 let i =
@@ -148,7 +124,18 @@ module ModuleBuilder =
                       Signature = noImpl "TODO: Get method signature"
                       ParamList = noImpl "TODO: Get parameters, maybe have another dictionary" }
                     |> builder.Tables.MethodDef.Add
-                setMemberFlag MemberSetFlags.Method &updated i &methodList
+                if methods.Count = 0 then methodList <- i
+                methods.[method] <- i
 
-            lookup.[tdef] <-
-                builder.Tables.TypeDef.Add ()
+            definedTypeLookup.[tdef] <-
+                { Row =
+                    { Flags = tdef.Flags
+                      TypeName = builder.Strings.Add tdef.TypeName
+                      TypeNamespace = builder.Strings.Add tdef.TypeNamespace
+                      Extends = failwith "TODO: How to get extends value for type that will be added later?"
+                      FieldList = fieldList
+                      MethodList = methodList }
+                    |> builder.Tables.TypeDef.Add
+                  Members = failwith "bad" }
+
+        builder
