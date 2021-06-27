@@ -13,7 +13,7 @@ module TypeDefOrRef =
         | _ -> Def(TableIndex.ofIntUnsafe<TypeDefRow> index.Index)
 
     let Def ({ TableIndex = index }: TableIndex<TypeDefRow>) = TypeDefOrRef(TypeDefOrRefTag.TypeDef, index)
-    let Ref ({ TableIndex = index }: TableIndex<TypeDefRow>) = TypeDefOrRef(TypeDefOrRefTag.TypeRef, index)
+    let Ref ({ TableIndex = index }: TableIndex<TypeRefRow>) = TypeDefOrRef(TypeDefOrRefTag.TypeRef, index)
     //let Spec
 
 

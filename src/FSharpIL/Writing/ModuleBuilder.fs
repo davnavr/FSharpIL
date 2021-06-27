@@ -147,13 +147,15 @@ type ModuleBuilder
             referencedTypeLookup.[tref] <- { Row = i; Members = members' }
             i
 
-    static member private SerializeDefinedType
+    member private this.SerializeDefinedType
         (
             tdef: DefinedType,
             members: DefinedTypeMembers,
             indices: byref<MemberIndices>,
             builder: CliMetadataBuilder,
-            definedTypeLookup: Dictionary<_, TypeEntry<_, _>>
+            definedTypeLookup: Dictionary<_, TypeEntry<_, _>>,
+            referencedTypeLookup,
+            assemblyRefLookup
         ) =
         match definedTypeLookup.TryGetValue tdef with
         | true, { Row = i } -> i
@@ -163,7 +165,21 @@ type ModuleBuilder
                 | ClassExtends.Null -> Unchecked.defaultof<TypeDefOrRef>
                 | ClassExtends.ConcreteDef(DefinedType tdef)
                 | ClassExtends.AbstractDef(DefinedType tdef) ->
-                    ModuleBuilder.SerializeDefinedType(tdef, members, &indices, builder, definedTypeLookup) |> TypeDefOrRef.Def
+                    this.SerializeDefinedType (
+                        tdef,
+                        members,
+                        &indices,
+                        builder,
+                        definedTypeLookup,
+                        referencedTypeLookup,
+                        assemblyRefLookup
+                    )
+                    |> TypeDefOrRef.Def
+                | ClassExtends.ConcreteRef(ReferencedType tref)
+                | ClassExtends.AbstractRef(ReferencedType tref) ->
+                    this.SerializeReferencedType(tref, referencedTypes.[tref], builder, referencedTypeLookup, assemblyRefLookup)
+                    |> TypeDefOrRef.Ref
+                | ClassExtends.Spec tspec -> failwith "TODO: Implement writing of TypeSpecs"
 
             //fields
             let methods = Dictionary<DefinedMethod, TableIndex<MethodDefRow>> members.MethodCount
@@ -233,6 +249,15 @@ type ModuleBuilder
 
         let mutable indices = MemberIndices()
         for KeyValue(tdef, members) in definedTypes do
-            ModuleBuilder.SerializeDefinedType(tdef, members, &indices, builder, definedTypeLookup) |> ignore
+            this.SerializeDefinedType (
+                tdef,
+                members,
+                &indices,
+                builder,
+                definedTypeLookup,
+                referencedTypeLookup,
+                assemblyRefLookup
+            )
+            |> ignore
 
         builder

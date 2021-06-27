@@ -97,17 +97,22 @@ type HybridHashSetEnumerator<'T when 'T : not struct and 'T : equality> =
         | EnumeratorState.ReachedEnd
         | _ -> enumeratorReachedEnd()
 
+    member inline private this.ReachedEnd() =
+        this.State <- EnumeratorState.ReachedEnd
+        false
+
     member this.MoveNext() =
         match this.State with
+        | EnumeratorState.NotStarted when this.Item0 = Unchecked.defaultof<_> -> this.ReachedEnd()
+        | EnumeratorState.First when this.Item1 = Unchecked.defaultof<_> -> this.ReachedEnd()
+        | EnumeratorState.Second when this.Item2 = Unchecked.defaultof<_> -> this.ReachedEnd()
         | EnumeratorState.NotStarted
         | EnumeratorState.First
         | EnumeratorState.Second
         | EnumeratorState.Third ->
             this.State <- this.State + EnumeratorState.First
             true
-        | EnumeratorState.Rest when not this.HasInner ->
-            this.State <- EnumeratorState.ReachedEnd
-            false
+        | EnumeratorState.Rest when not this.HasInner -> this.ReachedEnd()
         | EnumeratorState.Rest ->
             let moved = this.Inner.MoveNext()
             if not moved then this.State <- EnumeratorState.ReachedEnd

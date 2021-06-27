@@ -264,7 +264,14 @@ type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : 
         extends: ClassExtends
     )
     =
-    inherit DefinedType(visibility, flags.Flags, typeNamespace, enclosingClass, typeName, extends)
+    inherit DefinedType (
+        visibility,
+        Unchecked.defaultof<'Kind>.RequiredFlags ||| flags.Flags,
+        typeNamespace,
+        enclosingClass,
+        typeName,
+        extends
+    )
 
 type DefinedType with
     static member ConcreteClass(visibility, flags, typeNamespace, enclosingClass, typeName, extends) =
