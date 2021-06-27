@@ -29,6 +29,8 @@ type Attributes<'Tag, 'Flags, 'Op, 'Num
 
     override _.ToString() = flags.ToString()
 
+    static member val None = Unchecked.defaultof<Attributes<'Tag, 'Flags, 'Op, 'Num>>
+
     static member inline private BitwiseOr(left: 'Flags, right: 'Flags): 'Flags =
         EnumOfValue(Unchecked.defaultof<'Op>.Or(EnumToValue left, EnumToValue right))
 
@@ -60,7 +62,7 @@ type MethodAttributes<'Tag when 'Tag :> IAttributeTag<MethodDefFlags> and 'Tag :
 
 [<AutoOpen>]
 module Attribute =
-    let (|Attributes|) flags = Attributes.op_Implicit flags
+    let inline (|Attributes|) flags = Attributes.op_Implicit flags
 
 [<RequireQualifiedAccess>]
 module TypeAttributes =

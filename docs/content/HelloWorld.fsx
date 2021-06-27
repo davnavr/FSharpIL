@@ -59,11 +59,34 @@ let example() =
 
     builder.ReferenceAssembly consolelib
 
-    //validated {
-        
+    validated {
+        (* Add references to types defined in referenced assemblies. *)
+        let object =
+            ReferencedType.ConcreteClass (
+                resolutionScope = TypeReferenceParent.Assembly mscorlib,
+                typeNamespace = ValueSome(Identifier.ofStr "System"),
+                typeName = Identifier.ofStr "Object"
+            )
 
-    //    return failwith "TODO: Add hello world things"
-    //}
+        let! _ = builder.ReferenceType object
+
+        (* Create the class that will contain the entrypoint method. *)
+        // [<AbstractClass; Sealed>] type Program
+        let program =
+            DefinedType.StaticClass (
+                visibility = TypeVisibility.Public,
+                flags = TypeAttributes.None,
+                typeNamespace = ValueSome(Identifier.ofStr "HelloWorld"),
+                enclosingClass = ValueNone,
+                typeName = Identifier.ofStr "Program",
+                extends = ClassExtends.ConcreteRef object
+            )
+
+        let! members = builder.DefineType program
+
+        ()
+    }
+    |> ValidationResult.get
 
     let text (section: SectionBuilder) (directories: DataDirectoriesBuilder) =
         directories.CliHeader <- section.AddData builder

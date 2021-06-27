@@ -16,5 +16,7 @@ type ValidationResultBuilder internal () =
 
     member inline _.ReturnFrom(result: ValidationResult<_>) = result
 
+    member inline _.Zero() = ValidationResult.Ok()
+
 [<AutoOpen>]
 module ValidationResultBuilder = let validated = ValidationResultBuilder()

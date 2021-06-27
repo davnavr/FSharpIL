@@ -2,7 +2,6 @@
 
 open System
 open System.Collections.Generic
-open System.Collections.Immutable
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
@@ -11,7 +10,7 @@ open FSharpIL.Utilities.Collections
 
 [<Sealed>]
 type DefinedTypeMembers =
-    val mutable internal methods: HybridHashSet<DefinedMethod>
+    [<DefaultValue>] val mutable internal Method: HybridHashSet<DefinedMethod>
 
     internal new: owner: DefinedType * warnings: ValidationWarningsBuilder option -> DefinedTypeMembers
 
@@ -22,13 +21,18 @@ type DefinedTypeMembers =
 
     member AddMethod: DefinedMethod -> ValidationResult<unit> // TODO: Have return type be an object that allows the calling of the method in a method body.
 
-//[<Sealed>]
-//type ReferencedTypeMembers =
-//    internal new: owner: ReferencedType * warnings: ValidationWarningsBuilder option -> DefinedTypeMembers
-//    member FieldCount: int32
-//    member MethodCount: int32
-//    member PropertyCount: int32
-//    member EventCount: int32
+[<Sealed>]
+type ReferencedTypeMembers =
+    [<DefaultValue>] val mutable internal Method: HybridHashSet<ReferencedMethod>
+
+    internal new: owner: ReferencedType * warnings: ValidationWarningsBuilder option -> ReferencedTypeMembers
+
+    //member FieldCount: int32
+    member MethodCount: int32
+    //member PropertyCount: int32
+    //member EventCount: int32
+
+    //member AddMethod: ReferencedMethod -> ValidationResult<unit>
 
 /// Builds a CLI metadata module (I.9).
 [<Sealed>]
@@ -52,7 +56,7 @@ type ModuleBuilder =
     //member Globals: DefinedTypeMembers
 
     member DefineType: DefinedType -> ValidationResult<DefinedTypeMembers>
-    //member ReferenceType: ReferencedType -> ValidationResult<ReferencedTypeMembers>
+    member ReferenceType: ReferencedType -> ValidationResult<ReferencedTypeMembers>
 
     member ReferenceAssembly: AssemblyReference -> unit
 

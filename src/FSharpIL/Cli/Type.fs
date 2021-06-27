@@ -157,7 +157,8 @@ module TypeKinds =
 [<RequireQualifiedAccess>]
 [<StructuralComparison; StructuralEquality>]
 type TypeReferenceParent =
-    | TypeRef of ReferencedType
+    | Null
+    | Type of ReferencedType
     | Assembly of AssemblyReference
 
 [<AbstractClass>]
@@ -168,8 +169,9 @@ type ReferencedType =
     new (parent: TypeReferenceParent, typeNamespace, typeName) =
         let parent' =
             match parent with
-            | TypeReferenceParent.TypeRef enclosing -> ValueSome(enclosing :> Type)
-            | TypeReferenceParent.Assembly _ -> ValueNone
+            | TypeReferenceParent.Type enclosing -> ValueSome(enclosing :> Type)
+            | TypeReferenceParent.Assembly _
+            | TypeReferenceParent.Null -> ValueNone
         { inherit Type(typeNamespace, parent', typeName)
           ResolutionScope = parent }
 
@@ -282,3 +284,8 @@ type DefinedType with
 
     static member ValueType(visibility, flags, typeNamespace, enclosingClass, typeName, extends) =
         TypeDefinition<TypeKinds.ValueType>(visibility, flags, typeNamespace, enclosingClass, typeName, extends)
+
+[<AutoOpen>]
+module TypePatterns =
+    let inline (|DefinedType|) (tdef: #DefinedType) = tdef :> DefinedType
+    let inline (|ReferencedType|) (tdef: #ReferencedType) = tdef :> ReferencedType

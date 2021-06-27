@@ -3,6 +3,7 @@
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
@@ -15,11 +16,12 @@ open FSharpIL.Utilities.Collections
 type DefinedTypeMembers =
     val private owner: DefinedType
     val private warnings: ValidationWarningsBuilder option
-    [<DefaultValue>] val mutable methods: HybridHashSet<DefinedMethod>
-
-    member this.MethodCount = this.methods.Count
-
+    [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
+    
     new (owner, warnings) = { owner = owner; warnings = warnings }
+
+    member this.MethodCount = this.Method.Count
+
 
     member this.AddMethod(method: DefinedMethod) = // TODO: return something like a struct(DefinedType * DefinedMethod)
         match this.owner with
@@ -28,17 +30,33 @@ type DefinedTypeMembers =
         | :? TypeDefinition<TypeKinds.StaticClass> ->
             match method with
             | :? MethodDefinition<MethodKinds.Static> ->
-                if this.methods.Add method
+                if this.Method.Add method
                 then ValidationResult.Ok()
                 else noImpl "error for duplicate method"
             | _ -> noImpl "bad"
         | _ -> noImpl "bad"
 
 [<Sealed>]
-type ReferencedTypeMembers internal (warnings) = class end
+type ReferencedTypeMembers = class
+    val private owner: ReferencedType
+    val private warnings: ValidationWarningsBuilder option
+    [<DefaultValue>] val mutable Method: HybridHashSet<ReferencedMethod>
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+    new (owner, warnings) = { owner = owner; warnings = warnings }
+
+    member this.MethodCount = this.Method.Count
+end
+
+[<IsReadOnly; Struct>]
 type TypeEntry<'Row, 'Members when 'Row :> ITableRow> = { Row: TableIndex<'Row>; Members: 'Members }
+
+[<IsByRefLike>]
+type MemberIndices = struct
+    [<DefaultValue>] val mutable FieldList: TableIndex<FieldRow>
+    [<DefaultValue>] val mutable MethodList: TableIndex<MethodDefRow>
+    [<DefaultValue>] val mutable EventList: TableIndex<EventRow>
+    [<DefaultValue>] val mutable PropertyList: TableIndex<PropertyRow>
+end
 
 [<Sealed>]
 type ModuleBuilder
@@ -53,7 +71,7 @@ type ModuleBuilder
     ) =
     let assemblyRefs = HashSet<AssemblyReference>(defaultArg assemblyRefCapacity 8)
     let definedTypes = Dictionary<DefinedType, DefinedTypeMembers>(defaultArg typeDefCapacity 16)
-    let referencedTypes = Dictionary<ReferencedType, _>(defaultArg typeRefCapacity 32)
+    let referencedTypes = Dictionary<ReferencedType, ReferencedTypeMembers>(defaultArg typeRefCapacity 32)
 
     member val ValidationWarnings = ValidationWarningsCollection(?warnings = warnings)
     member val Mvid = Option.defaultWith (fun() -> Guid.NewGuid()) mvid
@@ -72,36 +90,114 @@ type ModuleBuilder
             definedTypes.[t] <- members
             Ok members
 
+    member _.ReferenceType t =
+        match referencedTypes.TryGetValue t with
+        | true, existing -> ValidationResult<_>.Error(noImpl "TODO: error for duplicate type ref")
+        | false, _ ->
+            // TODO: Check that the resolution scope is already accounted for.
+            let members = ReferencedTypeMembers(t, warnings)
+            referencedTypes.[t] <- members
+            Ok members
+
     member _.ReferenceAssembly assem =
         if not (assemblyRefs.Add assem) then
             () // TODO: Warning for duplicate assembly reference
 
-    member private this.SerializeDefinedType
+    member private this.SerializeReferencedType
         (
-            tdef: DefinedType,
-            fieldList,
-            methodList,
+            tref: ReferencedType,
+            members: ReferencedTypeMembers,
             builder: CliMetadataBuilder,
-            lookup: Dictionary<_, TypeEntry<TypeDefRow, _>>
+            referencedTypeLookup: Dictionary<_, TypeEntry<TypeRefRow, _>>,
+            assemblyRefLookup: Dictionary<AssemblyReference, _>
         )
         =
-        lookup.[tdef] <-
-            { Row =
-                { Flags = tdef.Flags
-                  TypeName = builder.Strings.Add tdef.TypeName
-                  TypeNamespace = builder.Strings.Add tdef.TypeNamespace
-                  Extends =
-                    match tdef.Extends with
-                    | ClassExtends.Null -> Unchecked.defaultof<_>
-                    failwith "TODO: How to get extends value for type that will be added later?"
-                  FieldList = fieldList
-                  MethodList = methodList }
-                |> builder.Tables.TypeDef.Add
-              Members = failwith "bad" }
+        match referencedTypeLookup.TryGetValue tref with
+        | true, { Row = i } -> i
+        | false, _ ->
+            let rscope =
+                match tref.ResolutionScope with
+                | TypeReferenceParent.Null -> ResolutionScope.Null
+                | TypeReferenceParent.Assembly assem -> ResolutionScope.AssemblyRef assemblyRefLookup.[assem]
+                | TypeReferenceParent.Type parent ->
+                    this.SerializeReferencedType (
+                        parent,
+                        referencedTypes.[parent],
+                        builder,
+                        referencedTypeLookup,
+                        assemblyRefLookup
+                     )
+                    |> ResolutionScope.TypeRef
+
+            let i =
+                builder.Tables.TypeRef.Add
+                    { ResolutionScope = rscope
+                      TypeName = builder.Strings.Add tref.TypeName
+                      TypeNamespace = builder.Strings.Add tref.TypeNamespace }
+
+            let members' = Dictionary<obj, TableIndex<MemberRefRow>>((*members.FieldCount +*) members.MethodCount)
+
+            for method in members.Method do
+                members'.[method] <-
+                    builder.Tables.MemberRef.Add
+                        { Class = MemberRefParent.TypeRef i
+                          Name = builder.Strings.Add method.Name
+                          Signature = invalidOp "TODO: How to get signature" }
+
+            referencedTypeLookup.[tref] <- { Row = i; Members = members' }
+            i
+
+    static member private SerializeDefinedType
+        (
+            tdef: DefinedType,
+            members: DefinedTypeMembers,
+            indices: byref<MemberIndices>,
+            builder: CliMetadataBuilder,
+            definedTypeLookup: Dictionary<_, TypeEntry<_, _>>
+        ) =
+        match definedTypeLookup.TryGetValue tdef with
+        | true, { Row = i } -> i
+        | false, _ ->
+            let extends =
+                match tdef.Extends with
+                | ClassExtends.Null -> Unchecked.defaultof<TypeDefOrRef>
+                | ClassExtends.ConcreteDef(DefinedType tdef)
+                | ClassExtends.AbstractDef(DefinedType tdef) ->
+                    ModuleBuilder.SerializeDefinedType(tdef, members, &indices, builder, definedTypeLookup) |> TypeDefOrRef.Def
+
+            //fields
+            let methods = Dictionary<DefinedMethod, TableIndex<MethodDefRow>> members.MethodCount
+
+            for method in members.Method do
+                let i =
+                    { Rva = MethodBodyLocation(noImpl "// TODO: Get method body somehow")
+                      ImplFlags = method.ImplFlags
+                      Flags = method.Flags
+                      Name = builder.Strings.Add method.Name
+                      Signature = noImpl "TODO: Get method signature"
+                      ParamList = noImpl "TODO: Get parameters, maybe have another dictionary" }
+                    |> builder.Tables.MethodDef.Add
+                if methods.Count = 0 then indices.MethodList <- i
+                methods.[method] <- i
+            
+            let i =
+                builder.Tables.TypeDef.Add
+                    { Flags = tdef.Flags
+                      TypeName = builder.Strings.Add tdef.TypeName
+                      TypeNamespace = builder.Strings.Add tdef.TypeNamespace
+                      Extends = extends
+                      FieldList = indices.FieldList
+                      MethodList = indices.MethodList }
+            
+            // TODO: Allow modification of existing rows, to defer setting of Extends, FieldList, and MethodList (though an iteration through the list of types might be needed again).
+            definedTypeLookup.[tdef] <-
+                { Row = i; Members = () } // TODO: Add typedef members
+            i
 
     member this.Serialize() =
         let builder = CliMetadataBuilder(fun str guid _ -> ModuleRow.create (str.Add name) (guid.Add this.Mvid))
         let assemblyRefLookup = Dictionary<AssemblyReference, TableIndex<AssemblyRefRow>> assemblyRefs.Count
+        let referencedTypeLookup = Dictionary<ReferencedType, TypeEntry<TypeRefRow, _>> referencedTypes.Count
         let definedTypeLookup = Dictionary<DefinedType, TypeEntry<TypeDefRow, _>> definedTypes.Count
 
         let assemblyDef =
@@ -132,33 +228,11 @@ type ModuleBuilder
                       Culture = builder.Strings.Add assem.Culture
                       HashValue = builder.Blob.Add assem.HashValue }
 
-        let mutable fieldList, methodList, propertyList, eventList =
-            Unchecked.defaultof<_>, Unchecked.defaultof<_>, Unchecked.defaultof<_>, Unchecked.defaultof<_>
+        for KeyValue(tref, members) in referencedTypes do
+            this.SerializeReferencedType(tref, members, builder, referencedTypeLookup, assemblyRefLookup) |> ignore
 
+        let mutable indices = MemberIndices()
         for KeyValue(tdef, members) in definedTypes do
-            let methods = Dictionary<DefinedMethod, TableIndex<MethodDefRow>> members.MethodCount
-
-            for method in members.methods do
-                let i =
-                    { Rva = MethodBodyLocation(noImpl "// TODO: Get method body somehow")
-                      ImplFlags = method.ImplFlags
-                      Flags = method.Flags
-                      Name = builder.Strings.Add method.Name
-                      Signature = noImpl "TODO: Get method signature"
-                      ParamList = noImpl "TODO: Get parameters, maybe have another dictionary" }
-                    |> builder.Tables.MethodDef.Add
-                if methods.Count = 0 then methodList <- i
-                methods.[method] <- i
-
-            definedTypeLookup.[tdef] <-
-                { Row =
-                    { Flags = tdef.Flags
-                      TypeName = builder.Strings.Add tdef.TypeName
-                      TypeNamespace = builder.Strings.Add tdef.TypeNamespace
-                      Extends = failwith "TODO: How to get extends value for type that will be added later?"
-                      FieldList = fieldList
-                      MethodList = methodList }
-                    |> builder.Tables.TypeDef.Add
-                  Members = failwith "bad" }
+            ModuleBuilder.SerializeDefinedType(tdef, members, &indices, builder, definedTypeLookup) |> ignore
 
         builder

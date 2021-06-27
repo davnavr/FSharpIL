@@ -120,8 +120,10 @@ module TypeKinds =
 [<RequireQualifiedAccess>]
 [<StructuralComparison; StructuralEquality>]
 type TypeReferenceParent =
-    | TypeRef of ReferencedType
+    | Null
+    | Type of ReferencedType
     | Assembly of AssemblyReference
+    //| Module of ModuleReference
 
 [<AbstractClass>]
 type ReferencedType =
@@ -220,52 +222,57 @@ type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : 
 
 type DefinedType with
     static member ConcreteClass:
-        TypeVisibility *
+        visibility: TypeVisibility *
         flags: TypeAttributes<TypeKinds.ConcreteClass> *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        ClassExtends -> TypeDefinition<TypeKinds.ConcreteClass>
+        extends: ClassExtends -> TypeDefinition<TypeKinds.ConcreteClass>
 
     static member AbstractClass:
-        TypeVisibility *
+        visibility: TypeVisibility *
         flags: TypeAttributes<TypeKinds.AbstractClass> *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        ClassExtends -> TypeDefinition<TypeKinds.AbstractClass>
+        extends: ClassExtends -> TypeDefinition<TypeKinds.AbstractClass>
 
     static member SealedClass:
-        TypeVisibility *
+        visibility: TypeVisibility *
         flags: TypeAttributes<TypeKinds.SealedClass> *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        ClassExtends -> TypeDefinition<TypeKinds.SealedClass>
+        extends: ClassExtends -> TypeDefinition<TypeKinds.SealedClass>
 
     static member StaticClass:
-        TypeVisibility *
+        visibility: TypeVisibility *
         flags: TypeAttributes<TypeKinds.StaticClass> *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        ClassExtends -> TypeDefinition<TypeKinds.StaticClass>
+        extends: ClassExtends -> TypeDefinition<TypeKinds.StaticClass>
 
     static member Interface:
-        TypeVisibility *
+        visibility: TypeVisibility *
         flags: TypeAttributes<TypeKinds.Interface> *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        ClassExtends -> TypeDefinition<TypeKinds.Interface>
+        extends: ClassExtends -> TypeDefinition<TypeKinds.Interface>
 
     static member ValueType:
-        TypeVisibility *
+        visibility: TypeVisibility *
         flags: TypeAttributes<TypeKinds.ValueType> *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        ClassExtends -> TypeDefinition<TypeKinds.ValueType>
+        extends: ClassExtends -> TypeDefinition<TypeKinds.ValueType>
 
     //static member Delegate
     //static member Enum
+
+[<AutoOpen>]
+module TypePatterns =
+    val inline (|DefinedType|): #DefinedType -> DefinedType
+    val inline (|ReferencedType|): #ReferencedType -> ReferencedType
