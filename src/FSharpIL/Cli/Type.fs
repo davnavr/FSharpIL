@@ -45,6 +45,47 @@ type Type (typeNamespace: Identifier voption, parent: Type voption, typeName: Id
     interface IComparable with member this.CompareTo obj = this.CompareTo(obj :?> Type)
     interface IComparable<Type> with member this.CompareTo other = this.CompareTo other
 
+type TypeSpec = FSharpIL.Metadata.Signatures.EncodedType<Type, TypeDefOrRefOrSpec>
+
+[<IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
+[<StructuralComparison; StructuralEquality>]
+type TypeSpecification = { Spec: TypeSpec }
+
+[<IsReadOnly>]
+[<CustomComparison; CustomEquality>]
+type TypeDefOrRefOrSpec (t: IComparable) = struct
+    member _.Type = t
+    member _.IsRef = t :? ReferencedType
+    member _.IsDef = t :? DefinedType
+    member _.IsSpec = t :? TypeSpec
+
+    member _.Equals(other: TypeDefOrRefOrSpec) = t.Equals other
+    member _.CompareTo(other: TypeDefOrRefOrSpec) = t.CompareTo other.Type
+
+    override this.Equals obj =
+        match obj with
+        | :? ClassExtends as other -> this.Equals other
+        | _ -> false
+
+    override _.GetHashCode() = t.GetHashCode()
+
+    interface IComparable with member this.CompareTo obj = this.CompareTo(obj :?> TypeDefOrRefOrSpec)
+    interface IComparable<TypeDefOrRefOrSpec> with member this.CompareTo other = this.CompareTo other
+    interface IEquatable<TypeDefOrRefOrSpec> with member this.Equals other = this.Equals other
+end
+
+[<RequireQualifiedAccess>]
+module TypeDefOrRefOrSpec =
+    let Def(t: DefinedType) = TypeDefOrRefOrSpec t
+    let Ref(t: ReferencedType) = TypeDefOrRefOrSpec t
+    let Spec { TypeSpecification.Spec = tspec } = TypeDefOrRefOrSpec tspec
+    let inline (|Def|Ref|Spec|) (encoded: TypeDefOrRefOrSpec) =
+        match encoded.Type with
+        | :? DefinedType as tdef -> Def tdef
+        | :? ReferencedType as tref -> Ref tref
+        | tspec -> Spec(tspec :?> TypeSpec)
+
 [<RequireQualifiedAccess>]
 module TypeKinds =
     type ConcreteClass = struct
@@ -170,10 +211,31 @@ module TypeVisibility =
     let NestedFamilyAndAssembly parent = TypeVisibility(TypeDefFlags.NestedFamAndAssem, ValueSome parent)
     let NestedFamilyOrAssembly parent = TypeVisibility(TypeDefFlags.NestedFamOrAssem, ValueSome parent)
 
+[<IsReadOnly>]
+[<StructuralComparison; StructuralEquality>]
+type ClassExtends (extends: TypeDefOrRefOrSpec) = struct
+    member _.IsNull = extends = Unchecked.defaultof<_>
+    member this.Extends = if this.IsNull then ValueNone else ValueSome extends
+end
+
 [<RequireQualifiedAccess>]
-[<NoComparison; StructuralEquality>]
-type ClassExtends =
-    | Null
+module ClassExtends =
+    let Null = ClassExtends Unchecked.defaultof<_>
+    let ConcreteDef(extends: TypeDefinition<TypeKinds.ConcreteClass>) = ClassExtends(TypeDefOrRefOrSpec.Def extends)
+    let AbstractDef(extends: TypeDefinition<TypeKinds.AbstractClass>) = ClassExtends(TypeDefOrRefOrSpec.Def extends)
+    let ConcreteRef(extends: TypeReference<TypeKinds.ConcreteClass>) = ClassExtends(TypeDefOrRefOrSpec.Ref extends)
+    let AbstractRef(extends: TypeReference<TypeKinds.AbstractClass>) = ClassExtends(TypeDefOrRefOrSpec.Ref extends)
+    let Spec tspec = ClassExtends(TypeDefOrRefOrSpec.Spec tspec)
+    let inline (|Null|ConcreteDef|AbstractDef|ConcreteRef|AbstractRef|Spec|) (extends: ClassExtends) =
+        match extends.Extends with
+        | ValueSome extends' ->
+            match extends' with
+            | TypeDefOrRefOrSpec.Def(:? TypeDefinition<TypeKinds.ConcreteClass> as tdef) -> ConcreteDef tdef
+            | TypeDefOrRefOrSpec.Def tdef -> AbstractDef(tdef :?> TypeDefinition<TypeKinds.AbstractClass>)
+            | TypeDefOrRefOrSpec.Ref(:? TypeReference<TypeKinds.ConcreteClass> as tref) -> ConcreteRef tref
+            | TypeDefOrRefOrSpec.Ref tref -> AbstractRef(tref :?> TypeReference<TypeKinds.AbstractClass>)
+            | TypeDefOrRefOrSpec.Spec tspec -> Spec tspec
+        | ValueNone -> Null
 
 [<AbstractClass>]
 type DefinedType =

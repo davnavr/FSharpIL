@@ -7,7 +7,7 @@ open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
 [<AbstractClass>]
-type Type =
+type Type = // TODO: Rename to NamedType.
     member TypeName: Identifier
     member TypeNamespace: Identifier voption
     member EnclosingType: Type voption
@@ -25,7 +25,40 @@ type Type =
     interface IComparable<Type>
     interface IComparable
 
-//type TypeSpec
+type TypeSpec = FSharpIL.Metadata.Signatures.EncodedType<Type, TypeDefOrRefOrSpec>
+
+[<IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
+[<StructuralComparison; StructuralEquality>]
+type TypeSpecification = { Spec: TypeSpec }
+
+// TODO: Come up with a better name, maybe Type or MetadataType?
+[<IsReadOnly>]
+[<CustomComparison; CustomEquality>]
+type TypeDefOrRefOrSpec = struct
+    internal new: IComparable -> TypeDefOrRefOrSpec
+
+    member Type: IComparable
+    member IsRef: bool
+    member IsDef: bool
+    member IsSpec: bool
+
+    member Equals: TypeDefOrRefOrSpec -> bool
+    member CompareTo: TypeDefOrRefOrSpec -> int32
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
+
+    interface IEquatable<TypeDefOrRefOrSpec>
+    interface IComparable<TypeDefOrRefOrSpec>
+    interface IComparable
+end
+
+[<RequireQualifiedAccess>]
+module TypeDefOrRefOrSpec =
+    val Def: DefinedType -> TypeDefOrRefOrSpec
+    val Ref: ReferencedType -> TypeDefOrRefOrSpec
+    val Spec: TypeSpecification -> TypeDefOrRefOrSpec
+    val inline (|Def|Ref|Spec|): TypeDefOrRefOrSpec -> Choice<DefinedType, ReferencedType, TypeSpec>
 
 [<RequireQualifiedAccess>]
 module TypeKinds =
@@ -130,10 +163,31 @@ module TypeVisibility =
     val Public: TypeVisibility
     //val NestedPublic
 
+[<IsReadOnly>]
+[<StructuralComparison; StructuralEquality>]
+type ClassExtends = struct
+    internal new: TypeDefOrRefOrSpec -> ClassExtends
+
+    member Extends: TypeDefOrRefOrSpec voption
+    member IsNull: bool
+end
+
 [<RequireQualifiedAccess>]
-[<NoComparison; StructuralEquality>]
-type ClassExtends =
-    | Null
+module ClassExtends =
+    val Null: ClassExtends
+    val ConcreteDef: TypeDefinition<TypeKinds.ConcreteClass> -> ClassExtends
+    val AbstractDef: TypeDefinition<TypeKinds.AbstractClass> -> ClassExtends
+    val ConcreteRef: TypeReference<TypeKinds.ConcreteClass> -> ClassExtends
+    val AbstractRef: TypeReference<TypeKinds.AbstractClass> -> ClassExtends
+    val Spec: TypeSpecification -> ClassExtends
+    val inline (|Null|ConcreteDef|AbstractDef|ConcreteRef|AbstractRef|Spec|):
+        ClassExtends ->
+            Choice<unit,
+                   TypeDefinition<TypeKinds.ConcreteClass>,
+                   TypeDefinition<TypeKinds.AbstractClass>,
+                   TypeReference<TypeKinds.ConcreteClass>,
+                   TypeReference<TypeKinds.AbstractClass>,
+                   TypeSpec>
 
 [<AbstractClass>]
 type DefinedType =

@@ -76,6 +76,29 @@ type ModuleBuilder
         if not (assemblyRefs.Add assem) then
             () // TODO: Warning for duplicate assembly reference
 
+    member private this.SerializeDefinedType
+        (
+            tdef: DefinedType,
+            fieldList,
+            methodList,
+            builder: CliMetadataBuilder,
+            lookup: Dictionary<_, TypeEntry<TypeDefRow, _>>
+        )
+        =
+        lookup.[tdef] <-
+            { Row =
+                { Flags = tdef.Flags
+                  TypeName = builder.Strings.Add tdef.TypeName
+                  TypeNamespace = builder.Strings.Add tdef.TypeNamespace
+                  Extends =
+                    match tdef.Extends with
+                    | ClassExtends.Null -> Unchecked.defaultof<_>
+                    failwith "TODO: How to get extends value for type that will be added later?"
+                  FieldList = fieldList
+                  MethodList = methodList }
+                |> builder.Tables.TypeDef.Add
+              Members = failwith "bad" }
+
     member this.Serialize() =
         let builder = CliMetadataBuilder(fun str guid _ -> ModuleRow.create (str.Add name) (guid.Add this.Mvid))
         let assemblyRefLookup = Dictionary<AssemblyReference, TableIndex<AssemblyRefRow>> assemblyRefs.Count
@@ -84,7 +107,7 @@ type ModuleBuilder
         let assemblyDef =
             match assembly with
             | Some assem ->
-                { HashAlgId = AssemblyHashAlgorithm.SHA1 // TODO: Set the HashAlgId properly
+                { HashAlgId = AssemblyHashAlgorithm.None // TODO: Set the HashAlgId properly
                   MajorVersion = assem.Version.Major
                   MinorVersion = assem.Version.Minor
                   BuildNumber = assem.Version.Build
