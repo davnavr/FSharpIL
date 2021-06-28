@@ -10,7 +10,7 @@ open FSharpIL.Metadata.Tables
 [<Sealed>]
 type MethodBodyList internal () =
     static let [<Literal>] BodyChunkSize = 64
-    let bodies = List<MethodBodyBuilder ref>()
+    let bodies = List<MethodBodyBuilder ref>() // TODO: Use a LinkedList<> and ValueRef
 
     member _.Add(maxStack, localVarSig, offset: outref<MethodBodyLocation>) =
         let body =

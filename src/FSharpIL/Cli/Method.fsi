@@ -61,6 +61,8 @@ type Method =
         ReturnType *
         ImmutableArray<ParamItem> -> Method
 
+    member Signature: MethodDefSig
+
     member Equals: #Method -> bool
     override Equals: obj -> bool
     override GetHashCode: unit -> int32

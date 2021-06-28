@@ -11,6 +11,7 @@ open FSharpIL.Utilities.Collections
 [<Sealed>]
 type DefinedTypeMembers =
     [<DefaultValue>] val mutable internal Method: HybridHashSet<DefinedMethod>
+    //[<DefaultValue>] val mutable internal MethodBodies: LinkedList<MethodBodyBuilder> // List<MethodBodyBuilder ref>
 
     internal new: owner: DefinedType * warnings: ValidationWarningsBuilder option -> DefinedTypeMembers
 

@@ -84,6 +84,7 @@ let example() =
 
         let! members = builder.DefineType program
 
+        // TODO: Add entrypoint method
         ()
     }
     |> ValidationResult.get

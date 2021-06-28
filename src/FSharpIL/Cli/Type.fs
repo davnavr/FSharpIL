@@ -294,5 +294,9 @@ type DefinedType with
 
 [<AutoOpen>]
 module TypePatterns =
-    let inline (|DefinedType|) (tdef: #DefinedType) = tdef :> DefinedType
-    let inline (|ReferencedType|) (tdef: #ReferencedType) = tdef :> ReferencedType
+    let inline (|AsDefinedType|) (tdef: #DefinedType) = tdef :> DefinedType
+    let inline (|AsReferencedType|) (tdef: #ReferencedType) = tdef :> ReferencedType
+    let inline (|DefinedType|ReferencedType|) (t: Type) =
+        match t with
+        | :? ReferencedType as tref -> ReferencedType tref
+        | _ -> DefinedType(t :?> DefinedType)

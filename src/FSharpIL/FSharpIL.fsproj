@@ -44,6 +44,7 @@
     <Compile Include="Metadata\Signatures\CustomMod.fs" />
     <Compile Include="Metadata\Signatures\Items.fs" />
     <Compile Include="Metadata\Signatures\LocalVarSig.fs" />
+    <Compile Include="Metadata\Signatures\Blob.fs" />
     <Compile Include="Metadata\Signatures\MetadataSignatures.fs" />
     <Compile Include="Metadata\Cil\Headers.fs" />
     <Compile Include="Metadata\Cil\Opcode.fs" />

@@ -62,6 +62,12 @@ type Method =
           ReturnType = rtype
           ParameterTypes = ptypes }
 
+    member this.Signature =
+        { HasThis = this.HasThis
+          CallingConvention = this.CallingConvention
+          ReturnType = this.ReturnType
+          Parameters = this.ParameterTypes }
+
     member this.Equals(other: #Method) =
         if this.Flags ||| other.Flags &&& MethodDefFlags.MemberAccessMask = MethodDefFlags.CompilerControlled
         then false

@@ -274,5 +274,6 @@ type DefinedType with
 
 [<AutoOpen>]
 module TypePatterns =
-    val inline (|DefinedType|): #DefinedType -> DefinedType
-    val inline (|ReferencedType|): #ReferencedType -> ReferencedType
+    val inline (|AsDefinedType|): #DefinedType -> DefinedType
+    val inline (|AsReferencedType|): #ReferencedType -> ReferencedType
+    val inline (|DefinedType|ReferencedType|): Type -> Choice<DefinedType, ReferencedType>
