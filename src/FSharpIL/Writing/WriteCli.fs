@@ -7,6 +7,7 @@ open FSharpIL.Utilities
 
 open FSharpIL
 open FSharpIL.Metadata
+open FSharpIL.PortableExecutable
 
 type RvaAndSizeWriter = struct
     val mutable private builder: ChunkedMemoryBuilder
@@ -17,13 +18,14 @@ end
 [<NoEquality; NoComparison>]
 type CliInfo =
     { Builder: CliMetadataBuilder
-      StartRva: FSharpIL.PortableExecutable.Rva
+      StartRva: Rva
       StartOffset: uint32
       Streams: List<IStreamBuilder>
       [<DefaultValue>] mutable Metadata: RvaAndSizeWriter
       [<DefaultValue>] mutable Resources: RvaAndSizeWriter
       [<DefaultValue>] mutable StrongNameSignature: RvaAndSizeWriter
-      [<DefaultValue>] mutable VTableFixups: RvaAndSizeWriter }
+      [<DefaultValue>] mutable VTableFixups: RvaAndSizeWriter
+      [<DefaultValue>] mutable MethodBodies: Rva }
 
 type RvaAndSizeWriter with
     member this.StartOffset = this.start
@@ -121,6 +123,7 @@ let metadata (section: byref<ChunkedMemoryBuilder>) cliHeaderRva builder =
     // TODO: Write strong name signature.
     // StrongNameSignature
 
+    info.MethodBodies <- cliHeaderRva + (section.Length - info.StartOffset)
     builder.MethodBodies.Serialize &section
 
     // Metadata

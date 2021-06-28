@@ -113,7 +113,7 @@ type ChunkedMemoryBuilder = struct
     member internal this.AsImmutableUnsafe() = this.MapChunksUnsafe Convert.unsafeTo<_, ImmutableArray<byte>>
 
     /// Copies the contents of this builder to a new non-contiguous region of memory.
-    member this.ToImmutable() = this.MapChunksUnsafe ImmutableArray.Create<byte>
+    member this.ToImmutable() = this.MapChunksUnsafe ImmutableArray.Create<byte> // TODO: Ensure that the resulting chunks match the Length property.
 
     member this.ReserveBytes count =
         let clone = ChunkedMemoryBuilder(this.current, this.pos, 0u)

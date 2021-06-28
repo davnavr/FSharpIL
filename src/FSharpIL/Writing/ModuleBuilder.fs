@@ -19,7 +19,8 @@ type DefinedTypeMembers =
     val private owner: DefinedType
     val private warnings: ValidationWarningsBuilder option
     [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
-    
+    [<DefaultValue>] val mutable MethodBodyLookup: HybridHashMap<DefinedMethod, obj> // TODO: Value should be method body
+
     new (owner, warnings) = { owner = owner; warnings = warnings }
 
     member this.MethodCount = this.Method.Count

@@ -7,6 +7,7 @@ open FSharpIL.Utilities
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Blobs
+open FSharpIL.PortableExecutable
 
 [<IsReadOnly; Struct>]
 type ModuleRow =
@@ -182,12 +183,15 @@ type ParamRow =
     interface ITableRow
     interface IEquatable<ParamRow> with member this.Equals other = this.Equals other
 
+
+
+
 [<IsReadOnly>]
-[<System.ObsoleteAttribute("Use Rva instead")>]
 type MethodBodyLocation = struct
     val Value: uint32
     internal new (value) = { Value = value }
-    member this.IsZero = this.Value = 0u
+    member this.IsNull = this.Value = 0u
+    static member (+) (location: MethodBodyLocation, start: Rva) = location.Value + start
 end
 
 /// <summary>(0x06) Represents a row in the <c>MethodDef</c> table (II.22.26).</summary>
@@ -543,7 +547,6 @@ type TypeSpecRow =
 
 /// Specifies where the initial value of a field is stored (II.22.18).
 [<IsReadOnly>]
-[<System.ObsoleteAttribute("Use Rva instead")>]
 type FieldValueLocation = struct
     val Value: uint32
     internal new (value) = { Value = value }

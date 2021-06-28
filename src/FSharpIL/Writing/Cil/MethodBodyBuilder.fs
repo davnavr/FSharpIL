@@ -32,28 +32,27 @@ type BranchTarget = struct
     static member op_Explicit (target: BranchTarget) = Checked.int8 target.Target
 end
 
-[<IsReadOnly; Struct>]
-[<NoComparison; NoEquality>]
-type BranchTargetList = internal { Targets: ImmutableArray<BranchTarget>.Builder }
-
-[<Struct>]
+[<IsByRefLike; Struct>]
 [<NoComparison; NoEquality>]
 type MethodBodyBuilder =
-    { mutable MethodBody: ChunkedMemoryBuilder
-      BranchTargets: BranchTargetList
-      MaxStack: uint16
-      LocalVarSigTok: LocalVarSigOffset } // TODO: Fix should be offset to StandaloneSig instead.
+    internal
+        { mutable estimatedMaxStack: uint16
+          branchTargetList: ImmutableArray<BranchTarget>.Builder
+          // TODO: Rename to instructions
+          mutable methodBody: ChunkedMemoryBuilder }
+
+    member this.EstimatedMaxStack = this.estimatedMaxStack
 
 /// Represents the destination that a branch instruction would jump to.
 [<IsReadOnly; IsByRefLike>]
 type Label = struct
     val Destination: MethodBodyOffset
-    new (writer: inref<MethodBodyBuilder>) = { Destination = { MethodBodyOffset = writer.MethodBody.Length } }
+    new (writer: inref<MethodBodyBuilder>) = { Destination = { MethodBodyOffset = writer.methodBody.Length } }
 end
 
 /// Contains functions used for writing CIL method bodies.
 [<AutoOpen>]
-module MethodBodyBuilder =
+module MethodBodyBuilder = // TODO: Update estimated max stack value.
     module Unsafe =
         let internal writeOpcodeHelper (wr: byref<ChunkedMemoryBuilder>) opcode =
             if opcode < Opcode.Arglist
@@ -63,7 +62,7 @@ module MethodBodyBuilder =
                 wr.Write(uint8(opcode' >>> 8))
                 wr.Write(uint8(opcode' &&& 0xFFus))
 
-        let writeRawOpcode (builder: byref<_>) opcode = writeOpcodeHelper &builder.MethodBody opcode
+        let writeRawOpcode (builder: byref<_>) opcode = writeOpcodeHelper &builder.methodBody opcode
 
         /// <summary>Writes a metadata token (III.1.9).</summary>
         /// <exception cref="T:System.ArgumentOutOfRangeException">
@@ -72,16 +71,17 @@ module MethodBodyBuilder =
         let writeMetadataToken (builder: byref<_>) (table: uint8) index =
             if index > 0xFFFFFFu then
                 argOutOfRange "index" index "The row or offset pointed to by the metadata token must be able to fit in 3 bytes"
-            let wr = &builder.MethodBody
+            let wr = &builder.methodBody
             uint8(index &&& 0xFFu) |> wr.Write
             uint8((index >>> 8) &&& 0xFFu) |> wr.Write
             uint8((index >>> 16) &&& 0xFFu) |> wr.Write
             wr.Write table
 
-        let writeBranchInstruction short long ({ BranchTargets = targets } as builder: byref<_>) =
-            let i = targets.Targets.Count
-            targets.Targets.Add(BranchTarget({ MethodBodyOffset = builder.MethodBody.Length }, short, long))
-            &Unsafe.AsRef(&targets.Targets.ItemRef i)
+        let writeBranchInstruction short long ({ branchTargetList = targets } as builder: byref<_>) =
+            let i = targets.Count
+            targets.Add(BranchTarget({ MethodBodyOffset = builder.methodBody.Length }, short, long))
+            &Unsafe.AsRef(&targets.ItemRef i)
+            failwith "TODO: Fix, changes to the branch target won't propogate if the internal array of targets is reallocated."
 
     open Unsafe
 
@@ -117,7 +117,7 @@ module MethodBodyBuilder =
     /// (0x0E) Writes the short form of an instruction that loads the specified argument onto the stack (III.3.38).
     let inline ldarg_s (wr: byref<MethodBodyBuilder>) (num: uint8) =
         writeRawOpcode &wr Opcode.Ldarg_s
-        wr.MethodBody.Write num
+        wr.methodBody.Write num
 
 
 
@@ -139,7 +139,7 @@ module MethodBodyBuilder =
     /// (0xFE 0x09) Writes the long form of an instruction that loads the specified argument onto the stack (III.3.38).
     let inline ldarg (wr: byref<_>) (num: uint16) =
         writeRawOpcode &wr Opcode.Ldarg
-        wr.MethodBody.WriteLE num
+        wr.methodBody.WriteLE num
 
     /// Contains functions used to write the most shorted from of CIL opcodes whenever possible.
     module Shortened =
@@ -155,55 +155,3 @@ module MethodBodyBuilder =
             | 3us -> ldarg_3 &wr
             | _ when num <= 0xFFus -> ldarg_s &wr (uint8 num)
             | _ -> ldarg &wr num
-
-    let [<Literal>] private FatFormatSize = 3us
-
-    let serialize (builder: inref<MethodBodyBuilder>) (wr: byref<ChunkedMemoryBuilder>) =
-        let body = builder.MethodBody.AsImmutableUnsafe()
-
-        // Estimate the length to determine if a tiny or fat format should be used.
-        // Note that this assumes that all branching targets are 4-bytes long, which may result in fat format method bodies
-        // being generated when the tiny format could have been used instead.
-        let length = body.Length + (uint32 builder.BranchTargets.Targets.Count * 5u) // 5 bytes, 1 is for opcode, 4 is for target
-        let tiny = length < 64u && builder.MaxStack <= 8us && builder.LocalVarSigTok.IsNull (*&& no exceptions *) (*&& no extra data sections*)
-        let header = wr.ReserveBytes 1
-
-        if not tiny then
-            wr.SkipBytes 1
-            wr.WriteLE builder.MaxStack
-            wr.SkipBytes 4 // CodeSize
-            invalidOp "TODO: Write LocalVarSigTok"
-            // TODO: Write extra method data sections.
-
-        let start = wr.Length
-        if builder.BranchTargets.Targets.Count = 0
-        then for chunk in body.AsMemoryArray() do wr.Write chunk
-        else
-            // TODO: Optimize writing of method bodies with branching instructions, use ReadOnlyMemory to write bytes in between two branching instructions.
-            let mutable offset, branchi = 0u, 0
-            while offset < body.Length do
-                if branchi < builder.BranchTargets.Targets.Count then
-                    let branch = &builder.BranchTargets.Targets.ItemRef branchi
-                    if branch.Position.MethodBodyOffset = offset then
-                        if branch.IsLarge then
-                            writeOpcodeHelper &wr branch.LongOpcode
-                            wr.WriteLE(uint32 branch.Target)
-                        else
-                            writeOpcodeHelper &wr branch.ShortOpcode
-                            wr.Write(uint8 branch.Target)
-                        branchi <- branchi + 1
-                wr.Write body.[offset]
-                offset <- offset + 1u
-
-        let codeSize = wr.Length - start
-
-        if tiny then
-            header.Write(uint8 ILMethodFlags.TinyFormat ||| Checked.uint8 codeSize)
-        else
-            let mutable flags' = ILMethodFlags.FatFormat
-            //if init locals flag set then flags' <- flags' ||| ILMethodFlags.InitLocals
-            //if has extra data sections then flags' <- flags' ||| ILMethodFlags.MoreSects
-            header.WriteLE(uint16 flags' ||| (FatFormatSize <<< 12)) // Flags & Size
-            header.SkipBytes 2 // MaxStack
-            header.WriteLE codeSize
-            wr.AlignTo 4

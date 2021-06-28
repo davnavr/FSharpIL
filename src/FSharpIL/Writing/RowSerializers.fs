@@ -36,8 +36,8 @@ end
 
 type MethodDef = struct
     interface ISerializer<MethodDefRow> with
-        member _.Serialize(hsizes, tsizes, row, wr) =
-            wr.WriteLE row.Rva.Value
+        member _.Serialize(hsizes, tsizes, row, wr) = // TODO: Have parameter for starting RVA of method bodies.
+            wr.WriteLE row.Rva.Value // TODO: Figure out how to get actual RVA from method body.
             wr.WriteLE(uint16 row.ImplFlags)
             wr.WriteLE(uint16 row.Flags)
             WriteIndex.string &wr hsizes row.Name.Offset

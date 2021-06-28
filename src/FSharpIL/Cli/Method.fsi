@@ -90,7 +90,6 @@ type DefinedMethod =
 
     val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
-    //member Visibility: MemberVisibility
 
     internal new:
         MethodImplFlags *
@@ -100,6 +99,8 @@ type DefinedMethod =
         MethodName *
         ImmutableArray<ParamItem> *
         ParameterList -> DefinedMethod
+
+    //member Visibility: MemberVisibility
 
 [<Sealed>]
 type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> =
