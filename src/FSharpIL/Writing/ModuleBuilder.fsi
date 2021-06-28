@@ -5,13 +5,27 @@ open System.Collections.Generic
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Cil
+open FSharpIL.Metadata.Signatures
+
+open FSharpIL.Writing.Cil
 
 open FSharpIL.Utilities.Collections
+
+[<AbstractClass>]
+type DefinedMethodBody =
+    val InitLocals: InitLocals
+    val LocalTypes: LocalVarSig<Type, TypeDefOrRefOrSpec>
+
+    new: initLocals: InitLocals * localTypes: LocalVarSig<Type, TypeDefOrRefOrSpec> -> DefinedMethodBody
+    new: unit -> DefinedMethodBody
+
+    abstract WriteInstructions: byref<MethodBodyBuilder> -> uint16
 
 [<Sealed>]
 type DefinedTypeMembers =
     [<DefaultValue>] val mutable internal Method: HybridHashSet<DefinedMethod>
-    //[<DefaultValue>] val mutable internal MethodBodies: LinkedList<MethodBodyBuilder> // List<MethodBodyBuilder ref>
+    [<DefaultValue>] val mutable internal MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
 
     internal new: owner: DefinedType * warnings: ValidationWarningsBuilder option -> DefinedTypeMembers
 
@@ -20,7 +34,7 @@ type DefinedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
-    member AddMethod: DefinedMethod -> ValidationResult<unit> // TODO: Have return type be an object that allows the calling of the method in a method body.
+    member AddMethod: method: DefinedMethod * body: DefinedMethodBody voption -> ValidationResult<unit> // TODO: Have return type be an object that allows the calling of the method in a method body.
 
 [<Sealed>]
 type ReferencedTypeMembers =

@@ -62,6 +62,8 @@ module MethodBodyBuilder = // TODO: Update estimated max stack value.
                 wr.Write(uint8(opcode' >>> 8))
                 wr.Write(uint8(opcode' &&& 0xFFus))
 
+        let getOpcodeWriter (builder: byref<_>) = &builder.methodBody
+
         let writeRawOpcode (builder: byref<_>) opcode = writeOpcodeHelper &builder.methodBody opcode
 
         /// <summary>Writes a metadata token (III.1.9).</summary>
@@ -117,7 +119,7 @@ module MethodBodyBuilder = // TODO: Update estimated max stack value.
     /// (0x0E) Writes the short form of an instruction that loads the specified argument onto the stack (III.3.38).
     let inline ldarg_s (wr: byref<MethodBodyBuilder>) (num: uint8) =
         writeRawOpcode &wr Opcode.Ldarg_s
-        wr.methodBody.Write num
+        (getOpcodeWriter &wr).Write num
 
 
 
@@ -139,7 +141,7 @@ module MethodBodyBuilder = // TODO: Update estimated max stack value.
     /// (0xFE 0x09) Writes the long form of an instruction that loads the specified argument onto the stack (III.3.38).
     let inline ldarg (wr: byref<_>) (num: uint16) =
         writeRawOpcode &wr Opcode.Ldarg
-        wr.methodBody.WriteLE num
+        (getOpcodeWriter &wr).WriteLE num
 
     /// Contains functions used to write the most shorted from of CIL opcodes whenever possible.
     module Shortened =

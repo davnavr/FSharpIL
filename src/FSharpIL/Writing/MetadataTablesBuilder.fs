@@ -157,14 +157,20 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
                 | ValidTableFlags.GenericParamConstraint -> count builder.GenericParamConstraint
                 | _ -> 0u }
 
-    member private this.SerializeTable(wr: byref<_>, table: RowTableBuilder<_, 'Serializer>) =
+    member private this.SerializeTable(wr: byref<_>, table: RowTableBuilder<_, 'Serializer>, methodBodiesRva) =
         for i = 1 to table.Count do
-            Unchecked.defaultof<'Serializer>.Serialize(this.HeapSizes, this.IndexSizes, &table.[{ TableIndex = uint32 i }], &wr)
+            Unchecked.defaultof<'Serializer>.Serialize (
+                this.HeapSizes,
+                this.IndexSizes,
+                &table.[{ TableIndex = uint32 i }],
+                methodBodiesRva,
+                &wr
+            )
 
     interface IStreamBuilder with
         member _.StreamName = Magic.StreamNames.metadata
         member _.StreamLength = ValueNone
-        member this.Serialize wr =
+        member this.Serialize(wr, methodBodiesRva) =
             // TODO: Use TablesHeader<_> type?
             wr.WriteLE 0u // Reserved
             wr.Write 2uy // MajorVersion
@@ -186,31 +192,31 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
             WriteIndex.guid &wr this.HeapSizes this.Module.EncId
             WriteIndex.guid &wr this.HeapSizes this.Module.EncBaseId
 
-            this.SerializeTable(&wr, this.TypeRef)
-            this.SerializeTable(&wr, this.TypeDef)
-            this.SerializeTable(&wr, this.Field)
-            this.SerializeTable(&wr, this.MethodDef)
-            this.SerializeTable(&wr, this.Param)
-            this.SerializeTable(&wr, this.InterfaceImpl)
-            this.SerializeTable(&wr, this.MemberRef)
-            this.SerializeTable(&wr, this.Constant)
-            this.SerializeTable(&wr, this.CustomAttribute)
+            this.SerializeTable(&wr, this.TypeRef, methodBodiesRva)
+            this.SerializeTable(&wr, this.TypeDef, methodBodiesRva)
+            this.SerializeTable(&wr, this.Field, methodBodiesRva)
+            this.SerializeTable(&wr, this.MethodDef, methodBodiesRva)
+            this.SerializeTable(&wr, this.Param, methodBodiesRva)
+            this.SerializeTable(&wr, this.InterfaceImpl, methodBodiesRva)
+            this.SerializeTable(&wr, this.MemberRef, methodBodiesRva)
+            this.SerializeTable(&wr, this.Constant, methodBodiesRva)
+            this.SerializeTable(&wr, this.CustomAttribute, methodBodiesRva)
 
-            this.SerializeTable(&wr, this.StandAloneSig)
-            this.SerializeTable(&wr, this.EventMap)
-            this.SerializeTable(&wr, this.Event)
-            this.SerializeTable(&wr, this.PropertyMap)
-            this.SerializeTable(&wr, this.Property)
-            this.SerializeTable(&wr, this.MethodSemantics)
-            this.SerializeTable(&wr, this.MethodImpl)
-            this.SerializeTable(&wr, this.ModuleRef)
-            this.SerializeTable(&wr, this.TypeSpec)
+            this.SerializeTable(&wr, this.StandAloneSig, methodBodiesRva)
+            this.SerializeTable(&wr, this.EventMap, methodBodiesRva)
+            this.SerializeTable(&wr, this.Event, methodBodiesRva)
+            this.SerializeTable(&wr, this.PropertyMap, methodBodiesRva)
+            this.SerializeTable(&wr, this.Property, methodBodiesRva)
+            this.SerializeTable(&wr, this.MethodSemantics, methodBodiesRva)
+            this.SerializeTable(&wr, this.MethodImpl, methodBodiesRva)
+            this.SerializeTable(&wr, this.ModuleRef, methodBodiesRva)
+            this.SerializeTable(&wr, this.TypeSpec, methodBodiesRva)
 
-            this.SerializeTable(&wr, this.Assembly)
-            this.SerializeTable(&wr, this.AssemblyRef)
-            this.SerializeTable(&wr, this.File)
+            this.SerializeTable(&wr, this.Assembly, methodBodiesRva)
+            this.SerializeTable(&wr, this.AssemblyRef, methodBodiesRva)
+            this.SerializeTable(&wr, this.File, methodBodiesRva)
 
-            this.SerializeTable(&wr, this.NestedClass)
-            this.SerializeTable(&wr, this.GenericParam)
-            this.SerializeTable(&wr, this.MethodSpec)
-            this.SerializeTable(&wr, this.GenericParamConstraint)
+            this.SerializeTable(&wr, this.NestedClass, methodBodiesRva)
+            this.SerializeTable(&wr, this.GenericParam, methodBodiesRva)
+            this.SerializeTable(&wr, this.MethodSpec, methodBodiesRva)
+            this.SerializeTable(&wr, this.GenericParamConstraint, methodBodiesRva)

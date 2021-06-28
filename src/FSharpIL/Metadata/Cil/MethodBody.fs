@@ -9,8 +9,8 @@ open FSharpIL.Metadata.Tables
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
 type InitLocals =
-    | InitLocals
     | SkipInitLocals
+    | InitLocals
 
 [<Sealed>]
 type MethodBody =

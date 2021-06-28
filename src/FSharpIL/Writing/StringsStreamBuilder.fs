@@ -57,4 +57,4 @@ type StringsStreamBuilder (capacity: int32) =
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.strings
-        member _.Serialize wr = StringHelpers.serializeStringHeap<StringsStreamSerializer, _> System.Text.Encoding.UTF8 &wr strings
+        member _.Serialize(wr, _) = StringHelpers.serializeStringHeap<StringsStreamSerializer, _> System.Text.Encoding.UTF8 &wr strings

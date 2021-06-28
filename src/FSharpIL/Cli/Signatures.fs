@@ -14,3 +14,4 @@ type PropertySig = PropertySig<Type, TypeDefOrRefOrSpec>
 type GenericArgList = GenericArgList<Type, TypeDefOrRefOrSpec>
 type GenericInst = GenericInst<Type, TypeDefOrRefOrSpec>
 type Pointer = Pointer<Type, TypeDefOrRefOrSpec>
+type LocalVarSig = LocalVarSig<Type, TypeDefOrRefOrSpec>

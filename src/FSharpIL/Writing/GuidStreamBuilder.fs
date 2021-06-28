@@ -37,7 +37,7 @@ type GuidStreamBuilder (capacity: int32) =
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.guid
-        member this.Serialize builder =
+        member this.Serialize(builder, _) =
             let mutable buffer = Span.stackalloc<byte> sizeof<Guid>
             for i = 1 to this.Count do
                 if not (guids.[i].TryWriteBytes buffer) then failwithf "Could not write GUID at index %i" i

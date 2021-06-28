@@ -91,7 +91,7 @@ let streams info (wr: byref<ChunkedMemoryBuilder>) =
         header.WriteLE(wr.Length - info.Metadata.StartOffset) // Offset
 
         let start = wr.Length
-        stream.Serialize &wr
+        stream.Serialize(&wr, info.MethodBodies)
         let size = wr.Length - start
 
         match stream.StreamLength with

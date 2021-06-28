@@ -93,7 +93,7 @@ type BlobStreamBuilder (capacity: int32) =
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.blob
-        member _.Serialize wr =
+        member _.Serialize(wr, _) =
             let mutable offset', content' = 0u, content.AsImmutableUnsafe()
             for i = 0 to entries.Count - 1 do
                 let length = entries.[i].DataLength

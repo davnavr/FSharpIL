@@ -16,8 +16,6 @@ type MethodBodyHeader =
       MaxStack: uint16
       LocalVariables: TableIndex<StandaloneSigRow> }
 
-type BuildMethodBody = delegate of byref<MethodBodyBuilder> -> MethodBodyHeader
-
 type IMethodBodySource = interface
     abstract Create: byref<MethodBodyBuilder> -> MethodBodyHeader
 end
