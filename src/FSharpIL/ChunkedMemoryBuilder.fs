@@ -104,31 +104,44 @@ type ChunkedMemoryBuilder = struct
 
     /// Copies the contents of this builder to a new non-contiguous region of memory.
     member this.ToImmutable() =
-        let mutable chunki = Checked.int32(uint32 this.pos - this.length)
-        let mutable remaining, chunk, resulti = this.length, this.current, 0
+        if this.length = 0u
+        then ChunkedMemory.empty
+        else
+            let chunkl = uint32 this.current.List.First.Value.Length
+            let mutable remaining, chunk, chunki = this.length, this.current, this.pos - 1
+            let lastl =
+                match remaining % chunkl with
+                | 0u -> chunkl
+                | length -> length
+                |> Checked.int32
 
-        let chunkl = uint32 chunk.Value.Length
+            let mutable results =
+                let chunks = remaining / chunkl
+                int32(if remaining % chunkl = 0u then chunks else chunks + 1u) |> Array.zeroCreate
 
-        let mutable results =
-            let chunks = remaining / chunkl
-            int32(if remaining % chunkl = 0u then chunks else chunks + 1u) |> Array.zeroCreate
+            let lastResultIndex = results.Length - 1
+            let mutable resulti = lastResultIndex
 
-        while remaining > 0u do
-            let chunk' = Array.zeroCreate(if remaining > chunkl then int32 chunkl else int32 remaining)
-            results.[resulti] <- chunk'
-            let mutable chunki' = 0
-            while chunki' < chunk'.Length do
-                let length = min (chunk'.Length - chunki') (chunk.Value.Length - chunki)
-                Span(chunk.Value, chunki, length).CopyTo(Span(chunk', chunki', length))
-                chunki' <- chunki' + length
-                chunki <- chunki + length
-                if chunki >= chunk.Value.Length then
-                    chunki <- 0
-                    chunk <- chunk.Next
-            remaining <- remaining - uint32 chunk'.Length
-            resulti <- resulti + 1
+            /// Need to iterate backwards starting at the current node.
+            while remaining > 0u do
+                let chunk' = Array.zeroCreate(if resulti = lastResultIndex then lastl else Checked.int32 chunkl)
+                results.[resulti] <- chunk'
+                let mutable chunki' = chunk'.Length - 1
+                while chunki' >= 0 do
+                    if chunki <= 0 then
+                        chunk <- chunk.Previous
+                        chunki <- chunk.Value.Length - 1
+                    let length =
+                        if remaining < uint32 chunki
+                        then Checked.int32 remaining
+                        else chunki + 1
+                    (Span.fromEnd chunk.Value chunki length).CopyTo(Span.fromEnd chunk' chunki' length)
+                    chunki' <- chunki' - length
+                    chunki <- chunki - length
+                remaining <- remaining - uint32 chunk'.Length
+                resulti <- resulti - 1
 
-        ChunkedMemory(Unsafe.As &results, 0u, this.length)
+            ChunkedMemory(Unsafe.As &results, 0u, this.length)
 
     member this.ReserveBytes count =
         let clone = ChunkedMemoryBuilder(this.current, this.pos, 0u)

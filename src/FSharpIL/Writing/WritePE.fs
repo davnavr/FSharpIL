@@ -68,12 +68,30 @@ let getFileInfo (file: PEFile) =
 type FileHeaderWriter<'Writer when 'Writer :> IByteWriter> = struct
     val mutable private output: 'Writer
     val mutable private pos: uint32
+
     new (output) = { output = output; pos = 0u }
+
     member this.Output = this.output
     member this.Position = this.pos
+
     member this.Write data =
         this.output.Write data
         this.pos <- this.pos + uint32 data.Length
+
+    member this.AlignTo alignment =
+        let mutable padding = (Round.upTo alignment this.Position) - this.Position
+        let buffer = Span.stackalloc<byte> 512
+
+        buffer.Clear()
+
+        while padding > 0u do
+            let length =
+                if padding > uint32 buffer.Length
+                then buffer.Length
+                else int32 padding
+            this.Write(buffer.Slice(0, length))
+            padding <- padding - uint32 length
+
     interface IByteWriter with member this.Write data = this.Write data
 end
 
@@ -179,15 +197,20 @@ let sectionHeaders info (writer: byref<#IByteWriter>) =
         writer.WriteLE header.NumberOfLineNumbers
         writer.WriteLE(uint32 header.Characteristics)
 
-let sectionData info (writer: byref<#IByteWriter>) =
+let sectionData info (writer: byref<FileHeaderWriter<#IByteWriter>>) =
     for section in info.Sections do
         let data = Span.stackalloc<byte> section.Data.ChunkSize
         let mutable remaining = section.Data.Length
         while remaining > 0u do
-            section.Data.CopyTo(section.Data.Length - remaining, data)
+            let length =
+                if remaining > uint32 data.Length
+                then data.Length
+                else int32 remaining
+            section.Data.CopyTo(section.Data.Length - remaining, data.Slice(0,length))
             writer.Write data
-            remaining <- remaining - uint32 data.Length
-            // Padding bytes are already included.
+            remaining <- remaining - uint32 length
+        // Padding to next section.
+        writer.AlignTo info.FileAlignment
 
 let internal write file output =
     let mutable output' = FileHeaderWriter output
@@ -199,12 +222,7 @@ let internal write file output =
     sectionHeaders info &output'
 
     // Padding to start of section data
-    let mutable padding = (Round.upTo info.FileAlignment output'.Position) - output'.Position
-    while padding > 0u do
-        let padding' = Span.stackalloc<byte>(int32(min padding info.FileAlignment))
-        padding'.Clear()
-        output'.Write padding'
-        padding <- padding - uint32 padding'.Length
+    output'.AlignTo info.FileAlignment
 
     sectionData info &output'
 

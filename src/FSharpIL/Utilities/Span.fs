@@ -32,3 +32,5 @@ let readOnlyEqual (left: ReadOnlySpan<'T>) (right: ReadOnlySpan<'T>) =
             else i <- i + 1
         equal
     else false
+
+let inline fromEnd source endi length = Span<'T>(source, endi - length + 1, length)
