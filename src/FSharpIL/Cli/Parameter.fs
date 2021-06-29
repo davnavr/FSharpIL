@@ -20,6 +20,8 @@ type Parameter =
       DefaultValue: Constant voption
       ParamName: Identifier voption } // TODO: Have field that allows setting of Optional flag.
 
+type ParameterList = int32 -> ParamItem -> Parameter
+
 [<RequireQualifiedAccess>]
 module Parameter =
     let flags (parameter: inref<_>) =
@@ -40,7 +42,7 @@ module Parameter =
           DefaultValue = ValueNone
           ParamName = ValueSome name }
 
-type ParameterList = int32 -> ParamItem -> Parameter
+    let emptyList: ParameterList = fun _ _ -> Unchecked.defaultof<Parameter>
 
 // TODO: Allow more efficient ways of generating parameter list
 (*

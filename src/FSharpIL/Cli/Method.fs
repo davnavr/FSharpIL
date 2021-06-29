@@ -228,13 +228,61 @@ type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>
     =
     inherit DefinedMethod (
         MethodImplFlags.IL, // TODO: Set PInvokeImpl flag for PInvoke methods.
-        flags.Flags ||| MemberVisibility.ofMethod visibility,
+        Unchecked.defaultof<'Kind>.RequiredFlags ||| flags.Flags ||| MemberVisibility.ofMethod visibility,
         Unchecked.defaultof<'Kind>.MethodThis,
         name,
         rtype,
         parameterTypes,
         parameterList
     )
+
+[<IsReadOnly; Struct>]
+type EntryPointKind =
+    { ReturnExitCode: bool
+      ArgumentsName: Identifier voption option }
+
+    member this.HasArguments = Option.isSome this.ArgumentsName
+
+[<RequireQualifiedAccess>]
+module EntryPointKind =
+    let exitCodeType = ReturnType.Type(ImmutableArray.Empty, EncodedType.I4)
+
+    let private argsParameterTypes =
+        ImmutableArray.Create<ParamItem>(
+            ParamItem.Param(ImmutableArray.Empty, EncodedType.SZArray(ImmutableArray.Empty, EncodedType.String))
+        )
+
+    let ExitWithArgs argsParamName = { ReturnExitCode = true; ArgumentsName = Some argsParamName }
+    let VoidWithArgs argsParamName = { ReturnExitCode = false; ArgumentsName = Some argsParamName }
+    let ExitNoArgs = { ReturnExitCode = true; ArgumentsName = None }
+    let VoidNoArgs = { ReturnExitCode = false; ArgumentsName = None }
+
+    let inline returnType kind = if kind.ReturnExitCode then exitCodeType else ReturnType.RVoid
+
+    let parameterTypes kind =
+        match kind with
+        | { ArgumentsName = Some _ } -> argsParameterTypes
+        | { ArgumentsName = None } -> ImmutableArray.Empty
+
+    let parameterList kind: ParameterList =
+        match kind with
+        | { ArgumentsName = Some name } ->
+            fun _ _ ->
+                { Kind = ParameterKind.Default
+                  DefaultValue = ValueNone
+                  ParamName = name }
+        | { ArgumentsName = None } -> Parameter.emptyList
+
+[<IsReadOnly>]
+type EntryPointMethod = struct
+    val Method: MethodDefinition<MethodKinds.Static>
+
+    new (method) = { Method = method }
+
+    member this.Kind =
+        { ReturnExitCode = this.Method.ReturnType = EntryPointKind.exitCodeType
+          ArgumentsName = if this.Method.Parameters.Length > 0 then Some(this.Method.Parameters.ItemRef(0).ParamName) else None }
+end
 
 type DefinedMethod with
     static member Instance(visibility, flags, returnType, name, parameterTypes, parameterList) =
@@ -261,6 +309,17 @@ type DefinedMethod with
             parameterTypes,
             parameterList
         )
+
+    static member EntryPoint(visibility, flags, name, kind) =
+        DefinedMethod.Static (
+            visibility,
+            flags,
+            EntryPointKind.returnType kind,
+            name,
+            EntryPointKind.parameterTypes kind,
+            EntryPointKind.parameterList kind
+        )
+        |> EntryPointMethod
 
 [<AutoOpen>]
 module ConstructorHelpers =

@@ -28,14 +28,27 @@ type DefinedMethodBody =
 
     abstract WriteInstructions: byref<MethodBodyBuilder> -> uint16
 
+type EntryPoint =
+    private
+    | NoEntryPoint
+    | EntryPointMethod of DefinedType * EntryPointMethod
+
+[<RequireQualifiedAccess>]
+module EntryPoint =
+    let (|None|Method|) entryPoint =
+        match entryPoint with
+        | NoEntryPoint -> None
+        | EntryPointMethod(owner, method) -> Method(struct(owner, method))
+
 [<Sealed>]
 type DefinedTypeMembers =
     val private owner: DefinedType
     val private warnings: ValidationWarningsBuilder option
+    val private entryPointToken: EntryPoint ref
     [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
     [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
 
-    new (owner, warnings) = { owner = owner; warnings = warnings }
+    new (owner, warnings, entryPointToken) = { owner = owner; warnings = warnings; entryPointToken = entryPointToken }
 
     member this.MethodCount = this.Method.Count
 
@@ -54,6 +67,13 @@ type DefinedTypeMembers =
                 | false, _ -> noImpl "error for duplicate method"
             | _ -> noImpl "bad"
         | _ -> noImpl "bad"
+
+    member this.AddEntryPoint(method: EntryPointMethod, body) =
+        match this.AddMethod(method.Method, ValueSome body) with
+        | Ok result ->
+            this.entryPointToken := EntryPointMethod(this.owner, method)
+            Ok result
+        | Error err -> Error err
 
 [<Sealed>]
 type ReferencedTypeMembers = class
@@ -102,6 +122,7 @@ type ModuleBuilderSerializer
         mvid,
         userStringStream,
         assembly: AssemblyDefinition option,
+        entryPointToken: EntryPoint,
         assemblyReferences: HashSet<AssemblyReference>,
         definedTypes: Dictionary<DefinedType, DefinedTypeMembers>,
         referencedTypes: Dictionary<ReferencedType, ReferencedTypeMembers>
@@ -287,6 +308,12 @@ type ModuleBuilderSerializer
 
         for KeyValue(tdef, members) in definedTypes do this.SerializeDefinedType(tdef, members) |> ignore
 
+        builder.EntryPointToken <-
+            match entryPointToken with
+            | NoEntryPoint -> EntryPointToken.Null
+            | EntryPointMethod(owner, method) -> EntryPointToken.MethodDef definedTypeLookup.[owner].Methods.[method.Method]
+            //| EntryPointFile file -> EntryPointToken.File(failwith "TODO: get entry point file")
+
         builder
 
 [<Sealed>]
@@ -303,6 +330,7 @@ type ModuleBuilder
     let assemblyRefs = HashSet<AssemblyReference>(defaultArg assemblyRefCapacity 8)
     let definedTypes = Dictionary<DefinedType, DefinedTypeMembers>(defaultArg typeDefCapacity 16)
     let referencedTypes = Dictionary<ReferencedType, ReferencedTypeMembers>(defaultArg typeRefCapacity 32)
+    let entryPointToken = ref Unchecked.defaultof<EntryPoint>
 
     static member val internal ModuleTypeName = Identifier.ofStr "<Module>"
 
@@ -311,7 +339,8 @@ type ModuleBuilder
     member val Mvid = Option.defaultWith Guid.NewGuid mvid
     member _.Name: Identifier = name
     member _.Assembly = assembly
-    
+    member _.EntryPoint = !entryPointToken
+
     member _.DefinedTypes = definedTypes.Keys :> IReadOnlyCollection<_>
     member _.ReferencedTypes = referencedTypes.Keys :> IReadOnlyCollection<_>
     member _.ReferencedAssemblies = assemblyRefs :> IReadOnlyCollection<_>
@@ -321,7 +350,7 @@ type ModuleBuilder
         | true, existing -> ValidationResult<_>.Error(noImpl "TODO: error for duplicate type def")
         | false, _ ->
             // TODO: Check that extends and nestedclass are already contained in the Module.
-            let members = DefinedTypeMembers(t, warnings)
+            let members = DefinedTypeMembers(t, warnings, entryPointToken)
             definedTypes.[t] <- members
             Ok members
 
@@ -341,4 +370,15 @@ type ModuleBuilder
             | None -> ()
 
     member internal this.Serialize() =
-        ModuleBuilderSerializer(name, this.Mvid, this.UserStrings, assembly, assemblyRefs, definedTypes, referencedTypes).Serialize()
+        let serializer =
+            ModuleBuilderSerializer (
+                name,
+                this.Mvid,
+                this.UserStrings,
+                assembly,
+                this.EntryPoint,
+                assemblyRefs,
+                definedTypes,
+                referencedTypes
+            )
+        serializer.Serialize()

@@ -114,6 +114,32 @@ type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> 
         ImmutableArray<ParamItem> *
         ParameterList -> MethodDefinition<'Kind>
 
+[<IsReadOnly; Struct>]
+type EntryPointKind =
+    { /// Gets a value indicating whether or not the entry point method returns an integer exit code.
+      ReturnExitCode: bool
+      /// Gets the optional name of the arguments parameter of the entry point method, if the method accepts arguments.
+      ArgumentsName: Identifier voption option }
+
+    member HasArguments: bool
+
+[<RequireQualifiedAccess>]
+module EntryPointKind =
+    /// An entrypoint that takes a single-dimensional array of string arguments and returns an integer exit code.
+    val ExitWithArgs: argsParamName: Identifier voption -> EntryPointKind
+    /// An entrypoint that takes a single-dimensional array of string arguments and returns nothing.
+    val VoidWithArgs: argsParamName: Identifier voption -> EntryPointKind
+    /// An entrypoint that takes no arguments and returns an integer exit code.
+    val ExitNoArgs: EntryPointKind
+    /// An entrypoint that takes no arguments and returns nothing.
+    val VoidNoArgs: EntryPointKind
+
+[<IsReadOnly>]
+type EntryPointMethod = struct
+    val Method: MethodDefinition<MethodKinds.Static>
+    member Kind: EntryPointKind
+end
+
 type DefinedMethod with
     static member Instance:
         visibility: MemberVisibility *
@@ -162,6 +188,12 @@ type DefinedMethod with
         parameterList: ParameterList -> MethodDefinition<MethodKinds.ObjectConstructor>
 
     static member ClassConstructor: MethodDefinition<MethodKinds.ClassConstructor>
+
+    static member EntryPoint:
+        visibility: MemberVisibility *
+        flags: MethodAttributes<MethodKinds.Static> *
+        name: MethodName *
+        kind: EntryPointKind -> EntryPointMethod
 
 [<AbstractClass>]
 type ReferencedMethod =

@@ -6,7 +6,6 @@ open System.Collections.Generic
 open FSharpIL.Cli
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Cil
-open FSharpIL.Metadata.Signatures
 
 open FSharpIL.Writing.Cil
 
@@ -23,12 +22,17 @@ type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allo
 
     abstract WriteInstructions: byref<MethodBodyBuilder> -> uint16
 
+type EntryPoint
+
+[<RequireQualifiedAccess>]
+module EntryPoint =
+    //val (|None|Method|File|): EntryPoint -> Choice<_, _, _>
+    val (|None|Method|): EntryPoint -> Choice<unit, struct(DefinedType * EntryPointMethod)>
+
 [<Sealed>]
 type DefinedTypeMembers =
     [<DefaultValue>] val mutable internal Method: HybridHashSet<DefinedMethod>
     [<DefaultValue>] val mutable internal MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
-
-    internal new: owner: DefinedType * warnings: ValidationWarningsBuilder option -> DefinedTypeMembers
 
     //member FieldCount: int32
     member MethodCount: int32
@@ -36,6 +40,7 @@ type DefinedTypeMembers =
     //member EventCount: int32
 
     member AddMethod: method: DefinedMethod * body: DefinedMethodBody voption -> ValidationResult<unit> // TODO: Have return type be an object that allows the calling of the method in a method body.
+    member AddEntryPoint: method: EntryPointMethod * body: DefinedMethodBody -> ValidationResult<unit>
 
 [<Sealed>]
 type ReferencedTypeMembers =
@@ -65,6 +70,7 @@ type ModuleBuilder =
     member Mvid: Guid
     member Name: Identifier
     member Assembly: AssemblyDefinition option
+    member EntryPoint: EntryPoint // TODO: Allow a File row to also be an entry point.
     member DefinedTypes: IReadOnlyCollection<DefinedType>
     member ReferencedTypes: IReadOnlyCollection<ReferencedType>
     member ReferencedAssemblies: IReadOnlyCollection<AssemblyReference>

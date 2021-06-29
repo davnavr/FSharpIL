@@ -97,20 +97,16 @@ let example() =
                     wr.EstimatedMaxStack }
 
         (* Create the entrypoint method of the current assembly. *)
-        // static member public Main: args: string[] -> unit
+        // static member public Main: unit -> unit
         let! main =
-            let args =
-                ParamItem.Param(ImmutableArray.Empty, EncodedType.SZArray(ImmutableArray.Empty, EncodedType.String))
             let def =
-                DefinedMethod.Static (
+                DefinedMethod.EntryPoint (
                     visibility = MemberVisibility.Public,
                     flags = MethodAttributes.HideBySig,
-                    returnType = ReturnType.RVoid,
                     name = MethodName.ofStr "Main",
-                    parameterTypes = ImmutableArray.Create args,
-                    parameterList = (fun _ _ -> Parameter.named(Identifier.ofStr "args"))
+                    kind = EntryPointKind.VoidNoArgs
                 )
-            members.AddMethod(def, ValueSome body)
+            members.AddEntryPoint(def, body)
 
         // TODO: Add TFM attribute
 
@@ -139,8 +135,15 @@ let tests =
     afterRunTests <| fun() -> if metadata.IsValueCreated then metadata.Value.Dispose()
 
     testList "hello world" [
-        ftestCase "has entrypoint" <| fun() ->
-            metadata.Value.EntryPoint.Name =! "Main"
+        testCase "has entrypoint with correct name and signature" <| fun() ->
+            let epoint = metadata.Value.EntryPoint
+            <@
+                epoint <> null
+                && epoint.Name = "Main"
+                && epoint.Parameters.Count = 0
+                && epoint.ReturnType = metadata.Value.TypeSystem.Void
+            @>
+            |> test
 
         testCase "has method references only" <| fun() ->
             test <@ metadata.Value.GetMemberReferences() |> Seq.forall (fun mref -> mref :? MethodReference) @>
@@ -162,11 +165,7 @@ let tests =
                 |> List.ofSeq
             test <@ expected = actual @>
 
-        testCase "entrypoint has correct argument type" <| fun() ->
-            let paramType = (Seq.head metadata.Value.EntryPoint.Parameters).ParameterType
-            test <@ paramType.IsArray && paramType.GetElementType() = metadata.Value.TypeSystem.String @>
-
-        ftestCaseExec example' "runs correctly" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
+        testCaseExec example' "runs correctly" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
             let out = dotnet.StandardOutput.ReadLine()
             dotnet.StandardError.ReadToEnd() |> stderr.Write
 
