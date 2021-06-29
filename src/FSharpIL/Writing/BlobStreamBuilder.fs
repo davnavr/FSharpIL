@@ -96,7 +96,7 @@ type BlobStreamBuilder (capacity: int32) =
         member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.blob
         member _.Serialize(wr, _) =
-            let mutable offset', content' = 0u, content.AsImmutableUnsafe()
+            let mutable offset', content' = 0u, content.ToImmutable() // NOTE: Maybe make an unsafe function that converts it to a ChunkedMemory without copying.
             for i = 0 to entries.Count - 1 do
                 let length = entries.[i].DataLength
                 BlobWriter.compressedUnsigned length &wr

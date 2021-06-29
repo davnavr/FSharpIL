@@ -82,10 +82,11 @@ module MethodBodyBuilder =
         let writeMetadataToken (builder: byref<_>) (table: uint8) index =
             if index > 0xFFFFFFu then
                 argOutOfRange "index" index "The row or offset pointed to by the metadata token must be able to fit in 3 bytes"
-            let wr = &builder.methodBody
-            uint8(index &&& 0xFFu) |> wr.Write
-            uint8((index >>> 8) &&& 0xFFu) |> wr.Write
-            uint8((index >>> 16) &&& 0xFFu) |> wr.Write
+            let mutable wr = &builder.methodBody
+            // For some reason, usage of |> here prevents writer from updating correctly.
+            wr.Write(uint8(index &&& 0xFFu))
+            wr.Write(uint8((index >>> 8) &&& 0xFFu))
+            wr.Write(uint8((index >>> 16) &&& 0xFFu))
             wr.Write table
 
         let writeBranchInstruction short long ({ branchTargetList = targets } as builder: byref<_>) =
@@ -148,7 +149,7 @@ module MethodBodyBuilder =
     /// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
     let ldstr (wr: byref<_>) (str: UserStringOffset) =
         writeRawOpcode &wr Opcode.Ldstr
-        writeMetadataToken &wr 0x70uy (uint32 str) // TODO: Fix, only the table byte appears to be written.
+        writeMetadataToken &wr 0x70uy (uint32 str)
         incrMaxStack &wr
 
 

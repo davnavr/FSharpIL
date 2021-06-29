@@ -35,14 +35,18 @@ let serializeStringHeap<'Serializer, 'String when 'Serializer :> IStringSerializ
     (strings: RefArrayList<'String>)
     =
     let encoder = encoding.GetEncoder()
-    let buffer = Span.stackalloc<byte> 512
+    let buffer = Span.stackalloc<byte> 256
     let mutable chars = ReadOnlySpan<char>()
     for i = 0 to strings.Count - 1 do
         let string = &strings.[i]
         Unchecked.defaultof<'Serializer>.WriteBefore(&string, &wr)
+
         chars <- Unchecked.defaultof<'Serializer>.GetChars(&string).Span
-        while chars.Length > 0 do
-            let length = encoder.GetBytes(chars, buffer, chars.Length < buffer.Length)
-            wr.Write(buffer.Slice(0, length))
-            chars <- chars.Slice length
+        let mutable charsUsed, bytesUsed, completed = 0, 0, false
+
+        while not completed || charsUsed > 0 do
+            encoder.Convert(chars, buffer, chars.IsEmpty, &charsUsed, &bytesUsed, completed = &completed)
+            wr.Write(buffer.Slice(0, bytesUsed))
+            chars <- chars.Slice charsUsed
+
         Unchecked.defaultof<'Serializer>.WriteAfter(&string, &wr)

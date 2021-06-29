@@ -21,7 +21,16 @@ type ChunkedMemory = struct
     /// The total length of this region of memory, in bytes.
     val Length: uint32
     internal new (chunks, start, length) = { chunks = chunks; soffset = start; Length = length }
-    internal new (chunks) = ChunkedMemory(chunks, 0u, uint32 chunks.Length * uint32 chunks.[0].Length)
+    internal new (chunks: ImmutableArray<ImmutableArray<byte>>) =
+        let length =
+            if chunks.IsDefaultOrEmpty
+            then 0u
+            else
+                let chunkl = uint32 chunks.[0].Length
+                if chunks.Length = 1
+                then chunkl
+                else ((uint32 chunks.Length - 1u) * chunkl) + uint32 chunks.[chunks.Length - 1].Length
+        ChunkedMemory(chunks, 0u, length)
     member this.IsEmpty = this.chunks.IsDefaultOrEmpty || this.chunks.[0].IsDefaultOrEmpty
     member this.ChunkCount = this.chunks.Length
     /// The length of each chunk except for the last chunk.

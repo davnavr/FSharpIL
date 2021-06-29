@@ -98,7 +98,7 @@ let streams info (wr: byref<ChunkedMemoryBuilder>) =
         | ValueSome expected when expected <> size ->
             failwithf
                 "The \"%s\" stream was expected to have a length of %i bytes, but the actual length was %i bytes"
-                (System.Text.Encoding.ASCII.GetString(stream.StreamName.AsSpan()))
+                (System.Text.Encoding.ASCII.GetString(stream.StreamName.AsSpan()).TrimEnd '\000')
                 expected
                 size
         | _ -> ()

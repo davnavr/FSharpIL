@@ -102,18 +102,33 @@ type ChunkedMemoryBuilder = struct
             Printf.bprintf sb " 0x%02X" this.current.Value.[i]
         sb.ToString()
 
-    member private this.MapChunksUnsafe mapping =
-        let mutable results = Array.zeroCreate this.current.List.Count
-        let mutable chunki = 0
-        for chunk in this.current.List do
-            results.[chunki] <- mapping chunk
-            chunki <- chunki + 1
-        ChunkedMemory(Unsafe.As &results)
-
-    member internal this.AsImmutableUnsafe() = this.MapChunksUnsafe Convert.unsafeTo<_, ImmutableArray<byte>>
-
     /// Copies the contents of this builder to a new non-contiguous region of memory.
-    member this.ToImmutable() = this.MapChunksUnsafe ImmutableArray.Create<byte> // TODO: Ensure that the resulting chunks match the Length property.
+    member this.ToImmutable() =
+        let mutable chunki = Checked.int32(uint32 this.pos - this.length)
+        let mutable remaining, chunk, resulti = this.length, this.current, 0
+
+        let chunkl = uint32 chunk.Value.Length
+
+        let mutable results =
+            let chunks = remaining / chunkl
+            int32(if remaining % chunkl = 0u then chunks else chunks + 1u) |> Array.zeroCreate
+
+        while remaining > 0u do
+            let chunk' = Array.zeroCreate(if remaining > chunkl then int32 chunkl else int32 remaining)
+            results.[resulti] <- chunk'
+            let mutable chunki' = 0
+            while chunki' < chunk'.Length do
+                let length = min (chunk'.Length - chunki') (chunk.Value.Length - chunki)
+                Span(chunk.Value, chunki, length).CopyTo(Span(chunk', chunki', length))
+                chunki' <- chunki' + length
+                chunki <- chunki + length
+                if chunki >= chunk.Value.Length then
+                    chunki <- 0
+                    chunk <- chunk.Next
+            remaining <- remaining - uint32 chunk'.Length
+            resulti <- resulti + 1
+
+        ChunkedMemory(Unsafe.As &results, 0u, this.length)
 
     member this.ReserveBytes count =
         let clone = ChunkedMemoryBuilder(this.current, this.pos, 0u)

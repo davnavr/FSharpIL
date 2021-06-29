@@ -15,6 +15,8 @@ type private UserStringEntry =
       Length: uint32
       TerminalByte: uint8 }
 
+    member inline this.TotalLength = this.Length + 1u
+
 [<AutoOpen>]
 module private UserStringHelpers =
     let inline (|IsNonZero|) value = value = 0us
@@ -42,9 +44,10 @@ module private UserStringHelpers =
 [<Struct>]
 type private UserStringSerializer =
     interface StringHelpers.IStringSerializer<UserStringEntry> with
-        member _.WriteBefore(entry, wr) = BlobWriter.compressedUnsigned (entry.Length + 1u) &wr // Append length before string
+        /// Appends the length of the blob before the string
+        member _.WriteBefore(entry, wr) = BlobWriter.compressedUnsigned entry.TotalLength &wr
         member _.GetChars entry = &entry.String
-        member _.WriteAfter(entry, wr) = wr.Write entry.TerminalByte
+        member _.WriteAfter(entry, wr) = if entry.Length > 0u then wr.Write entry.TerminalByte
 
 // <summary>Builds the <c>#US</c> metadata stream, containing length prefixed UTF-16 strings (II.24.2.4).</summary>
 [<Sealed>]
@@ -71,7 +74,7 @@ type UserStringStreamBuilder (capacity: int32) =
                 { String = str
                   Length = uint32(encoding.GetByteCount str.Span)
                   TerminalByte = getTerminalByte &str }
-            offset <- offset + BlobWriter.compressedUnsignedSize entry.Length + entry.Length
+            offset <- offset + BlobWriter.compressedUnsignedSize entry.TotalLength + entry.TotalLength
             strings.Add &entry |> ignore
             lookup.[str] <- offset'
             offset'
