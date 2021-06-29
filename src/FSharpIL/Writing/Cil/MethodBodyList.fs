@@ -27,7 +27,7 @@ type MethodBodyList internal () =
     let bodies = List<MethodBody>()
     let mutable offset = 0u
 
-    member _.Add(source: #IMethodBodySource) =
+    member _.Add(source: inref<#IMethodBodySource>) =
         let start = MethodBodyLocation offset
         let mutable builder =
             { estimatedMaxStack = 0us

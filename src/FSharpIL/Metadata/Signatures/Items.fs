@@ -122,6 +122,8 @@ type ReturnType<'TDefOrRef, 'TDefOrRefOrSpec> // TODO: Rename to RetType
     member _.IsTypedByRef = tag = ReturnTypeTag.TypedByRef
     member _.IsVoid = tag = ReturnTypeTag.Void
     member _.IsByRef = tag = ReturnTypeTag.ByRef
+
+    /// <summary>Represents a <c>void</c> return type without any custom modifiers.</summary>
     static member val RVoid = ReturnType<'TDefOrRef, 'TDefOrRefOrSpec>(ReturnTypeTag.Void, ImmutableArray.Empty, ValueNone)
 
 (*

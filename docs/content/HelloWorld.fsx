@@ -15,7 +15,7 @@ open Mono.Cecil
 # Hello World
 
 The following example creates a file containing a simple .NET 5 console application. The corresponding F# code that would produce
-the same or similar CLI metadata as the example is shown as single line comments `//`.
+the same or similar CLI metadata as the example is shown in single line comments.
 
 ## Example
 *)
@@ -23,9 +23,11 @@ open System.Collections.Immutable
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Signatures
 open FSharpIL.PortableExecutable
 
 open FSharpIL.Writing
+open FSharpIL.Writing.Cil
 
 let example() =
     let builder =
@@ -71,7 +73,7 @@ let example() =
         let! _ = builder.ReferenceType object
 
         (* Create the class that will contain the entrypoint method. *)
-        // [<AbstractClass; Sealed>] type Program
+        // [<AbstractClass; Sealed>] type public Program
         let program =
             DefinedType.StaticClass (
                 visibility = TypeVisibility.Public,
@@ -84,7 +86,36 @@ let example() =
 
         let! members = builder.DefineType program
 
-        // TODO: Add entrypoint method
+        (* Create the body of the entrypoint method *)
+        let body =
+            { new DefinedMethodBody() with
+                override _.WriteInstructions wr =
+                    // TODO: Maybe make other way of generating method bodies, since methods that mutate ModuleBuilder in here might not work correctly.
+                    ldstr &wr (builder.UserStrings.AddFolded "Hello World!")
+                    pop &wr // call // TODO: Have a call here for WriteLine method.
+                    ret &wr
+                    wr.EstimatedMaxStack }
+
+        (* Create the entrypoint method of the current assembly. *)
+        // static member public Main: args: string[] -> unit
+        let! main =
+            let args =
+                ParamItem.Param(ImmutableArray.Empty, EncodedType.SZArray(ImmutableArray.Empty, EncodedType.String))
+            let def =
+                DefinedMethod.Static (
+                    visibility = MemberVisibility.Public,
+                    flags = MethodAttributes.HideBySig,
+                    returnType = ReturnType.RVoid,
+                    name = MethodName.ofStr "Main",
+                    parameterTypes = ImmutableArray.Create args,
+                    parameterList = (fun _ _ -> Parameter.named(Identifier.ofStr "args"))
+                )
+            members.AddMethod(def, ValueSome body)
+
+        // TODO: Add TFM attribute
+
+        // TODO: Set entry point token
+
         ()
     }
     |> ValidationResult.get

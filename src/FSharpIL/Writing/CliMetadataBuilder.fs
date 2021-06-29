@@ -33,22 +33,6 @@ type CliMetadataBuilder internal
         //strongNameSignature,
         //vTableFixups
     ) =
-    new (moduleRow, header, root, stringsCapacity, guidCapacity, usCapacity, blobCapacity) =
-        let strings = StringsStreamBuilder stringsCapacity
-        let guids = GuidStreamBuilder guidCapacity
-        let blobs = BlobStreamBuilder blobCapacity
-        CliMetadataBuilder (
-            header,
-            root,
-            FSharpIL.Writing.Cil.MethodBodyList(),
-            MetadataTablesBuilder(moduleRow, strings, guids, blobs),
-            strings,
-            UserStringStreamBuilder usCapacity,
-            guids,
-            blobs
-        )
-    new (moduleRow, header, root) = CliMetadataBuilder(moduleRow, header, root, 1024, 1, 1, 512)
-    new (moduleRow) = CliMetadataBuilder(moduleRow, CliHeader.defaultFields, CliMetadataRoot.defaultFields)
 
     member _.Header = header
     member _.Root = root

@@ -17,8 +17,29 @@ type internal LateInitCollection<'Item, 'Inner when 'Inner :> ICollection<'Item>
 
     member this.Add item = this.Inner.Add item
 
-    member this.GetEnumerator() = this.Inner.GetEnumerator()
+    member this.GetEnumerator() = if this.IsInitialized then this.Inner.GetEnumerator() else Seq.empty.GetEnumerator()
 end
 
-type internal LateInitDictionary<'Key, 'Value when 'Key : equality> =
-    LateInitCollection<KeyValuePair<'Key, 'Value>, Dictionary<'Key, 'Value>>
+type internal LateInitDictionary<'Key, 'Value when 'Key : equality> = struct
+    val mutable inner: LateInitCollection<KeyValuePair<'Key, 'Value>, Dictionary<'Key, 'Value>>
+
+    new (inner) = { inner = inner }
+
+    member this.Item
+        with get key =
+            if this.inner.IsInitialized
+            then this.inner.inner.[key]
+            else invalidOp "The dictionary was not yet initialized"
+        and set key value = this.inner.Inner.[key] <- value
+
+    member this.TryGetValue(key, value: outref<_>) =
+        if this.IsInitialized
+        then this.inner.inner.TryGetValue(key, &value)
+        else false
+
+    member this.Count = this.inner.Count
+    member this.Inner = this.inner.Inner
+    member this.IsInitialized = this.inner.IsInitialized
+
+    member this.GetEnumerator() = this.inner.GetEnumerator()
+end

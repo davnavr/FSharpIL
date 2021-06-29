@@ -66,7 +66,9 @@ type BlobStreamBuilder (capacity: int32) =
         =
         let start = content.Length
         Unchecked.defaultof<'Writer>.Write(&content, &item)
-        this.AddEntry start
+        if content.Length = start
+        then this.EmptyBlob
+        else this.AddEntry start
 
     member this.Add(writer: ByteBlobWriter) = this.Add<DelegateBlobWriter, _> &writer
 

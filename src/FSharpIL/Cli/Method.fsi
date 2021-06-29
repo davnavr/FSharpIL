@@ -116,50 +116,50 @@ type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> 
 
 type DefinedMethod with
     static member Instance:
-        MemberVisibility *
+        visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.Instance> *
-        ReturnType *
-        MethodName *
+        returnType: ReturnType *
+        name: MethodName *
         parameterTypes: ImmutableArray<ParamItem> *
-        ParameterList -> MethodDefinition<MethodKinds.Instance>
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.Instance>
 
     static member Virtual:
-        MemberVisibility *
+        visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.Virtual> *
-        ReturnType *
-        MethodName *
+        returnType: ReturnType *
+        name: MethodName *
         parameterTypes: ImmutableArray<ParamItem> *
-        ParameterList -> MethodDefinition<MethodKinds.Virtual>
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.Virtual>
 
     static member Final:
-        MemberVisibility *
+        visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.Final> *
-        ReturnType *
-        MethodName *
+        returnType: ReturnType *
+        name: MethodName *
         parameterTypes: ImmutableArray<ParamItem> *
-        ParameterList -> MethodDefinition<MethodKinds.Final>
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.Final>
 
     static member Static:
-        MemberVisibility *
+        visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.Static> *
-        ReturnType *
-        MethodName *
+        returnType: ReturnType *
+        name: MethodName *
         parameterTypes: ImmutableArray<ParamItem> *
-        ParameterList -> MethodDefinition<MethodKinds.Static>
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.Static>
 
     static member Abstract:
-        MemberVisibility *
+        visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.Abstract> *
-        ReturnType *
-        MethodName *
+        returnType: ReturnType *
+        name: MethodName *
         parameterTypes: ImmutableArray<ParamItem> *
-        ParameterList -> MethodDefinition<MethodKinds.Abstract>
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.Abstract>
 
     static member Constructor:
-        MemberVisibility *
+        visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.ObjectConstructor> *
         parameterTypes: ImmutableArray<ParamItem> *
-        ParameterList -> MethodDefinition<MethodKinds.ObjectConstructor>
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.ObjectConstructor>
 
     static member ClassConstructor: MethodDefinition<MethodKinds.ClassConstructor>
 

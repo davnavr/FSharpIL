@@ -80,7 +80,7 @@ type Method =
 
     override this.Equals obj =
         match obj with
-        | :? Method as other -> this.Equals other
+        | :? Method as other -> this.Equals(other = other)
         | _ -> false
 
     override this.GetHashCode() =
@@ -111,7 +111,7 @@ module MethodHelpers =
         (parameterTypes: ImmutableArray<ParamItem>)
         =
         let mutable gcount = 0u
-        for i = 0 to parameterTypes.Length do
+        for i = 0 to parameterTypes.Length - 1 do
             let ptype = &parameterTypes.ItemRef i
 
             match ptype with

@@ -80,3 +80,19 @@ let mapMethodDefSig namedTypeMapping modifierTypeMapping (signature: inref<Metho
       CallingConvention = signature.CallingConvention
       ReturnType = mapReturnType namedTypeMapping modifierTypeMapping &signature.ReturnType
       Parameters = mapParameters namedTypeMapping modifierTypeMapping signature.Parameters }
+
+let mapLocalVarSig namedTypeMapping modifierTypeMapping (signature: LocalVarSig<'Type1, 'MType1>) =
+    if signature.IsDefaultOrEmpty
+    then ImmutableArray.Empty
+    else
+        let mutable signature' = Array.zeroCreate<LocalVariable<'Type2, 'MType2>> signature.Length
+        for i = 0 to signature'.Length - 1 do
+            let local = &signature.ItemRef i
+            signature'.[i] <-
+                LocalVariable (
+                    mapCustomMod modifierTypeMapping local.CustomMod,
+                    local.Constraints,
+                    local.Tag,
+                    mapOptionalType namedTypeMapping modifierTypeMapping local.Type
+                )
+        Unsafe.As<_, ImmutableArray<ParamItem<'Type2, 'MType2>>> &signature'

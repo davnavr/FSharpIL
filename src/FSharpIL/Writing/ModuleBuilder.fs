@@ -19,10 +19,13 @@ open FSharpIL.Utilities.Collections
 
 [<AbstractClass>]
 type DefinedMethodBody =
-    val InitLocals: InitLocals
     val LocalTypes: Signatures.LocalVarSig
-    new (initLocals, localTypes) = { InitLocals = initLocals; LocalTypes = localTypes }
-    new () = { InitLocals = SkipInitLocals; LocalTypes = ImmutableArray.Empty }
+    val InitLocals: InitLocals
+
+    new (localTypes, initLocals) = { LocalTypes = localTypes; InitLocals = initLocals }
+    new (localTypes) = DefinedMethodBody(localTypes, SkipInitLocals)
+    new () = DefinedMethodBody ImmutableArray.Empty
+
     abstract WriteInstructions: byref<MethodBodyBuilder> -> uint16
 
 [<Sealed>]
@@ -45,7 +48,7 @@ type DefinedTypeMembers =
             | :? MethodDefinition<MethodKinds.Static> ->
                 match this.Method.Add method, body with
                 | true, ValueSome body' ->
-                    this.MethodBodyLookup.Inner.[method] <- body'
+                    this.MethodBodyLookup.[method] <- body'
                     ValidationResult.Ok()
                 | true, ValueNone -> noImpl "error for missing method body"
                 | false, _ -> noImpl "error for duplicate method"
@@ -80,10 +83,24 @@ type MemberIndices = struct
     [<DefaultValue>] val mutable PropertyList: TableIndex<PropertyRow>
 end
 
+[<IsReadOnly; Struct>]
+type DefinedMethodBodyWriter
+    (
+        localVarSource: Signatures.LocalVarSig -> TableIndex<StandaloneSigRow>,
+        body: DefinedMethodBody
+    )
+    =
+    interface IMethodBodySource with
+        member _.Create builder =
+            { InitLocals = body.InitLocals
+              MaxStack = body.WriteInstructions &builder
+              LocalVariables = localVarSource body.LocalTypes }
+
 type ModuleBuilderSerializer
     (
         name: Identifier,
         mvid,
+        userStringStream,
         assembly: AssemblyDefinition option,
         assemblyReferences: HashSet<AssemblyReference>,
         definedTypes: Dictionary<DefinedType, DefinedTypeMembers>,
@@ -91,7 +108,20 @@ type ModuleBuilderSerializer
     )
     as serializer
     =
-    let builder = CliMetadataBuilder(fun str guid _ -> ModuleRow.create (str.Add name) (guid.Add mvid))
+    let builder =
+        let strings = StringsStreamBuilder 1024
+        let guids = GuidStreamBuilder 1
+        let blobs = BlobStreamBuilder 512
+        CliMetadataBuilder (
+            CliHeader.defaultFields,
+            CliMetadataRoot.defaultFields,
+            FSharpIL.Writing.Cil.MethodBodyList(),
+            MetadataTablesBuilder((fun str guid _ -> ModuleRow.create (str.Add name) (guid.Add mvid)), strings, guids, blobs),
+            strings,
+            userStringStream,
+            guids,
+            blobs
+        )
     let assemblyDefIndex =
         match assembly with
         | Some assem ->
@@ -113,7 +143,9 @@ type ModuleBuilderSerializer
     let definedTypeLookup = Dictionary<DefinedType, _> definedTypes.Count
 
     let methodDefSignatures = Dictionary<Signatures.MethodDefSig, MethodDefSigOffset>(definedTypeLookup.Count * 8)
-    let localVarSignatures = Dictionary<Signatures.LocalVarSig, TableIndex<StandaloneSigRow>>(methodDefSignatures.Count)
+    //let localVarSignatures = Dictionary<Signatures.LocalVarSig, TableIndex<StandaloneSigRow>>(methodDefSignatures.Count)
+
+    let mutable methodDefParams = Unchecked.defaultof<TableIndex<ParamRow>>
 
     let mutable indices = MemberIndices()
 
@@ -129,6 +161,14 @@ type ModuleBuilderSerializer
         | TypeDefOrRefOrSpec.Def tdef -> TypeDefOrRef.Def(serializer.SerializeDefinedType(tdef, definedTypes.[tdef]))
         | TypeDefOrRefOrSpec.Ref tref -> TypeDefOrRef.Ref(serializer.SerializeReferencedType(tref, referencedTypes.[tref]))
         | TypeDefOrRefOrSpec.Spec tspec -> invalidOp "TODO: Get type specs"
+
+    let localVarSource (signature: LocalVarSig<_, _>) =
+        if signature.IsDefaultOrEmpty
+        then Unchecked.defaultof<_>
+        else
+            // TODO: Consider caching local variable signatures in localVarSignatures dictionary.
+            Blob.mapLocalVarSig namedTypeMapping modifierTypeMapping signature
+            |> failwith "TODO: write locals to blob stream"
 
     member private _.SerializeAssemblyReferences() =
         for assem in assemblyReferences do
@@ -190,9 +230,23 @@ type ModuleBuilderSerializer
             let methods = Dictionary<DefinedMethod, TableIndex<MethodDefRow>> members.MethodCount
 
             for method in members.Method do
+                for i = 0 to method.Parameters.Length - 1 do
+                    let param = &method.Parameters.ItemRef i
+                    let i' =
+                        builder.Tables.Param.Add
+                            { Flags = Parameter.flags &param
+                              Name = builder.Strings.Add param.ParamName
+                              Sequence = Checked.uint16(i + 1) }
+                    if i = 0 then methodDefParams <- i'
+
                 let signature = method.Signature
                 let i =
-                    { Rva = MethodBodyLocation(noImpl "// TODO: Get method body somehow")
+                    { Rva =
+                        match members.MethodBodyLookup.TryGetValue method with
+                        | true, body' ->
+                            let writer = DefinedMethodBodyWriter(localVarSource, body')
+                            builder.MethodBodies.Add &writer
+                        | false, _ -> MethodBodyLocation 0u
                       ImplFlags = method.ImplFlags
                       Flags = method.Flags
                       Name = builder.Strings.Add method.Name
@@ -204,7 +258,7 @@ type ModuleBuilderSerializer
                             let offset = builder.Blob.Add &signature'
                             methodDefSignatures.[signature] <- offset
                             offset
-                      ParamList = noImpl "TODO: Get parameters, maybe have another dictionary" }
+                      ParamList = methodDefParams }
                     |> builder.Tables.MethodDef.Add
                 if methods.Count = 0 then indices.MethodList <- i
                 methods.[method] <- i
@@ -252,10 +306,12 @@ type ModuleBuilder
 
     static member val internal ModuleTypeName = Identifier.ofStr "<Module>"
 
+    member val UserStrings = UserStringStreamBuilder 1
     member val ValidationWarnings = ValidationWarningsCollection(?warnings = warnings)
     member val Mvid = Option.defaultWith Guid.NewGuid mvid
     member _.Name: Identifier = name
     member _.Assembly = assembly
+    
     member _.DefinedTypes = definedTypes.Keys :> IReadOnlyCollection<_>
     member _.ReferencedTypes = referencedTypes.Keys :> IReadOnlyCollection<_>
     member _.ReferencedAssemblies = assemblyRefs :> IReadOnlyCollection<_>
@@ -285,4 +341,4 @@ type ModuleBuilder
             | None -> ()
 
     member internal this.Serialize() =
-        ModuleBuilderSerializer(name, this.Mvid, assembly, assemblyRefs, definedTypes, referencedTypes).Serialize()
+        ModuleBuilderSerializer(name, this.Mvid, this.UserStrings, assembly, assemblyRefs, definedTypes, referencedTypes).Serialize()

@@ -154,7 +154,7 @@ and param (item: inref<ParamItem>) (wr: byref<ChunkedMemoryBuilder>) =
         etype item.ParamType.Value &wr
 
 and inline parameters (parameters: ImmutableArray<ParamItem>) (wr: byref<_>) =
-    for i = 0 to parameters.Length do param (&parameters.ItemRef i) &wr
+    for i = 0 to parameters.Length - 1 do param (&parameters.ItemRef i) &wr
 
 // and methodRefSig
 

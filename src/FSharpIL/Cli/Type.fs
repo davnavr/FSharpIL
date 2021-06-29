@@ -36,7 +36,7 @@ type Type (typeNamespace: Identifier voption, parent: Type voption, typeName: Id
 
     override this.Equals obj =
         match obj with
-        | :? Type as other -> this.Equals other
+        | :? Type as other -> this.Equals(other = other)
         | _ -> false
 
     override _.GetHashCode() = HashCode.Combine(typeName, typeNamespace, parent)
@@ -65,7 +65,7 @@ type TypeDefOrRefOrSpec (t: IComparable) = struct
 
     override this.Equals obj =
         match obj with
-        | :? ClassExtends as other -> this.Equals other
+        | :? TypeDefOrRefOrSpec as other -> this.Equals(other = other)
         | _ -> false
 
     override _.GetHashCode() = t.GetHashCode()

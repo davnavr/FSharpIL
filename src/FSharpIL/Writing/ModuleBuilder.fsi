@@ -13,11 +13,12 @@ open FSharpIL.Writing.Cil
 open FSharpIL.Utilities.Collections
 
 [<AbstractClass>]
-type DefinedMethodBody =
+type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allow its usage in the FSharpIL.Cli namespace.
     val InitLocals: InitLocals
-    val LocalTypes: LocalVarSig<Type, TypeDefOrRefOrSpec>
+    val LocalTypes: Signatures.LocalVarSig
 
-    new: initLocals: InitLocals * localTypes: LocalVarSig<Type, TypeDefOrRefOrSpec> -> DefinedMethodBody
+    new: localTypes: Signatures.LocalVarSig * initLocals: InitLocals -> DefinedMethodBody
+    new: localTypes: Signatures.LocalVarSig -> DefinedMethodBody
     new: unit -> DefinedMethodBody
 
     abstract WriteInstructions: byref<MethodBodyBuilder> -> uint16
@@ -68,6 +69,7 @@ type ModuleBuilder =
     member ReferencedTypes: IReadOnlyCollection<ReferencedType>
     member ReferencedAssemblies: IReadOnlyCollection<AssemblyReference>
     member ValidationWarnings: ValidationWarningsCollection
+    member UserStrings: UserStringStreamBuilder
     //member Globals: DefinedTypeMembers
 
     member DefineType: DefinedType -> ValidationResult<DefinedTypeMembers>

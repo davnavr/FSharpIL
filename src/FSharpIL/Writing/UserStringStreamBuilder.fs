@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
 
 open FSharpIL.Metadata
 
@@ -82,6 +83,12 @@ type UserStringStreamBuilder (capacity: int32) =
             offset' <- offset' + 1u
             lookup.[str.Slice i] <- { UserStringOffset = offset' }
         result
+
+    member this.AddFolded(str: string) =
+        match str with
+        | null
+        | "" -> Unchecked.defaultof<_>
+        | _ -> this.AddFolded(str.AsMemory())
 
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength

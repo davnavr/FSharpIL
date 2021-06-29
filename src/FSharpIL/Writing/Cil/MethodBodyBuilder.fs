@@ -41,6 +41,8 @@ type MethodBodyBuilder =
           // TODO: Rename to instructions
           mutable methodBody: ChunkedMemoryBuilder }
 
+    /// <summary>Estimates the maximum number of items that are pushed onto the evaluation stack by this method body.</summary>
+    /// <remarks>This estimate might be higher than the number of items that is actually needed by the method.</remarks>
     member this.EstimatedMaxStack = this.estimatedMaxStack
 
 /// Represents the destination that a branch instruction would jump to.
@@ -52,7 +54,7 @@ end
 
 /// Contains functions used for writing CIL method bodies.
 [<AutoOpen>]
-module MethodBodyBuilder = // TODO: Update estimated max stack value.
+module MethodBodyBuilder =
     module Unsafe =
         let internal writeOpcodeHelper (wr: byref<ChunkedMemoryBuilder>) opcode =
             if opcode < Opcode.Arglist
@@ -64,7 +66,14 @@ module MethodBodyBuilder = // TODO: Update estimated max stack value.
 
         let getOpcodeWriter (builder: byref<_>) = &builder.methodBody
 
+        let incrMaxStack (builder: byref<_>) = builder.estimatedMaxStack <- Checked.(+) builder.estimatedMaxStack 1us
+
         let writeRawOpcode (builder: byref<_>) opcode = writeOpcodeHelper &builder.methodBody opcode
+
+        /// Writes an opcode that pushes a single item onto the stack.
+        let inline writePushingOpcode (builder: byref<_>) opcode =
+            writeRawOpcode &builder opcode
+            incrMaxStack &builder
 
         /// <summary>Writes a metadata token (III.1.9).</summary>
         /// <exception cref="T:System.ArgumentOutOfRangeException">
@@ -95,7 +104,6 @@ module MethodBodyBuilder = // TODO: Update estimated max stack value.
         let setTarget (branch: byref<BranchTarget>) (destination: Label) =
             branch.Target <- int32(int64 destination.Destination.MethodBodyOffset - int64 branch.Position.MethodBodyOffset)
 
-
     /// (0x00) Writes an instruction that does nothing (III.3.51).
     let inline nop (wr: byref<_>) = writeRawOpcode &wr Opcode.Nop
 
@@ -106,13 +114,13 @@ module MethodBodyBuilder = // TODO: Update estimated max stack value.
     let inline ``break`` (wr: byref<_>) = writeRawOpcode &wr Opcode.Break
 
     /// (0x02) Writes an instruction that loads argument #0 onto the stack (III.3.38).
-    let inline ldarg_0 (wr: byref<_>) = writeRawOpcode &wr Opcode.Ldarg_0
+    let inline ldarg_0 (wr: byref<_>) = writePushingOpcode &wr Opcode.Ldarg_0
     /// (0x03) Writes an instruction that loads argument #1 onto the stack (III.3.38).
-    let inline ldarg_1 (wr: byref<_>) = writeRawOpcode &wr Opcode.Ldarg_1
+    let inline ldarg_1 (wr: byref<_>) = writePushingOpcode &wr Opcode.Ldarg_1
     /// (0x04) Writes an instruction that loads argument #2 onto the stack (III.3.38).
-    let inline ldarg_2 (wr: byref<_>) = writeRawOpcode &wr Opcode.Ldarg_2
+    let inline ldarg_2 (wr: byref<_>) = writePushingOpcode &wr Opcode.Ldarg_2
     /// (0x05) Writes an instruction that loads argument #3 onto the stack (III.3.38).
-    let inline ldarg_3 (wr: byref<_>) = writeRawOpcode &wr Opcode.Ldarg_3
+    let inline ldarg_3 (wr: byref<_>) = writePushingOpcode &wr Opcode.Ldarg_3
 
 
 
@@ -120,6 +128,12 @@ module MethodBodyBuilder = // TODO: Update estimated max stack value.
     let inline ldarg_s (wr: byref<MethodBodyBuilder>) (num: uint8) =
         writeRawOpcode &wr Opcode.Ldarg_s
         (getOpcodeWriter &wr).Write num
+        incrMaxStack &wr
+
+
+
+    /// (0x26) Writes an instruction that pops the value at the top of the stack (III.3.54).
+    let inline pop (wr: byref<_>) = writeRawOpcode &wr Opcode.Pop
 
 
 
@@ -134,7 +148,8 @@ module MethodBodyBuilder = // TODO: Update estimated max stack value.
     /// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
     let ldstr (wr: byref<_>) (str: UserStringOffset) =
         writeRawOpcode &wr Opcode.Ldstr
-        writeMetadataToken &wr 0x70uy (uint32 str)
+        writeMetadataToken &wr 0x70uy (uint32 str) // TODO: Fix, only the table byte appears to be written.
+        incrMaxStack &wr
 
 
 
@@ -142,8 +157,9 @@ module MethodBodyBuilder = // TODO: Update estimated max stack value.
     let inline ldarg (wr: byref<_>) (num: uint16) =
         writeRawOpcode &wr Opcode.Ldarg
         (getOpcodeWriter &wr).WriteLE num
+        incrMaxStack &wr
 
-    /// Contains functions used to write the most shorted from of CIL opcodes whenever possible.
+    /// Contains functions used to write the most shortened from of CIL opcodes whenever possible.
     module Shortened =
         /// <summary>
         /// (0x02 to 0x05, 0x0E, 0xFE 0x09) Writes the shortest form of an instruction that loads an argument onto the stack
