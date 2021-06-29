@@ -52,7 +52,7 @@ type MethodBodyList internal () =
         for body in bodies do
             let flags = body.Flags
             if flags = ILMethodFlags.TinyFormat then
-                wr.Write(uint8 ILMethodFlags.TinyFormat ||| Checked.uint8 body.CodeSize)
+                wr.Write(uint8 flags ||| (Checked.uint8 body.CodeSize <<< 2))
             else
                 noImpl "TODO: Write fat format see https://github.com/davnavr/FSharpIL/blob/cd0141ba7c76a709bb9300234ae34aa2567eb1f9/src/FSharpIL/Writing/Cil/MethodBodyBuilder.fs#L161"
             wr.Write body.InstructionStream
