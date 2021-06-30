@@ -81,6 +81,12 @@ let mapMethodDefSig namedTypeMapping modifierTypeMapping (signature: inref<Metho
       ReturnType = mapReturnType namedTypeMapping modifierTypeMapping &signature.ReturnType
       Parameters = mapParameters namedTypeMapping modifierTypeMapping signature.Parameters }
 
+let mapMethodRefSig namedTypeMapping modifierTypeMapping (signature: inref<MethodRefSig<_, _>>) =
+    MethodRefSig (
+        mapMethodDefSig namedTypeMapping modifierTypeMapping &signature.Signature,
+        mapParameters namedTypeMapping modifierTypeMapping signature.Parameters
+    )
+
 let mapLocalVarSig namedTypeMapping modifierTypeMapping (signature: LocalVarSig<'Type1, 'MType1>) =
     if signature.IsDefaultOrEmpty
     then ImmutableArray.Empty

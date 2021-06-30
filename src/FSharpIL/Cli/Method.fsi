@@ -46,24 +46,15 @@ module MethodNamePatterns =
 
 [<AbstractClass>]
 type Method =
-    val Flags: MethodDefFlags
     val HasThis: MethodThis
     val CallingConvention: CallingConventions
     val Name: Identifier
     val ReturnType: ReturnType
     val ParameterTypes: ImmutableArray<ParamItem>
 
-    internal new:
-        MethodDefFlags *
-        MethodThis *
-        CallingConventions *
-        Identifier *
-        ReturnType *
-        ImmutableArray<ParamItem> -> Method
+    abstract Equals: other: Method -> bool
+    default Equals: other: Method -> bool
 
-    member Signature: MethodDefSig
-
-    member Equals: #Method -> bool
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
@@ -88,31 +79,19 @@ module MethodKinds =
 type DefinedMethod =
     inherit Method
 
+    val Flags: MethodDefFlags
     val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
 
-    internal new:
-        MethodImplFlags *
-        MethodDefFlags *
-        MethodThis *
-        ReturnType *
-        MethodName *
-        ImmutableArray<ParamItem> *
-        ParameterList -> DefinedMethod
-
+    member Signature: MethodDefSig
     //member Visibility: MemberVisibility
 
-[<Sealed>]
-type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> =
-    inherit DefinedMethod
+    override Equals: Method -> bool
 
-    internal new:
-        MemberVisibility *
-        MethodAttributes<'Kind> *
-        ReturnType *
-        MethodName *
-        ImmutableArray<ParamItem> *
-        ParameterList -> MethodDefinition<'Kind>
+[<Sealed>]
+type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> = class
+    inherit DefinedMethod
+end
 
 [<IsReadOnly; Struct>]
 type EntryPointKind =
@@ -198,65 +177,51 @@ type DefinedMethod with
 [<AbstractClass>]
 type ReferencedMethod =
     inherit Method
+    val Visibility: ExternalVisibility
 
-    internal new:
-        MethodDefFlags *
-        MethodThis *
-        ReturnType *
-        MethodName *
-        ImmutableArray<ParamItem> -> ReferencedMethod
+    member Signature: MethodRefSig
+
+    override Equals: Method -> bool
 
 // TODO: Also keep track of method names to allow languages to use named parameters, maybe move val Parameters: ImmutableArray<Parameter> in MethodDefinition to Method base class?
 [<Sealed>]
-type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> =
+type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> = class
     inherit ReferencedMethod
-
-    internal new:
-        ExternalVisibility *
-        flags: MethodAttributes<'Kind> *
-        ReturnType *
-        MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<'Kind>
+end
 
 type ReferencedMethod with
     static member Instance:
-        ExternalVisibility *
-        flags: MethodAttributes<MethodKinds.Instance> *
-        ReturnType *
-        MethodName *
+        visibility: ExternalVisibility *
+        returnType: ReturnType *
+        name: MethodName *
         parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Instance>
 
     static member Virtual:
-        ExternalVisibility *
-        flags: MethodAttributes<MethodKinds.Virtual> *
-        ReturnType *
-        MethodName *
+        visibility: ExternalVisibility *
+        returnType: ReturnType *
+        name: MethodName *
         parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Virtual>
 
     static member Final:
-        ExternalVisibility *
-        flags: MethodAttributes<MethodKinds.Final> *
-        ReturnType *
-        MethodName *
+        visibility: ExternalVisibility *
+        returnType: ReturnType *
+        name: MethodName *
         parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Final>
 
     static member Static:
-        ExternalVisibility *
-        flags: MethodAttributes<MethodKinds.Static> *
-        ReturnType *
-        MethodName *
+        visibility: ExternalVisibility *
+        returnType: ReturnType *
+        name: MethodName *
         parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Static>
 
     static member Abstract:
-        ExternalVisibility *
-        flags: MethodAttributes<MethodKinds.Abstract> *
-        ReturnType *
-        MethodName *
+        visibility: ExternalVisibility *
+        returnType: ReturnType *
+        name: MethodName *
         parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Abstract>
 
     static member Constructor:
-        ExternalVisibility *
-        flags: MethodAttributes<MethodKinds.ObjectConstructor> *
+        visibility: ExternalVisibility *
         parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.ObjectConstructor>
 
 [<RequireQualifiedAccess>]

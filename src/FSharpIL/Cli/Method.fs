@@ -47,38 +47,34 @@ module MethodNamePatterns = let (|MethodName|) name = MethodName.toIdentifier na
 
 [<AbstractClass>]
 type Method =
-    val Flags: MethodDefFlags
     val HasThis: MethodThis
     val CallingConvention: CallingConventions
     val Name: Identifier
     val ReturnType: ReturnType
     val ParameterTypes: ImmutableArray<ParamItem>
 
-    new (flags, mthis, cconv, name, rtype, ptypes) =
-        { Flags = flags
-          HasThis = mthis
+    new (mthis, cconv, name, rtype, ptypes) =
+        { HasThis = mthis
           CallingConvention = cconv
           Name = name
           ReturnType = rtype
           ParameterTypes = ptypes }
 
-    member this.Signature =
+    member this.DefinedSignature =
         { HasThis = this.HasThis
           CallingConvention = this.CallingConvention
           ReturnType = this.ReturnType
           Parameters = this.ParameterTypes }
 
-    member this.Equals(other: #Method) =
-        if this.Flags ||| other.Flags &&& MethodDefFlags.MemberAccessMask = MethodDefFlags.CompilerControlled
-        then false
-        else
-            this.Name = other.Name
-            && this.ParameterTypes = other.ParameterTypes
-            && this.HasThis = other.HasThis
-            && this.ReturnType = other.ReturnType
-            && this.CallingConvention = other.CallingConvention
+    abstract Equals: other: Method -> bool
+    default this.Equals(other: Method) =
+        this.Name = other.Name
+        && this.ParameterTypes = other.ParameterTypes
+        && this.HasThis = other.HasThis
+        && this.ReturnType = other.ReturnType
+        && this.CallingConvention = other.CallingConvention
 
-    override this.Equals obj =
+    override this.Equals(obj: obj) =
         match obj with
         | :? Method as other -> this.Equals(other = other)
         | _ -> false
@@ -198,6 +194,7 @@ module MethodKinds =
 type DefinedMethod =
     inherit Method
 
+    val Flags: MethodDefFlags
     val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
 
@@ -205,15 +202,25 @@ type DefinedMethod =
         let mutable parameters = Array.zeroCreate parameterTypes.Length
         let cconv = checkMethodSig<MethodDefParamIterator, _> (parameters, parameterList) parameterTypes
         { inherit Method (
-              flags,
               mthis,
               cconv,
               name,
               rtype,
               parameterTypes
           )
+          Flags = flags
           ImplFlags = iflags
           Parameters = Unsafe.As &parameters }
+
+    member this.Signature = this.DefinedSignature
+
+    override this.Equals(other: Method) =
+        match other with
+        | :? DefinedMethod as other' ->
+            if this.Flags ||| other'.Flags &&& MethodDefFlags.MemberAccessMask = MethodDefFlags.CompilerControlled
+            then false
+            else base.Equals(other = other)
+        | _ -> false
 
 [<Sealed>]
 type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>
@@ -339,29 +346,37 @@ type DefinedMethod with static member ClassConstructor = classConstructorDef
 type ReferencedMethod =
     inherit Method
 
-    new (flags, mthis, rtype, MethodName name, parameterTypes: ImmutableArray<_>) =
+    val Visibility: ExternalVisibility
+
+    new (visibility, mthis, rtype, MethodName name, parameterTypes: ImmutableArray<_>) = // TODO: Add parameter for VarArg parameter types.
         let cconv = checkMethodSig<EmptyParameterIterator, _> Omitted parameterTypes
         { inherit Method (
-            flags,
             mthis,
             cconv,
             name,
             rtype,
             parameterTypes
-          ) }
+          )
+          Visibility = visibility }
+
+    member this.Signature = MethodRefSig(this.DefinedSignature, ImmutableArray.Empty)
+
+    override _.Equals(other: Method) =
+        match other with
+        | :? ReferencedMethod -> base.Equals other
+        | _ -> false
 
 [<Sealed>]
 type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>
     (
         visibility,
-        flags: MethodAttributes<'Kind>,
         returnType,
         name,
         parameterTypes
     )
     =
     inherit ReferencedMethod (
-        flags.Flags ||| ExternalVisibility.ofMethod visibility,
+        visibility,
         Unchecked.defaultof<'Kind>.MethodThis,
         returnType,
         name,
@@ -369,25 +384,24 @@ type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>
     )
 
 type ReferencedMethod with
-    static member Instance(visibility, flags, returnType, name, parameterTypes) =
-        new MethodReference<MethodKinds.Instance>(visibility, flags, returnType, name, parameterTypes)
+    static member Instance(visibility, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Instance>(visibility, returnType, name, parameterTypes)
 
-    static member Abstract(visibility, flags, returnType, name, parameterTypes) =
-        new MethodReference<MethodKinds.Abstract>(visibility, flags, returnType, name, parameterTypes)
+    static member Abstract(visibility, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Abstract>(visibility, returnType, name, parameterTypes)
 
-    static member Final(visibility, flags, returnType, name, parameterTypes) =
-        new MethodReference<MethodKinds.Final>(visibility, flags, returnType, name, parameterTypes)
+    static member Final(visibility, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Final>(visibility, returnType, name, parameterTypes)
 
-    static member Static(visibility, flags, returnType, name, parameterTypes) =
-        new MethodReference<MethodKinds.Static>(visibility, flags, returnType, name, parameterTypes)
+    static member Static(visibility, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Static>(visibility, returnType, name, parameterTypes)
 
-    static member Virtual(visibility, flags, returnType, name, parameterTypes) =
-        new MethodReference<MethodKinds.Virtual>(visibility, flags, returnType, name, parameterTypes)
+    static member Virtual(visibility, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Virtual>(visibility, returnType, name, parameterTypes)
 
-    static member Constructor(visibility, flags, parameterTypes) =
+    static member Constructor(visibility, parameterTypes) =
         new MethodReference<MethodKinds.ObjectConstructor> (
             visibility,
-            flags,
             ReturnType.RVoid,
             MethodName MethodName.ctor,
             parameterTypes

@@ -156,19 +156,26 @@ and param (item: inref<ParamItem>) (wr: byref<ChunkedMemoryBuilder>) =
 and inline parameters (parameters: ImmutableArray<ParamItem>) (wr: byref<_>) =
     for i = 0 to parameters.Length - 1 do param (&parameters.ItemRef i) &wr
 
-// and methodRefSig
-
-let methodDefSig (signature: inref<MethodDefSig>) (wr: byref<ChunkedMemoryBuilder>) =
+and methodSigCommon (signature: inref<MethodDefSig>) paramCountExtra (wr: byref<ChunkedMemoryBuilder>) =
     wr.Write(uint8(signature.HasThis.Tag ||| signature.CallingConvention.Tag))
 
     match signature.CallingConvention with
     | Default
     | VarArg -> ()
     | Generic genParamCount -> compressedUnsigned genParamCount &wr
-
-    compressedUnsigned (uint32 signature.Parameters.Length) &wr // ParamCount
+    
+    compressedUnsigned (uint32 signature.Parameters.Length + paramCountExtra) &wr // ParamCount
     retType &signature.ReturnType &wr
     parameters signature.Parameters &wr // Param
+
+and methodDefSig (signature: inref<MethodDefSig>) (wr: byref<ChunkedMemoryBuilder>) = methodSigCommon &signature 0u &wr
+
+and methodRefSig (signature: inref<MethodRefSig>) (wr: byref<ChunkedMemoryBuilder>) =
+    methodSigCommon &signature.Signature (uint32 signature.VarArgParams.Length) &wr
+
+    if not signature.VarArgParams.IsDefaultOrEmpty then
+        elem ElementType.Sentinel &wr
+        parameters signature.VarArgParams &wr
 
 let fieldSig (signature: inref<FieldSig>) (wr: byref<ChunkedMemoryBuilder>) =
     wr.Write 0x6uy // FIELD

@@ -30,6 +30,9 @@ val compressedSigned : value: int32 -> byref<ChunkedMemoryBuilder> -> unit
 /// <summary>Writes the signature of a <c>MethodDef</c> (II.23.2.1).</summary>
 val methodDefSig : signature: inref<MethodDefSig> -> byref<ChunkedMemoryBuilder> -> unit
 
+/// <summary>Writes the signature of a method reference used in the <c>MethodRef</c> table (II.23.2.1).</summary>
+val methodRefSig: signature: inref<MethodRefSig> -> byref<ChunkedMemoryBuilder> -> unit
+
 /// <summary>Writes the signature of a <c>Field</c> (II.23.2.4).</summary>
 val fieldSig : signature: inref<FieldSig> -> byref<ChunkedMemoryBuilder> -> unit
 

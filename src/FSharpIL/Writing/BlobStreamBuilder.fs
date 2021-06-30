@@ -32,6 +32,10 @@ type private MethodDefSigWriter = struct
     interface IBlobWriter<MethodDefSig> with member _.Write(wr, signature) = BlobWriter.methodDefSig &signature &wr
 end
 
+type private MethodRefSigWriter = struct
+    interface IBlobWriter<MethodRefSig> with member _.Write(wr, signature) = BlobWriter.methodRefSig &signature &wr
+end
+
 type private CustomAttribWriter = struct
     interface IBlobWriter<CustomAttrib> with member _.Write(wr, attrib) = BlobWriter.customAttrib &attrib &wr
 end
@@ -96,6 +100,8 @@ type BlobStreamBuilder (capacity: int32) =
           Token = this.Add(PublicKeyOrToken.toBlock token) }
 
     member this.Add(signature: inref<_>) = { MethodDefSig = this.Add<MethodDefSigWriter, _> &signature }
+
+    member this.Add(signature: inref<_>) = { MemberRefSig = this.Add<MethodRefSigWriter, _> &signature }
 
     member this.Add(attrib: inref<_>) = { CustomAttrib = this.Add<CustomAttribWriter, _> &attrib }
 

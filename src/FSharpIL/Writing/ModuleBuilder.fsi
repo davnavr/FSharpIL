@@ -55,7 +55,7 @@ type ReferencedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
-    //member AddMethod: ReferencedMethod -> ValidationResult<unit>
+    member ReferenceMethod: ReferencedMethod -> ValidationResult<unit>
     member ContainsMethod: method: ReferencedMethod -> bool
 
 [<Sealed>]

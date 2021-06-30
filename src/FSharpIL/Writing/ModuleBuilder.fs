@@ -52,7 +52,7 @@ type DefinedTypeMembers =
 
     member this.MethodCount = this.Method.Count
 
-    member this.AddMethod(method: DefinedMethod, body: DefinedMethodBody voption) = // TODO: return something like a struct(DefinedType * DefinedMethod)
+    member this.AddMethod(method: DefinedMethod, body: DefinedMethodBody voption) =
         match this.owner with
         //| DefinedType.Enum _ -> noImpl "error for enum cannot have methods"
         //| DefinedType.Delegate _ -> noImpl "error for delegate cannot have additional methods maybe go check if ECMA-335 prohibits this in the list of rules, since section I says so"
@@ -65,8 +65,8 @@ type DefinedTypeMembers =
                     ValidationResult.Ok()
                 | true, ValueNone -> noImpl "error for missing method body"
                 | false, _ -> noImpl "error for duplicate method"
-            | _ -> noImpl "bad"
-        | _ -> noImpl "bad"
+            | _ -> noImpl "what method definition"
+        | _ -> noImpl "no handler for adding method to this defined type"
 
     member this.AddEntryPoint(method: EntryPointMethod, body) =
         match this.AddMethod(method.Method, ValueSome body) with
@@ -86,6 +86,17 @@ type ReferencedTypeMembers = class
     new (owner, warnings) = { owner = owner; warnings = warnings }
 
     member this.MethodCount = this.Method.Count
+
+    member this.ReferenceMethod(method: ReferencedMethod) =
+        match this.owner with
+        | :? TypeReference<TypeKinds.StaticClass> ->
+            match method with
+            | :? MethodReference<MethodKinds.Static> ->
+                if this.Method.Add method
+                then ValidationResult.Ok()
+                else noImpl "error for duplicate method"
+            | _ -> noImpl "what method reference"
+        | _ -> noImpl "what referenced type"
 
     member this.ContainsMethod method = this.Method.Contains method
 end
@@ -164,20 +175,7 @@ type CustomAttributeList
                 lookup.[owner] <- attributes
 
             attributes.Add(ConstructedCustomAttribute(attrib.Constructor, fixedArguments, attrib.NamedArguments))
-
-            return ()
         }
-        //match resolver attrib.Constructor with
-        //| Ok numFixedArgs ->
-        //    let mutable fixedArgs = Array.zeroCreate numFixedArgs
-
-
-        //    if isNull attributes then
-        //        attributes <- ImmutableArray.CreateBuilder()
-        //        lookup.[owner] <- attributes
-        //    attributes.Add attrib
-        //    Ok()
-        //| Error err -> Error err
 
 [<IsReadOnly; Struct>]
 type ReferencedTypeEntry =
@@ -259,7 +257,8 @@ type ModuleBuilderSerializer
     let referencedTypeLookup = Dictionary<ReferencedType, _> referencedTypes.Count
     let definedTypeLookup = Dictionary<DefinedType, _> definedTypes.Count
 
-    let methodDefSignatures = Dictionary<Signatures.MethodDefSig, MethodDefSigOffset>(definedTypeLookup.Count * 8)
+    let methodDefSignatures = Dictionary<Signatures.MethodDefSig, MethodDefSigOffset>(definedTypeLookup.Count * 16)
+    let methodRefSignatures = Dictionary<Signatures.MethodRefSig, MemberRefSigOffset>(definedTypeLookup.Count * 48) // TODO: Helper function for getting and adding signatures.
     //let localVarSignatures = Dictionary<Signatures.LocalVarSig, TableIndex<StandaloneSigRow>>(methodDefSignatures.Count)
 
     let mutable methodDefParams = Unchecked.defaultof<TableIndex<ParamRow>>
@@ -320,11 +319,19 @@ type ModuleBuilderSerializer
             let members' = Dictionary<obj, TableIndex<MemberRefRow>>((*members.FieldCount +*) members.MethodCount)
 
             for method in members.Method do
+                let signature = method.Signature
                 members'.[method] <-
                     builder.Tables.MemberRef.Add
                         { Class = MemberRefParent.TypeRef i
                           Name = builder.Strings.Add method.Name
-                          Signature = invalidOp "TODO: How to get signature" }
+                          Signature =
+                            match methodRefSignatures.TryGetValue signature with
+                            | true, offset -> offset
+                            | false, _ ->
+                                let signature' = Blob.mapMethodRefSig namedTypeMapping modifierTypeMapping &signature
+                                let offset = builder.Blob.Add &signature'
+                                methodRefSignatures.[signature] <- offset
+                                offset }
 
             referencedTypeLookup.[tref] <- { TypeRef = i; Members = members' }
             i

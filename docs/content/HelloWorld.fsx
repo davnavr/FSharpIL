@@ -14,8 +14,8 @@ open Mono.Cecil
 (**
 # Hello World
 
-The following example creates a file containing a simple .NET 5 console application. The corresponding F# code that would produce
-the same or similar CLI metadata as the example is shown in single line comments.
+The following example creates a file containing a simple .NET 5 console application. The corresponding F# signature code that
+would produce the same or similar CLI metadata as the example is shown in single line comments.
 
 ## Example
 *)
@@ -40,9 +40,9 @@ let example() =
                   Culture = ValueNone }
         )
 
-    (* Add references to other assemblies. *)
+    (* Add references to other assemblies *)
     let mscorlib =
-        (* Contains core types such as System.Object or System.Int32, usually System.Runtime is referenced instead. *)
+        (* Contains core types such as System.Object or System.Int32, usually System.Runtime is referenced instead *)
         { AssemblyReference.Version = AssemblyVersion(5us, 0us, 0us, 0us)
           PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
           Name = FileName.ofStr "System.Private.CoreLib"
@@ -52,7 +52,7 @@ let example() =
     builder.ReferenceAssembly mscorlib
 
     let consolelib =
-        (* Contains the System.Console type, which is needed to print text onto the screen. *)
+        (* Contains the System.Console type, which is needed to print text onto the screen *)
         { AssemblyReference.Version = AssemblyVersion(5us, 0us, 0us, 0us)
           PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
           Name = FileName.ofStr "System.Console"
@@ -62,17 +62,41 @@ let example() =
     builder.ReferenceAssembly consolelib
 
     validated {
-        (* Add references to types defined in referenced assemblies. *)
+        let system = ValueSome(Identifier.ofStr "System")
+
+        (* Add references to types defined in referenced assemblies *)
         let object =
+            // type Object
             ReferencedType.ConcreteClass (
                 resolutionScope = TypeReferenceParent.Assembly mscorlib,
-                typeNamespace = ValueSome(Identifier.ofStr "System"),
+                typeNamespace = system,
                 typeName = Identifier.ofStr "Object"
             )
 
         let! _ = builder.ReferenceType object
 
-        (* Create the class that will contain the entrypoint method. *)
+        let console =
+            // [<AbstractClass; Sealed>] type Console
+            ReferencedType.StaticClass (
+                resolutionScope = TypeReferenceParent.Assembly consolelib,
+                typeNamespace = system,
+                typeName = Identifier.ofStr "Console"
+            )
+
+        let! console' = builder.ReferenceType console
+
+        (* Add reference to methods defined in a referenced types *)
+        // static member WriteLine: string -> unit
+        let writeln =
+            ReferencedMethod.Static (
+                visibility = ExternalVisibility.Public,
+                returnType = ReturnType.RVoid,
+                name = MethodName.ofStr "WriteLine",
+                parameterTypes = ImmutableArray.Create(ParamItem.Param(ImmutableArray.Empty, EncodedType.String))
+            )
+            |> console'.ReferenceMethod
+
+        (* Create the class that will contain the entrypoint method *)
         // [<AbstractClass; Sealed>] type public Program
         let program =
             DefinedType.StaticClass (
@@ -96,7 +120,7 @@ let example() =
                     ret &wr
                     wr.EstimatedMaxStack }
 
-        (* Create the entrypoint method of the current assembly. *)
+        (* Create the entrypoint method of the current assembly *)
         // static member public Main: unit -> unit
         let! main =
             let def =
