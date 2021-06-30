@@ -4,7 +4,7 @@ open System
 open System.Collections.Generic
 
 type internal IHybridCollectionMethods<'Item, 'Inner, 'InnerEnumerator> = interface
-    abstract ItemsEqual: 'Inner * 'Item * 'Item -> bool
+    abstract EqualityComparer: IEqualityComparer<'Item>
     abstract InitInner: unit -> 'Inner
     abstract InnerEnumerator: 'Inner -> 'InnerEnumerator
 end
@@ -31,13 +31,14 @@ type internal HybridCollection<'Item, 'Inner, 'InnerEnumerator, 'Methods
         if this.Count > 3 && isNull this.inner then
             this.inner <- Unchecked.defaultof<'Methods>.InitInner()
 
-    member internal this.ItemsEqual(x, y) = Unchecked.defaultof<'Methods>.ItemsEqual(this.inner, x, y)
+    member inline internal _.ItemsEqual(x, y) = Unchecked.defaultof<'Methods>.EqualityComparer.Equals(x, y)
 
     member this.Contains item =
         match this.Count with
         | 0 -> false
         | 1 -> this.ItemsEqual(this.item0, item)
         | 2 -> this.ItemsEqual(this.item0, item) || this.ItemsEqual(this.item1, item)
+        | 3 -> this.ItemsEqual(this.item0, item) || this.ItemsEqual(this.item1, item) || this.ItemsEqual(this.item2, item)
         | _ ->
             this.ItemsEqual(this.item0, item) ||
             this.ItemsEqual(this.item1, item) ||

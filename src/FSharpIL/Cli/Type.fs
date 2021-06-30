@@ -183,6 +183,12 @@ type ReferencedType with
     static member ConcreteClass(resolutionScope, typeNamespace, typeName) =
         TypeReference<TypeKinds.ConcreteClass>(resolutionScope, typeNamespace, typeName)
 
+
+
+
+    static member SealedClass(resolutionScope, typeNamespace, typeName) =
+        TypeReference<TypeKinds.SealedClass>(resolutionScope, typeNamespace, typeName)
+
     static member StaticClass(resolutionScope, typeNamespace, typeName) =
         TypeReference<TypeKinds.StaticClass>(resolutionScope, typeNamespace, typeName)
 

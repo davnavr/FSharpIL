@@ -11,9 +11,6 @@ type Type = // TODO: Rename to NamedType.
     member TypeName: Identifier
     member TypeNamespace: Identifier voption
     member EnclosingType: Type voption
-
-    internal new: Identifier voption * Type voption * Identifier -> Type
-
     member IsNested: bool
 
     member Equals: Type -> bool
@@ -130,18 +127,24 @@ type ReferencedType =
     inherit Type
     val ResolutionScope: TypeReferenceParent
 
-    internal new: TypeReferenceParent * Identifier voption * Identifier -> ReferencedType
-
 [<Sealed>]
-type TypeReference<'Kind> =
+type TypeReference<'Kind> = class
     inherit ReferencedType
-    internal new: TypeReferenceParent * Identifier voption * Identifier -> TypeReference<'Kind>
+end
 
 type ReferencedType with
     static member ConcreteClass:
         resolutionScope: TypeReferenceParent *
         typeNamespace: Identifier voption *
         typeName: Identifier -> TypeReference<TypeKinds.ConcreteClass>
+
+
+
+
+    static member SealedClass:
+        resolutionScope: TypeReferenceParent *
+        typeNamespace: Identifier voption *
+        typeName: Identifier -> TypeReference<TypeKinds.SealedClass>
 
     static member StaticClass:
         resolutionScope: TypeReferenceParent *
@@ -210,15 +213,9 @@ type DefinedType =
     member EnclosingClass: DefinedType voption
 
 [<Sealed>]
-type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
+type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> = class
     inherit DefinedType
-    internal new:
-        TypeVisibility *
-        TypeAttributes<'Kind> *
-        Identifier voption *
-        enclosingClass: DefinedType voption *
-        Identifier *
-        ClassExtends -> TypeDefinition<'Kind>
+end
 
 type DefinedType with
     static member ConcreteClass:

@@ -73,7 +73,12 @@ let example() =
                 typeName = Identifier.ofStr "Object"
             )
 
-        let! _ = builder.ReferenceType object
+        let tfmattr =
+            ReferencedType.SealedClass (
+                resolutionScope = TypeReferenceParent.Assembly mscorlib,
+                typeNamespace = ValueSome(Identifier.ofStr "System.Runtime.Versioning"),
+                typeName = Identifier.ofStr "TargetFrameworkAttribute"
+            )
 
         let console =
             // [<AbstractClass; Sealed>] type Console
@@ -83,16 +88,29 @@ let example() =
                 typeName = Identifier.ofStr "Console"
             )
 
+        let! _ = builder.ReferenceType object
+        let! tfmattr' = builder.ReferenceType tfmattr
         let! console' = builder.ReferenceType console
 
         (* Add reference to methods defined in a referenced types *)
+        let stringArg = ParamItem.Param(ImmutableArray.Empty, EncodedType.String)
+
+        // member new: string -> System.Runtime.Versioning.TargetFrameworkAttribute
+        let tfmctor =
+            ReferencedMethod.Constructor (
+                visibility = ExternalVisibility.Public,
+                parameterTypes = ImmutableArray.Create stringArg
+            )
+
+        let! _ = tfmattr'.ReferenceMethod tfmctor
+
         // static member WriteLine: string -> unit
         let writeln =
             ReferencedMethod.Static (
                 visibility = ExternalVisibility.Public,
                 returnType = ReturnType.RVoid,
                 name = MethodName.ofStr "WriteLine",
-                parameterTypes = ImmutableArray.Create(ParamItem.Param(ImmutableArray.Empty, EncodedType.String))
+                parameterTypes = ImmutableArray.Create stringArg
             )
             |> console'.ReferenceMethod
 
@@ -122,7 +140,7 @@ let example() =
 
         (* Create the entrypoint method of the current assembly *)
         // static member public Main: unit -> unit
-        let! main =
+        let! _ =
             let def =
                 DefinedMethod.EntryPoint (
                     visibility = MemberVisibility.Public,
@@ -132,12 +150,13 @@ let example() =
                 )
             members.AddEntryPoint(def, body)
 
-        (* Sets the target framework of the assembly, this is so the CoreCLR? and tools such as ILSpy can recognize it *)
+        (* Sets the target framework of the assembly, this is so the CoreCLR and tools such as ILSpy can recognize it *)
         // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
-        //builder.AssemblyCustomAttributes.Value.Add
-        //    { Constructor = failwith "TODO: "
-        //      FixedArguments = fun _ _ _ -> Ok(FixedArg.Elem (Elem.SerString ".NETCoreApp,Version=v5.0"))
-        //      NamedArguments = ImmutableArray.Empty }
+        do!
+            builder.AssemblyCustomAttributes.Value.Add
+                { Constructor = CustomAttributeCtor.Ref(tfmattr, tfmctor)
+                  FixedArguments = fun _ _ _ -> Ok(FixedArg.Elem (Elem.SerString ".NETCoreApp,Version=v5.0"))
+                  NamedArguments = ImmutableArray.Empty }
 
         ()
     }

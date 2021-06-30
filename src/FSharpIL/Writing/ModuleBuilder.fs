@@ -88,15 +88,14 @@ type ReferencedTypeMembers = class
     member this.MethodCount = this.Method.Count
 
     member this.ReferenceMethod(method: ReferencedMethod) =
-        match this.owner with
-        | :? TypeReference<TypeKinds.StaticClass> ->
-            match method with
-            | :? MethodReference<MethodKinds.Static> ->
-                if this.Method.Add method
-                then ValidationResult.Ok()
-                else noImpl "error for duplicate method"
-            | _ -> noImpl "what method reference"
-        | _ -> noImpl "what referenced type"
+        match this.owner, method with
+        | (:? TypeReference<TypeKinds.SealedClass>), :? MethodReference<MethodKinds.Static>
+        | (:? TypeReference<TypeKinds.SealedClass>), :? MethodReference<MethodKinds.ObjectConstructor>
+        | (:? TypeReference<TypeKinds.StaticClass>), :? MethodReference<MethodKinds.Static> ->
+            if this.Method.Add method
+            then ValidationResult.Ok()
+            else noImpl "error for duplicate method"
+        | _ -> noImpl "what referenced type and method"
 
     member this.ContainsMethod method = this.Method.Contains method
 end
@@ -140,8 +139,8 @@ type CustomAttributeList
 
             let fixedArgType =
                 let paramType = &parameterTypes.ItemRef i
-                match paramType.ParamType with
-                | ValueSome EncodedType.Boolean -> Ok(ElemType.Primitive PrimitiveElemType.Bool)
+                match ValueOption.bind EncodedType.toElemType paramType.ParamType with
+                | ValueSome etype -> Ok etype
                 | _ -> Error(noImpl "error for invalid custom attribute argument type")
 
             match fixedArgType with

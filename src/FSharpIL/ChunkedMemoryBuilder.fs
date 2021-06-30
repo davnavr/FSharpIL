@@ -56,7 +56,7 @@ type ChunkedMemoryBuilder = struct
             let destination = Span<_>(this.current.Value, this.pos, length)
             data.Slice(i, length).CopyTo destination
             i <- i + length
-        this.IncrementPosition data.Length
+            this.IncrementPosition length
 
     // TODO: Avoid code duplication with ByteWriterExtensions methods.
     member inline this.Write(data: Span<byte>) = this.Write(Span<byte>.op_Implicit data)
@@ -107,41 +107,30 @@ type ChunkedMemoryBuilder = struct
         if this.length = 0u
         then ChunkedMemory.empty
         else
-            let chunkl = uint32 this.current.List.First.Value.Length
-            let mutable remaining, chunk, chunki = this.length, this.current, this.pos - 1
-            let lastl =
-                match remaining % chunkl with
-                | 0u -> chunkl
-                | length -> length
-                |> Checked.int32
+            let mutable remaining, chunk, chunki = this.length, this.current, this.pos
 
             let mutable results =
+                let chunkl = uint32 this.ChunkSize
                 let chunks = remaining / chunkl
                 int32(if remaining % chunkl = 0u then chunks else chunks + 1u) |> Array.zeroCreate
 
-            let lastResultIndex = results.Length - 1
-            let mutable resulti = lastResultIndex
+            let mutable resulti = results.Length - 1
 
             /// Need to iterate backwards starting at the current node.
             while remaining > 0u do
-                let chunk' = Array.zeroCreate(if resulti = lastResultIndex then lastl else Checked.int32 chunkl)
-                results.[resulti] <- chunk'
-                let mutable chunki' = chunk'.Length - 1
-                while chunki' > 0 do
-                    if chunki <= 0 then
-                        chunk <- chunk.Previous
-                        chunki <- chunk.Value.Length - 1
-                    let length =
-                        if remaining < uint32 chunki
-                        then Checked.int32 remaining
-                        else chunki + 1
-                    (Span.fromEnd chunk.Value chunki length).CopyTo(Span.fromEnd chunk' chunki' length)
-                    chunki' <- chunki' - length
-                    chunki <- chunki - length
-                remaining <- remaining - uint32 chunk'.Length
+                if chunki <= 0 then
+                    chunk <- chunk.Previous
+                    chunki <- chunk.Value.Length
+                let moved =
+                    if uint32 chunki > remaining
+                    then remaining
+                    else uint32 chunki
+                results.[resulti] <- Span(chunk.Value).ToArray()
+                chunki <- chunki - int32 moved
+                remaining <- remaining - moved
                 resulti <- resulti - 1
 
-            ChunkedMemory(Unsafe.As &results, 0u, this.length)
+            ChunkedMemory(Unsafe.As &results, uint32 chunki, this.length)
 
     member this.ReserveBytes count =
         let clone = ChunkedMemoryBuilder(this.current, this.pos, 0u)

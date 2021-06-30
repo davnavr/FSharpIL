@@ -9,8 +9,9 @@ type private HybridHashSetHelpers<'T> = struct
         member _.InitInner() = HashSet<'T>()
         [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
         member _.InnerEnumerator inner = inner.GetEnumerator()
-        [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
-        member _.ItemsEqual(inner, x, y) = inner.Comparer.Equals(x, y)
+        member _.EqualityComparer
+            with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                EqualityComparer<'T>.Default :> IEqualityComparer<'T> // Don't forget to change this if a different comparer is used.
 end
 
 type internal HybridHashSet<'T when 'T : not struct and 'T : equality> = struct

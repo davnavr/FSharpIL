@@ -329,3 +329,29 @@ module EncodedType =
         | EncodedType.Array(t, _)
         | EncodedType.Ptr(Pointer.Type(_, t)) -> isMethodVar t
         | _ -> false
+
+    let private toPrimitiveType (etype: EncodedType<_, _>) =
+        match etype with
+        | EncodedType.Boolean -> ValueSome PrimitiveElemType.Bool
+        | EncodedType.Char -> ValueSome PrimitiveElemType.Char
+        | EncodedType.R4 -> ValueSome PrimitiveElemType.R4
+        | EncodedType.R8 -> ValueSome PrimitiveElemType.R8
+        | EncodedType.I1 -> ValueSome PrimitiveElemType.I1
+        | EncodedType.I2 -> ValueSome PrimitiveElemType.I2
+        | EncodedType.I4 -> ValueSome PrimitiveElemType.I4
+        | EncodedType.I8 -> ValueSome PrimitiveElemType.I8
+        | EncodedType.U1 -> ValueSome PrimitiveElemType.U1
+        | EncodedType.U2 -> ValueSome PrimitiveElemType.U2
+        | EncodedType.U4 -> ValueSome PrimitiveElemType.U4
+        | EncodedType.U8 -> ValueSome PrimitiveElemType.U8
+        | EncodedType.String -> ValueSome PrimitiveElemType.String
+        //| _ -> ValueSome(ElemType.Primitive(PrimitiveElemType.Type))
+        | _ -> ValueNone
+
+    let toElemType (etype: EncodedType<_, _>) =
+        match toPrimitiveType etype with
+        | ValueSome prim -> ValueSome(ElemType.Primitive prim)
+        | ValueNone ->
+            match etype with
+            | EncodedType.SZArray(NoRequiredModifiers, item) -> ValueOption.map ElemType.Primitive (toPrimitiveType item)
+            | _ -> ValueNone
