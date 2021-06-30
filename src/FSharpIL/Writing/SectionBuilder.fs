@@ -24,8 +24,7 @@ type SectionBuilder internal (alignment: Alignment, voffset: Rva, foffset: FileO
 
     member this.AddData(metadata: ModuleBuilder) = this.AddData(metadata.Serialize())
 
-    member _.ToImmutable header =
-        Section(header, section.ToImmutable())
+    member _.ToImmutable header = Section(header, section.ToImmutable())
 
 /// Generates a section in a Portable Executable file.
 type SectionContent = SectionBuilder -> DataDirectoriesBuilder -> struct(SectionName * SectionCharacteristics)

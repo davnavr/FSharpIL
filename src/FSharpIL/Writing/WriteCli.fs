@@ -92,10 +92,11 @@ let streams info (wr: byref<ChunkedMemoryBuilder>) =
 
         let start = wr.Length
         stream.Serialize(&wr, info.MethodBodies)
+        wr.AlignTo 4
         let size = wr.Length - start
 
         match stream.StreamLength with
-        | ValueSome expected when expected <> size ->
+        | ValueSome expected when expected > size || size - expected > 3u ->
             failwithf
                 "The \"%s\" stream was expected to have a length of %i bytes, but the actual length was %i bytes"
                 (System.Text.Encoding.ASCII.GetString(stream.StreamName.AsSpan()).TrimEnd '\000')

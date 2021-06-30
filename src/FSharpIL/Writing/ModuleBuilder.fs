@@ -186,12 +186,12 @@ type DefinedTypeEntry =
     { TypeDef: TableIndex<TypeDefRow>
       Methods: Dictionary<DefinedMethod, TableIndex<MethodDefRow>> }
 
-type MemberIndices = struct
-    [<DefaultValue>] val mutable FieldList: TableIndex<FieldRow> // TODO: Consider using null value (0) instead of last value, since F# compiler gets away with it.
-    [<DefaultValue>] val mutable MethodList: TableIndex<MethodDefRow>
-    [<DefaultValue>] val mutable EventList: TableIndex<EventRow>
-    [<DefaultValue>] val mutable PropertyList: TableIndex<PropertyRow>
-end
+[<Struct>]
+type MemberIndices =
+    { mutable FieldList: TableIndex<FieldRow>
+      mutable MethodList: TableIndex<MethodDefRow>
+      mutable EventList: TableIndex<EventRow>
+      mutable PropertyList: TableIndex<PropertyRow> }
 
 [<IsReadOnly; Struct>]
 type DefinedMethodBodyWriter
@@ -261,9 +261,14 @@ type ModuleBuilderSerializer
     let methodRefSignatures = Dictionary<Signatures.MethodRefSig, MemberRefSigOffset>(definedTypeLookup.Count * 48) // TODO: Helper function for getting and adding signatures.
     //let localVarSignatures = Dictionary<Signatures.LocalVarSig, TableIndex<StandaloneSigRow>>(methodDefSignatures.Count)
 
-    let mutable methodDefParams = Unchecked.defaultof<TableIndex<ParamRow>>
+    let mutable methodDefParams = TableIndex<ParamRow>.One
 
-    let mutable indices = MemberIndices()
+    // TODO: Check that EventList and PropertyList actually start at 1 (they probably do)
+    let mutable indices =
+        { FieldList = TableIndex.One
+          MethodList = TableIndex.One
+          EventList = TableIndex.One
+          PropertyList = TableIndex.One }
 
     let namedTypeMapping =
         function

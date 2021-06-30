@@ -7,6 +7,7 @@ type ITableRow = interface end
 type TableIndex<'Row when 'Row :> ITableRow> =
     internal { TableIndex: uint32 }
     member this.IsNull = this.TableIndex = 0u
+    static member inline internal One = { TableIndex = 1u }: TableIndex<'Row>
     static member op_Implicit { TableIndex = index } = index
     override this.ToString() = sprintf "%s (0x%08X)" typeof<'Row>.Name this.TableIndex
 
