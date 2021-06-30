@@ -222,7 +222,7 @@ module TypeVisibility =
 [<IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
 type ClassExtends (extends: TypeDefOrRefOrSpec) = struct
-    member _.IsNull = extends = Unchecked.defaultof<_>
+    member _.IsNull = Object.ReferenceEquals(null, extends.Type)
     member this.Extends = if this.IsNull then ValueNone else ValueSome extends
 end
 
@@ -258,6 +258,17 @@ type DefinedType =
 
     member this.EnclosingClass = Convert.unsafeValueOption<_, DefinedType> this.EnclosingType
     member this.Visibility = TypeVisibility(this.Flags &&& TypeDefFlags.VisibilityMask, this.EnclosingClass)
+
+[<Sealed>]
+type ModuleType () =
+    inherit DefinedType (
+        TypeVisibility.NotPublic,
+        Unchecked.defaultof<_>,
+        ValueNone,
+        ValueNone,
+        Identifier.ofStr "<Module>",
+        ClassExtends.Null // According to ECMA-335, the module class "does not have a base type" (II.10.8).
+    )
 
 [<Sealed>]
 type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct>
@@ -300,6 +311,8 @@ type DefinedType with
 
 [<AutoOpen>]
 module TypePatterns =
+    let ModuleType = new ModuleType()
+
     let inline (|AsDefinedType|) (tdef: #DefinedType) = tdef :> DefinedType
     let inline (|AsReferencedType|) (tdef: #ReferencedType) = tdef :> ReferencedType
     let inline (|DefinedType|ReferencedType|) (t: Type) =

@@ -179,6 +179,10 @@ end
 
 [<RequireQualifiedAccess>]
 module ClassExtends =
+    /// <summary>
+    /// The class does not extend another type, used for <see cref="T:System.Object"/> and the special class
+    /// <c>&lt;Module&gt;</c>.
+    /// </summary>
     val Null: ClassExtends
     val ConcreteDef: TypeDefinition<TypeKinds.ConcreteClass> -> ClassExtends
     val AbstractDef: TypeDefinition<TypeKinds.AbstractClass> -> ClassExtends
@@ -200,17 +204,15 @@ type DefinedType =
     val Flags: TypeDefFlags
     val Extends: ClassExtends
 
-    internal new:
-        TypeVisibility *
-        TypeDefFlags *
-        typeNamespace: Identifier voption *
-        parent: DefinedType voption *
-        Identifier *
-        ClassExtends -> DefinedType
-
     member Visibility: TypeVisibility
     /// Gets the type that contains this nested type (II.22.32).
     member EnclosingClass: DefinedType voption
+
+/// <summary>Represents the special <c>&lt;Module&gt;</c> class, which contains global fields and methods (II.10.8).</summary>
+[<Sealed>]
+type ModuleType = class
+    inherit DefinedType
+end
 
 [<Sealed>]
 type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> = class
@@ -271,6 +273,7 @@ type DefinedType with
 
 [<AutoOpen>]
 module TypePatterns =
+    val internal ModuleType: ModuleType
     val inline (|AsDefinedType|): #DefinedType -> DefinedType
     val inline (|AsReferencedType|): #ReferencedType -> ReferencedType
     val inline (|DefinedType|ReferencedType|): Type -> Choice<DefinedType, ReferencedType>

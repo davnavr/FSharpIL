@@ -38,7 +38,7 @@ module MetadataVersion =
 
     /// Latest runtime version for files intended to be executed on Microsoft-specific implementations of the CLI such as .NET
     /// Framework, .NET Core, or .NET.
-    let defaultLatest = ofStr "v4.0.3031"
+    let defaultLatest = ofStr "v4.0.30319"
     /// Latest runtime version for files "intended to be executed on any conforming implementation of the CLI" (II.24.2.1).
     let standardLatest = ofStr "Standard CLI 2005"
 

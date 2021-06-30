@@ -187,7 +187,7 @@ type DefinedTypeEntry =
       Methods: Dictionary<DefinedMethod, TableIndex<MethodDefRow>> }
 
 type MemberIndices = struct
-    [<DefaultValue>] val mutable FieldList: TableIndex<FieldRow>
+    [<DefaultValue>] val mutable FieldList: TableIndex<FieldRow> // TODO: Consider using null value (0) instead of last value, since F# compiler gets away with it.
     [<DefaultValue>] val mutable MethodList: TableIndex<MethodDefRow>
     [<DefaultValue>] val mutable EventList: TableIndex<EventRow>
     [<DefaultValue>] val mutable PropertyList: TableIndex<PropertyRow>
@@ -217,6 +217,7 @@ type ModuleBuilderSerializer
         entryPointToken: EntryPoint,
         assemblyReferences: HashSet<AssemblyReference>,
         definedTypes: Dictionary<DefinedType, DefinedTypeMembers>,
+        moduleGlobalMembers: DefinedTypeMembers,
         referencedTypes: Dictionary<ReferencedType, ReferencedTypeMembers>
     )
     as serializer
@@ -239,7 +240,7 @@ type ModuleBuilderSerializer
     let assemblyDefIndex =
         match assembly with
         | Some assem ->
-            { HashAlgId = AssemblyHashAlgorithm.None // TODO: Set the HashAlgId properly
+            { HashAlgId = AssemblyHashAlgorithm.SHA1 // TODO: Set the HashAlgId properly
               MajorVersion = assem.Version.Major
               MinorVersion = assem.Version.Minor
               BuildNumber = assem.Version.Build
@@ -439,7 +440,8 @@ type ModuleBuilderSerializer
 
         for KeyValue(tref, members) in referencedTypes do this.SerializeReferencedType(tref, members) |> ignore
 
-        // TODO: Add <Module> type.
+        // Write the special <Module> type.
+        this.SerializeDefinedType(ModuleType, moduleGlobalMembers) |> ignore
 
         for KeyValue(tdef, members) in definedTypes do this.SerializeDefinedType(tdef, members) |> ignore
 
@@ -485,8 +487,6 @@ type ModuleBuilder
             | true, _ -> Error(noImpl "error for referenced attribute ctor not found")
             | false, _ -> Error(noImpl "error for referenced attribute type not found")
 
-    static member val internal ModuleTypeName = Identifier.ofStr "<Module>"
-
     member val AssemblyCustomAttributes =
         match assembly with
         | Some assembly' -> Some(CustomAttributeList(assembly', attributes, customAttributeResolver))
@@ -496,6 +496,7 @@ type ModuleBuilder
     member val ValidationWarnings = ValidationWarningsCollection(?warnings = warnings)
     member val Mvid = Option.defaultWith Guid.NewGuid mvid
     member val ModuleCustomAttributes = CustomAttributeList(builder, attributes, customAttributeResolver)
+    member val GlobalMembers = DefinedTypeMembers(ModuleType, warnings, entryPointToken)
     member _.Name: Identifier = name
     member _.Assembly = assembly
     member _.EntryPoint = !entryPointToken
@@ -542,6 +543,7 @@ type ModuleBuilder
                 this.EntryPoint,
                 assemblyRefs,
                 definedTypes,
+                this.GlobalMembers,
                 referencedTypes
             )
         serializer.Serialize()

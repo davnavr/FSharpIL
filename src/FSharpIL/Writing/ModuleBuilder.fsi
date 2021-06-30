@@ -86,7 +86,10 @@ type ModuleBuilder =
     member ReferencedAssemblies: IReadOnlyCollection<AssemblyReference>
     member ValidationWarnings: ValidationWarningsCollection
     member UserStrings: UserStringStreamBuilder
-    //member Globals: DefinedTypeMembers
+    /// <summary>
+    /// Gets the members of the <c>&lt;Module&gt;</c> special type, which represents the global members defined in the module.
+    /// </summary>
+    member GlobalMembers: DefinedTypeMembers
 
     member DefineType: DefinedType -> ValidationResult<struct(DefinedTypeMembers * CustomAttributeList)>
     member ReferenceType: ReferencedType -> ValidationResult<ReferencedTypeMembers> // TODO: Apparently TypeRefs can have custom attributes.
