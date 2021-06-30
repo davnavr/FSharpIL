@@ -53,7 +53,7 @@ The metadata is written in the following order:
 /// Writes the CLI header (II.25.3.3).
 let header info (wr: byref<ChunkedMemoryBuilder>) =
     let header = info.Builder.Header
-    wr.WriteLE Magic.cliHeaderSize // Cb
+    wr.WriteLE Magic.CliHeaderSize // Cb
     wr.WriteLE header.MajorRuntimeVersion
     wr.WriteLE header.MinorRuntimeVersion
     info.Metadata <- RvaAndSizeWriter &wr

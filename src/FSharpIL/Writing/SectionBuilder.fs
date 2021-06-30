@@ -19,8 +19,8 @@ type SectionBuilder internal (alignment: Alignment, voffset: Rva, foffset: FileO
 
     member this.AddData(metadata: CliMetadataBuilder) =
         let start = this.VirtualSize
-        WriteCli.metadata &section this.VirtualAddress metadata
-        { CliHeaderDirectory.Directory = { Rva = voffset + start; Size = this.VirtualSize - start }}
+        WriteCli.metadata &section this.VirtualAddress metadata // TODO: Since size is not needed here, consider writing the metadata directly into the output.
+        { CliHeaderDirectory.Directory = { Rva = voffset + start; Size = FSharpIL.Metadata.Magic.CliHeaderSize }}
 
     member this.AddData(metadata: ModuleBuilder) = this.AddData(metadata.Serialize())
 

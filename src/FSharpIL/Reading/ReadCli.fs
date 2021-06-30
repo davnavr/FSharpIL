@@ -51,7 +51,7 @@ let readCliHeader (section: inref<ChunkedMemory>) info reader ustate =
     let inline failure err = Failure(info.CliHeaderOffset, err)
     let offset = info.CliHeaderOffset
     match ChunkedMemory.tryReadU4 (uint32 offset) &section with
-    | ValueSome cb when cb >= Magic.cliHeaderSize ->
+    | ValueSome cb when cb >= Magic.CliHeaderSize ->
         match section.TrySlice(uint32 offset + 4u) with
         | true, fields ->
             match EntryPointToken.tryOfInt(ChunkedMemory.readU4 16u &fields) with
@@ -73,6 +73,7 @@ let readCliHeader (section: inref<ChunkedMemory>) info reader ustate =
             | Error bad -> failure(InvalidEntryPointKind bad)
         | false, _ -> CliHeaderOutOfSection(info.SectionRva + info.CliHeaderOffset + 4u) |> failure
     | ValueSome cb -> failure(CliHeaderTooSmall cb)
+    // TODO: Consider returning error if CliHeader is too large.
     | ValueNone -> CliHeaderOutOfSection(info.SectionRva + info.CliHeaderOffset) |> failure
 
 let readHeaderDataPointer (section: inref<ChunkedMemory>) sectionRva { Rva = rva; Size = size } (data: outref<_>) =

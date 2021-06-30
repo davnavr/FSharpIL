@@ -202,12 +202,16 @@ let sectionData info (writer: byref<FileHeaderWriter<#IByteWriter>>) =
         let data = Span.stackalloc<byte> section.Data.ChunkSize
         let mutable remaining = section.Data.Length
         while remaining > 0u do
+            data.Clear()
+
             let length =
                 if remaining > uint32 data.Length
                 then data.Length
                 else int32 remaining
-            section.Data.CopyTo(section.Data.Length - remaining, data.Slice(0,length))
-            writer.Write data
+            let destination = data.Slice(0, length)
+
+            section.Data.CopyTo(section.Data.Length - remaining, destination)
+            writer.Write destination
             remaining <- remaining - uint32 length
         // Padding to next section.
         writer.AlignTo info.FileAlignment
