@@ -84,7 +84,7 @@ let mapMethodDefSig namedTypeMapping modifierTypeMapping (signature: inref<Metho
 let mapMethodRefSig namedTypeMapping modifierTypeMapping (signature: inref<MethodRefSig<_, _>>) =
     MethodRefSig (
         mapMethodDefSig namedTypeMapping modifierTypeMapping &signature.Signature,
-        mapParameters namedTypeMapping modifierTypeMapping signature.Parameters
+        mapParameters namedTypeMapping modifierTypeMapping signature.VarArgParams
     )
 
 let mapLocalVarSig namedTypeMapping modifierTypeMapping (signature: LocalVarSig<'Type1, 'MType1>) =
