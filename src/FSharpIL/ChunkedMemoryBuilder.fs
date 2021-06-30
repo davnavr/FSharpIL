@@ -127,7 +127,7 @@ type ChunkedMemoryBuilder = struct
                 let chunk' = Array.zeroCreate(if resulti = lastResultIndex then lastl else Checked.int32 chunkl)
                 results.[resulti] <- chunk'
                 let mutable chunki' = chunk'.Length - 1
-                while chunki' >= 0 do
+                while chunki' > 0 do
                     if chunki <= 0 then
                         chunk <- chunk.Previous
                         chunki <- chunk.Value.Length - 1

@@ -134,10 +134,10 @@ let example() =
 
         (* Sets the target framework of the assembly, this is so the CoreCLR? and tools such as ILSpy can recognize it *)
         // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
-        builder.AssemblyCustomAttributes.Value.Add
-            { Constructor = failwith "TODO: "
-              FixedArguments = fun _ _ _ -> Ok(FixedArg.Elem (Elem.SerString ".NETCoreApp,Version=v5.0"))
-              NamedArguments = ImmutableArray.Empty }
+        //builder.AssemblyCustomAttributes.Value.Add
+        //    { Constructor = failwith "TODO: "
+        //      FixedArguments = fun _ _ _ -> Ok(FixedArg.Elem (Elem.SerString ".NETCoreApp,Version=v5.0"))
+        //      NamedArguments = ImmutableArray.Empty }
 
         ()
     }
