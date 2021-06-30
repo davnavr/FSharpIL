@@ -12,6 +12,13 @@ type ValidationResultBuilder internal () =
         | None -> body()
         | Some err -> Error err
 
+    member inline _.Combine(x: ValidationResult<unit>, y: ValidationResult<_>) =
+        match x with
+        | Ok() -> y
+        | Error err -> Error err
+
+    member inline _.Delay(f: _ -> ValidationResult<_>) = f()
+
     member inline _.Return value: ValidationResult<_> = Ok value
 
     member inline _.ReturnFrom(result: ValidationResult<_>) = result

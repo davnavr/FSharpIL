@@ -1,14 +1,36 @@
 ﻿namespace FSharpIL.Metadata.Tables
 
+open System
 open System.Runtime.CompilerServices
 
 /// Represents a coded index, which represents an index into one of many possible multiple metadata tables (II.24.2.6).
 [<IsReadOnly; Struct>]
-type CodedIndex<'Tag when 'Tag : enum<uint8>> = struct
+[<CustomComparison; CustomEquality>]
+type CodedIndex<'Tag when 'Tag : enum<uint8> and 'Tag : comparison> = struct
     val Tag: 'Tag
     val Index: uint32
+
     internal new (tag, index) = { Tag = tag; Index = index }
+
     member this.IsNull = this.Index = 0u
+
+    member this.Equals(other: CodedIndex<'Tag>) = this.Tag = other.Tag && this.Index = other.Index
+
+    member this.CompareTo(other: CodedIndex<'Tag>) =
+        match compare this.Index other.Index with
+        | 0 -> compare this.Tag other.Tag
+        | result -> result
+
+    override this.Equals obj =
+        match obj with
+        | :? CodedIndex<'Tag> as other -> this.Equals(other = other)
+        | _ -> false
+
+    override this.GetHashCode() = HashCode.Combine(this.Tag, this.Index)
+
+    interface IEquatable<CodedIndex<'Tag>> with member this.Equals other = this.Equals(other = other)
+    interface IComparable<CodedIndex<'Tag>> with member this.CompareTo other = this.CompareTo other
+    interface IComparable with member this.CompareTo obj = this.CompareTo(obj :?> CodedIndex<'Tag>)
 end
 
 type TypeDefOrRefTag =

@@ -27,7 +27,7 @@ module CodedIndex =
         CodedIndex<'Tag>(LanguagePrimitives.EnumOfValue(uint8(index &&& ~~~filter)), uint32((index &&& filter) >>> n))
 
     [<IsReadOnly; Struct>]
-    type Parser<'Tag when 'Tag : enum<uint8>> = struct
+    type Parser<'Tag when 'Tag : enum<uint8> and 'Tag : comparison> = struct
         /// Gets a value indicating whether this coded index would occupy four bytes.
         val IsLarge: bool
         val Kind: CodedIndexKind<'Tag>

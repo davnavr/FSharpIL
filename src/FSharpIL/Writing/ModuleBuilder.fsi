@@ -2,6 +2,7 @@
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
@@ -41,6 +42,7 @@ type DefinedTypeMembers =
 
     member AddMethod: method: DefinedMethod * body: DefinedMethodBody voption -> ValidationResult<unit> // TODO: Have return type be an object that allows the calling of the method in a method body.
     member AddEntryPoint: method: EntryPointMethod * body: DefinedMethodBody -> ValidationResult<unit>
+    member ContainsMethod: method: DefinedMethod -> bool
 
 [<Sealed>]
 type ReferencedTypeMembers =
@@ -54,6 +56,12 @@ type ReferencedTypeMembers =
     //member EventCount: int32
 
     //member AddMethod: ReferencedMethod -> ValidationResult<unit>
+    member ContainsMethod: method: ReferencedMethod -> bool
+
+[<Sealed>]
+type CustomAttributeList =
+    member Count: int32
+    member Add: CustomAttribute -> ValidationResult<unit>
 
 /// Builds a CLI metadata module (I.9).
 [<Sealed>]
@@ -69,7 +77,9 @@ type ModuleBuilder =
 
     member Mvid: Guid
     member Name: Identifier
+    member ModuleCustomAttributes: CustomAttributeList
     member Assembly: AssemblyDefinition option
+    member AssemblyCustomAttributes: CustomAttributeList option
     member EntryPoint: EntryPoint // TODO: Allow a File row to also be an entry point.
     member DefinedTypes: IReadOnlyCollection<DefinedType>
     member ReferencedTypes: IReadOnlyCollection<ReferencedType>
@@ -78,8 +88,8 @@ type ModuleBuilder =
     member UserStrings: UserStringStreamBuilder
     //member Globals: DefinedTypeMembers
 
-    member DefineType: DefinedType -> ValidationResult<DefinedTypeMembers>
-    member ReferenceType: ReferencedType -> ValidationResult<ReferencedTypeMembers>
+    member DefineType: DefinedType -> ValidationResult<struct(DefinedTypeMembers * CustomAttributeList)>
+    member ReferenceType: ReferencedType -> ValidationResult<ReferencedTypeMembers> // TODO: Apparently TypeRefs can have custom attributes.
 
     member ReferenceAssembly: AssemblyReference -> unit
 

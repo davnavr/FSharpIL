@@ -2,6 +2,7 @@
 module FSharpIL.Writing.BlobWriter
 
 open FSharpIL
+open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Signatures.MetadataSignatures
 
 [<Literal>] val MaxCompressedUnsigned : uint32 = 0x1FFF_FFFFu
@@ -34,3 +35,6 @@ val fieldSig : signature: inref<FieldSig> -> byref<ChunkedMemoryBuilder> -> unit
 
 /// <summary>Writes the signature of a <c>Property</c> (II.23.2.5).</summary>
 val propertySig : signature: inref<PropertySig> -> byref<ChunkedMemoryBuilder> -> unit
+
+/// <summary>Writes a custom attribute (II.23.3).</summary>
+val customAttrib : attrib: inref<CustomAttrib> -> byref<ChunkedMemoryBuilder> -> unit

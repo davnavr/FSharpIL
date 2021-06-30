@@ -17,11 +17,11 @@ type PrimitiveElemType =
     | U8
     | String
     | Type
+    //| Boxed // of PrimitiveElemType
 
+/// <summary>Represents the type of a custom attribute argument (II.23.3).</summary>
 [<RequireQualifiedAccess>]
 type ElemType =
-    | Type of PrimitiveElemType
+    | Primitive of PrimitiveElemType
     | SZArray of PrimitiveElemType
-    | Boxed of PrimitiveElemType
-
-//module ElemType
+    // TODO: How to represent enum types?

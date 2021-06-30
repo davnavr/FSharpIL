@@ -75,6 +75,8 @@ type DefinedTypeMembers =
             Ok result
         | Error err -> Error err
 
+    member this.ContainsMethod method = this.Method.Contains method
+
 [<Sealed>]
 type ReferencedTypeMembers = class
     val private owner: ReferencedType
@@ -84,7 +86,98 @@ type ReferencedTypeMembers = class
     new (owner, warnings) = { owner = owner; warnings = warnings }
 
     member this.MethodCount = this.Method.Count
+
+    member this.ContainsMethod method = this.Method.Contains method
 end
+
+[<IsReadOnly>]
+[<NoComparison; NoEquality>]
+type ConstructedCustomAttribute = struct
+    val Constructor: CustomAttributeCtor
+    val Signature: CustomAttrib
+
+    new (ctor, fixedArgs, namedArgs) =
+        { Constructor = ctor
+          Signature = { FixedArgs = fixedArgs; NamedArgs = namedArgs } }
+end
+
+[<Sealed>]
+type CustomAttributeList
+    (
+        owner: obj,
+        lookup: Dictionary<obj, _>,
+        resolver: CustomAttributeCtor -> ValidationResult<int32>
+    ) =
+    let mutable attributes = Unchecked.defaultof<ImmutableArray<ConstructedCustomAttribute>.Builder>
+
+    member _.Count = if isNull attributes then 0 else attributes.Count
+
+    static member private CreateFixedArgsLoop
+        (
+            fixedArgs: byref<FixedArg[]>,
+            parameterTypes: ImmutableArray<Signatures.ParamItem>,
+            parameterNames: ImmutableArray<Parameter>,
+            fixedArgsSource: FixedArgSource,
+            i
+        )
+        =
+        if i < fixedArgs.Length then
+            let paramName =
+                if parameterNames.IsDefaultOrEmpty
+                then ValueNone
+                else parameterNames.ItemRef(i).ParamName
+
+            let fixedArgType =
+                let paramType = &parameterTypes.ItemRef i
+                match paramType.ParamType with
+                | ValueSome EncodedType.Boolean -> Ok(ElemType.Primitive PrimitiveElemType.Bool)
+                | _ -> Error(noImpl "error for invalid custom attribute argument type")
+
+            match fixedArgType with
+            | Ok fixedArgType' ->
+                match fixedArgsSource i paramName fixedArgType' with
+                | Ok fixedArg ->
+                    fixedArgs.[i] <- fixedArg
+                    CustomAttributeList.CreateFixedArgsLoop(&fixedArgs, parameterTypes, parameterNames, fixedArgsSource, i + 1)
+                | Error(ValueSome err) -> Error err
+                | Error ValueNone -> Error(noImpl "error for no argument provided to custom attribute constructor")
+            | Error err -> Error err
+        else Ok(Unsafe.As<_, ImmutableArray<FixedArg>> &fixedArgs)
+
+    static member private CreateFixedArgs(fixedArgsSource, numFixedArgs, customAttribCtor) =
+        let mutable fixedArgs = Array.zeroCreate numFixedArgs
+
+        let parameterTypes, parameterNames =
+            match customAttribCtor with
+            | CustomAttributeCtor.Ref(_, ctor) -> ctor.ParameterTypes, ImmutableArray.Empty
+            | CustomAttributeCtor.Def(_, ctor) -> ctor.ParameterTypes, ctor.Parameters
+
+        CustomAttributeList.CreateFixedArgsLoop(&fixedArgs, parameterTypes, parameterNames, fixedArgsSource, 0)
+
+    member _.Add attrib =
+        validated {
+            let! numFixedArgs = resolver attrib.Constructor
+            let! fixedArguments = CustomAttributeList.CreateFixedArgs(attrib.FixedArguments, numFixedArgs, attrib.Constructor)
+
+            if isNull attributes then
+                attributes <- ImmutableArray.CreateBuilder()
+                lookup.[owner] <- attributes
+
+            attributes.Add(ConstructedCustomAttribute(attrib.Constructor, fixedArguments, attrib.NamedArguments))
+
+            return ()
+        }
+        //match resolver attrib.Constructor with
+        //| Ok numFixedArgs ->
+        //    let mutable fixedArgs = Array.zeroCreate numFixedArgs
+
+
+        //    if isNull attributes then
+        //        attributes <- ImmutableArray.CreateBuilder()
+        //        lookup.[owner] <- attributes
+        //    attributes.Add attrib
+        //    Ok()
+        //| Error err -> Error err
 
 [<IsReadOnly; Struct>]
 type ReferencedTypeEntry =
@@ -118,8 +211,10 @@ type DefinedMethodBodyWriter
 
 type ModuleBuilderSerializer
     (
+        moduleBuilderObj: obj,
         name: Identifier,
         mvid,
+        attributes: Dictionary<_, _>,
         userStringStream,
         assembly: AssemblyDefinition option,
         entryPointToken: EntryPoint,
@@ -143,6 +238,7 @@ type ModuleBuilderSerializer
             guids,
             blobs
         )
+
     let assemblyDefIndex =
         match assembly with
         | Some assem ->
@@ -299,6 +395,39 @@ type ModuleBuilderSerializer
                   Methods = methods }
             i
 
+    member private _.SerializeCustomAttributes() =
+        /// The custom attribute table is required to be sorted.
+        let customAttributeLookup = SortedList<HasCustomAttribute, _> attributes.Count
+
+        for KeyValue(parent, attrs) in attributes do
+            let key =
+                if Object.ReferenceEquals(parent, moduleBuilderObj) then
+                    HasCustomAttribute.Module
+                elif assembly.IsSome && Object.ReferenceEquals(parent, assembly.Value) then
+                    HasCustomAttribute.Assembly assemblyDefIndex.Value
+                else
+                    match parent with
+                    | _ ->
+                        parent.GetType().Name
+                        |> sprintf "Unsupported custom attribute parent type %s"
+                        |> invalidOp
+            customAttributeLookup.[key] <- attrs
+
+        for KeyValue(parent, attrs) in customAttributeLookup do
+            for (attribute: ConstructedCustomAttribute) in attrs do
+                { Parent = parent
+                  Type =
+                    match attribute.Constructor with
+                    | CustomAttributeCtor.Ref(tref, ctor) ->
+                        CustomAttributeType.MemberRef referencedTypeLookup.[tref].Members.[ctor]
+                    | CustomAttributeCtor.Def(tdef, ctor) ->
+                        CustomAttributeType.MethodDef definedTypeLookup.[tdef].Methods.[ctor]
+                  Value = builder.Blob.Add &attribute.Signature }
+                |> builder.Tables.CustomAttribute.Add
+                |> ignore
+
+        builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.CustomAttribute
+
     member this.Serialize() =
         this.SerializeAssemblyReferences()
 
@@ -314,6 +443,8 @@ type ModuleBuilderSerializer
             | EntryPointMethod(owner, method) -> EntryPointToken.MethodDef definedTypeLookup.[owner].Methods.[method.Method]
             //| EntryPointFile file -> EntryPointToken.File(failwith "TODO: get entry point file")
 
+        this.SerializeCustomAttributes()
+
         builder
 
 [<Sealed>]
@@ -326,17 +457,39 @@ type ModuleBuilder
         ?typeDefCapacity,
         ?typeRefCapacity,
         ?assemblyRefCapacity
-    ) =
+    )
+    as builder
+    =
     let assemblyRefs = HashSet<AssemblyReference>(defaultArg assemblyRefCapacity 8)
     let definedTypes = Dictionary<DefinedType, DefinedTypeMembers>(defaultArg typeDefCapacity 16)
     let referencedTypes = Dictionary<ReferencedType, ReferencedTypeMembers>(defaultArg typeRefCapacity 32)
+    let attributes = Dictionary<obj, _> 8 // TODO: Get fixed arguments!
     let entryPointToken = ref Unchecked.defaultof<EntryPoint>
 
+    let customAttributeResolver =
+        function
+        | CustomAttributeCtor.Def(tdef, ctor) ->
+            match definedTypes.TryGetValue tdef with
+            | true, members when members.ContainsMethod ctor -> Ok ctor.ParameterTypes.Length
+            | true, _ -> Error(noImpl "error for defined attribute ctor not found")
+            | false, _ -> Error(noImpl "error for defined attribute type not found")
+        | CustomAttributeCtor.Ref(tref, ctor) ->
+            match referencedTypes.TryGetValue tref with
+            | true, members when members.ContainsMethod ctor -> Ok ctor.ParameterTypes.Length
+            | true, _ -> Error(noImpl "error for referenced attribute ctor not found")
+            | false, _ -> Error(noImpl "error for referenced attribute type not found")
+
     static member val internal ModuleTypeName = Identifier.ofStr "<Module>"
+
+    member val AssemblyCustomAttributes =
+        match assembly with
+        | Some assembly' -> Some(CustomAttributeList(assembly', attributes, customAttributeResolver))
+        | None -> None
 
     member val UserStrings = UserStringStreamBuilder 1
     member val ValidationWarnings = ValidationWarningsCollection(?warnings = warnings)
     member val Mvid = Option.defaultWith Guid.NewGuid mvid
+    member val ModuleCustomAttributes = CustomAttributeList(builder, attributes, customAttributeResolver)
     member _.Name: Identifier = name
     member _.Assembly = assembly
     member _.EntryPoint = !entryPointToken
@@ -345,14 +498,16 @@ type ModuleBuilder
     member _.ReferencedTypes = referencedTypes.Keys :> IReadOnlyCollection<_>
     member _.ReferencedAssemblies = assemblyRefs :> IReadOnlyCollection<_>
 
-    member _.DefineType t =
+    member inline private _.CreateAttributeList owner = CustomAttributeList(owner, attributes, customAttributeResolver)
+
+    member this.DefineType t =
         match definedTypes.TryGetValue t with
         | true, existing -> ValidationResult<_>.Error(noImpl "TODO: error for duplicate type def")
         | false, _ ->
             // TODO: Check that extends and nestedclass are already contained in the Module.
             let members = DefinedTypeMembers(t, warnings, entryPointToken)
             definedTypes.[t] <- members
-            Ok members
+            Ok(struct(members, this.CreateAttributeList t))
 
     member _.ReferenceType t =
         match referencedTypes.TryGetValue t with
@@ -372,8 +527,10 @@ type ModuleBuilder
     member internal this.Serialize() =
         let serializer =
             ModuleBuilderSerializer (
+                this,
                 name,
                 this.Mvid,
+                attributes,
                 this.UserStrings,
                 assembly,
                 this.EntryPoint,

@@ -339,7 +339,7 @@ let rec fixedArg
     if arguments.Count < fixedArgs.Length then
         let elem =
             match fixedArgs.[arguments.Count] with
-            | ElemType.Type PrimitiveElemType.Bool ->
+            | ElemType.Primitive PrimitiveElemType.Bool ->
                 match elemThingReplaceWithChunkMethod 1u &chunk with
                 | Ok elem ->
                     ValBool(Convert.ToBoolean elem.[0u])

@@ -42,7 +42,7 @@ let example() =
 
     (* Add references to other assemblies. *)
     let mscorlib =
-        (* Contains core types such as System.Object or System.Int32 *)
+        (* Contains core types such as System.Object or System.Int32, usually System.Runtime is referenced instead. *)
         { AssemblyReference.Version = AssemblyVersion(5us, 0us, 0us, 0us)
           PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
           Name = FileName.ofStr "System.Private.CoreLib"
@@ -52,7 +52,7 @@ let example() =
     builder.ReferenceAssembly mscorlib
 
     let consolelib =
-        (* Contains the System.Console type *)
+        (* Contains the System.Console type, which is needed to print text onto the screen. *)
         { AssemblyReference.Version = AssemblyVersion(5us, 0us, 0us, 0us)
           PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
           Name = FileName.ofStr "System.Console"
@@ -84,7 +84,7 @@ let example() =
                 extends = ClassExtends.ConcreteRef object
             )
 
-        let! members = builder.DefineType program
+        let! struct(members, _) = builder.DefineType program
 
         (* Create the body of the entrypoint method *)
         let body =
@@ -108,9 +108,12 @@ let example() =
                 )
             members.AddEntryPoint(def, body)
 
-        // TODO: Add TFM attribute
-
-        // TODO: Set entry point token
+        (* Sets the target framework of the assembly, this is so the CoreCLR? and tools such as ILSpy can recognize it *)
+        // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
+        builder.AssemblyCustomAttributes.Value.Add
+            { Constructor = failwith "TODO: "
+              FixedArguments = fun _ _ _ -> Ok(FixedArg.Elem (Elem.SerString ".NETCoreApp,Version=v5.0"))
+              NamedArguments = ImmutableArray.Empty }
 
         ()
     }

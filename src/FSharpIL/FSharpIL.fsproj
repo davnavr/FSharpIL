@@ -44,7 +44,6 @@
     <Compile Include="Metadata\Blobs\Offsets.fs" />
     <Compile Include="Metadata\Blobs\ElementType.fs" />
     <Compile Include="Metadata\Blobs\CallingConventionFlags.fs" />
-    <Compile Include="Metadata\Blobs\CustomAttrib.fs" />
     <Compile Include="Metadata\Blobs\ElemType.fs" />
     <Compile Include="Metadata\Tables\TableFlags.fs" />
     <Compile Include="Metadata\Tables\TableIndex.fs" />
@@ -54,6 +53,7 @@
     <Compile Include="Metadata\Tables\CodedIndexPatterns.fs" />
     <Compile Include="Metadata\MetadataToken.fs" />
     <Compile Include="Metadata\EntryPointToken.fs" />
+    <Compile Include="Metadata\Signatures\CustomAttrib.fs" />
     <Compile Include="Metadata\Signatures\CustomMod.fs" />
     <Compile Include="Metadata\Signatures\Items.fs" />
     <Compile Include="Metadata\Signatures\LocalVarSig.fs" />
@@ -62,6 +62,8 @@
     <Compile Include="Metadata\Cil\MethodBody.fs" />
     <Compile Include="Metadata\Cil\Opcode.fs" />
     <Compile Include="Metadata\PublicKeyOrToken.fs" />
+    <Compile Include="Metadata\ValidationResult.fs" />
+    <Compile Include="Metadata\ValidationResultBuilder.fs" />
     <Compile Include="Cli\MemberVisibility.fs" />
     <Compile Include="Cli\Attributes.fs" />
     <Compile Include="Cli\Assembly.fsi" />
@@ -73,8 +75,8 @@
     <Compile Include="Cli\Parameter.fs" />
     <Compile Include="Cli\Method.fsi" />
     <Compile Include="Cli\Method.fs" />
-    <Compile Include="Metadata\ValidationResult.fs" />
-    <Compile Include="Metadata\ValidationResultBuilder.fs" />
+    <Compile Include="Cli\CustomAttribute.fsi" />
+    <Compile Include="Cli\CustomAttribute.fs" />
     <Compile Include="Writing\Cil\MethodBodyBuilder.fs" />
     <Compile Include="Writing\Cil\MethodBodyList.fs" />
     <Compile Include="Writing\IStreamBuilder.fs" />

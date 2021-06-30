@@ -1,13 +1,15 @@
-﻿namespace FSharpIL.Metadata.Blobs
+﻿namespace FSharpIL.Metadata.Signatures
 
 open System.Runtime.CompilerServices
 open System.Collections.Immutable
+
+open FSharpIL.Metadata.Blobs
 
 /// <summary>Represents an <c>Elem</c> item, which is an argument in a custom attribute (II.23.3).</summary>
 type Elem =
     | ValBool of bool
     | ValChar of char
-    | ValR4 of float32
+    | ValR4 of System.Single
     | ValR8 of System.Double
     | ValI1 of int8
     | ValU1 of uint8
@@ -17,7 +19,6 @@ type Elem =
     | ValU4 of uint32
     | ValI8 of int64
     | ValU8 of uint64
-    // | ValEnum // of SomehowGetTheEnumUnderlyingType?
     /// <summary>Represents a string used as an argument in a custom attribute.</summary>
     /// <remarks>Empty strings and <see langword="null"/> strings are allowed values.</remarks>
     | SerString of string
@@ -30,12 +31,13 @@ type Elem =
 [<RequireQualifiedAccess>]
 type FixedArg =
     | Elem of Elem
-    | SZArray of ImmutableArray<Elem voption>
+    | SZArray of ImmutableArray<Elem> voption
 
 [<IsReadOnly; Struct>]
 type NamedArg =
     { IsProperty: bool
       Name: string
+      Type: ElemType // FieldOrPropType
       Value: FixedArg }
 
 [<RequireQualifiedAccess>]
@@ -43,12 +45,14 @@ module NamedArg =
     let inline (|Field|Prop|) arg =
         let value() = struct(arg.Name, arg.Value)
         if arg.IsProperty then Prop(value()) else Field(value())
-    let inline Field (name, value) = { IsProperty = false; Name = name; Value = value }
-    let inline Prop (name, value) = { IsProperty = true; Name = name; Value = value }
+    let inline Field (name, namedArgType, value) = { IsProperty = false; Name = name; Type = namedArgType; Value = value }
+    let inline Prop (name, namedArgType, value) = { IsProperty = true; Name = name; Type = namedArgType; Value = value }
 
 /// <summary>
 /// Represents a <c>CustomAttrib</c> item, which stores the arguments provided to a custom attribute's constructor, as well as
 /// any values assigned to its fields or properties. (II.23.3).
 /// </summary>
 [<IsReadOnly; Struct>]
-type CustomAttrib = { FixedArgs: ImmutableArray<FixedArg>; NamedArgs: ImmutableArray<NamedArg> }
+type CustomAttrib =
+    { FixedArgs: ImmutableArray<FixedArg>
+      NamedArgs: ImmutableArray<NamedArg> }

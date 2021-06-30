@@ -9,6 +9,7 @@ open FSharpIL.Utilities.Collections
 open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Blobs
+open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Signatures.MetadataSignatures
 
 [<IsReadOnly; Struct>]
@@ -23,14 +24,16 @@ end
 
 type ByteBlobWriter = delegate of byref<ChunkedMemoryBuilder> -> unit
 
-[<IsReadOnly>]
 type private DelegateBlobWriter = struct
     interface IBlobWriter<ByteBlobWriter> with member _.Write(wr, writer) = writer.Invoke &wr
 end
 
-[<IsReadOnly>]
 type private MethodDefSigWriter = struct
     interface IBlobWriter<MethodDefSig> with member _.Write(wr, signature) = BlobWriter.methodDefSig &signature &wr
+end
+
+type private CustomAttribWriter = struct
+    interface IBlobWriter<CustomAttrib> with member _.Write(wr, attrib) = BlobWriter.customAttrib &attrib &wr
 end
 
 /// <summary>Builds the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
@@ -83,6 +86,7 @@ type BlobStreamBuilder (capacity: int32) =
     member inline this.Add(bytes: ReadOnlyMemory<byte>) = this.Add bytes.Span
     member inline this.Add(bytes: byte[]) = this.Add(ReadOnlySpan bytes)
     member inline this.Add(bytes: ImmutableArray<byte>) = this.Add(bytes.AsSpan())
+
     member this.Add(token: PublicKeyOrToken) =
         { IsPublicKey =
             match token with
@@ -90,7 +94,10 @@ type BlobStreamBuilder (capacity: int32) =
             | NoPublicKeyOrToken -> false
             | PublicKey _ -> true
           Token = this.Add(PublicKeyOrToken.toBlock token) }
+
     member this.Add(signature: inref<_>) = { MethodDefSig = this.Add<MethodDefSigWriter, _> &signature }
+
+    member this.Add(attrib: inref<_>) = { CustomAttrib = this.Add<CustomAttribWriter, _> &attrib }
 
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength

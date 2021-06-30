@@ -20,11 +20,29 @@ module TypeDefOrRef =
 
 
 [<RequireQualifiedAccess>]
+module HasCustomAttribute =
+    let Module = HasCustomAttribute(HasCustomAttributeTag.Module, 1u)
+
+    let Assembly ({ TableIndex = index }: TableIndex<AssemblyRow>) = HasCustomAttribute(HasCustomAttributeTag.Assembly, index)
+
+
+
+[<RequireQualifiedAccess>]
 module MemberRefParent =
     let TypeRef({ TableIndex = index }: TableIndex<TypeRefRow>) = MemberRefParent(MemberRefParentTag.TypeRef, index)
 
 
 
+
+
+
+[<RequireQualifiedAccess>]
+module CustomAttributeType =
+    let MethodDef ({ TableIndex = index }: TableIndex<MethodDefRow>) =
+        CustomAttributeType(CustomAttributeTypeTag.MethodDef, index)
+
+    let MemberRef ({ TableIndex = index }: TableIndex<MemberRefRow>) =
+        CustomAttributeType(CustomAttributeTypeTag.MemberRef, index)
 
 [<RequireQualifiedAccess>]
 module ResolutionScope =

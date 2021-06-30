@@ -13,7 +13,7 @@ let table (wr: byref<FSharpIL.ChunkedMemoryBuilder>) counts table { TableIndex =
     then wr.WriteLE i
     else wr.WriteLE(uint16 i)
 
-let coded<'Tag when 'Tag : enum<uint8>>
+let coded<'Tag when 'Tag : enum<uint8> and 'Tag : comparison>
     (wr: byref<FSharpIL.ChunkedMemoryBuilder>)
     counts
     (kind: inref<CodedIndexKind<'Tag>>)

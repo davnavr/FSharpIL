@@ -181,3 +181,75 @@ let propertySig (signature: inref<PropertySig>) (wr: byref<ChunkedMemoryBuilder>
     customModifierList signature.CustomModifiers &wr
     etype signature.PropertyType &wr
     parameters signature.Parameters &wr
+
+let serString str (wr: byref<ChunkedMemoryBuilder>) =
+    match str with
+    | null -> wr.Write System.Byte.MaxValue
+    | "" -> wr.Write 0uy
+    | _ ->
+        let mutable buffer = if str.Length > 256 then Span.heapalloc<byte> str.Length else Span.stackalloc<byte> str.Length
+        let count = System.Text.Encoding.UTF8.GetBytes(System.String.op_Implicit str, buffer)
+        compressedUnsigned (uint32 count) &wr // PackedLen
+        wr.Write buffer
+
+let customAttribElem e (wr: byref<ChunkedMemoryBuilder>) =
+    match e with
+    | ValBool false -> wr.Write 0uy
+    | ValBool true -> wr.Write 1uy
+    | ValI1 (Convert.U1 i)
+    | ValU1 i -> wr.Write i
+    | ValChar (Convert.U2 i)
+    | ValI2 (Convert.U2 i)
+    | ValU2 i -> wr.WriteLE i
+    | ValI4 (Convert.U4 i)
+    | ValU4 i -> wr.WriteLE i
+    | ValI8 (Convert.U8 i)
+    | ValU8 i -> wr.WriteLE i
+    | ValR4 r -> wr.WriteLE(Convert.unsafeTo<_, uint32> r)
+    | ValR8 r -> wr.WriteLE(Convert.unsafeTo<_, uint64> r)
+    | SerString str -> serString str &wr
+
+let fixedArg arg (wr: byref<ChunkedMemoryBuilder>) =
+    match arg with
+    | FixedArg.Elem e -> customAttribElem e &wr
+    | FixedArg.SZArray ValueNone -> wr.WriteLE System.UInt32.MaxValue
+    | FixedArg.SZArray(ValueSome arr) ->
+        wr.WriteLE(uint32 arr.Length)
+        for e in arr do customAttribElem e &wr
+
+let primitiveElemType prim =
+    match prim with
+    | PrimitiveElemType.Bool -> ElementType.Boolean
+    | PrimitiveElemType.Char -> ElementType.Char
+    | PrimitiveElemType.R4 -> ElementType.R4
+    | PrimitiveElemType.R8 -> ElementType.R8
+    | PrimitiveElemType.I1 -> ElementType.I1
+    | PrimitiveElemType.I2 -> ElementType.I2
+    | PrimitiveElemType.I4 -> ElementType.I4
+    | PrimitiveElemType.I8 -> ElementType.I8
+    | PrimitiveElemType.U1 -> ElementType.U1
+    | PrimitiveElemType.U2 -> ElementType.U2
+    | PrimitiveElemType.U4 -> ElementType.U4
+    | PrimitiveElemType.U8 -> ElementType.U8
+    | PrimitiveElemType.String -> ElementType.String
+    | PrimitiveElemType.Type -> ElementType.Type
+
+let fieldOrPropType etype (wr: byref<ChunkedMemoryBuilder>) =
+    match etype with
+    | ElemType.Primitive prim -> elem (primitiveElemType prim) &wr
+    | ElemType.SZArray itype ->
+        elem ElementType.SZArray &wr
+        elem (primitiveElemType itype) &wr
+
+let namedArg (arg: inref<_>) (wr: byref<ChunkedMemoryBuilder>) =
+    elem (if arg.IsProperty then ElementType.Property else ElementType.Field) &wr
+    fieldOrPropType arg.Type &wr
+    serString arg.Name &wr // FieldOrPropName
+    fixedArg arg.Value &wr
+
+let customAttrib (attrib: inref<_>) (wr: byref<ChunkedMemoryBuilder>) =
+    wr.WriteLE 1us // Prolog
+    for farg in attrib.FixedArgs do fixedArg farg &wr
+    wr.WriteLE(Checked.uint16 attrib.NamedArgs.Length) // NumNamed
+    for i = 0 to attrib.NamedArgs.Length - 1 do
+        namedArg (&attrib.NamedArgs.ItemRef i) &wr
