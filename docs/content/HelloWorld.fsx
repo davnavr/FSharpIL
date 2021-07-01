@@ -156,8 +156,6 @@ let example() =
                 { Constructor = CustomAttributeCtor.Ref(tfmattr, tfmctor)
                   FixedArguments = fun _ _ _ -> Ok(FixedArg.Elem (Elem.SerString ".NETCoreApp,Version=v5.0"))
                   NamedArguments = ImmutableArray.Empty }
-
-        ()
     }
     |> ValidationResult.get
 
