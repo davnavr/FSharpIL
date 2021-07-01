@@ -224,6 +224,12 @@ type ReferencedMethod with
         visibility: ExternalVisibility *
         parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.ObjectConstructor>
 
+[<IsReadOnly; Struct>]
+[<NoComparison; StructuralEquality>]
+type MethodCall = // TODO: Prevent calling of default constructor?
+    member Owner: FSharpIL.Cli.Type
+    member Method: Method
+
 [<RequireQualifiedAccess>]
 module ReferencedMethod =
     val inline (|Instance|Virtual|Final|Static|Abstract|Constructor|):
@@ -234,3 +240,11 @@ module ReferencedMethod =
                    MethodReference<MethodKinds.Static>,
                    MethodReference<MethodKinds.Abstract>,
                    MethodReference<MethodKinds.ObjectConstructor>>
+
+[<RequireQualifiedAccess>]
+module MethodCall =
+    val internal Defined: DefinedType * DefinedMethod -> MethodCall
+    val internal Referenced: ReferencedType * ReferencedMethod -> MethodCall
+
+    //val inline (|Defined|Referenced|Specification|)
+    val inline (|Defined|Referenced|): MethodCall -> Choice<struct(DefinedType * DefinedMethod), struct(ReferencedType * ReferencedMethod)>

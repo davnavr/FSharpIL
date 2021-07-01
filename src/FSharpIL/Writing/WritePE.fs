@@ -47,7 +47,7 @@ let getFileInfo (file: PEFile) =
         if baseOfCode = Rva.Zero && section.Header.SectionName = SectionName.text then baseOfCode <- rva
         if baseOfData = Rva.Zero && section.Header.SectionName = SectionName.rsrc then baseOfData <- rva
 
-        imageSize <- imageSize + (Round.upTo salignment size) // TODO: Image size might still be wrong, remember the thing from before?
+        imageSize <- imageSize + (Round.upTo salignment size)
         rva <- rva + Round.upTo salignment size
     { FileHeader = file.FileHeader
       OptionalHeader = file.OptionalHeader

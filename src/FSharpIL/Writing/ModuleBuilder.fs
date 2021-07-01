@@ -26,7 +26,8 @@ type DefinedMethodBody =
     new (localTypes) = DefinedMethodBody(localTypes, SkipInitLocals)
     new () = DefinedMethodBody ImmutableArray.Empty
 
-    abstract WriteInstructions: byref<MethodBodyBuilder> -> uint16
+    /// Writes the instructions of the method body, and returns the maximum number of items on the stack.
+    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource -> uint16
 
 type EntryPoint =
     private
@@ -54,15 +55,13 @@ type DefinedTypeMembers =
 
     member this.AddMethod(method: DefinedMethod, body: DefinedMethodBody voption) =
         match this.owner with
-        //| DefinedType.Enum _ -> noImpl "error for enum cannot have methods"
-        //| DefinedType.Delegate _ -> noImpl "error for delegate cannot have additional methods maybe go check if ECMA-335 prohibits this in the list of rules, since section I says so"
         | :? TypeDefinition<TypeKinds.StaticClass> ->
             match method with
             | :? MethodDefinition<MethodKinds.Static> ->
                 match this.Method.Add method, body with
                 | true, ValueSome body' ->
                     this.MethodBodyLookup.[method] <- body'
-                    ValidationResult.Ok()
+                    ValidationResult.Ok(MethodCall.Defined(this.owner, method))
                 | true, ValueNone -> noImpl "error for missing method body"
                 | false, _ -> noImpl "error for duplicate method"
             | _ -> noImpl "what method definition"
@@ -93,7 +92,7 @@ type ReferencedTypeMembers = class
         | (:? TypeReference<TypeKinds.SealedClass>), :? MethodReference<MethodKinds.ObjectConstructor>
         | (:? TypeReference<TypeKinds.StaticClass>), :? MethodReference<MethodKinds.Static> ->
             if this.Method.Add method
-            then ValidationResult.Ok()
+            then ValidationResult.Ok(MethodCall.Referenced(this.owner, method))
             else noImpl "error for duplicate method"
         | _ -> noImpl "what referenced type and method"
 
@@ -197,13 +196,14 @@ type MemberIndices =
 type DefinedMethodBodyWriter
     (
         localVarSource: Signatures.LocalVarSig -> TableIndex<StandaloneSigRow>,
+        methodTokenSource: MethodTokenSource,
         body: DefinedMethodBody
     )
     =
     interface IMethodBodySource with
         member _.Create builder =
             { InitLocals = body.InitLocals
-              MaxStack = body.WriteInstructions &builder
+              MaxStack = body.WriteInstructions(&builder, methodTokenSource)
               LocalVariables = localVarSource body.LocalTypes }
 
 type ModuleBuilderSerializer
@@ -258,7 +258,7 @@ type ModuleBuilderSerializer
     let definedTypeLookup = Dictionary<DefinedType, _> definedTypes.Count
 
     let methodDefSignatures = Dictionary<Signatures.MethodDefSig, MethodDefSigOffset>(definedTypeLookup.Count * 16)
-    let methodRefSignatures = Dictionary<Signatures.MethodRefSig, MemberRefSigOffset>(definedTypeLookup.Count * 48) // TODO: Helper function for getting and adding signatures.
+    let methodRefSignatures = Dictionary<Signatures.MethodRefSig, MemberRefSigOffset>(referencedTypeLookup.Count * 32) // TODO: Helper function for getting and adding signatures.
     //let localVarSignatures = Dictionary<Signatures.LocalVarSig, TableIndex<StandaloneSigRow>>(methodDefSignatures.Count)
 
     let mutable methodDefParams = TableIndex<ParamRow>.One
@@ -290,6 +290,8 @@ type ModuleBuilderSerializer
             // TODO: Consider caching local variable signatures in localVarSignatures dictionary.
             Blob.mapLocalVarSig namedTypeMapping modifierTypeMapping signature
             |> failwith "TODO: write locals to blob stream"
+
+    let methodTokenSource = { MethodCalls = ImmutableArray.CreateBuilder(definedTypeLookup.Count * 64) }
 
     member private _.SerializeAssemblyReferences() =
         for assem in assemblyReferences do
@@ -355,7 +357,7 @@ type ModuleBuilderSerializer
                     TypeDefOrRef.Ref(this.SerializeReferencedType(tref, referencedTypes.[tref]))
                 | ClassExtends.Spec tspec -> failwith "TODO: Implement writing of TypeSpecs"
 
-            //members'
+            // TODO: Make a HybridHashMap helper collection type.
             let methods = Dictionary<DefinedMethod, TableIndex<MethodDefRow>> members.MethodCount
 
             for method in members.Method do
@@ -373,7 +375,7 @@ type ModuleBuilderSerializer
                     { Rva =
                         match members.MethodBodyLookup.TryGetValue method with
                         | true, body' ->
-                            let writer = DefinedMethodBodyWriter(localVarSource, body')
+                            let writer = DefinedMethodBodyWriter(localVarSource, methodTokenSource, body')
                             builder.MethodBodies.Add &writer
                         | false, _ -> MethodBodyLocation 0u
                       ImplFlags = method.ImplFlags
@@ -391,7 +393,7 @@ type ModuleBuilderSerializer
                     |> builder.Tables.MethodDef.Add
                 if methods.Count = 0 then indices.MethodList <- i
                 methods.[method] <- i
-            
+
             let i =
                 builder.Tables.TypeDef.Add
                     { Flags = tdef.Flags
@@ -440,6 +442,20 @@ type ModuleBuilderSerializer
 
         builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.CustomAttribute
 
+    member private _.PatchMethodCalls() =
+        let methodCallList = methodTokenSource.MethodCalls
+        for i = 0 to methodCallList.Count - 1 do
+            let call = &methodCallList.ItemRef i
+            let mutable writer =
+                { branchTargetList = Unchecked.defaultof<_>
+                  estimatedMaxStack = 0us
+                  instructions = call.InstructionWriter }
+            let token =
+                match call.MethodCall with
+                | MethodCall.Defined(tdef, mdef) -> MethodMetadataToken.Def definedTypeLookup.[tdef].Methods.[mdef]
+                | MethodCall.Referenced(tref, mref) -> MethodMetadataToken.Ref referencedTypeLookup.[tref].Members.[mref]
+            Unsafe.writeCallInstruction &writer call.CallOpcode token (not call.MethodCall.Method.ReturnType.IsVoid)
+
     member this.Serialize() =
         this.SerializeAssemblyReferences()
 
@@ -457,6 +473,8 @@ type ModuleBuilderSerializer
             //| EntryPointFile file -> EntryPointToken.File(failwith "TODO: get entry point file")
 
         this.SerializeCustomAttributes()
+
+        this.PatchMethodCalls()
 
         builder
 

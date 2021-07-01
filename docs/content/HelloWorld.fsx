@@ -105,7 +105,7 @@ let example() =
         let! _ = tfmattr'.ReferenceMethod tfmctor
 
         // static member WriteLine: string -> unit
-        let writeln =
+        let! writeln =
             ReferencedMethod.Static (
                 visibility = ExternalVisibility.Public,
                 returnType = ReturnType.RVoid,
@@ -131,10 +131,9 @@ let example() =
         (* Create the body of the entrypoint method *)
         let body =
             { new DefinedMethodBody() with
-                override _.WriteInstructions wr =
-                    // TODO: Maybe make other way of generating method bodies, since methods that mutate ModuleBuilder in here might not work correctly.
+                override _.WriteInstructions(wr, methods) =
                     ldstr &wr (builder.UserStrings.AddFolded "Hello World!")
-                    pop &wr // call // TODO: Have a call here for WriteLine method.
+                    call &wr writeln methods
                     ret &wr
                     wr.EstimatedMaxStack }
 

@@ -417,3 +417,20 @@ module ReferencedMethod =
         | :? MethodReference<MethodKinds.Static> as method' -> Static method'
         | :? MethodReference<MethodKinds.Abstract> as method' -> Abstract method'
         | _ -> Constructor(method :?> MethodReference<MethodKinds.ObjectConstructor>)
+
+[<IsReadOnly; Struct>]
+[<NoComparison; StructuralEquality>]
+type MethodCall (owner: FSharpIL.Cli.Type, method: Method) =
+    member _.Owner = owner
+    member _.Method = method
+
+[<RequireQualifiedAccess>]
+module MethodCall =
+    let Defined (tdef: DefinedType, method: DefinedMethod) = MethodCall(tdef, method)
+    let Referenced (tdef: ReferencedType, method: ReferencedMethod) = MethodCall(tdef, method)
+
+    let inline (|Defined|Referenced|) (call: MethodCall) =
+        match call.Owner with
+        | :? ReferencedType as tref -> Referenced(struct(tref, call.Method :?> ReferencedMethod))
+        | :? DefinedType as tdef -> Defined(struct(tdef, call.Method :?> DefinedMethod))
+        | _ -> failwith "TODO: MethodSpec?"

@@ -2,7 +2,6 @@
 
 open System
 open System.Collections.Generic
-open System.Collections.Immutable
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
@@ -21,7 +20,7 @@ type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allo
     new: localTypes: Signatures.LocalVarSig -> DefinedMethodBody
     new: unit -> DefinedMethodBody
 
-    abstract WriteInstructions: byref<MethodBodyBuilder> -> uint16
+    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource -> uint16
 
 type EntryPoint
 
@@ -40,8 +39,9 @@ type DefinedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
-    member AddMethod: method: DefinedMethod * body: DefinedMethodBody voption -> ValidationResult<unit> // TODO: Have return type be an object that allows the calling of the method in a method body.
-    member AddEntryPoint: method: EntryPointMethod * body: DefinedMethodBody -> ValidationResult<unit>
+    // TODO: Have special types for static method calls and instance method calls, since static does not work with callvirt
+    member AddMethod: method: DefinedMethod * body: DefinedMethodBody voption -> ValidationResult<MethodCall>
+    member AddEntryPoint: method: EntryPointMethod * body: DefinedMethodBody -> ValidationResult<MethodCall>
     member ContainsMethod: method: DefinedMethod -> bool
 
 [<Sealed>]
@@ -55,7 +55,7 @@ type ReferencedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
-    member ReferenceMethod: ReferencedMethod -> ValidationResult<unit>
+    member ReferenceMethod: ReferencedMethod -> ValidationResult<MethodCall>
     member ContainsMethod: method: ReferencedMethod -> bool
 
 [<Sealed>]

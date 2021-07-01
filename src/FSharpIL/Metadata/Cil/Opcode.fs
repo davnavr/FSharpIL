@@ -33,6 +33,8 @@ type Opcode =
     | Dup = 0x25us
     | Pop = 0x26us
 
+    | Call = 0x28us
+
     | Ret = 0x2Aus
 
     | Add = 0x58us
@@ -58,6 +60,7 @@ type Opcode =
     | Conv_r8 = 0x6Cus
     | Conv_u4 = 0x6Dus
     | Conv_u8 = 0x6Eus
+    | Callvirt = 0x6Fus
 
     | Ldstr = 0x72us
 
