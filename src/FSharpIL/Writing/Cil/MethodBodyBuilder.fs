@@ -44,7 +44,7 @@ type MethodBodyBuilder =
 
 [<Struct>]
 type internal MethodCallPatch =
-    { MethodCall: FSharpIL.Cli.MethodCall
+    { MethodCall: FSharpIL.Cli.MethodCallTarget
       CallOpcode: Opcode
       InstructionWriter: ChunkedMemoryBuilder }
 

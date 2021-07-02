@@ -40,8 +40,8 @@ type DefinedTypeMembers =
     //member EventCount: int32
 
     // TODO: Have special types for static method calls and instance method calls, since static does not work with callvirt
-    member AddMethod: method: DefinedMethod * body: DefinedMethodBody voption -> ValidationResult<MethodCall>
-    member AddEntryPoint: method: EntryPointMethod * body: DefinedMethodBody -> ValidationResult<MethodCall>
+    member AddMethod: method: DefinedMethod * body: DefinedMethodBody voption -> ValidationResult<MethodCallTarget>
+    member AddEntryPoint: method: EntryPointMethod * body: DefinedMethodBody -> ValidationResult<MethodCallTarget>
     member ContainsMethod: method: DefinedMethod -> bool
 
 [<Sealed>]
@@ -55,13 +55,15 @@ type ReferencedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
-    member ReferenceMethod: ReferencedMethod -> ValidationResult<MethodCall>
+    member ReferenceMethod: ReferencedMethod -> ValidationResult<MethodCallTarget>
     member ContainsMethod: method: ReferencedMethod -> bool
 
 [<Sealed>]
 type CustomAttributeList =
     member Count: int32
     member Add: CustomAttribute -> ValidationResult<unit>
+
+// TODO: Instead of having return values of methods by ValidationResult, have the ModuleBuilder instance itself keep track of whether or not it is an "error". This means that methods that return an error do not leave the builder in a potentially weird state.
 
 /// Builds a CLI metadata module (I.9).
 [<Sealed>]

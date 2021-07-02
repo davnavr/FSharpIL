@@ -98,6 +98,8 @@
     <Compile Include="Writing\MetadataValidator.fs" />
     <Compile Include="Writing\ModuleBuilder.fsi" />
     <Compile Include="Writing\ModuleBuilder.fs" />
+    <Compile Include="Writing\CoreAssemblyReference.fsi" />
+    <Compile Include="Writing\CoreAssemblyReference.fs" />
     <Compile Include="Writing\WriteCli.fsi" />
     <Compile Include="Writing\WriteCli.fs" />
     <Compile Include="Writing\DataDirectoriesBuilder.fs" />

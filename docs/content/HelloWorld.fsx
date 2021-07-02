@@ -159,14 +159,7 @@ let example() =
     }
     |> ValidationResult.get
 
-    let text (section: SectionBuilder) (directories: DataDirectoriesBuilder) =
-        directories.CliHeader <- section.AddData builder
-        struct(SectionName.text, SectionCharacteristics.text)
-
-    BuildPE.create
-        { DefaultHeaders.coffHeader with Characteristics = ImageFileFlags.exe }
-        DefaultHeaders.optionalHeader
-        (ImmutableArray.Create text)
+    BuildPE.exeFromModule builder
 
 (*** hide ***)
 #if COMPILED && !BENCHMARK

@@ -2,10 +2,12 @@
 
 open System.Collections.Immutable
 
+type PublicKeyToken = byte * byte * byte * byte * byte * byte * byte * byte
+
 type PublicKeyOrToken =
     | NoPublicKeyOrToken
     | PublicKey of ImmutableArray<byte>
-    | PublicKeyToken of byte * byte * byte * byte * byte * byte * byte * byte
+    | PublicKeyToken of PublicKeyToken
 
 [<RequireQualifiedAccess>]
 module PublicKeyOrToken =

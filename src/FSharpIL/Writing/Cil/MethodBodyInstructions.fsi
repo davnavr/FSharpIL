@@ -87,7 +87,7 @@ val inline pop: byref<MethodBodyBuilder> -> unit
 
 
 /// (0x28) Writes an instruction that calls the specified method (III.3.19).
-val call: byref<MethodBodyBuilder> -> method: FSharpIL.Cli.MethodCall -> MethodTokenSource -> unit
+val call: byref<MethodBodyBuilder> -> method: FSharpIL.Cli.MethodCallTarget -> MethodTokenSource -> unit
 
 
 
@@ -97,7 +97,7 @@ val inline ret: byref<MethodBodyBuilder> -> unit
 
 
 /// <summary>(0x6F) Writes an instruction that calls a method associated with an object (III.4.2).</summary>
-val callvirt: byref<MethodBodyBuilder> -> method: FSharpIL.Cli.MethodCall -> MethodTokenSource -> unit
+val callvirt: byref<MethodBodyBuilder> -> method: FSharpIL.Cli.MethodCallTarget -> MethodTokenSource -> unit
 
 
 

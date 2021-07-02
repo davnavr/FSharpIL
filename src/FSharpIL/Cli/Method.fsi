@@ -226,7 +226,7 @@ type ReferencedMethod with
 
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
-type MethodCall = // TODO: Prevent calling of default constructor?
+type MethodCallTarget = // TODO: Prevent calling of default constructor?
     member Owner: FSharpIL.Cli.Type
     member Method: Method
 
@@ -242,9 +242,9 @@ module ReferencedMethod =
                    MethodReference<MethodKinds.ObjectConstructor>>
 
 [<RequireQualifiedAccess>]
-module MethodCall =
-    val internal Defined: DefinedType * DefinedMethod -> MethodCall
-    val internal Referenced: ReferencedType * ReferencedMethod -> MethodCall
+module MethodCallTarget =
+    val internal Defined: DefinedType * DefinedMethod -> MethodCallTarget
+    val internal Referenced: ReferencedType * ReferencedMethod -> MethodCallTarget
 
     //val inline (|Defined|Referenced|Specification|)
-    val inline (|Defined|Referenced|): MethodCall -> Choice<struct(DefinedType * DefinedMethod), struct(ReferencedType * ReferencedMethod)>
+    val inline (|Defined|Referenced|): MethodCallTarget -> Choice<struct(DefinedType * DefinedMethod), struct(ReferencedType * ReferencedMethod)>

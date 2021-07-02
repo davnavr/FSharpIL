@@ -55,10 +55,16 @@ module Identifier =
 
 [<RequireQualifiedAccess>]
 module FileName =
+    let inline private invalidFileName() = invalidArg "str" "The assembly name was empty or contains invalid characters."
+
+    let tryOfId (id: Identifier) =
+        if id.ToString().IndexOfAny [| ':'; '\\'; '/' |] = -1
+        then ValueSome { FileName = id }
+        else ValueNone
+
     let tryOfStr (str: string) =
         match Identifier.tryOfStr str with
-        | ValueSome name when str.IndexOfAny [| ':'; '\\'; '/' |] = -1 -> ValueSome { FileName = name }
-        | ValueSome _
+        | ValueSome name -> tryOfId name
         | ValueNone -> ValueNone
 
     /// <summary>Creates a name for an <c>Assembly</c> or <c>AssemblyRef</c>.</summary>
@@ -68,7 +74,12 @@ module FileName =
     let ofStr (str: string) =
         match tryOfStr str with
         | ValueSome name -> name
-        | ValueNone -> invalidArg "str" "The assembly name was empty or contains invalid characters."
+        | ValueNone -> invalidFileName()
+
+    let ofId id =
+        match tryOfId id with
+        | ValueSome name -> name
+        | ValueNone -> invalidFileName()
 
 [<AutoOpen>]
 module StringOffsetPatterns =

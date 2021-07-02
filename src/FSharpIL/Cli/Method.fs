@@ -420,17 +420,17 @@ module ReferencedMethod =
 
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
-type MethodCall (owner: FSharpIL.Cli.Type, method: Method) =
+type MethodCallTarget (owner: FSharpIL.Cli.Type, method: Method) =
     member _.Owner = owner
     member _.Method = method
 
 [<RequireQualifiedAccess>]
-module MethodCall =
-    let Defined (tdef: DefinedType, method: DefinedMethod) = MethodCall(tdef, method)
-    let Referenced (tdef: ReferencedType, method: ReferencedMethod) = MethodCall(tdef, method)
+module MethodCallTarget =
+    let Defined (tdef: DefinedType, method: DefinedMethod) = MethodCallTarget(tdef, method)
+    let Referenced (tdef: ReferencedType, method: ReferencedMethod) = MethodCallTarget(tdef, method)
 
-    let inline (|Defined|Referenced|) (call: MethodCall) =
-        match call.Owner with
-        | :? ReferencedType as tref -> Referenced(struct(tref, call.Method :?> ReferencedMethod))
-        | :? DefinedType as tdef -> Defined(struct(tdef, call.Method :?> DefinedMethod))
+    let inline (|Defined|Referenced|) (target: MethodCallTarget) =
+        match target.Owner with
+        | :? ReferencedType as tref -> Referenced(struct(tref, target.Method :?> ReferencedMethod))
+        | :? DefinedType as tdef -> Defined(struct(tdef, target.Method :?> DefinedMethod))
         | _ -> failwith "TODO: MethodSpec?"

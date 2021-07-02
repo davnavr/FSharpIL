@@ -41,3 +41,15 @@ let create fileHeader (optionalHeader: OptionalHeader) (sections: ImmutableArray
         foffset <- foffset + builder.RawDataSize
 
     PEFile(fileHeader, optionalHeader, dataDirectories.ToImmutable(), Unsafe.As &sections', fileHeadersSize)
+
+let fromModule flags (metadata: ModuleBuilder) =
+    let text (section: SectionBuilder) (directories: DataDirectoriesBuilder) =
+        directories.CliHeader <- section.AddData metadata
+        struct(SectionName.text, SectionCharacteristics.text)
+    create
+        { DefaultHeaders.coffHeader with Characteristics = flags }
+        DefaultHeaders.optionalHeader
+        (ImmutableArray.Create text)
+
+let exeFromModule metadata = fromModule ImageFileFlags.exe metadata
+let dllFromModule metadata = fromModule ImageFileFlags.dll metadata

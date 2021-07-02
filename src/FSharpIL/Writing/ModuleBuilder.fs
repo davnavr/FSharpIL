@@ -61,7 +61,7 @@ type DefinedTypeMembers =
                 match this.Method.Add method, body with
                 | true, ValueSome body' ->
                     this.MethodBodyLookup.[method] <- body'
-                    ValidationResult.Ok(MethodCall.Defined(this.owner, method))
+                    ValidationResult.Ok(MethodCallTarget.Defined(this.owner, method))
                 | true, ValueNone -> noImpl "error for missing method body"
                 | false, _ -> noImpl "error for duplicate method"
             | _ -> noImpl "what method definition"
@@ -92,7 +92,7 @@ type ReferencedTypeMembers = class
         | (:? TypeReference<TypeKinds.SealedClass>), :? MethodReference<MethodKinds.ObjectConstructor>
         | (:? TypeReference<TypeKinds.StaticClass>), :? MethodReference<MethodKinds.Static> ->
             if this.Method.Add method
-            then ValidationResult.Ok(MethodCall.Referenced(this.owner, method))
+            then ValidationResult.Ok(MethodCallTarget.Referenced(this.owner, method))
             else noImpl "error for duplicate method"
         | _ -> noImpl "what referenced type and method"
 
@@ -452,8 +452,8 @@ type ModuleBuilderSerializer
                   instructions = call.InstructionWriter }
             let token =
                 match call.MethodCall with
-                | MethodCall.Defined(tdef, mdef) -> MethodMetadataToken.Def definedTypeLookup.[tdef].Methods.[mdef]
-                | MethodCall.Referenced(tref, mref) -> MethodMetadataToken.Ref referencedTypeLookup.[tref].Members.[mref]
+                | MethodCallTarget.Defined(tdef, mdef) -> MethodMetadataToken.Def definedTypeLookup.[tdef].Methods.[mdef]
+                | MethodCallTarget.Referenced(tref, mref) -> MethodMetadataToken.Ref referencedTypeLookup.[tref].Members.[mref]
             Unsafe.writeCallInstruction &writer call.CallOpcode token (not call.MethodCall.Method.ReturnType.IsVoid)
 
     member this.Serialize() =
