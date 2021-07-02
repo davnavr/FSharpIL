@@ -46,6 +46,11 @@ module Unsafe =
         writeMetadataToken &wr method.Token
         if hasRetValue then incrMaxStack &wr
 
+    let writeFieldInstruction (wr: byref<_>) opcode (field: FieldMetadataToken) pushesFieldValue =
+        writeRawOpcode &wr opcode
+        writeMetadataToken &wr field.Token
+        if pushesFieldValue then incrMaxStack &wr
+
 open Unsafe
 
 [<RequireQualifiedAccess>]
@@ -75,7 +80,7 @@ let inline pop (wr: byref<_>) = writeRawOpcode &wr Opcode.Pop
 
 let private patchedMethodCall (wr: byref<_>) opcode method { MethodCalls = calls } =
     // 1 byte for opcode, 4 bytes for method token.
-    calls.Add { MethodCall = method; CallOpcode = opcode; InstructionWriter = wr.instructions.ReserveBytes 5 }
+    calls.Add { Target = method; Opcode = opcode; InstructionWriter = wr.instructions.ReserveBytes 5 }
 
 let call (wr: byref<_>) method methodTokenSource =
     patchedMethodCall &wr Opcode.Call method methodTokenSource
@@ -91,6 +96,33 @@ let ldstr (wr: byref<_>) { UserStringOffset = offset } =
     writeRawOpcode &wr Opcode.Ldstr
     writeMetadataToken &wr (MetadataToken(MetadataTokenType.UserStringHeap, offset))
     incrMaxStack &wr
+
+let private patchedFieldInstruction (wr: byref<_>) opcode field pushesFieldValue { FieldInstructions = instrs } =
+    // 1 byte for opcode, 4 bytes for field token.
+    instrs.Add
+        { Target =
+            { PushesFieldValue = pushesFieldValue
+              Argument = field }
+          Opcode = opcode
+          InstructionWriter = wr.instructions.ReserveBytes 5 }
+
+let ldfld (wr: byref<_>) field fieldTokenSource =
+    patchedFieldInstruction &wr Opcode.Ldfld field true fieldTokenSource
+
+let ldflda (wr: byref<_>) field fieldTokenSource =
+    patchedFieldInstruction &wr Opcode.Ldflda field true fieldTokenSource
+
+let stfld (wr: byref<_>) field fieldTokenSource =
+    patchedFieldInstruction &wr Opcode.Stfld field false fieldTokenSource
+
+let ldsfld (wr: byref<_>) field fieldTokenSource =
+    patchedFieldInstruction &wr Opcode.Ldsfld field true fieldTokenSource
+
+let ldsflda (wr: byref<_>) field fieldTokenSource =
+    patchedFieldInstruction &wr Opcode.Ldsflda field true fieldTokenSource
+
+let stsfld (wr: byref<_>) field fieldTokenSource =
+    patchedFieldInstruction &wr Opcode.Stfld field false fieldTokenSource
 
 let inline ldarg (wr: byref<_>) (num: uint16) =
     writeRawOpcode &wr Opcode.Ldarg

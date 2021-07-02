@@ -87,7 +87,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
         let mainbody =
             { new DefinedMethodBody() with
-                override _.WriteInstructions(wr, methods) =
+                override _.WriteInstructions(wr, methods, fields) =
                     ret &wr
                     wr.EstimatedMaxStack }
 

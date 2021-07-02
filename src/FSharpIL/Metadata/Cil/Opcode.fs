@@ -67,6 +67,13 @@ type Opcode =
     | Conv_r_un = 0x76us
 
     | Throw = 0x7Aus
+    | Ldfld = 0x7Bus
+    | Ldflda = 0x7Cus
+    | Stfld = 0x7Dus
+    | Ldsfld = 0x7Eus
+    | Ldsflda = 0x7Fus
+
+    | Stsfld = 0x80us
 
     | Conv_ovf_i1_un = 0x82us
     | Conv_ovf_i2_un = 0x83us

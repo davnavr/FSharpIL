@@ -27,7 +27,7 @@ type DefinedMethodBody =
     new () = DefinedMethodBody ImmutableArray.Empty
 
     /// Writes the instructions of the method body, and returns the maximum number of items on the stack.
-    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource -> uint16
+    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource * FieldTokenSource -> uint16
 
 type EntryPoint =
     private
@@ -46,12 +46,22 @@ type DefinedTypeMembers =
     val private owner: DefinedType
     val private warnings: ValidationWarningsBuilder option
     val private entryPointToken: EntryPoint ref
+    [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
     [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
     [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
 
     new (owner, warnings, entryPointToken) = { owner = owner; warnings = warnings; entryPointToken = entryPointToken }
 
+    member this.FieldCount = this.Field.Count
     member this.MethodCount = this.Method.Count
+
+    member this.AddField(field: DefinedField) =
+        match this.owner, field with
+        | (:? TypeDefinition<TypeKinds.SealedClass>), (:? FieldDefinition<FieldKinds.Instance>) ->
+            if this.Field.Add field then
+                ValidationResult.Ok(FieldArg.Defined(this.owner, field))
+            else noImpl "error for duplicate field"
+        | _ -> noImpl (sprintf "TODO: Cannot add field %s to type %s" (field.GetType().Name) (this.owner.GetType().Name))
 
     // TODO: Check that the method does not use more type parameters defiend in the owner type than there actually are.
     member this.AddMethod(method: DefinedMethod, body: DefinedMethodBody voption) =
@@ -64,7 +74,7 @@ type DefinedTypeMembers =
 
                 ValidationResult.Ok(MethodCallTarget.Defined(this.owner, method))
             else noImpl "error for duplicate method"
-        | _ -> noImpl "TODO: Cannot add method %s to type %s" (method.GetType().Name) (this.owner.GetType().Name)
+        | _ -> noImpl (sprintf "TODO: Cannot add method %s to type %s" (method.GetType().Name) (this.owner.GetType().Name))
 
     member this.AddEntryPoint(method: EntryPointMethod, body) =
         match this.AddMethod(method.Method, ValueSome body) with
@@ -79,10 +89,12 @@ type DefinedTypeMembers =
 type ReferencedTypeMembers = class
     val private owner: ReferencedType
     val private warnings: ValidationWarningsBuilder option
+    [<DefaultValue>] val mutable Field: HybridHashSet<ReferencedField>
     [<DefaultValue>] val mutable Method: HybridHashSet<ReferencedMethod>
 
     new (owner, warnings) = { owner = owner; warnings = warnings }
 
+    member this.FieldCount = this.Field.Count
     member this.MethodCount = this.Method.Count
 
     member this.ReferenceMethod(method: ReferencedMethod) =
@@ -181,6 +193,7 @@ type ReferencedTypeEntry =
 [<NoComparison; NoEquality>]
 type DefinedTypeEntry =
     { TypeDef: TableIndex<TypeDefRow>
+      Fields: Dictionary<DefinedField, TableIndex<FieldRow>>
       Methods: Dictionary<DefinedMethod, TableIndex<MethodDefRow>> }
 
 [<Struct>]
@@ -195,13 +208,14 @@ type DefinedMethodBodyWriter
     (
         localVarSource: Signatures.LocalVarSig -> TableIndex<StandaloneSigRow>,
         methodTokenSource: MethodTokenSource,
+        fieldTokenSource: FieldTokenSource,
         body: DefinedMethodBody
     )
     =
     interface IMethodBodySource with
         member _.Create builder =
             { InitLocals = body.InitLocals
-              MaxStack = body.WriteInstructions(&builder, methodTokenSource)
+              MaxStack = body.WriteInstructions(&builder, methodTokenSource, fieldTokenSource)
               LocalVariables = localVarSource body.LocalTypes }
 
 type ModuleBuilderSerializer
@@ -255,6 +269,7 @@ type ModuleBuilderSerializer
     let referencedTypeLookup = Dictionary<ReferencedType, _> referencedTypes.Count
     let definedTypeLookup = Dictionary<DefinedType, _> definedTypes.Count
 
+    let fieldSignatures = Dictionary<_, FieldSigOffset>((definedTypeLookup.Count + referencedTypeLookup.Count) * 8)
     let methodDefSignatures = Dictionary<Signatures.MethodDefSig, MethodDefSigOffset>(definedTypeLookup.Count * 16)
     let methodRefSignatures = Dictionary<Signatures.MethodRefSig, MemberRefSigOffset>(referencedTypeLookup.Count * 32) // TODO: Helper function for getting and adding signatures.
     //let localVarSignatures = Dictionary<Signatures.LocalVarSig, TableIndex<StandaloneSigRow>>(methodDefSignatures.Count)
@@ -290,6 +305,7 @@ type ModuleBuilderSerializer
             |> failwith "TODO: write locals to blob stream"
 
     let methodTokenSource = { MethodCalls = ImmutableArray.CreateBuilder(definedTypeLookup.Count * 64) }
+    let fieldTokenSource = { FieldInstructions = ImmutableArray.CreateBuilder methodTokenSource.MethodCalls.Capacity }
 
     member private _.SerializeAssemblyReferences() =
         for assem in assemblyReferences do
@@ -321,7 +337,22 @@ type ModuleBuilderSerializer
                       TypeName = builder.Strings.Add tref.TypeName
                       TypeNamespace = builder.Strings.Add tref.TypeNamespace }
 
-            let members' = Dictionary<obj, TableIndex<MemberRefRow>>((*members.FieldCount +*) members.MethodCount)
+            let members' = Dictionary<obj, TableIndex<MemberRefRow>>(members.FieldCount + members.MethodCount)
+
+            for field in members.Field do
+                let signature = &field.Signature
+                members'.[field] <-
+                    builder.Tables.MemberRef.Add
+                        { Class = MemberRefParent.TypeRef i
+                          Name = builder.Strings.Add field.Name
+                          Signature =
+                            match fieldSignatures.TryGetValue signature with
+                            | true, { FieldSig = existing } -> { MemberRefSig = existing }
+                            | false, _ ->
+                                let signature' = Blob.mapFieldSig namedTypeMapping modifierTypeMapping &signature
+                                let offset = builder.Blob.Add &signature'
+                                fieldSignatures.[signature] <- offset
+                                { MemberRefSig = offset.FieldSig } }
 
             for method in members.Method do
                 let signature = method.Signature
@@ -356,7 +387,24 @@ type ModuleBuilderSerializer
                 | ClassExtends.Spec tspec -> failwith "TODO: Implement writing of TypeSpecs"
 
             // TODO: Make a HybridHashMap helper collection type.
+            let fields = Dictionary<DefinedField, TableIndex<FieldRow>> members.FieldCount
             let methods = Dictionary<DefinedMethod, TableIndex<MethodDefRow>> members.MethodCount
+
+            for field in members.Field do
+                let signature = &field.Signature
+                let i' =
+                    builder.Tables.Field.Add
+                        { Flags = field.Flags
+                          Name = builder.Strings.Add field.Name
+                          Signature =
+                            match fieldSignatures.TryGetValue signature with
+                            | true, existing -> existing
+                            | false, _ ->
+                                let signature' = Blob.mapFieldSig namedTypeMapping modifierTypeMapping &signature
+                                let offset = builder.Blob.Add &signature'
+                                fieldSignatures.[signature] <- offset
+                                offset }
+                if fields.Count = 0 then indices.FieldList <- i'
 
             for method in members.Method do
                 // TODO: If method list is empty, maybe increment methodDefParams by one, since method list of previous type will be reduced.
@@ -374,7 +422,7 @@ type ModuleBuilderSerializer
                     { Rva =
                         match members.MethodBodyLookup.TryGetValue method with
                         | true, body' ->
-                            let writer = DefinedMethodBodyWriter(localVarSource, methodTokenSource, body')
+                            let writer = DefinedMethodBodyWriter(localVarSource, methodTokenSource, fieldTokenSource, body')
                             builder.MethodBodies.Add &writer
                         | false, _ -> MethodBodyLocation 0u
                       ImplFlags = method.ImplFlags
@@ -406,7 +454,7 @@ type ModuleBuilderSerializer
 
             definedTypeLookup.[tdef] <-
                 { TypeDef = i
-                  //Fields = fields
+                  Fields = fields
                   Methods = methods }
             i
 
@@ -447,15 +495,23 @@ type ModuleBuilderSerializer
         let methodCallList = methodTokenSource.MethodCalls
         for i = 0 to methodCallList.Count - 1 do
             let call = &methodCallList.ItemRef i
-            let mutable writer =
-                { branchTargetList = Unchecked.defaultof<_>
-                  estimatedMaxStack = 0us
-                  instructions = call.InstructionWriter }
+            let mutable writer = call.Instructions
             let token =
-                match call.MethodCall with
+                match call.Target with
                 | MethodCallTarget.Defined(tdef, mdef) -> MethodMetadataToken.Def definedTypeLookup.[tdef].Methods.[mdef]
                 | MethodCallTarget.Referenced(tref, mref) -> MethodMetadataToken.Ref referencedTypeLookup.[tref].Members.[mref]
-            Unsafe.writeCallInstruction &writer call.CallOpcode token (not call.MethodCall.Method.ReturnType.IsVoid)
+            Unsafe.writeCallInstruction &writer call.Opcode token (not call.Target.Method.ReturnType.IsVoid)
+
+    member private _.PatchFieldInstructions() =
+        let fieldInstructionList = fieldTokenSource.FieldInstructions
+        for i = 0 to fieldInstructionList.Count - 1 do
+            let instr = &fieldInstructionList.ItemRef i
+            let mutable writer = instr.Instructions
+            let token =
+                match instr.Target.Argument with
+                | FieldArg.Defined(tdef, fdef) -> FieldMetadataToken.Def definedTypeLookup.[tdef].Fields.[fdef]
+                | FieldArg.Referenced(tref, fref) -> FieldMetadataToken.Ref referencedTypeLookup.[tref].Members.[fref]
+            Unsafe.writeFieldInstruction &writer instr.Opcode token (failwith "TODO: Have this be in Patch<FieldArg>")
 
     member this.Serialize() =
         this.SerializeAssemblyReferences()
@@ -476,6 +532,7 @@ type ModuleBuilderSerializer
         this.SerializeCustomAttributes()
 
         this.PatchMethodCalls()
+        this.PatchFieldInstructions()
 
         builder
 

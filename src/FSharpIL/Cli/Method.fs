@@ -217,9 +217,8 @@ type DefinedMethod =
     override this.Equals(other: Method) =
         match other with
         | :? DefinedMethod as other' ->
-            if this.Flags ||| other'.Flags &&& MethodDefFlags.MemberAccessMask = MethodDefFlags.CompilerControlled
-            then false
-            else base.Equals(other = other)
+            (this.Flags ||| other'.Flags &&& MethodDefFlags.MemberAccessMask <> MethodDefFlags.CompilerControlled)
+            && base.Equals(other = other)
         | _ -> false
 
 [<Sealed>]

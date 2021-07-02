@@ -56,6 +56,10 @@ let mapOptionalType namedTypeMapping modifierTypeMapping value =
     | ValueSome etype -> ValueSome(mapType namedTypeMapping modifierTypeMapping etype)
     | ValueNone -> ValueNone
 
+let mapFieldSig namedTypeMapping modifierTypeMapping (signature: inref<FieldSig<_, _>>) =
+    { CustomModifiers = mapCustomMod modifierTypeMapping signature.CustomModifiers
+      FieldType = mapType namedTypeMapping modifierTypeMapping signature.FieldType }
+
 let mapReturnType namedTypeMapping modifierTypeMapping (rtype: inref<ReturnType<_, _>>) =
     ReturnType<_, _> (
         rtype.Tag,

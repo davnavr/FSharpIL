@@ -43,14 +43,28 @@ type MethodBodyBuilder =
     member this.EstimatedMaxStack = this.estimatedMaxStack
 
 [<Struct>]
-type internal MethodCallPatch =
-    { MethodCall: FSharpIL.Cli.MethodCallTarget
-      CallOpcode: Opcode
+type internal Patch<'Target> =
+    { Target: 'Target
+      Opcode: Opcode
       InstructionWriter: ChunkedMemoryBuilder }
+
+    member this.Instructions =
+        { branchTargetList = Unchecked.defaultof<_>
+          estimatedMaxStack = 0us
+          instructions = this.InstructionWriter }
 
 [<IsReadOnly; Struct>]
 type MethodTokenSource =
-    internal { MethodCalls: ImmutableArray<MethodCallPatch>.Builder }
+    internal { MethodCalls: ImmutableArray<Patch<FSharpIL.Cli.MethodCallTarget>>.Builder }
+
+[<IsReadOnly; Struct>]
+type FieldPatch =
+    { PushesFieldValue: bool
+      Argument: FSharpIL.Cli.FieldArg }
+
+[<IsReadOnly; Struct>]
+type FieldTokenSource =
+    internal { FieldInstructions: ImmutableArray<Patch<FieldPatch>>.Builder }
 
 /// Represents the destination that a branch instruction would jump to.
 [<IsReadOnly; IsByRefLike>]

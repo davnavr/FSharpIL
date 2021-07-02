@@ -57,6 +57,9 @@ module AttributeKinds =
 type TypeAttributes<'Tag when 'Tag :> IAttributeTag<TypeDefFlags> and 'Tag : struct> =
     Attributes<'Tag, TypeDefFlags, AttributeKinds.U4, uint32>
 
+type FieldAttributes<'Tag when 'Tag :> IAttributeTag<FieldFlags> and 'Tag : struct> =
+    Attributes<'Tag, FieldFlags, AttributeKinds.U2, uint16>
+
 type MethodAttributes<'Tag when 'Tag :> IAttributeTag<MethodDefFlags> and 'Tag : struct> =
     Attributes<'Tag, MethodDefFlags, AttributeKinds.U2, uint16>
 
@@ -68,31 +71,41 @@ module Attribute =
 module TypeAttributes =
     type Tag = IAttributeTag<TypeDefFlags>
 
-    type IHasStaticMethods = interface end
+    type [<Interface>] IHasStaticMethods = inherit Tag
 
-    let BeforeFieldInit<'Tag when 'Tag :> Tag and 'Tag : struct and 'Tag :> IHasStaticMethods> =
+    let BeforeFieldInit<'Tag when 'Tag :> IHasStaticMethods and 'Tag : struct> =
         TypeAttributes<'Tag> TypeDefFlags.BeforeFieldInit
 
-    type IHasLayout = interface end
+    type [<Interface>] IHasLayout = inherit Tag
 
-    let SequentialLayout<'Tag when 'Tag :> Tag and 'Tag : struct and 'Tag :> IHasLayout> =
+    let SequentialLayout<'Tag when 'Tag : struct and 'Tag :> IHasLayout> =
         TypeAttributes<'Tag> TypeDefFlags.SequentialLayout
 
-    let ExplicitLayout<'Tag when 'Tag :> Tag and 'Tag : struct and 'Tag :> IHasLayout> =
+    let ExplicitLayout<'Tag when 'Tag : struct and 'Tag :> IHasLayout> =
         TypeAttributes<'Tag> TypeDefFlags.ExplicitLayout
 
-    type IHasStringFormat = interface end
+    type [<Interface>] IHasStringFormat = inherit Tag
 
-    let UnicodeClass<'Tag when 'Tag :> Tag and 'Tag : struct and 'Tag :> IHasStringFormat> =
+    let UnicodeClass<'Tag when 'Tag : struct and 'Tag :> IHasStringFormat> =
         TypeAttributes<'Tag> TypeDefFlags.UnicodeClass
 
-    let AutoClass<'Tag when 'Tag :> Tag and 'Tag : struct and 'Tag :> IHasStringFormat> =
+    let AutoClass<'Tag when 'Tag : struct and 'Tag :> IHasStringFormat> =
         TypeAttributes<'Tag> TypeDefFlags.AutoClass
 
-    type ISerializableType = interface end
+    type [<Interface>] ISerializableType = inherit Tag
 
-    let Serializable<'Tag when 'Tag :> Tag and 'Tag : struct and 'Tag :> ISerializableType> =
+    let Serializable<'Tag when 'Tag : struct and 'Tag :> ISerializableType> =
         TypeAttributes<'Tag> TypeDefFlags.Serializable
+
+[<RequireQualifiedAccess>]
+module FieldAttributes =
+    type Tag = IAttributeTag<FieldFlags>
+
+    let NotSerialized<'Tag when 'Tag :> Tag and 'Tag : struct and 'Tag :> Tag> =
+        FieldAttributes<'Tag> FieldFlags.NotSerialized
+
+    let InitOnly<'Tag when 'Tag :> Tag and 'Tag : struct and 'Tag :> Tag> =
+        FieldAttributes<'Tag> FieldFlags.InitOnly
 
 [<RequireQualifiedAccess>]
 module MethodAttributes =

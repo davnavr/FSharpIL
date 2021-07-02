@@ -28,6 +28,10 @@ type private DelegateBlobWriter = struct
     interface IBlobWriter<ByteBlobWriter> with member _.Write(wr, writer) = writer.Invoke &wr
 end
 
+type private FieldSigWriter = struct
+    interface IBlobWriter<FieldSig> with member _.Write(wr, signature) = BlobWriter.fieldSig &signature &wr
+end
+
 type private MethodDefSigWriter = struct
     interface IBlobWriter<MethodDefSig> with member _.Write(wr, signature) = BlobWriter.methodDefSig &signature &wr
 end
@@ -66,7 +70,7 @@ type BlobStreamBuilder (capacity: int32) =
     // TODO: Add overload that accepts function pointer for adding byte blob when available.
     //member this.Add(writer: 
 
-    member internal this.Add<'Writer, 'Item
+    member private this.Add<'Writer, 'Item
         when 'Writer :> IBlobWriter<'Item>
         and 'Writer : struct>
         (item: inref<'Item>)
@@ -104,6 +108,8 @@ type BlobStreamBuilder (capacity: int32) =
     member this.Add(signature: inref<_>) = { MemberRefSig = this.Add<MethodRefSigWriter, _> &signature }
 
     member this.Add(attrib: inref<_>) = { CustomAttrib = this.Add<CustomAttribWriter, _> &attrib }
+
+    member this.Add(signature: inref<_>) = { FieldSig = this.Add<FieldSigWriter, _> &signature }
 
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength

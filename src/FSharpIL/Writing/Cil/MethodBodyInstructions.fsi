@@ -25,7 +25,15 @@ module Unsafe =
     val writeCallInstruction:
         byref<MethodBodyBuilder> ->
         opcode: Opcode ->
-        method: MethodMetadataToken -> hasRetValue: bool ->
+        method: MethodMetadataToken ->
+        hasRetValue: bool ->
+        unit
+
+    val writeFieldInstruction:
+        byref<MethodBodyBuilder> ->
+        opcode: Opcode ->
+        field: FieldMetadataToken ->
+        loadsFieldValue: bool ->
         unit
 
 [<RequireQualifiedAccess>]
@@ -48,6 +56,8 @@ module Call =
 
     /// <summary>(0x6F) Writes an instruction that calls the <paramref name="method"/> associated with an object (III.4.2).</summary>
     val callvirt: stream: byref<MethodBodyBuilder> -> method: MethodMetadataToken -> hasRetValue: bool -> unit
+
+// TODO: Have module for versions of field instructions that take a FieldMetadataToken instead.
 
 /// (0x00) Writes an instruction that does nothing (III.3.51).
 val inline nop: byref<MethodBodyBuilder> -> unit
@@ -106,6 +116,29 @@ val callvirt: byref<MethodBodyBuilder> -> method: FSharpIL.Cli.MethodCallTarget 
 /// </summary>
 /// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
 val ldstr: byref<MethodBodyBuilder> -> offset: UserStringOffset -> unit
+
+
+
+/// (0x7B) Writes an instruction that loads the value of an instance field onto the stack (III.4.10).
+// TODO: Instead take a FieldDefinition<FieldKinds.Instance> or FieldReference<FieldKinds.Instance>
+val ldfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
+
+/// (0x7C) Writes an instruction that pops a member reference off of the stack and pushes an unmanaged pointer to an instance
+/// field onto the stack (III.4.11).
+val ldflda: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
+
+/// (0x7D) Writes an instruction that pops a value and a member reference off of the stack, storing the value into an instance
+/// field (III.4.28).
+val stfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
+
+/// (0x7E) Writes an instruction that loads the value of a static field onto the stack (III.4.14).
+val ldsfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
+
+/// (0x7F) Writes an instruction that pushes an unmanaged pointer to a static field onto the stack (III.4.15).
+val ldsflda: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
+
+/// (0x80) Writes an instruction that pops a value off of the stack and stores it into a static field (III.4.30).
+val stsfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
 
 
 

@@ -5,6 +5,8 @@ open FSharpIL.Utilities
 type MetadataTokenType =
     | Module = 0uy
 
+    | Field = 4uy
+
     | MethodDef = 6uy
 
     | MemberRef = 0xAuy

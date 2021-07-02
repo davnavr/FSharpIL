@@ -20,7 +20,7 @@ type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allo
     new: localTypes: Signatures.LocalVarSig -> DefinedMethodBody
     new: unit -> DefinedMethodBody
 
-    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource -> uint16
+    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource * FieldTokenSource -> uint16
 
 type EntryPoint
 
@@ -31,13 +31,16 @@ module EntryPoint =
 
 [<Sealed>]
 type DefinedTypeMembers =
+    [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
     [<DefaultValue>] val mutable internal Method: HybridHashSet<DefinedMethod>
     [<DefaultValue>] val mutable internal MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
 
-    //member FieldCount: int32
+    member FieldCount: int32
     member MethodCount: int32
     //member PropertyCount: int32
     //member EventCount: int32
+
+    member AddField: field: DefinedField -> ValidationResult<FieldArg>
 
     // TODO: Have special types for static method calls and instance method calls, since static does not work with callvirt
     member AddMethod: method: DefinedMethod * body: DefinedMethodBody voption -> ValidationResult<MethodCallTarget>
@@ -46,11 +49,12 @@ type DefinedTypeMembers =
 
 [<Sealed>]
 type ReferencedTypeMembers =
+    [<DefaultValue>] val mutable internal Field: HybridHashSet<ReferencedField>
     [<DefaultValue>] val mutable internal Method: HybridHashSet<ReferencedMethod>
 
     internal new: owner: ReferencedType * warnings: ValidationWarningsBuilder option -> ReferencedTypeMembers
 
-    //member FieldCount: int32
+    member FieldCount: int32
     member MethodCount: int32
     //member PropertyCount: int32
     //member EventCount: int32
