@@ -123,7 +123,8 @@ let example() =
                 typeNamespace = ValueSome(Identifier.ofStr "HelloWorld"),
                 enclosingClass = ValueNone,
                 typeName = Identifier.ofStr "Program",
-                extends = ClassExtends.ConcreteRef object
+                extends = ClassExtends.ConcreteRef object,
+                genericParameters = GenericParamList.empty
             )
 
         let! struct(members, _) = builder.DefineType program

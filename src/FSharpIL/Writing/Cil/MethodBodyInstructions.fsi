@@ -68,7 +68,8 @@ val inline nop: byref<MethodBodyBuilder> -> unit
 /// </summary>
 val inline ``break``: byref<MethodBodyBuilder> -> unit
 
-/// (0x02) Writes an instruction that loads argument #0 onto the stack (III.3.38).
+/// (0x02) Writes an instruction that loads argument #0 for static methods or the "this" pointer for instance methods onto the
+/// stack (III.3.38).
 val inline ldarg_0: byref<MethodBodyBuilder> -> unit
 
 /// (0x03) Writes an instruction that loads argument #1 onto the stack (III.3.38).
@@ -119,7 +120,8 @@ val ldstr: byref<MethodBodyBuilder> -> offset: UserStringOffset -> unit
 
 
 
-/// (0x7B) Writes an instruction that loads the value of an instance field onto the stack (III.4.10).
+/// (0x7B) Writes an instruction that pops a member reference off of the stack and pushes the value of an instance field onto the
+/// stack (III.4.10).
 // TODO: Instead take a FieldDefinition<FieldKinds.Instance> or FieldReference<FieldKinds.Instance>
 val ldfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
 
@@ -127,7 +129,7 @@ val ldfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldToke
 /// field onto the stack (III.4.11).
 val ldflda: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
 
-/// (0x7D) Writes an instruction that pops a value and a member reference off of the stack, storing the value into an instance
+/// (0x7D) Writes an instruction that pops a member reference and a value off of the stack, storing the value into an instance
 /// field (III.4.28).
 val stfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
 

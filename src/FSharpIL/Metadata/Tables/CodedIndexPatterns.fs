@@ -59,3 +59,7 @@ module ResolutionScope =
     let TypeRef({ TableIndex = index }: TableIndex<TypeRefRow>) = ResolutionScope(ResolutionScopeTag.TypeRef, index)
     let AssemblyRef({ TableIndex = index }: TableIndex<AssemblyRefRow>) = ResolutionScope(ResolutionScopeTag.AssemblyRef, index)
 
+[<RequireQualifiedAccess>]
+module TypeOrMethodDef =
+    let Type ({ TableIndex = index }: TableIndex<TypeDefRow>) = TypeOrMethodDef(TypeOrMethodDefTag.TypeDef, index)
+    let Method ({ TableIndex = index }: TableIndex<MethodDefRow>) = TypeOrMethodDef(TypeOrMethodDefTag.MethodDef, index)

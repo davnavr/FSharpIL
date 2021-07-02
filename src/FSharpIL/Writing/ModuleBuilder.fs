@@ -224,6 +224,7 @@ type ModuleBuilderSerializer
         name: Identifier,
         mvid,
         attributes: Dictionary<_, _>,
+        gparams: Dictionary<_, _>,
         userStringStream,
         assembly: AssemblyDefinition option,
         entryPointToken: EntryPoint,
@@ -459,37 +460,92 @@ type ModuleBuilderSerializer
             i
 
     member private _.SerializeCustomAttributes() =
-        /// The custom attribute table is required to be sorted.
-        let customAttributeLookup = SortedList<HasCustomAttribute, _> attributes.Count
+        if attributes.Count > 0 then
+            let lookup = SortedList<HasCustomAttribute, _> attributes.Count
 
-        for KeyValue(parent, attrs) in attributes do
-            let key =
-                if Object.ReferenceEquals(parent, moduleBuilderObj) then
-                    HasCustomAttribute.Module
-                elif assembly.IsSome && Object.ReferenceEquals(parent, assembly.Value) then
-                    HasCustomAttribute.Assembly assemblyDefIndex.Value
-                else
+            for KeyValue(parent, attrs) in attributes do
+                let index =
+                    if Object.ReferenceEquals(parent, moduleBuilderObj) then
+                        HasCustomAttribute.Module
+                    elif assembly.IsSome && Object.ReferenceEquals(parent, assembly.Value) then
+                        HasCustomAttribute.Assembly assemblyDefIndex.Value
+                    else
+                        match parent with
+                        | _ ->
+                            parent.GetType().Name
+                            |> sprintf "Unsupported custom attribute parent type %s"
+                            |> invalidOp
+                lookup.[index] <- attrs
+
+            for KeyValue(parent, attrs: ImmutableArray<ConstructedCustomAttribute>.Builder) in lookup do
+                for i = 0 to attrs.Count - 1 do
+                    let attribute = &attrs.ItemRef i
+                    { Parent = parent
+                      Type =
+                        match attribute.Constructor with
+                        | CustomAttributeCtor.Ref(tref, ctor) ->
+                            CustomAttributeType.MemberRef referencedTypeLookup.[tref].Members.[ctor]
+                        | CustomAttributeCtor.Def(tdef, ctor) ->
+                            CustomAttributeType.MethodDef definedTypeLookup.[tdef].Methods.[ctor]
+                      Value = builder.Blob.Add &attribute.Signature }
+                    |> builder.Tables.CustomAttribute.Add
+                    |> ignore
+
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.CustomAttribute
+
+    member private _.SerializeGenericParams() =
+        if gparams.Count > 0 then
+            let genericParamLookup = SortedList<TypeOrMethodDef, _> gparams.Count
+
+            for KeyValue(parent: obj, parameters) in gparams do
+                let index =
                     match parent with
+                    | :? DefinedType as tdef -> TypeOrMethodDef.Type definedTypeLookup.[tdef].TypeDef
                     | _ ->
                         parent.GetType().Name
-                        |> sprintf "Unsupported custom attribute parent type %s"
+                        |> sprintf "Unsupported generic parameter parent %s, expected either a defined type or defined method"
                         |> invalidOp
-            customAttributeLookup.[key] <- attrs
+                genericParamLookup.[index] <- parameters
 
-        for KeyValue(parent, attrs) in customAttributeLookup do
-            for (attribute: ConstructedCustomAttribute) in attrs do
-                { Parent = parent
-                  Type =
-                    match attribute.Constructor with
-                    | CustomAttributeCtor.Ref(tref, ctor) ->
-                        CustomAttributeType.MemberRef referencedTypeLookup.[tref].Members.[ctor]
-                    | CustomAttributeCtor.Def(tdef, ctor) ->
-                        CustomAttributeType.MethodDef definedTypeLookup.[tdef].Methods.[ctor]
-                  Value = builder.Blob.Add &attribute.Signature }
-                |> builder.Tables.CustomAttribute.Add
-                |> ignore
+            let genericParamConstraints = SortedList<TableIndex<GenericParamRow>, _>(genericParamLookup.Capacity * 4)
 
-        builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.CustomAttribute
+            for KeyValue(owner, GenericParamList parameters) in genericParamLookup do
+                for i = 0 to parameters.Length - 1 do
+                    let gparam = parameters.[i]
+                    let parami =
+                        let mutable flags =
+                            match gparam.SpecialConstraint with
+                            | NoSpecialConstriant -> GenericParamFlags.None
+                            | ReferenceTypeConstraint -> GenericParamFlags.ReferenceTypeConstraint
+                            | NonNullableValueTypeConstraint -> GenericParamFlags.NotNullableValueTypeConstraint
+
+                        if gparam.RequiresDefaultConstructor then
+                            flags <- flags ||| GenericParamFlags.DefaultConstructorConstraint
+
+                        // TODO: Add variance information to generic param rows.
+
+                        builder.Tables.GenericParam.Add
+                            { Number = Checked.uint16 i
+                              Flags = flags
+                              Owner = owner
+                              Name = builder.Strings.Add gparam.Name }
+
+                    genericParamConstraints.[parami] <- gparam.Constraints
+
+            for KeyValue(owner, constraints) in genericParamConstraints do
+                for constr in constraints do
+                    { Owner = owner
+                      Constraint =
+                        match constr with
+                        | TypeDefOrRefOrSpec.Def tdef -> TypeDefOrRef.Def definedTypeLookup.[tdef].TypeDef
+                        | TypeDefOrRefOrSpec.Ref tref -> TypeDefOrRef.Ref referencedTypeLookup.[tref].TypeRef
+                        | TypeDefOrRefOrSpec.Spec tspec -> noImpl "TODO: Use lookup for typespec for generic param constraints" }
+                    |> builder.Tables.GenericParamConstraint.Add
+                    |> ignore
+
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.GenericParam
+            if genericParamConstraints.Count > 0 then
+                builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.GenericParamConstraint
 
     member private _.PatchMethodCalls() =
         let methodCallList = methodTokenSource.MethodCalls
@@ -529,8 +585,8 @@ type ModuleBuilderSerializer
             | EntryPointMethod(owner, method) -> EntryPointToken.MethodDef definedTypeLookup.[owner].Methods.[method.Method]
             //| EntryPointFile file -> EntryPointToken.File(failwith "TODO: get entry point file")
 
+        this.SerializeGenericParams()
         this.SerializeCustomAttributes()
-
         this.PatchMethodCalls()
         this.PatchFieldInstructions()
 
@@ -552,7 +608,8 @@ type ModuleBuilder
     let assemblyRefs = HashSet<AssemblyReference>(defaultArg assemblyRefCapacity 8)
     let definedTypes = Dictionary<DefinedType, DefinedTypeMembers>(defaultArg typeDefCapacity 16)
     let referencedTypes = Dictionary<ReferencedType, ReferencedTypeMembers>(defaultArg typeRefCapacity 32)
-    let attributes = Dictionary<obj, _> 8 // TODO: Get fixed arguments!
+    let attributes = Dictionary<obj, ImmutableArray<_>.Builder> 8
+    let gparams = Dictionary<obj, GenericParamList> 16
     let entryPointToken = ref Unchecked.defaultof<EntryPoint>
 
     let customAttributeResolver =
@@ -589,13 +646,14 @@ type ModuleBuilder
     member inline private _.CreateAttributeList owner = CustomAttributeList(owner, attributes, customAttributeResolver)
 
     // TODO: Add extra parameter that accepts a list of generic parameters.
-    member this.DefineType t =
+    member this.DefineType(t: DefinedType) =
         match definedTypes.TryGetValue t with
         | true, existing -> ValidationResult<_>.Error(noImpl "TODO: error for duplicate type def")
         | false, _ ->
             // TODO: Check that extends and nestedclass are already contained in the Module.
             let members = DefinedTypeMembers(t, warnings, entryPointToken)
             definedTypes.[t] <- members
+            gparams.[t] <- t.GenericParameters
             Ok(struct(members, this.CreateAttributeList t))
 
     member _.ReferenceType t =
@@ -620,6 +678,7 @@ type ModuleBuilder
                 name,
                 this.Mvid,
                 attributes,
+                gparams,
                 this.UserStrings,
                 assembly,
                 this.EntryPoint,

@@ -22,7 +22,7 @@ open System.Collections.Immutable
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
-open FSharpIL.PortableExecutable
+open FSharpIL.Metadata.Signatures
 
 open FSharpIL.Writing
 open FSharpIL.Writing.Cil
@@ -70,12 +70,50 @@ let example() = // TODO: Make helper function to add reference to System.Private
                 typeNamespace = ValueSome namespace',
                 enclosingClass = ValueNone,
                 typeName = Identifier.ofStr "ArrayList`1",
-                extends = ClassExtends.ConcreteRef mscorlib.Object
+                extends = ClassExtends.ConcreteRef mscorlib.Object,
+                genericParameters = GenericParamList.ofSeq [ GenericParam.named(Identifier.ofStr "T") ]
             )
 
         // TODO: Figure out how to add generic parameters.
-        let! arrlist' = builder.DefineType arrlist
+        let! struct(arrlist', _) = builder.DefineType arrlist
 
+        // val private items: 'T[]
+        let! items =
+            DefinedField.Instance (
+                visibility = MemberVisibility.Private,
+                flags = FieldAttributes.InitOnly,
+                name = Identifier.ofStr "items",
+                signature =
+                    { CustomModifiers = ImmutableArray.Empty
+                      FieldType = EncodedType.SZArray(ImmutableArray.Empty, EncodedType.Var 0u) }
+            )
+            |> arrlist'.AddField
+
+        // new: capacity: int32 -> ArrayList<'T>
+        let ctor =
+            DefinedMethod.Constructor (
+                MemberVisibility.Public,
+                flags = MethodAttributes.HideBySig,
+                parameterTypes = ImmutableArray.Create(ParamItem.Param(ImmutableArray.Empty, EncodedType.I4)),
+                parameterList = (fun _ _ -> Parameter.named(Identifier.ofStr "capacity"))
+            )
+
+        let ctorbody =
+            { new DefinedMethodBody() with
+                override _.WriteInstructions(wr, methods, fields) =
+                    // inherit System.Object()
+                    ldarg_0 &wr
+                    callvirt &wr core.ObjectConstructor methods
+
+                    // { items = Array.zeroCreate<'T> capacity }
+                    ldarg_0 &wr
+                    failwith "TODO: Create empty array"
+                    stfld &wr items fields
+
+                    ret &wr
+                    wr.EstimatedMaxStack }
+
+        // TODO: Add ctor
 
         let maindef =
             DefinedMethod.EntryPoint (

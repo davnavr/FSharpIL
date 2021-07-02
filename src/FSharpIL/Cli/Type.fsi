@@ -1,10 +1,64 @@
 ﻿namespace rec FSharpIL.Cli
 
 open System
+open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
+
+type GenericParamKind =
+    | Invariant
+    | Covariant
+    | Contravariant
+
+[<IsReadOnly; Struct>]
+type GenericSpecialConstraint =
+    | NoSpecialConstriant
+    | ReferenceTypeConstraint
+    | NonNullableValueTypeConstraint
+
+[<CustomComparison; CustomEquality>]
+type GenericParam =
+    { Name: Identifier
+      SpecialConstraint: GenericSpecialConstraint
+      RequiresDefaultConstructor: bool
+      Constraints: ImmutableArray<TypeDefOrRefOrSpec> }
+
+    member Equals: other: GenericParam -> bool
+    member CompareTo: other: GenericParam -> int32
+
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
+
+    interface IComparable
+    interface IComparable<GenericParam>
+    interface IEquatable<GenericParam>
+
+[<RequireQualifiedAccess>]
+module GenericParam =
+    val named: Identifier -> GenericParam
+
+[<IsReadOnly>]
+[<NoComparison; NoEquality>]
+type GenericParamList = struct
+    member Parameters: ImmutableArray<GenericParam>
+end
+
+[<RequireQualifiedAccess>]
+module GenericParamList =
+    val empty: GenericParamList
+    val ofSet: Set<GenericParam> -> GenericParamList
+    val tryOfSeq: seq<GenericParam> -> Result<GenericParamList, GenericParam>
+    val tryOfArray: GenericParam[] -> Result<GenericParamList, GenericParam>
+    val tryOfBlock: ImmutableArray<GenericParam> -> Result<GenericParamList, GenericParam>
+    /// <summary>Creates a generic parameter list from the sequence of generic parameters.</summary>
+    /// <exception cref="ArgumentException">The sequence of generic <paramref name="parameters"/> contains a duplicate.</exception>
+    val ofSeq: parameters: seq<GenericParam> -> GenericParamList
+
+[<AutoOpen>]
+module GenericParamListPatterns =
+    val inline (|GenericParamList|): GenericParamList -> ImmutableArray<GenericParam>
 
 [<AbstractClass>]
 type Type = // TODO: Rename to NamedType.
@@ -203,6 +257,8 @@ type DefinedType =
     inherit Type
     val Flags: TypeDefFlags
     val Extends: ClassExtends
+    /// Gets the generic parameters of this type.
+    val GenericParameters: GenericParamList // TODO: Have list of generic parameters be in Type base class.
 
     member Visibility: TypeVisibility
     /// Gets the type that contains this nested type (II.22.32).
@@ -226,7 +282,8 @@ type DefinedType with
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        extends: ClassExtends -> TypeDefinition<TypeKinds.ConcreteClass>
+        extends: ClassExtends *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.ConcreteClass>
 
     static member AbstractClass:
         visibility: TypeVisibility *
@@ -234,7 +291,8 @@ type DefinedType with
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        extends: ClassExtends -> TypeDefinition<TypeKinds.AbstractClass>
+        extends: ClassExtends *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.AbstractClass>
 
     static member SealedClass:
         visibility: TypeVisibility *
@@ -242,7 +300,8 @@ type DefinedType with
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        extends: ClassExtends -> TypeDefinition<TypeKinds.SealedClass>
+        extends: ClassExtends *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.SealedClass>
 
     static member StaticClass:
         visibility: TypeVisibility *
@@ -250,7 +309,8 @@ type DefinedType with
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        extends: ClassExtends -> TypeDefinition<TypeKinds.StaticClass>
+        extends: ClassExtends *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.StaticClass>
 
     static member Interface:
         visibility: TypeVisibility *
@@ -258,7 +318,8 @@ type DefinedType with
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        extends: ClassExtends -> TypeDefinition<TypeKinds.Interface>
+        extends: ClassExtends *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.Interface>
 
     static member ValueType:
         visibility: TypeVisibility *
@@ -266,7 +327,8 @@ type DefinedType with
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
         typeName: Identifier *
-        extends: ClassExtends -> TypeDefinition<TypeKinds.ValueType>
+        extends: ClassExtends *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.ValueType>
 
     //static member Delegate
     //static member Enum

@@ -1,12 +1,136 @@
 ﻿namespace rec FSharpIL.Cli
 
 open System
+open System.Collections.Generic
+open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
 open FSharpIL.Utilities
+open FSharpIL.Utilities.Collections
+
+type GenericParamKind =
+    | Invariant
+    | Covariant
+    | Contravariant
+
+[<IsReadOnly; Struct>]
+type GenericSpecialConstraint =
+    | NoSpecialConstriant
+    | ReferenceTypeConstraint
+    | NonNullableValueTypeConstraint
+
+[<CustomComparison; CustomEquality>]
+type GenericParam =
+    { Name: Identifier
+      SpecialConstraint: GenericSpecialConstraint
+      RequiresDefaultConstructor: bool
+      Constraints: ImmutableArray<TypeDefOrRefOrSpec> } // TODO: Constraint list should be a set.
+
+    member this.Equals other = this.Name = other.Name
+    member this.CompareTo other = compare this.Name other.Name
+
+    override this.GetHashCode() = this.Name.GetHashCode()
+
+    override this.Equals(obj: obj) =
+        match obj with
+        | :? GenericParam as other -> this.Equals(other = other)
+        | _ -> false
+
+    interface IComparable with member this.CompareTo obj = this.CompareTo(obj :?> GenericParam)
+    interface IComparable<GenericParam> with member this.CompareTo other = this.CompareTo other
+    interface IEquatable<GenericParam> with member this.Equals other = this.Equals(other = other)
+
+[<RequireQualifiedAccess>]
+module GenericParam =
+    let named name =
+        { Name = name
+          SpecialConstraint = NoSpecialConstriant
+          RequiresDefaultConstructor = false
+          Constraints = ImmutableArray.Empty }
+
+// TODO: Include whether or not the parameters are covariant or contravariant. (GenericParamKind)
+[<IsReadOnly>]
+[<NoComparison; NoEquality>]
+type GenericParamList (parameters: ImmutableArray<GenericParam>) = struct
+    member _.Parameters = parameters
+end
+
+[<RequireQualifiedAccess>]
+module GenericParamList =
+    let empty = GenericParamList ImmutableArray.Empty
+
+    let ofSet (parameters: Set<_>) = GenericParamList(ImmutableArray.CreateRange parameters)
+
+    let inline tryOfCollection capacity move current add finish =
+        let mutable lookup = HybridHashSet<GenericParam> capacity
+        let mutable duplicate: GenericParam voption = ValueNone
+
+        while duplicate.IsNone && move() do
+            let current = current()
+            if lookup.Add current
+            then add current
+            else duplicate <- ValueSome current
+
+        match duplicate with
+        | ValueNone -> GenericParamList(finish()) |> Ok
+        | ValueSome duplicate' -> Error duplicate'
+
+    let tryOfSeq (parameters: seq<_>) =
+        let builder = ImmutableArray.CreateBuilder()
+        let mutable enumerator: IEnumerator<_> = parameters.GetEnumerator()
+        tryOfCollection
+            0
+            (fun() -> enumerator.MoveNext())
+            (fun() -> enumerator.Current)
+            (fun gparam -> builder.Add gparam)
+            (fun() ->
+                if builder.Count = builder.Capacity
+                then builder.MoveToImmutable()
+                else builder.ToImmutable())
+
+    let tryOfArray parameters =
+        match parameters with
+        | null
+        | [||] -> Ok empty
+        | _ ->
+            let mutable parameters', i = Array.zeroCreate parameters.Length, -1
+            tryOfCollection
+                parameters.Length
+                (fun() ->
+                    i <- i + 1
+                    i < parameters.Length)
+                (fun() -> parameters.[i])
+                (fun gparam -> parameters'.[i] <- gparam)
+                (fun() -> Unsafe.As &parameters')
+
+    let tryOfBlock (parameters: ImmutableArray<_>) =
+        if parameters.IsDefaultOrEmpty
+        then Ok empty
+        else
+            let mutable enumerator = parameters.GetEnumerator()
+            tryOfCollection
+                parameters.Length
+                (fun() -> enumerator.MoveNext())
+                (fun() -> enumerator.Current)
+                ignore
+                (fun() -> parameters)
+
+    let inline duplicateGenericParam (duplicate: GenericParam) =
+        invalidArg
+            "parameters"
+            (sprintf "A generic parameter with the same name \"%O\" already exists in the generic parameter list" duplicate.Name)
+
+    let ofSeq parameters =
+        match tryOfSeq parameters with
+        | Ok parameters' -> parameters'
+        | Error dup -> duplicateGenericParam dup
+
+[<AutoOpen>]
+module GenericParamListPatterns =
+    let inline (|GenericParamList|) (parameters: GenericParamList) = parameters.Parameters
 
 [<AbstractClass>]
 type Type (typeNamespace: Identifier voption, parent: Type voption, typeName: Identifier) =
@@ -250,11 +374,13 @@ type DefinedType =
     inherit Type
     val Flags: TypeDefFlags
     val Extends: ClassExtends
+    val GenericParameters: GenericParamList
 
-    new (visibility: TypeVisibility, flags, typeNamespace, parent, typeName, extends) =
+    new (visibility: TypeVisibility, flags, typeNamespace, parent, typeName, extends, gparams) =
         { inherit Type(typeNamespace, Convert.unsafeValueOption<DefinedType, _> parent, typeName)
           Flags = visibility.Flag ||| flags
-          Extends = extends }
+          Extends = extends
+          GenericParameters = gparams }
 
     member this.EnclosingClass = Convert.unsafeValueOption<_, DefinedType> this.EnclosingType
     member this.Visibility = TypeVisibility(this.Flags &&& TypeDefFlags.VisibilityMask, this.EnclosingClass)
@@ -267,7 +393,8 @@ type ModuleType () =
         ValueNone,
         ValueNone,
         Identifier.ofStr "<Module>",
-        ClassExtends.Null // According to ECMA-335, the module class "does not have a base type" (II.10.8).
+        ClassExtends.Null, // According to ECMA-335, the module class "does not have a base type" (II.10.8).
+        GenericParamList.empty
     )
 
 [<Sealed>]
@@ -278,7 +405,8 @@ type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : 
         typeNamespace: Identifier voption,
         enclosingClass: DefinedType voption,
         typeName: Identifier,
-        extends: ClassExtends
+        extends: ClassExtends,
+        gparams: GenericParamList
     )
     =
     inherit DefinedType (
@@ -287,27 +415,28 @@ type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : 
         typeNamespace,
         enclosingClass,
         typeName,
-        extends
+        extends,
+        gparams
     )
 
 type DefinedType with
-    static member ConcreteClass(visibility, flags, typeNamespace, enclosingClass, typeName, extends) =
-        TypeDefinition<TypeKinds.ConcreteClass>(visibility, flags, typeNamespace, enclosingClass, typeName, extends)
+    static member ConcreteClass(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters) =
+        TypeDefinition<TypeKinds.ConcreteClass>(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters)
 
-    static member AbstractClass(visibility, flags, typeNamespace, enclosingClass, typeName, extends) =
-        TypeDefinition<TypeKinds.AbstractClass>(visibility, flags, typeNamespace, enclosingClass, typeName, extends)
+    static member AbstractClass(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters) =
+        TypeDefinition<TypeKinds.AbstractClass>(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters)
 
-    static member SealedClass(visibility, flags, typeNamespace, enclosingClass, typeName, extends) =
-        TypeDefinition<TypeKinds.SealedClass>(visibility, flags, typeNamespace, enclosingClass, typeName, extends)
+    static member SealedClass(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters) =
+        TypeDefinition<TypeKinds.SealedClass>(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters)
 
-    static member StaticClass(visibility, flags, typeNamespace, enclosingClass, typeName, extends) =
-        TypeDefinition<TypeKinds.StaticClass>(visibility, flags, typeNamespace, enclosingClass, typeName, extends)
+    static member StaticClass(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters) =
+        TypeDefinition<TypeKinds.StaticClass>(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters)
 
-    static member Interface(visibility, flags, typeNamespace, enclosingClass, typeName, extends) =
-        TypeDefinition<TypeKinds.Interface>(visibility, flags, typeNamespace, enclosingClass, typeName, extends)
+    static member Interface(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters) =
+        TypeDefinition<TypeKinds.Interface>(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters)
 
-    static member ValueType(visibility, flags, typeNamespace, enclosingClass, typeName, extends) =
-        TypeDefinition<TypeKinds.ValueType>(visibility, flags, typeNamespace, enclosingClass, typeName, extends)
+    static member ValueType(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters) =
+        TypeDefinition<TypeKinds.ValueType>(visibility, flags, typeNamespace, enclosingClass, typeName, extends, genericParameters)
 
 [<AutoOpen>]
 module TypePatterns =
