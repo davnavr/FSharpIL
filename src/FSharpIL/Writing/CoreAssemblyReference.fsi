@@ -21,7 +21,7 @@ type CoreAssemblyMembers =
 type CoreAssemblyReference =
     member Reference: AssemblyReference
     /// <summary>The core type <see cref="T:System.Object"/>, which serves as the base type for all types.</summary>
-    member Object: ReferencedType
+    member Object: TypeReference<TypeKinds.ConcreteClass>
     /// <summary>
     /// The core type <see cref="T:System.ValueType"/>, which serves as the base type for all value types (II.13).
     /// </summary>

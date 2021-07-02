@@ -53,19 +53,18 @@ type DefinedTypeMembers =
 
     member this.MethodCount = this.Method.Count
 
+    // TODO: Check that the method does not use more type parameters defiend in the owner type than there actually are.
     member this.AddMethod(method: DefinedMethod, body: DefinedMethodBody voption) =
-        match this.owner with
-        | :? TypeDefinition<TypeKinds.StaticClass> ->
-            match method with
-            | :? MethodDefinition<MethodKinds.Static> ->
-                match this.Method.Add method, body with
-                | true, ValueSome body' ->
-                    this.MethodBodyLookup.[method] <- body'
-                    ValidationResult.Ok(MethodCallTarget.Defined(this.owner, method))
-                | true, ValueNone -> noImpl "error for missing method body"
-                | false, _ -> noImpl "error for duplicate method"
-            | _ -> noImpl "what method definition"
-        | _ -> noImpl "no handler for adding method to this defined type"
+        match this.owner, method, body with
+        | (:? TypeDefinition<TypeKinds.StaticClass> | :? ModuleType), (:? MethodDefinition<MethodKinds.Static>), ValueSome _ ->
+            if this.Method.Add method then
+                match body with
+                | ValueSome body' -> this.MethodBodyLookup.[method] <- body'
+                | ValueNone -> ()
+
+                ValidationResult.Ok(MethodCallTarget.Defined(this.owner, method))
+            else noImpl "error for duplicate method"
+        | _ -> noImpl "TODO: Cannot add method %s to type %s" (method.GetType().Name) (this.owner.GetType().Name)
 
     member this.AddEntryPoint(method: EntryPointMethod, body) =
         match this.AddMethod(method.Method, ValueSome body) with
@@ -88,9 +87,8 @@ type ReferencedTypeMembers = class
 
     member this.ReferenceMethod(method: ReferencedMethod) =
         match this.owner, method with
-        | (:? TypeReference<TypeKinds.SealedClass>), :? MethodReference<MethodKinds.Static>
-        | (:? TypeReference<TypeKinds.SealedClass>), :? MethodReference<MethodKinds.ObjectConstructor>
-        | (:? TypeReference<TypeKinds.StaticClass>), :? MethodReference<MethodKinds.Static> ->
+        | (:? TypeReference<TypeKinds.ConcreteClass> | :? TypeReference<TypeKinds.SealedClass>), :? MethodReference<MethodKinds.ObjectConstructor>
+        | (:? TypeReference<TypeKinds.SealedClass> | :? TypeReference<TypeKinds.StaticClass>), :? MethodReference<MethodKinds.Static> ->
             if this.Method.Add method
             then ValidationResult.Ok(MethodCallTarget.Referenced(this.owner, method))
             else noImpl "error for duplicate method"
@@ -361,6 +359,7 @@ type ModuleBuilderSerializer
             let methods = Dictionary<DefinedMethod, TableIndex<MethodDefRow>> members.MethodCount
 
             for method in members.Method do
+                // TODO: If method list is empty, maybe increment methodDefParams by one, since method list of previous type will be reduced.
                 for i = 0 to method.Parameters.Length - 1 do
                     let param = &method.Parameters.ItemRef i
                     let i' =
@@ -403,6 +402,8 @@ type ModuleBuilderSerializer
                       FieldList = indices.FieldList
                       MethodList = indices.MethodList }
             
+            // TODO: Write nested class information.
+
             definedTypeLookup.[tdef] <-
                 { TypeDef = i
                   //Fields = fields
@@ -530,6 +531,7 @@ type ModuleBuilder
 
     member inline private _.CreateAttributeList owner = CustomAttributeList(owner, attributes, customAttributeResolver)
 
+    // TODO: Add extra parameter that accepts a list of generic parameters.
     member this.DefineType t =
         match definedTypes.TryGetValue t with
         | true, existing -> ValidationResult<_>.Error(noImpl "TODO: error for duplicate type def")

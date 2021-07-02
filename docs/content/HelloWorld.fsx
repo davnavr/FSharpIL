@@ -201,7 +201,7 @@ let tests =
                 |> List.ofSeq
             test <@ expected = actual @>
 
-        testCaseExec example' "runs correctly" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
+        testCaseExec example' "prints correct message" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
             let out = dotnet.StandardOutput.ReadLine()
             dotnet.StandardError.ReadToEnd() |> stderr.Write
 

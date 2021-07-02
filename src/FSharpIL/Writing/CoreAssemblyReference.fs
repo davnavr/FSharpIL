@@ -15,20 +15,20 @@ type CoreAssemblyMembers (octor: MethodCallTarget, tfmctor: MethodCallTarget) =
 type CoreAssemblyReference (assembly: AssemblyReference) =
     static let netCoreLib = FileName.ofStr "System.Private.CoreLib"
 
-    let referenceCoreType ns =
-        let ns' = ValueSome(Identifier.ofStr ns)
-        fun name ->
-            ReferencedType.ConcreteClass (
-                TypeReferenceParent.Assembly assembly,
-                ns',
-                Identifier.ofStr name
-            )
-            :> ReferencedType
-
-    let referenceSystemType name = referenceCoreType "System" name
+    let referenceSystemType name =
+        ReferencedType.ConcreteClass (
+            TypeReferenceParent.Assembly assembly,
+            ValueSome(Identifier.ofStr "System"),
+            Identifier.ofStr name
+        )
 
     let object = referenceSystemType "Object"
-    let tfmattr = referenceCoreType "System.Runtime.Versioning" "TargetFrameworkAttribute"
+    let tfmattr =
+        ReferencedType.SealedClass (
+            TypeReferenceParent.Assembly assembly,
+            ValueSome(Identifier.ofStr "System.Runtime.Versioning"),
+            Identifier.ofStr "TargetFrameworkAttribute"
+        )
 
     let octor = ReferencedMethod.Constructor(ExternalVisibility.Public, ImmutableArray.Empty)
     let tfmctor =
@@ -37,10 +37,10 @@ type CoreAssemblyReference (assembly: AssemblyReference) =
 
     member _.Reference = assembly
     member _.Object = object
-    member val ValueType = referenceSystemType "ValueType"
-    member val Delegate = referenceSystemType "Delegate"
-    member val Enum = referenceSystemType "Enum"
-    member _.TargetFrameworkAttribute = tfmattr
+    member val ValueType = referenceSystemType "ValueType" :> ReferencedType
+    member val Delegate = referenceSystemType "Delegate" :> ReferencedType
+    member val Enum = referenceSystemType "Enum" :> ReferencedType
+    member _.TargetFrameworkAttribute = tfmattr :> ReferencedType
 
     member this.AddReferencesTo(builder: ModuleBuilder) =
         builder.ReferenceAssembly assembly
