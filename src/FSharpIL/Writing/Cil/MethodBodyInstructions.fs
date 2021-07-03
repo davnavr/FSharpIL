@@ -51,6 +51,11 @@ module Unsafe =
         writeMetadataToken &wr field.Token
         if pushesFieldValue then incrMaxStack &wr
 
+    let writeTypeInstruction (wr: byref<_>) opcode (typeTok: TypeMetadataToken) =
+        writeRawOpcode &wr opcode
+        writeMetadataToken &wr typeTok.Token
+        incrMaxStack &wr
+
 open Unsafe
 
 [<RequireQualifiedAccess>]
@@ -78,9 +83,14 @@ let inline ldarg_s (stream: byref<_>) (num: uint8) =
 
 let inline pop (wr: byref<_>) = writeRawOpcode &wr Opcode.Pop
 
-let private patchedMethodCall (wr: byref<_>) opcode method { MethodCalls = calls } =
-    // 1 byte for opcode, 4 bytes for method token.
-    calls.Add { Target = method; Opcode = opcode; InstructionWriter = wr.instructions.ReserveBytes 5 }
+// TODO: Don't forget to reserve correct amount of bytes for 2-byte long opcodes
+let inline patched (wr: byref<_>) opcode target (patches: System.Collections.Immutable.ImmutableArray<_>.Builder) =
+    // 1 byte for opcode, 4 bytes for metadata token.
+    patches.Add { Target = target; Opcode = opcode; InstructionWriter = wr.instructions.ReserveBytes 5 }
+
+let inline patchedMethodCall (wr: byref<_>) opcode method patches =
+    patched &wr opcode method patches.MethodCalls
+    incrMaxStack &wr
 
 let call (wr: byref<_>) method methodTokenSource =
     patchedMethodCall &wr Opcode.Call method methodTokenSource
@@ -97,14 +107,13 @@ let ldstr (wr: byref<_>) { UserStringOffset = offset } =
     writeMetadataToken &wr (MetadataToken(MetadataTokenType.UserStringHeap, offset))
     incrMaxStack &wr
 
-let private patchedFieldInstruction (wr: byref<_>) opcode field pushesFieldValue { FieldInstructions = instrs } =
-    // 1 byte for opcode, 4 bytes for field token.
-    instrs.Add
-        { Target =
-            { PushesFieldValue = pushesFieldValue
-              Argument = field }
-          Opcode = opcode
-          InstructionWriter = wr.instructions.ReserveBytes 5 }
+let inline patchedFieldInstruction (wr: byref<_>) opcode field pushesFieldValue patches =
+    patched
+        &wr
+        opcode
+        field
+        patches.FieldInstructions
+    if pushesFieldValue then incrMaxStack &wr
 
 let ldfld (wr: byref<_>) field fieldTokenSource =
     patchedFieldInstruction &wr Opcode.Ldfld field true fieldTokenSource
@@ -123,6 +132,13 @@ let ldsflda (wr: byref<_>) field fieldTokenSource =
 
 let stsfld (wr: byref<_>) field fieldTokenSource =
     patchedFieldInstruction &wr Opcode.Stfld field false fieldTokenSource
+
+let inline patchedTypeInstruction (wr: byref<_>) opcode typeTok patches =
+    patched &wr opcode typeTok patches.TypeInstructions
+    incrMaxStack &wr // Assumes that all instruction that take a typeTok returns something onto the stack.
+
+let newarr (wr: byref<_>) etype typeTokenSource =
+    patchedTypeInstruction &wr Opcode.Newarr etype typeTokenSource
 
 let inline ldarg (wr: byref<_>) (num: uint16) =
     writeRawOpcode &wr Opcode.Ldarg

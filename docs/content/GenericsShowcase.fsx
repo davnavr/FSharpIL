@@ -74,6 +74,9 @@ let example() = // TODO: Make helper function to add reference to System.Private
                 genericParameters = GenericParamList.ofSeq [ GenericParam.named(Identifier.ofStr "T") ]
             )
 
+        // 'T
+        let t = builder.AddTypeSpec { Spec = TypeSpec.Var 0u }
+
         // TODO: Figure out how to add generic parameters.
         let! struct(arrlist', _) = builder.DefineType arrlist
 
@@ -100,20 +103,21 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
         let ctorbody =
             { new DefinedMethodBody() with
-                override _.WriteInstructions(wr, methods, fields) =
+                override _.WriteInstructions(wr, methods, fields, types) =
                     // inherit System.Object()
                     ldarg_0 &wr
                     callvirt &wr core.ObjectConstructor methods
 
                     // { items = Array.zeroCreate<'T> capacity }
                     ldarg_0 &wr
-                    failwith "TODO: Create empty array"
+                    ldarg_1 &wr
+                    newarr &wr (TypeDefOrRefOrSpec.Spec t) types
                     stfld &wr items fields
 
                     ret &wr
                     wr.EstimatedMaxStack }
 
-        // TODO: Add ctor
+        let! ctor = arrlist'.AddMethod(ctor, ValueSome ctorbody)
 
         let maindef =
             DefinedMethod.EntryPoint (
@@ -125,7 +129,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
         let mainbody =
             { new DefinedMethodBody() with
-                override _.WriteInstructions(wr, methods, fields) =
+                override _.WriteInstructions(wr, methods, _, types) =
                     ret &wr
                     wr.EstimatedMaxStack }
 

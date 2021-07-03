@@ -132,7 +132,7 @@ let example() =
         (* Create the body of the entrypoint method *)
         let body =
             { new DefinedMethodBody() with
-                override _.WriteInstructions(wr, methods, _) =
+                override _.WriteInstructions(wr, methods, _, _) =
                     ldstr &wr (builder.UserStrings.AddFolded "Hello World!")
                     call &wr writeln methods
                     ret &wr

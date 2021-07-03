@@ -27,7 +27,7 @@ type DefinedMethodBody =
     new () = DefinedMethodBody ImmutableArray.Empty
 
     /// Writes the instructions of the method body, and returns the maximum number of items on the stack.
-    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource * FieldTokenSource -> uint16
+    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource * FieldTokenSource * TypeTokenSource -> uint16
 
 type EntryPoint =
     private
@@ -66,7 +66,8 @@ type DefinedTypeMembers =
     // TODO: Check that the method does not use more type parameters defiend in the owner type than there actually are.
     member this.AddMethod(method: DefinedMethod, body: DefinedMethodBody voption) =
         match this.owner, method, body with
-        | (:? TypeDefinition<TypeKinds.StaticClass> | :? ModuleType), (:? MethodDefinition<MethodKinds.Static>), ValueSome _ ->
+        | (:? TypeDefinition<TypeKinds.StaticClass> | :? ModuleType), (:? MethodDefinition<MethodKinds.Static>), ValueSome _
+        | (:? TypeDefinition<TypeKinds.SealedClass>), (:? MethodDefinition<MethodKinds.ObjectConstructor>), ValueSome _ ->
             if this.Method.Add method then
                 match body with
                 | ValueSome body' -> this.MethodBodyLookup.[method] <- body'
@@ -74,7 +75,8 @@ type DefinedTypeMembers =
 
                 ValidationResult.Ok(MethodCallTarget.Defined(this.owner, method))
             else noImpl "error for duplicate method"
-        | _ -> noImpl (sprintf "TODO: Cannot add method %s to type %s" (method.GetType().Name) (this.owner.GetType().Name))
+        | _ ->
+            noImpl (sprintf "TODO: Cannot add method %s to type %s" (method.GetType().FullName) (this.owner.GetType().FullName))
 
     member this.AddEntryPoint(method: EntryPointMethod, body) =
         match this.AddMethod(method.Method, ValueSome body) with
@@ -209,13 +211,14 @@ type DefinedMethodBodyWriter
         localVarSource: Signatures.LocalVarSig -> TableIndex<StandaloneSigRow>,
         methodTokenSource: MethodTokenSource,
         fieldTokenSource: FieldTokenSource,
+        typeTokenSource: TypeTokenSource,
         body: DefinedMethodBody
     )
     =
     interface IMethodBodySource with
         member _.Create builder =
             { InitLocals = body.InitLocals
-              MaxStack = body.WriteInstructions(&builder, methodTokenSource, fieldTokenSource)
+              MaxStack = body.WriteInstructions(&builder, methodTokenSource, fieldTokenSource, typeTokenSource)
               LocalVariables = localVarSource body.LocalTypes }
 
 type ModuleBuilderSerializer
@@ -231,7 +234,8 @@ type ModuleBuilderSerializer
         assemblyReferences: HashSet<AssemblyReference>,
         definedTypes: Dictionary<DefinedType, DefinedTypeMembers>,
         moduleGlobalMembers: DefinedTypeMembers,
-        referencedTypes: Dictionary<ReferencedType, ReferencedTypeMembers>
+        referencedTypes: Dictionary<ReferencedType, ReferencedTypeMembers>,
+        typeSpecSet: HashSet<TypeSpec>
     )
     as serializer
     =
@@ -269,15 +273,16 @@ type ModuleBuilderSerializer
     let assemblyReferenceLookup = Dictionary<AssemblyReference, TableIndex<AssemblyRefRow>> assemblyReferences.Count
     let referencedTypeLookup = Dictionary<ReferencedType, _> referencedTypes.Count
     let definedTypeLookup = Dictionary<DefinedType, _> definedTypes.Count
+    let typeSpecLookup = Dictionary<TypeSpec, TableIndex<TypeSpecRow>> typeSpecSet.Count
 
-    let fieldSignatures = Dictionary<_, FieldSigOffset>((definedTypeLookup.Count + referencedTypeLookup.Count) * 8)
+    let fieldSignatures = Dictionary<_, FieldSigOffset>((definedTypeLookup.Count + referencedTypes.Count) * 8)
     let methodDefSignatures = Dictionary<Signatures.MethodDefSig, MethodDefSigOffset>(definedTypeLookup.Count * 16)
-    let methodRefSignatures = Dictionary<Signatures.MethodRefSig, MemberRefSigOffset>(referencedTypeLookup.Count * 32) // TODO: Helper function for getting and adding signatures.
+    let methodRefSignatures = Dictionary<Signatures.MethodRefSig, MemberRefSigOffset>(referencedTypes.Count * 32) // TODO: Helper function for getting and adding signatures.
     //let localVarSignatures = Dictionary<Signatures.LocalVarSig, TableIndex<StandaloneSigRow>>(methodDefSignatures.Count)
 
     let mutable methodDefParams = TableIndex<ParamRow>.One
 
-    // TODO: Check that EventList and PropertyList actually start at 1 (they probably do)
+    // TODO: Fix, a typedef with no members may mess up the member list (previous type has one member missing).
     let mutable indices =
         { FieldList = TableIndex.One
           MethodList = TableIndex.One
@@ -295,7 +300,7 @@ type ModuleBuilderSerializer
         function
         | TypeDefOrRefOrSpec.Def tdef -> TypeDefOrRef.Def(serializer.SerializeDefinedType(tdef, definedTypes.[tdef]))
         | TypeDefOrRefOrSpec.Ref tref -> TypeDefOrRef.Ref(serializer.SerializeReferencedType(tref, referencedTypes.[tref]))
-        | TypeDefOrRefOrSpec.Spec tspec -> invalidOp "TODO: Get type specs"
+        | TypeDefOrRefOrSpec.Spec tspec -> TypeDefOrRef.Spec(serializer.SerializeTypeSpec tspec)
 
     let localVarSource (signature: LocalVarSig<_, _>) =
         if signature.IsDefaultOrEmpty
@@ -305,8 +310,10 @@ type ModuleBuilderSerializer
             Blob.mapLocalVarSig namedTypeMapping modifierTypeMapping signature
             |> failwith "TODO: write locals to blob stream"
 
-    let methodTokenSource = { MethodCalls = ImmutableArray.CreateBuilder(definedTypeLookup.Count * 64) }
+    let methodTokenSource = { MethodCalls = ImmutableArray.CreateBuilder(definedTypes.Count * 64) }
     let fieldTokenSource = { FieldInstructions = ImmutableArray.CreateBuilder methodTokenSource.MethodCalls.Capacity }
+    let typeTokenSource =
+        { TypeInstructions = ImmutableArray.CreateBuilder(definedTypes.Count + referencedTypes.Count + typeSpecSet.Count) }
 
     member private _.SerializeAssemblyReferences() =
         for assem in assemblyReferences do
@@ -385,7 +392,7 @@ type ModuleBuilderSerializer
                 | ClassExtends.ConcreteRef(AsReferencedType tref)
                 | ClassExtends.AbstractRef(AsReferencedType tref) ->
                     TypeDefOrRef.Ref(this.SerializeReferencedType(tref, referencedTypes.[tref]))
-                | ClassExtends.Spec tspec -> failwith "TODO: Implement writing of TypeSpecs"
+                | ClassExtends.Spec tspec -> TypeDefOrRef.Spec(this.SerializeTypeSpec tspec)
 
             // TODO: Make a HybridHashMap helper collection type.
             let fields = Dictionary<DefinedField, TableIndex<FieldRow>> members.FieldCount
@@ -406,6 +413,7 @@ type ModuleBuilderSerializer
                                 fieldSignatures.[signature] <- offset
                                 offset }
                 if fields.Count = 0 then indices.FieldList <- i'
+                fields.[field] <- i'
 
             for method in members.Method do
                 // TODO: If method list is empty, maybe increment methodDefParams by one, since method list of previous type will be reduced.
@@ -423,7 +431,15 @@ type ModuleBuilderSerializer
                     { Rva =
                         match members.MethodBodyLookup.TryGetValue method with
                         | true, body' ->
-                            let writer = DefinedMethodBodyWriter(localVarSource, methodTokenSource, fieldTokenSource, body')
+                            let writer =
+                                DefinedMethodBodyWriter (
+                                    localVarSource,
+                                    methodTokenSource,
+                                    fieldTokenSource,
+                                    typeTokenSource,
+                                    body'
+                                )
+
                             builder.MethodBodies.Add &writer
                         | false, _ -> MethodBodyLocation 0u
                       ImplFlags = method.ImplFlags
@@ -457,6 +473,16 @@ type ModuleBuilderSerializer
                 { TypeDef = i
                   Fields = fields
                   Methods = methods }
+            i
+
+    member private _.SerializeTypeSpec(tspec: TypeSpec) =
+        match typeSpecLookup.TryGetValue tspec with
+        | true, existing -> existing
+        | false, _ ->
+            let i =
+                builder.Tables.TypeSpec.Add
+                    { TypeSpec = builder.Blob.Add(Blob.mapType namedTypeMapping modifierTypeMapping tspec) }
+            typeSpecLookup.[tspec] <- i
             i
 
     member private _.SerializeCustomAttributes() =
@@ -556,7 +582,7 @@ type ModuleBuilderSerializer
                 match call.Target with
                 | MethodCallTarget.Defined(tdef, mdef) -> MethodMetadataToken.Def definedTypeLookup.[tdef].Methods.[mdef]
                 | MethodCallTarget.Referenced(tref, mref) -> MethodMetadataToken.Ref referencedTypeLookup.[tref].Members.[mref]
-            Unsafe.writeCallInstruction &writer call.Opcode token (not call.Target.Method.ReturnType.IsVoid)
+            Unsafe.writeCallInstruction &writer call.Opcode token false // MaxStack will not be updated
 
     member private _.PatchFieldInstructions() =
         let fieldInstructionList = fieldTokenSource.FieldInstructions
@@ -564,10 +590,22 @@ type ModuleBuilderSerializer
             let instr = &fieldInstructionList.ItemRef i
             let mutable writer = instr.Instructions
             let token =
-                match instr.Target.Argument with
+                match instr.Target with
                 | FieldArg.Defined(tdef, fdef) -> FieldMetadataToken.Def definedTypeLookup.[tdef].Fields.[fdef]
                 | FieldArg.Referenced(tref, fref) -> FieldMetadataToken.Ref referencedTypeLookup.[tref].Members.[fref]
-            Unsafe.writeFieldInstruction &writer instr.Opcode token (failwith "TODO: Have this be in Patch<FieldArg>")
+            Unsafe.writeFieldInstruction &writer instr.Opcode token false // MaxStack will not be updated
+
+    member private _.PatchTypeInstructions() =
+        let typeInstructionList = typeTokenSource.TypeInstructions
+        for i = 0 to typeInstructionList.Count - 1 do
+            let instr = &typeInstructionList.ItemRef i
+            let mutable writer = instr.Instructions
+            let token =
+                match instr.Target with
+                | TypeDefOrRefOrSpec.Def tdef -> TypeMetadataToken.Def definedTypeLookup.[tdef].TypeDef
+                | TypeDefOrRefOrSpec.Ref tref -> TypeMetadataToken.Ref referencedTypeLookup.[tref].TypeRef
+                | TypeDefOrRefOrSpec.Spec tspec -> TypeMetadataToken.Spec typeSpecLookup.[tspec]
+            Unsafe.writeTypeInstruction &writer instr.Opcode token
 
     member this.Serialize() =
         this.SerializeAssemblyReferences()
@@ -579,6 +617,8 @@ type ModuleBuilderSerializer
 
         for KeyValue(tdef, members) in definedTypes do this.SerializeDefinedType(tdef, members) |> ignore
 
+        for tspec in typeSpecSet do this.SerializeTypeSpec tspec |> ignore
+
         builder.EntryPointToken <-
             match entryPointToken with
             | NoEntryPoint -> EntryPointToken.Null
@@ -589,6 +629,7 @@ type ModuleBuilderSerializer
         this.SerializeCustomAttributes()
         this.PatchMethodCalls()
         this.PatchFieldInstructions()
+        this.PatchTypeInstructions()
 
         builder
 
@@ -601,6 +642,7 @@ type ModuleBuilder
         ?warnings,
         ?typeDefCapacity,
         ?typeRefCapacity,
+        ?typeSpecCapacity,
         ?assemblyRefCapacity
     )
     as builder
@@ -608,6 +650,7 @@ type ModuleBuilder
     let assemblyRefs = HashSet<AssemblyReference>(defaultArg assemblyRefCapacity 8)
     let definedTypes = Dictionary<DefinedType, DefinedTypeMembers>(defaultArg typeDefCapacity 16)
     let referencedTypes = Dictionary<ReferencedType, ReferencedTypeMembers>(defaultArg typeRefCapacity 32)
+    let typeSpecSet = HashSet<TypeSpec>(defaultArg typeSpecCapacity 32)
     let attributes = Dictionary<obj, ImmutableArray<_>.Builder> 8
     let gparams = Dictionary<obj, GenericParamList> 16
     let entryPointToken = ref Unchecked.defaultof<EntryPoint>
@@ -665,6 +708,10 @@ type ModuleBuilder
             referencedTypes.[t] <- members
             Ok members
 
+    member _.AddTypeSpec(tspec: TypeSpecification) =
+        typeSpecSet.Add tspec.Spec |> ignore
+        tspec
+
     member _.ReferenceAssembly assem =
         if not (assemblyRefs.Add assem) then
             match warnings with
@@ -685,6 +732,7 @@ type ModuleBuilder
                 assemblyRefs,
                 definedTypes,
                 this.GlobalMembers,
-                referencedTypes
+                referencedTypes,
+                typeSpecSet
             )
         serializer.Serialize()

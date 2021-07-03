@@ -33,7 +33,13 @@ module Unsafe =
         byref<MethodBodyBuilder> ->
         opcode: Opcode ->
         field: FieldMetadataToken ->
-        loadsFieldValue: bool ->
+        pushesFieldValue: bool ->
+        unit
+
+    val writeTypeInstruction:
+        byref<MethodBodyBuilder> ->
+        opcode: Opcode ->
+        typeTok: TypeMetadataToken ->
         unit
 
 [<RequireQualifiedAccess>]
@@ -58,6 +64,8 @@ module Call =
     val callvirt: stream: byref<MethodBodyBuilder> -> method: MethodMetadataToken -> hasRetValue: bool -> unit
 
 // TODO: Have module for versions of field instructions that take a FieldMetadataToken instead.
+
+// TODO: Have module for versions of instrucions like `newarr` that take a TypeMetadataToken instead.
 
 /// (0x00) Writes an instruction that does nothing (III.3.51).
 val inline nop: byref<MethodBodyBuilder> -> unit
@@ -141,6 +149,12 @@ val ldsflda: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTo
 
 /// (0x80) Writes an instruction that pops a value off of the stack and stores it into a static field (III.4.30).
 val stsfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
+
+
+
+/// (0x8D) Writes an instruction that pops an integer length off of the stack and creates "a zero-based, one-dimensional array"
+/// of the specified type (III.4.20).
+val newarr: byref<MethodBodyBuilder> -> etype: FSharpIL.Cli.TypeDefOrRefOrSpec -> TypeTokenSource -> unit
 
 
 

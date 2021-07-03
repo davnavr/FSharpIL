@@ -54,17 +54,13 @@ type internal Patch<'Target> =
           instructions = this.InstructionWriter }
 
 [<IsReadOnly; Struct>]
-type MethodTokenSource =
-    internal { MethodCalls: ImmutableArray<Patch<FSharpIL.Cli.MethodCallTarget>>.Builder }
+type MethodTokenSource = internal { MethodCalls: ImmutableArray<Patch<FSharpIL.Cli.MethodCallTarget>>.Builder }
 
 [<IsReadOnly; Struct>]
-type FieldPatch =
-    { PushesFieldValue: bool
-      Argument: FSharpIL.Cli.FieldArg }
+type FieldTokenSource = internal { FieldInstructions: ImmutableArray<Patch<FSharpIL.Cli.FieldArg>>.Builder }
 
 [<IsReadOnly; Struct>]
-type FieldTokenSource =
-    internal { FieldInstructions: ImmutableArray<Patch<FieldPatch>>.Builder }
+type TypeTokenSource = internal { TypeInstructions: ImmutableArray<Patch<FSharpIL.Cli.TypeDefOrRefOrSpec>>.Builder }
 
 /// Represents the destination that a branch instruction would jump to.
 [<IsReadOnly; IsByRefLike>]

@@ -52,6 +52,7 @@
     <Compile Include="Metadata\Tables\TableRows.fs" />
     <Compile Include="Metadata\Tables\CodedIndexPatterns.fs" />
     <Compile Include="Metadata\MetadataToken.fs" />
+    <Compile Include="Metadata\TypeMetadataToken.fs" />
     <Compile Include="Metadata\FieldMetadataToken.fs" />
     <Compile Include="Metadata\MethodMetadataToken.fs" />
     <Compile Include="Metadata\EntryPointToken.fs" />

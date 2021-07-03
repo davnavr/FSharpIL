@@ -44,6 +44,10 @@ type private CustomAttribWriter = struct
     interface IBlobWriter<CustomAttrib> with member _.Write(wr, attrib) = BlobWriter.customAttrib &attrib &wr
 end
 
+type private EncodedTypeWriter = struct
+    interface IBlobWriter<EncodedType> with member _.Write(wr, t) = BlobWriter.etype t &wr
+end
+
 /// <summary>Builds the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
 [<Sealed>]
 type BlobStreamBuilder (capacity: int32) =
@@ -109,7 +113,10 @@ type BlobStreamBuilder (capacity: int32) =
 
     member this.Add(attrib: inref<_>) = { CustomAttrib = this.Add<CustomAttribWriter, _> &attrib }
 
+    // TODO: Allow adding of FieldSigs as MemberRefSigs
     member this.Add(signature: inref<_>) = { FieldSig = this.Add<FieldSigWriter, _> &signature }
+
+    member internal this.Add signature = this.Add<EncodedTypeWriter, _> &signature
 
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength

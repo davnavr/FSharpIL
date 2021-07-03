@@ -27,6 +27,9 @@ val compressedUnsigned : value: uint32 -> byref<ChunkedMemoryBuilder> -> unit
 /// </exception>
 val compressedSigned : value: int32 -> byref<ChunkedMemoryBuilder> -> unit
 
+/// Writes a type encoded in a signature (II.23.2.12).
+val etype: EncodedType -> byref<ChunkedMemoryBuilder> -> unit
+
 /// <summary>Writes the signature of a <c>MethodDef</c> (II.23.2.1).</summary>
 val methodDefSig : signature: inref<MethodDefSig> -> byref<ChunkedMemoryBuilder> -> unit
 

@@ -20,7 +20,7 @@ type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allo
     new: localTypes: Signatures.LocalVarSig -> DefinedMethodBody
     new: unit -> DefinedMethodBody
 
-    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource * FieldTokenSource -> uint16
+    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource * FieldTokenSource * TypeTokenSource -> uint16
 
 type EntryPoint
 
@@ -39,6 +39,8 @@ type DefinedTypeMembers =
     member MethodCount: int32
     //member PropertyCount: int32
     //member EventCount: int32
+
+    // TODO: For these add methods, also return a mutable list of custom attributes
 
     member AddField: field: DefinedField -> ValidationResult<FieldArg>
 
@@ -79,6 +81,7 @@ type ModuleBuilder =
         ?warnings: ValidationWarningsBuilder *
         ?typeDefCapacity: int32 *
         ?typeRefCapacity: int32 *
+        ?typeSpecCapacity: int32 *
         ?assemblyRefCapacity: int32 -> ModuleBuilder
 
     member Mvid: Guid
@@ -99,6 +102,8 @@ type ModuleBuilder =
 
     member DefineType: DefinedType -> ValidationResult<struct(DefinedTypeMembers * CustomAttributeList)>
     member ReferenceType: ReferencedType -> ValidationResult<ReferencedTypeMembers> // TODO: Apparently TypeRefs can have custom attributes.
+
+    member AddTypeSpec: TypeSpecification -> TypeSpecification
 
     member ReferenceAssembly: AssemblyReference -> unit
 

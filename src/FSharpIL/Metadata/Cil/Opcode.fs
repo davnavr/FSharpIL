@@ -75,6 +75,8 @@ type Opcode =
 
     | Stsfld = 0x80us
 
+    | Newarr = 0x8Dus
+
     | Conv_ovf_i1_un = 0x82us
     | Conv_ovf_i2_un = 0x83us
     | Conv_ovf_i4_un = 0x84us

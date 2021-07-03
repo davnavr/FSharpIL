@@ -14,7 +14,7 @@ module TypeDefOrRef =
 
     let Def ({ TableIndex = index }: TableIndex<TypeDefRow>) = TypeDefOrRef(TypeDefOrRefTag.TypeDef, index)
     let Ref ({ TableIndex = index }: TableIndex<TypeRefRow>) = TypeDefOrRef(TypeDefOrRefTag.TypeRef, index)
-    //let Spec
+    let Spec ({ TableIndex = index }: TableIndex<TypeSpecRow>) = TypeDefOrRef(TypeDefOrRefTag.TypeSpec, index)
 
 
 
