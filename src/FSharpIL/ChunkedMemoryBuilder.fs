@@ -102,7 +102,7 @@ type ChunkedMemoryBuilder = struct
             Printf.bprintf sb " 0x%02X" this.current.Value.[i]
         sb.ToString()
 
-    /// Copies the contents of this builder to a new non-contiguous region of memory.
+    /// Copies the contents of this builder to a new immutable non-contiguous region of memory.
     member this.ToImmutable() =
         if this.length = 0u
         then ChunkedMemory.empty
@@ -131,6 +131,41 @@ type ChunkedMemoryBuilder = struct
                 resulti <- resulti - 1
 
             ChunkedMemory(Unsafe.As &results, uint32 chunki, this.length)
+
+    /// <summary>
+    /// Moves the contents of this builder to an immutable non-contiguous region of memory, and creates a new list for the
+    /// builder to write content to.
+    /// </summary>
+    /// <exception cref="T:System.InvalidOperationException">
+    /// Thrown when there are still free bytes available in the current chunk, or the chunk where the first write occured was
+    /// not the first chunk in the list.
+    /// </exception>
+    member this.MoveToImmutable() =
+        if this.Length = 0u then
+            ChunkedMemory.empty
+        elif this.FreeBytes <> 0 then
+            invalidOp
+                "The builder must have zero free bytes available in the current chunk, add the required padding bytes by \
+                calling MoveToEnd()"
+        else
+            let chunks = this.current.List
+            let expectedTotalLength = uint32 chunks.Count * uint32 this.ChunkSize
+
+            if expectedTotalLength <> this.Length then
+                invalidOp "The builder must have started writing on the first chunk of the list"
+
+            let mutable chunks' = Array.zeroCreate<byte[]> chunks.Count
+            let mutable current' = chunks.First
+
+            for i = 0 to chunks'.Length do
+                chunks'.[i] <- current'.Value
+                current' <- current'.Next
+
+            this.current <-
+                let replacement = LinkedList()
+                replacement.AddFirst(Array.zeroCreate this.ChunkSize)
+
+            ChunkedMemory(Unsafe.As &chunks', 0u, expectedTotalLength)
 
     member this.ReserveBytes count =
         let clone = ChunkedMemoryBuilder(this.current, this.pos, 0u)

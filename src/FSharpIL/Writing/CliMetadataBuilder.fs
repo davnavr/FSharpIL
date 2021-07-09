@@ -5,6 +5,7 @@ open FSharpIL.Metadata
 
 // TODO: Come up with better name that shows how this type is only used when writing.
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<NoComparison; StructuralEquality>]
 type CliHeader =
     { MajorRuntimeVersion: uint16
       MinorRuntimeVersion: uint16
@@ -12,10 +13,12 @@ type CliHeader =
 
 [<RequireQualifiedAccess>]
 module CliHeader =
-    let defaultFields =
+    let latestDefault =
         { MajorRuntimeVersion = 2us
           MinorRuntimeVersion = 5us
           Requires32Bit = false }
+
+// TODO: Make this class internal.
 
 /// <summary>Builds the CLI metadata stored in the <c>.text</c> section of a PE file (II.24).</summary>
 [<Sealed>]
@@ -32,7 +35,8 @@ type CliMetadataBuilder internal
         //resources,
         //strongNameSignature,
         //vTableFixups
-    ) =
+    )
+    =
 
     member _.Header = header
     member _.Root = root

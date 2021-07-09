@@ -86,7 +86,7 @@ module ILOutput =
             field "SymbolTablePointer" Print.integer header.SymbolTablePointer out
             field "SymbolCount" Print.integer header.SymbolCount out
             field "OptionalHeaderSize" Print.integer header.OptionalHeaderSize out
-            field "Characteristics" Print.bitfield header.Characteristics out
+            field "Characteristics" Print.bitfield (FileCharacteristics.flags header.Characteristics) out
             endn out
 
         let private standardFieldsCommon fields out =

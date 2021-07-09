@@ -49,6 +49,7 @@ let getFileInfo (file: PEFile) =
 
         imageSize <- imageSize + (Round.upTo salignment size)
         rva <- rva + Round.upTo salignment size
+
     { FileHeader = file.FileHeader
       OptionalHeader = file.OptionalHeader
       DataDirectories = dataDirectories

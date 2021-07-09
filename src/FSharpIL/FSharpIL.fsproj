@@ -106,7 +106,7 @@
     <Compile Include="Writing\CoreAssemblyReference.fs" />
     <Compile Include="Writing\WriteCli.fsi" />
     <Compile Include="Writing\WriteCli.fs" />
-    <Compile Include="Writing\DataDirectoriesBuilder.fs" />
+    <Compile Include="Writing\SectionBuilder.fsi" />
     <Compile Include="Writing\SectionBuilder.fs" />
     <Compile Include="Writing\BuildPE.fsi" />
     <Compile Include="Writing\BuildPE.fs" />

@@ -8,18 +8,49 @@ open FSharpIL
 /// Flags that specify file characteristics in the PE file header (II.25.2.2.1).
 [<Flags>]
 type ImageFileFlags =
-    | FileRelocsStripped = 0x0001us
-    | FileExecutableImage = 0x0002us
-    | File32BitMachine = 0x0100us // TODO This flag depends on a flag from the CLI header, should it be validated?
-    | FileDll = 0x2000us
+    | RelocsStripped = 1us
+    /// <summary>The file can be run, should be set for all <c>.dll</c> and <c>.exe</c> files.</summary>
+    | ExecutableImage = 2us
+    | LineNumsStripped = 4us
+    | LocalSymsStripped = 8us
+    | AggressiveWsTrim = 0x10us
+    | LargeAddressAware = 0x20us
+    /// Specifies that the file must run on a 32-bit machine, should be in sync with the corresponding flag in the CLI header.
+    | Is32BitMachine = 0x100us
+    | DebugStripped = 0x200us
+    | RemovableRunFromSwap = 0x400us
+    | NetRunFromSwap = 0x800us
+    | System = 0x1000us
+    /// Indicates that the executable file is a library that cannot be directly run.
+    | Dll = 0x2000us
+
+[<IsReadOnly; Struct>]
+type FileCharacteristics =
+    | IsDll
+    | IsExe
+    | Characteristics of ImageFileFlags
 
 [<RequireQualifiedAccess>]
-module ImageFileFlags =
-    let dll = ImageFileFlags.FileExecutableImage ||| ImageFileFlags.FileDll
-    let exe = ImageFileFlags.FileExecutableImage
+module FileCharacteristics =
+    let flags characteristics =
+        match characteristics with
+        | IsDll -> ImageFileFlags.ExecutableImage ||| ImageFileFlags.Dll
+        | IsExe -> ImageFileFlags.ExecutableImage
+        | Characteristics custom -> custom
 
+/// Specifies the CPU type of the Portable Executable file.
 type MachineFlags =
+    | Unknown = 0us
+    /// <summary>
+    /// Corresponds to the <c>AnyCPU</c> or <c>x86</c> target platform depending on whether or not the file characteristics or
+    /// flags in the CLI header specify that the file prefers or can only run on a 32-bit machine.
+    /// </summary>
+    | Default = 0x14Cus
+    /// Default value used for most assemblies.
     | I386 = 0x14Cus
+    /// <summary>Corresponds to the <c>x64</c> target platform.</summary>
+    | AMD64 = 0x8664us
+    | IA64 = 0x200us
 
 /// Specifies the number of sections and defines various characteristics of the PE file (II.25.2.2).
 type CoffHeader<'NumSections, 'HeaderSize> =
@@ -29,7 +60,7 @@ type CoffHeader<'NumSections, 'HeaderSize> =
       SymbolTablePointer: uint32
       SymbolCount: uint32
       OptionalHeaderSize: 'HeaderSize
-      Characteristics: ImageFileFlags }
+      Characteristics: FileCharacteristics }
 
 /// <summary>Represents the value of the <c>Magic</c> field in the PE file standard fields.</summary>
 type ImageKind =
@@ -80,14 +111,15 @@ type ImageSubsystem =
 
 [<Flags>]
 type PEFileFlags =
-    | Reserved = 0x000Fus
-    | HighEntropyVA = 0x0020us
-    | DynamicBase = 0x0040us
-    | ForceIntegrity = 0x0080us
-    | NXCompatible = 0x0100us
-    | NoIsolation = 0x0200us
-    | NoSEH = 0x0400us
-    | NoBind = 0x0800us
+    /// Indicates that Address Space Layout Randomization (ASLR) is enabled for this executable file.
+    | HighEntropyVA = 0x20us
+    | DynamicBase = 0x40us
+    | ForceIntegrity = 0x80us
+    | NXCompatible = 0x100us
+    | NoIsolation = 0x200us
+    /// Indicates that the executable image does not use Structured Exception handling.
+    | NoSEH = 0x400us
+    | NoBind = 0x800us
     | AppContainer = 0x1000us
     | WdmDriver = 0x2000us
     | GuardCF = 0x4000us

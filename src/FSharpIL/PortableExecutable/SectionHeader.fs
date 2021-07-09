@@ -1,7 +1,5 @@
 ﻿namespace FSharpIL.PortableExecutable
 
-open FSharpIL
-
 /// Flags describing the characteristics of a PE file section (II.25.3).
 [<System.Flags>]
 type SectionCharacteristics =

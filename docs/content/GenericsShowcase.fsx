@@ -112,7 +112,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     ldarg_0 &wr
                     ldarg_1 &wr
                     newarr &wr (TypeDefOrRefOrSpec.Spec t) types
-                    stfld &wr items fields
+                    stfld &wr items fields // TODO: This needs to be a memberref to the field.
 
                     ret &wr
                     wr.EstimatedMaxStack }
