@@ -66,7 +66,6 @@
     <Compile Include="Metadata\Cil\Opcode.fs" />
     <Compile Include="Metadata\PublicKeyOrToken.fs" />
     <Compile Include="Metadata\ValidationResult.fs" />
-    <Compile Include="Metadata\ValidationResultBuilder.fs" />
     <Compile Include="Cli\MemberVisibility.fs" />
     <Compile Include="Cli\Attributes.fs" />
     <Compile Include="Cli\Assembly.fsi" />

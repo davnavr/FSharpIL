@@ -14,6 +14,7 @@ open FSharpIL.Utilities.Collections
 [<NoComparison; NoEquality>]
 type ModuleBuilderCommand =
     | AddDefinedType of DefinedType
+    | Finish
 
 [<NoComparison; NoEquality>]
 type ModuleBuilder<'State> =

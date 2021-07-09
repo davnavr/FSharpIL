@@ -89,3 +89,51 @@ type ValidationWarningsCollection internal (?warnings: ValidationWarningsBuilder
         member this.Count = this.Count
         member this.GetEnumerator() = this.GetEnumerator()
         member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
+
+[<Sealed>]
+type ValidationResultBuilder internal () =
+    member inline _.Bind(result: ValidationResult<_>, body: _ -> ValidationResult<_>) =
+        match result with
+        | Ok value -> body value
+        | Error err -> Error err
+
+    member inline _.Bind(result: IValidationError option, body: unit -> ValidationResult<_>) =
+        match result with
+        | None -> body()
+        | Some err -> Error err
+
+    member inline _.Combine(x: ValidationResult<unit>, y: ValidationResult<_>) =
+        match x with
+        | Ok() -> y
+        | Error err -> Error err
+
+    member inline _.Delay(f: _ -> ValidationResult<_>) = f()
+
+    member inline _.Return value: ValidationResult<_> = Ok value
+
+    member inline _.ReturnFrom(result: ValidationResult<_>) = result
+
+    member inline _.Zero() = ValidationResult.Ok()
+
+[<Sealed>]
+type internal ValidationErrorBuilder internal () =
+    member inline _.Bind(result: IValidationError option, body) =
+        match result with
+        | None -> body()
+        | err -> err
+
+    member inline _.Combine(x: IValidationError option, y) =
+        match x with
+        | None -> y
+        | err -> err
+
+    member inline _.Delay(f: _ -> IValidationError option) = f()
+
+    member inline _.ReturnFrom(result: IValidationError option) = result
+
+    member inline _.Zero() = Option<IValidationError>.None
+
+[<AutoOpen>]
+module ValidationResultBuilders =
+    let validated = ValidationResultBuilder()
+    let internal canfail = ValidationErrorBuilder()

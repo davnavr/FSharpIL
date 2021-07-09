@@ -16,7 +16,7 @@ type AssemblyVersion = struct // TODO: Move this type to FSharpIL.Metadata.Table
 end
 
 [<StructuralComparison; StructuralEquality>]
-type AssemblyReference =
+type AssemblyReference = // TODO: Maybe rename these types to ReferencedAssembly and DefinedAssembly?
     { Version: AssemblyVersion
       PublicKeyOrToken: PublicKeyOrToken
       Name: FileName

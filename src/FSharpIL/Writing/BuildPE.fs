@@ -118,6 +118,8 @@ let ofSectionBuilders fileHeader (optionalHeader: OptionalHeader) (sections: Imm
 
     PEFile(fileHeader, optionalHeader, directories, Unsafe.As &sections', fileHeadersSize)
 
+// TODO: Move old ModuleBuilderSerializer class here.
+
 let buildMetadataContent header root (name: Identifier) mvid update warning state builder =
     let builder =
         let strings = StringsStreamBuilder 1024
@@ -134,15 +136,38 @@ let buildMetadataContent header root (name: Identifier) mvid update warning stat
             blobs
         )
 
-    let definedTypes = Dictionary<DefinedType, TableIndex<TypeDefRow>> 16
+    let referencedAssemblies = Dictionary<AssemblyReference, _> 4
+    let definedTypes = Dictionary<DefinedType, _> 16
+    let referencedTypes = Dictionary<ReferencedType, _> 32
 
-    let rec inner state =
+    // TODO: Have parameter indicating if this function was called while searching for the extends value of a type, and return a ClassCannotInheritItself if an equal (not reference equal) type was the parent.
+    // Someone could use Activator something to have the parent be itself, though checking for value equality would still work in this case.
+    let rec addDefinedType tdef =
+        match definedTypes.TryGetValue tdef with
+        | true, existing -> Some(noImpl "TODO: Error for duplicate TypeDef")
+        | false, _ ->
+            definedTypes.[tdef] <- noImpl "TODO: Have struct to keep track of type members"
+            noImpl "TODO: Check parent and extends value, and add all missing values"
+            None
+
+    and addReferencedType tref =
+        match referencedTypes.TryGetValue tref with
+        | true, existing -> Some(noImpl "TODO: Error for duplicate TypeRef")
+        | false, _ ->
+            referencedTypes.[tref] <- noImpl "TODO: Have struct to keep track of type members"
+            noImpl "TODO: Check resolutionScope, and attempt to add any missing Assembly or Module references"
+            None
+
+    let inner state =
+        // TODO: Have CE for IValidationError option.
         match update state with
         | AddDefinedType tdef ->
             
-            ()
+            failwith "bad"
 
-        Ok builder
+        // TODO: Have a command be to stop the loop.
+
+        | Finish -> Ok builder
 
     inner state
 
