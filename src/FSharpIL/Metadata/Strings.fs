@@ -15,9 +15,20 @@ type [<IsReadOnly; Struct; RequireQualifiedAccess>] FileNameOffset = internal { 
 [<StructuralComparison; StructuralEquality>]
 type Identifier = struct
     val private identifier: string
+
     internal new (identifier) = { identifier = identifier }
+
     member this.AsMemory() = this.identifier.AsMemory()
+
     override this.ToString() = this.identifier
+
+    static member (+) (x: Identifier, y: Identifier) = Identifier(x.identifier + y.identifier)
+
+    static member (+) (id: Identifier, str) =
+        match str with
+        | null
+        | "" -> id
+        | _ -> Identifier(id.identifier + str)
 end
 
 /// Represents the name of an assembly (II.22.2) or file (II.22.19).

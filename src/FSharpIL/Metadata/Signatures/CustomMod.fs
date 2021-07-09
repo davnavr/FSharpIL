@@ -1,11 +1,11 @@
 ﻿namespace FSharpIL.Metadata.Signatures
 
+/// <summary>Represents an index into the <c>TypeDef</c>, <c>TypeRef</c> or <c>TypeSpec</c> table (II.23.2.8).</summary>
+type TypeDefOrRefOrSpecEncoded = FSharpIL.Metadata.Tables.TypeDefOrRef
+
 /// <summary>Represents a custom modifier (II.7.1.1 and II.23.2.7).</summary>
-/// <typeparam name="ModifierType">
-/// A <c>TypeDef</c>, <c>TypeRef</c>, or <c>TypeSpec</c> that is the type of the custom modifier.
-/// </typeparam>
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-type CustomMod<'ModifierType> = { Required: bool; ModifierType: 'ModifierType }
+type CustomMod = { Required: bool; ModifierType: TypeDefOrRefOrSpecEncoded }
 
 (*
 type CustomMod<'ModifierType> =
@@ -13,14 +13,14 @@ type CustomMod<'ModifierType> =
     | ModReq of ModifierType: 'ModifierType
 *)
 
-type CustomModifiers<'ModifierType> = System.Collections.Immutable.ImmutableArray<CustomMod<'ModifierType>>
+type CustomModifiers = System.Collections.Immutable.ImmutableArray<CustomMod>
 
 [<AutoOpen>]
 module CustomModPatterns =
     let inline (|ModOpt|ModReq|) { Required = req; ModifierType = mtype } =
         if req then ModReq mtype else ModOpt mtype
 
-    let inline (|NoRequiredModifiers|HasRequiredModifiers|) (modifiers: CustomModifiers<_>) =
+    let inline (|NoRequiredModifiers|HasRequiredModifiers|) (modifiers: CustomModifiers) =
         let mutable i, allOptionalModifiers = 0, true
         while allOptionalModifiers && i < modifiers.Length do
             allOptionalModifiers <- not (modifiers.ItemRef i).Required

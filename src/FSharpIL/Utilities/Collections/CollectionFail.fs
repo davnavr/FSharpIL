@@ -1,5 +1,5 @@
 ﻿[<AutoOpen>]
-module private FSharpIL.Utilities.Collections.CollectionFail
+module FSharpIL.Utilities.Collections.CollectionFail
 
 open FSharpIL.Utilities
 

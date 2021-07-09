@@ -147,8 +147,15 @@ let buildMetadataContent header root (name: Identifier) mvid update warning stat
         | true, existing -> Some(noImpl "TODO: Error for duplicate TypeDef")
         | false, _ ->
             definedTypes.[tdef] <- noImpl "TODO: Have struct to keep track of type members"
-            noImpl "TODO: Check parent and extends value, and add all missing values"
-            None
+
+            canfail {
+                match tdef.EnclosingClass with
+                | ValueSome parent -> failwith "TODO: Add missing"
+                | ValueNone -> ()
+
+                noImpl "TODO: Check parent and extends value, and add all missing values"
+                ()
+            }
 
     and addReferencedType tref =
         match referencedTypes.TryGetValue tref with
@@ -159,14 +166,10 @@ let buildMetadataContent header root (name: Identifier) mvid update warning stat
             None
 
     let inner state =
-        // TODO: Have CE for IValidationError option.
         match update state with
         | AddDefinedType tdef ->
             
             failwith "bad"
-
-        // TODO: Have a command be to stop the loop.
-
         | Finish -> Ok builder
 
     inner state

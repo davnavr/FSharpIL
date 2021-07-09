@@ -10,7 +10,6 @@ open FSharpIL.Metadata.Tables
 
 open FSharpIL.Metadata.Blobs
 open FSharpIL.Metadata.Signatures
-open FSharpIL.Metadata.Signatures.MetadataSignatures
 
 let inline ensureLastItem (chunk: inref<ChunkedMemory>) result =
     match result with
