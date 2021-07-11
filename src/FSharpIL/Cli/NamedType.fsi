@@ -7,6 +7,8 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
+// TOOD: Update Field.fs and Method.fs to use NamedType.
+
 [<AbstractClass>]
 type NamedType =
     member TypeName: Identifier
@@ -14,7 +16,7 @@ type NamedType =
     member EnclosingType: NamedType voption
     member IsNested: bool
 
-    member Equals: NamedType -> bool
+    member Equals: other: NamedType -> bool
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
@@ -22,7 +24,10 @@ type NamedType =
 
 [<AutoOpen>]
 module NamedTypePatterns =
-    val inline (|NamedType|): #NamedType -> NamedType
+    val inline internal (|NamedType|) : #NamedType -> NamedType
+    val inline (|IsSystemType|) : expected: string -> #NamedType -> bool
+    // TODO: Add cases for pointer types.
+    //val inline (|DefinedType|ReferencedType|InstantiatedType|ArrayType|PrimitiveType|) : NamedType -> Choice<DefinedType, ReferencedType, InstantiatedType, ArrayType, PrimitiveType>
 
 type GenericParamKind =
     | Invariant
@@ -51,7 +56,7 @@ type GenericParam = // TODO: Make this inherit NamedType
 
 [<RequireQualifiedAccess>]
 module GenericParam =
-    val named: Identifier -> GenericParam
+    val named : Identifier -> GenericParam
 
 [<IsReadOnly>]
 [<NoComparison; NoEquality>]
@@ -61,13 +66,13 @@ end
 
 [<RequireQualifiedAccess>]
 module GenericParamList =
-    val empty: GenericParamList
-    val tryOfSeq: seq<GenericParam> -> Result<GenericParamList, GenericParam>
-    val tryOfArray: GenericParam[] -> Result<GenericParamList, GenericParam>
-    val tryOfBlock: ImmutableArray<GenericParam> -> Result<GenericParamList, GenericParam>
+    val empty : GenericParamList
+    val tryOfSeq : seq<GenericParam> -> Result<GenericParamList, GenericParam>
+    val tryOfArray : GenericParam[] -> Result<GenericParamList, GenericParam>
+    val tryOfBlock : ImmutableArray<GenericParam> -> Result<GenericParamList, GenericParam>
     /// <summary>Creates a generic parameter list from the sequence of generic parameters.</summary>
     /// <exception cref="ArgumentException">The sequence of generic <paramref name="parameters"/> contains a duplicate.</exception>
-    val ofSeq: parameters: seq<GenericParam> -> GenericParamList
+    val ofSeq : parameters: seq<GenericParam> -> GenericParamList
 
 [<AutoOpen>]
 module GenericParamListPatterns =
@@ -83,8 +88,8 @@ type ModifierType =
 
 [<RequireQualifiedAccess>]
 module ModifierType =
-    val inline Req: modifier: NamedType -> ModifierType
-    val inline Opt: modifier: NamedType -> ModifierType
+    val inline Req : modifier: NamedType -> ModifierType
+    val inline Opt : modifier: NamedType -> ModifierType
 
 /// Represents a type that is modified by custom modifiers (II.7.1.1).
 [<Sealed>]
@@ -106,22 +111,22 @@ end
 
 [<RequireQualifiedAccess>]
 module PrimitiveType =
-    val Boolean: PrimitiveType
-    val Char: PrimitiveType
-    val I1: PrimitiveType
-    val U1: PrimitiveType
-    val I2: PrimitiveType
-    val U2: PrimitiveType
-    val I4: PrimitiveType
-    val U4: PrimitiveType
-    val I8: PrimitiveType
-    val U8: PrimitiveType
-    val R4: PrimitiveType
-    val R8: PrimitiveType
-    val I: PrimitiveType
-    val U: PrimitiveType
-    val Object: PrimitiveType
-    val String: PrimitiveType
+    val Boolean : PrimitiveType
+    val Char : PrimitiveType
+    val I1 : PrimitiveType
+    val U1 : PrimitiveType
+    val I2 : PrimitiveType
+    val U2 : PrimitiveType
+    val I4 : PrimitiveType
+    val U4 : PrimitiveType
+    val I8 : PrimitiveType
+    val U8 : PrimitiveType
+    val R4 : PrimitiveType
+    val R8 : PrimitiveType
+    val I : PrimitiveType
+    val U : PrimitiveType
+    val Object : PrimitiveType
+    val String : PrimitiveType
 
 type ArrayType =
     inherit NamedType
@@ -157,6 +162,8 @@ type TypeReferenceParent =
 and [<Sealed>] ReferencedType =
     inherit GenericType
 
+    //val Flags: TypeDefFlags voption
+
     member ResolutionScope: TypeReferenceParent
 
     internal new: TypeReferenceParent * Identifier voption * Identifier * GenericParamList -> ReferencedType
@@ -177,8 +184,6 @@ type TypeVisibility =
     member IsNested: bool
     member EnclosingClass: DefinedType voption
 
-
-
 and [<Sealed>] DefinedType =
     inherit GenericType
 
@@ -198,15 +203,20 @@ and [<Sealed>] DefinedType =
     member EnclosingClass: DefinedType voption
 
 [<RequireQualifiedAccess>]
+module DefinedType =
+    val inline (|IsInterface|NotInterface|) : tdef: DefinedType -> Choice<unit, unit>
+    //val inline (|IsValueType|NotValueType|) : tdef: DefinedType -> Choice<unit, unit>
+
+[<RequireQualifiedAccess>]
 module TypeVisibility =
-    val NotPublic: TypeVisibility
-    val Public: TypeVisibility
-    val NestedPublic: parent: DefinedType -> TypeVisibility
-    val NestedPrivate: parent: DefinedType -> TypeVisibility
-    val NestedFamily: parent: DefinedType -> TypeVisibility
-    val NestedAssembly: parent: DefinedType -> TypeVisibility
-    val NestedFamilyAndAssembly: parent: DefinedType -> TypeVisibility
-    val NestedFamilyOrAssembly: parent: DefinedType -> TypeVisibility
+    val NotPublic : TypeVisibility
+    val Public : TypeVisibility
+    val NestedPublic : parent: DefinedType -> TypeVisibility
+    val NestedPrivate : parent: DefinedType -> TypeVisibility
+    val NestedFamily : parent: DefinedType -> TypeVisibility
+    val NestedAssembly : parent: DefinedType -> TypeVisibility
+    val NestedFamilyAndAssembly : parent: DefinedType -> TypeVisibility
+    val NestedFamilyOrAssembly : parent: DefinedType -> TypeVisibility
 
 [<NoComparison; NoEquality>]
 type InstantiatedTypeArgumentsEnumerator = struct
@@ -250,6 +260,7 @@ end
 [<RequireQualifiedAccess>]
 module GenericType =
     val instantiate : gtype: 'Inst -> instantiator: (int32 -> GenericParam -> NamedType) -> InstantiatedType<'Inst>
+    val inline (|Instantiation|) : gtype: InstantiatedType<'Inst> -> struct('Inst * InstantiatedTypeArguments)
 
 [<RequireQualifiedAccess>]
 module ClassExtends =

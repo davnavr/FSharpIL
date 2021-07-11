@@ -6,12 +6,14 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL
-open FSharpIL.Cli
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 open FSharpIL.PortableExecutable
 
+open FSharpIL.Cli
+
 open FSharpIL.Utilities
+open FSharpIL.Utilities.Collections
 
 [<IsByRefLike>]
 [<NoComparison; NoEquality>]
@@ -118,10 +120,19 @@ let ofSectionBuilders fileHeader (optionalHeader: OptionalHeader) (sections: Imm
 
     PEFile(fileHeader, optionalHeader, directories, Unsafe.As &sections', fileHeadersSize)
 
+[<Sealed>]
+type DefinedTypeMembers () =
+    [<DefaultValue>] val mutable Methods: HybridHashSet<DefinedMethod>
+
 // TODO: Move old ModuleBuilderSerializer class here.
 
+[<AbstractClass; Sealed; Extension>]
+type DictionaryExtensions =
+    [<Extension>]
+    static member inline TryAddDefault<'K, 'V when 'V : (new: unit -> 'V)>(this: Dictionary<'K, 'V>, key) = this.TryAdd(key, new 'V()) |> ignore
+
 let buildMetadataContent header root (name: Identifier) mvid update warning state builder =
-    let builder =
+    let builder' =
         let strings = StringsStreamBuilder 1024
         let guids = GuidStreamBuilder 1
         let blobs = BlobStreamBuilder 512
@@ -136,25 +147,45 @@ let buildMetadataContent header root (name: Identifier) mvid update warning stat
             blobs
         )
 
-    let referencedAssemblies = Dictionary<AssemblyReference, _> 4
+    let referencedAssemblies = HashSet<AssemblyReference> 4
     let definedTypes = Dictionary<DefinedType, _> 16
     let referencedTypes = Dictionary<ReferencedType, _> 32
 
-    // TODO: Have parameter indicating if this function was called while searching for the extends value of a type, and return a ClassCannotInheritItself if an equal (not reference equal) type was the parent.
-    // Someone could use Activator something to have the parent be itself, though checking for value equality would still work in this case.
+    let warn (msg: IValidationWarning) =
+        match warning with
+        | Some warning' -> warning' state msg
+        | None -> state
+
     let rec addDefinedType tdef =
         match definedTypes.TryGetValue tdef with
         | true, existing -> Some(noImpl "TODO: Error for duplicate TypeDef")
         | false, _ ->
-            definedTypes.[tdef] <- noImpl "TODO: Have struct to keep track of type members"
+            definedTypes.[tdef] <- DefinedTypeMembers()
 
             canfail {
                 match tdef.EnclosingClass with
-                | ValueSome parent -> failwith "TODO: Add missing"
+                | ValueSome parent when parent.Equals(other = tdef) -> return! Some(noImpl "TODO: Error for type nested inside itself.")
+                | ValueSome parent -> definedTypes.TryAddDefault parent
                 | ValueNone -> ()
 
-                noImpl "TODO: Check parent and extends value, and add all missing values"
-                ()
+                match tdef, tdef.Extends with
+                | IsSystemType (nameof PrimitiveType.Object) true, ClassExtends.Null -> ()
+                | IsSystemType (nameof PrimitiveType.Object) true, _ -> return! Some(noImpl "Error for System.Object must inherit nothing")
+                | _, ClassExtends.Null -> return! Some(noImpl "TODO: Error for type missing extends")
+                | _, ClassExtends.Defined extends when extends.Equals(other = tdef) -> return! Some(noImpl "TODO: Error for type inheriting itself.")
+                | _, ClassExtends.Defined extends
+                | _, ClassExtends.DefinedGeneric(GenericType.Instantiation(extends, _)) -> // TODO: Loop through type parameters to add any types there as well?
+                    definedTypes.TryAddDefault extends
+                | _, ClassExtends.Referenced extends
+                | _, ClassExtends.ReferencedGeneric(GenericType.Instantiation(extends, _)) -> // TODO: Loop through type parameters to add any types there as well?
+                    referencedTypes.TryAddDefault extends
+
+                // TODO: If inheriting from ValueType/Enum, then ensure type is sealed.
+
+                // TODO: Examine extends chain to determine if a type inherits from itself.
+                // TODO: Prevent inheriting from interfaces, check that any extended TypeRefs are also not interfaces.
+
+                // TODO: These checks need to be run again for parent and extends, maybe make a separate function?
             }
 
     and addReferencedType tref =
@@ -165,18 +196,20 @@ let buildMetadataContent header root (name: Identifier) mvid update warning stat
             noImpl "TODO: Check resolutionScope, and attempt to add any missing Assembly or Module references"
             None
 
-    let inner state =
+    let rec inner state =
         match update state with
         | AddDefinedType tdef ->
-            
-            failwith "bad"
-        | Finish -> Ok builder
+            validated {
+                do! addDefinedType tdef
+                return! inner (builder.DefineType state tdef)
+            }
+        | Finish -> Ok(struct(builder', state))
 
     inner state
 
 let ofModule flags header root name mvid update warning state builder =
     validated {
-        let! metadata = buildMetadataContent header root name mvid update warning state builder
+        let! struct(metadata, state') = buildMetadataContent header root name mvid update warning state builder
 
         let text =
             SectionBuilder.ofList SectionName.text SectionCharacteristics.text [
@@ -184,9 +217,11 @@ let ofModule flags header root name mvid update warning state builder =
                 SectionContent.WriteMetadata metadata
             ]
 
-        return
+        let file =
             ofSectionBuilders
                 { DefaultHeaders.coffHeader with Characteristics = flags }
                 DefaultHeaders.optionalHeader
                 (ImmutableArray.Create text)
+
+        return file, state'
     }

@@ -69,6 +69,9 @@ type NamedType (ns: Identifier voption, parent: NamedType voption, tname: Identi
 module NamedTypePatterns =
     let inline (|NamedType|) (t: #NamedType) = t :> NamedType
 
+    let inline (|IsSystemType|) expected (t: #NamedType) =
+        t.TypeNamespace = PrimitiveType.ns && t.EnclosingType.IsNone && t.TypeName = Identifier expected
+
 type GenericParamKind =
     | Invariant
     | Covariant
@@ -210,11 +213,13 @@ type ModifiedType =
 
 [<Sealed>]
 type PrimitiveType (encoded: EncodedType) =
-    inherit NamedType(ValueSome(Identifier.ofStr "System"), ValueNone, Identifier.ofStr(encoded.GetType().Name))
+    inherit NamedType(PrimitiveType.ns, ValueNone, Identifier.ofStr(encoded.GetType().Name))
     member _.Encoded = encoded
 
 [<RequireQualifiedAccess>]
 module PrimitiveType =
+    /// <summary>The <c>System</c> namespace, which contains primitive types.</summary>
+    let ns = ValueSome(Identifier.ofStr "System")
     let Boolean = PrimitiveType EncodedType.Boolean
     let Char = PrimitiveType EncodedType.Char
     let I1 = PrimitiveType EncodedType.I1
@@ -328,6 +333,13 @@ type DefinedType =
 
     member this.Visibility = TypeVisibility(this.Flags &&& TypeDefFlags.VisibilityMask, this.EnclosingClass)
 
+[<RequireQualifiedAccess>]
+module DefinedType =
+    let inline (|IsInterface|NotInterface|) (tdef: DefinedType) =
+        if tdef.Flags &&& TypeDefFlags.Interface = TypeDefFlags.Interface
+        then IsInterface
+        else NotInterface
+
 type InstantiatedTypeArgumentsEnumerator = struct
     val mutable internal Index: int32
     val internal Parameters: ImmutableArray<GenericParam>
@@ -390,6 +402,8 @@ end
 [<RequireQualifiedAccess>]
 module GenericType =
     let instantiate gtype instantiator = InstantiatedType(instantiator, gtype)
+
+    let inline (|Instantiation|) (gtype: InstantiatedType<_>) = struct(gtype.Instantiated, gtype.Arguments)
 
 [<RequireQualifiedAccess>]
 module ClassExtends =
