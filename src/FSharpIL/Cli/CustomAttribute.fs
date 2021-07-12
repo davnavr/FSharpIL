@@ -40,4 +40,4 @@ type CustomAttributeParent (parent: obj) =
 [<System.Obsolete>]
 [<RequireQualifiedAccess>]
 module CustomAttributeParent =
-    let Assembly (assem: AssemblyDefinition) = CustomAttributeParent assem
+    let Assembly (assem: DefinedAssembly) = CustomAttributeParent assem

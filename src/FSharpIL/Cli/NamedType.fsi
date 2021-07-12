@@ -156,7 +156,7 @@ type GenericType =
 type TypeReferenceParent =
     | Null
     | Type of ReferencedType
-    | Assembly of AssemblyReference
+    | Assembly of ReferencedAssembly
     //| Module of ModuleReference
 
 and [<Sealed>] ReferencedType =

@@ -32,24 +32,18 @@ val ofSectionBuilders<'State> :
 /// <param name="mvid">
 /// An identifier used to distinguish between two versions of the same module, can be randomly generated.
 /// </param>
-/// <param name="update">The function used to update the contents of the CLI module.</param>
-/// <param name="warning">The function used to update the state given a validation warning.</param>
-/// <param name="state">The initial state.</param>
 /// <param name="builder">
-/// The collection of functions used to update the state given the modifications made to the CLI module.
+/// The collection of functions used to update the contents of the CLI module and to update the state given the modifications
+/// made to the CLI module or any generated validation warnings.
 /// </param>
-/// <returns>
-/// If successful, the portable executable file containing the CLI module and the final state value; otherwise, an error object
-/// describing why the generated CLI metadata was invalid.
-/// </returns>
+/// <param name="state">The initial state.</param>
+/// <returns>The portable executable file containing the CLI module and the final state value.</returns>
 val ofModule<'State> :
     flags: FileCharacteristics ->
     header: CliHeader ->
     root: CliMetadataRoot<Omitted, Omitted> ->
     name: Identifier ->
     mvid: Guid ->
-    update: ('State -> ModuleBuilderCommand) ->
-    warning: ('State -> IValidationWarning -> 'State) option ->
-    state: 'State ->
     builder: ModuleBuilder<'State> ->
-    ValidationResult<PEFile * 'State>
+    state: 'State ->
+    PEFile * 'State

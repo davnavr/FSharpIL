@@ -18,7 +18,7 @@ module CliHeader =
           MinorRuntimeVersion = 5us
           Requires32Bit = false }
 
-// TODO: Make this class internal.
+// TODO: Make this class internal, or make this a public record type.
 
 /// <summary>Builds the CLI metadata stored in the <c>.text</c> section of a PE file (II.24).</summary>
 [<Sealed>]

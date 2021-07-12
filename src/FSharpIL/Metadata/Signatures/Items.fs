@@ -228,7 +228,7 @@ type MethodDefSig =
 
 /// <summary>Represents a <c>MethodRefSig</c>, which captures "the call site signature for a method" (II.23.2.2).</summary>
 [<IsReadOnly>]
-type MethodRefSig<'TDefOrRef, 'TDefOrRefOrSpec> = struct
+type MethodRefSig = struct
     val Signature: MethodDefSig
     val VarArgParams: ImmutableArray<ParamItem>
 

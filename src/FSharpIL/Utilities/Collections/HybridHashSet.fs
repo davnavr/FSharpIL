@@ -19,19 +19,19 @@ type internal HybridHashSet<'T when 'T : not struct and 'T : equality> = struct
 
     internal new (capacity) = { inner = HybridCollection.create capacity }
 
-    member this.Count = this.inner.Count
+    member this.Count = this.inner.count
     member this.IsEmpty = this.inner.IsEmpty
 
     member this.Add item =
         match this.Count with
         | 0 ->
             this.inner.item0 <- item
-            this.inner.Count <- 1
+            this.inner.count <- 1
             true
         | 1 when this.inner.ItemsEqual(this.inner.item0, item) -> false
         | 1 ->
             this.inner.item1 <- item
-            this.inner.Count <- 2
+            this.inner.count <- 2
             true
         | 2 when
                 this.inner.ItemsEqual(this.inner.item0, item)
@@ -40,7 +40,7 @@ type internal HybridHashSet<'T when 'T : not struct and 'T : equality> = struct
                 false
         | 2 ->
             this.inner.item2 <- item
-            this.inner.Count <- 3
+            this.inner.count <- 3
             true
         | _ when
                 this.inner.ItemsEqual(this.inner.item0, item)
@@ -51,7 +51,7 @@ type internal HybridHashSet<'T when 'T : not struct and 'T : equality> = struct
         | _ ->
             this.inner.InitInner()
             let result = this.inner.inner.Add item
-            if result then this.inner.Count <- this.inner.Count + 1
+            if result then this.inner.count <- this.inner.Count + 1
             result
 
     member this.Contains item = this.inner.Contains item

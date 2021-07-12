@@ -43,7 +43,7 @@ let example() =
     (* Add references to other assemblies *)
     let mscorlib =
         (* Contains core types such as System.Object or System.Int32, usually System.Runtime is referenced instead *)
-        { AssemblyReference.Version = AssemblyVersion(5us, 0us, 0us, 0us)
+        { ReferencedAssembly.Version = AssemblyVersion(5us, 0us, 0us, 0us)
           PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
           Name = FileName.ofStr "System.Private.CoreLib"
           Culture = ValueNone
@@ -53,7 +53,7 @@ let example() =
 
     let consolelib =
         (* Contains the System.Console type, which is needed to print text onto the screen *)
-        { AssemblyReference.Version = AssemblyVersion(5us, 0us, 0us, 0us)
+        { ReferencedAssembly.Version = AssemblyVersion(5us, 0us, 0us, 0us)
           PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
           Name = FileName.ofStr "System.Console"
           Culture = ValueNone

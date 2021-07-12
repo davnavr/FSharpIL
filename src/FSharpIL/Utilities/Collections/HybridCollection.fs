@@ -20,21 +20,21 @@ type internal HybridCollection<'Item, 'Inner, 'InnerEnumerator, 'Methods
     =
     private
         { mutable inner: 'Inner
-          [<DefaultValue(false)>] mutable Count: int32
+          [<DefaultValue(false)>] mutable count: int32
           [<DefaultValue(false)>] mutable item0: 'Item
           [<DefaultValue(false)>] mutable item1: 'Item
           [<DefaultValue(false)>] mutable item2: 'Item }
 
-    member this.IsEmpty = this.Count = 0
+    member this.IsEmpty = this.count = 0
 
     member internal this.InitInner() =
-        if this.Count > 3 && isNull this.inner then
+        if this.count > 3 && isNull this.inner then
             this.inner <- Unchecked.defaultof<'Methods>.InitInner()
 
     member inline internal _.ItemsEqual(x, y) = Unchecked.defaultof<'Methods>.EqualityComparer.Equals(x, y)
 
     member this.Contains item =
-        match this.Count with
+        match this.count with
         | 0 -> false
         | 1 -> this.ItemsEqual(this.item0, item)
         | 2 -> this.ItemsEqual(this.item0, item) || this.ItemsEqual(this.item1, item)

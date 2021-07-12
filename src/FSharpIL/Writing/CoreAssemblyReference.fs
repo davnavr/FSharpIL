@@ -12,7 +12,7 @@ type CoreAssemblyMembers (octor: MethodCallTarget, tfmctor: MethodCallTarget) =
     member _.TargetFrameworkConstructor = tfmctor
 
 [<Sealed>]
-type CoreAssemblyReference (assembly: AssemblyReference) =
+type CoreAssemblyReference (assembly: ReferencedAssembly) =
     static let netCoreLib = FileName.ofStr "System.Private.CoreLib"
 
     let referenceSystemType name =
