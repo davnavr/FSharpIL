@@ -5,18 +5,17 @@ open FSharpIL.Metadata.Tables
 open FSharpIL.Cli
 
 [<NoComparison; NoEquality>]
-type ModuleBuilderCommand =
+type UpdateModule =
     internal
     | AddDefinedType of DefinedType
     | Finish
 
 [<RequireQualifiedAccess>]
-module ModuleBuilderSomething =
-    val finish : ModuleBuilderCommand
+module UpdateModule =
+    val finish : UpdateModule
 
     // TODO: Have module with functions for defining specific types e.g. addDefinedInterface, addDefinedEnum, etc. Maybe make a "DefineType" module.
-    //val addDefinedType : definition: (SomeParentRetrievalType -> SomeExtendsRetrievalType -> DefinedType) -> ModuleBuilderCommand
-    val addDefinedType : definition: DefinedType -> ModuleBuilderCommand // TODO: Maybe just search the tree and add any missing types (parent, extends)
+    val addDefinedType : definition: DefinedType -> UpdateModule // TODO: Maybe just search the tree and add any missing types (parent, extends)
 
 [<NoComparison; NoEquality>]
 type ModuleBuilder<'State> =

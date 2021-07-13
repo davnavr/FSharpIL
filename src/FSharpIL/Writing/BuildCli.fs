@@ -12,7 +12,7 @@ open FSharpIL.Writing.Cil
 open FSharpIL.Utilities.Collections
 
 [<NoComparison; NoEquality>]
-type ModuleBuilderCommand =
+type UpdateModule =
     | AddDefinedType of DefinedType
     | Finish
 

@@ -47,7 +47,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
         )
 
     let consolelib =
-        { AssemblyReference.Version = AssemblyVersion(5us, 0us, 0us, 0us)
+        { ReferencedAssembly.Version = AssemblyVersion(5us, 0us, 0us, 0us)
           PublicKeyOrToken = NoPublicKeyOrToken
           Name = FileName.ofStr "System.Console"
           Culture = ValueNone

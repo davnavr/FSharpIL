@@ -16,7 +16,7 @@ type AssemblyVersion = struct
 end
 
 [<StructuralComparison; StructuralEquality>]
-type AssemblyReference =
+type ReferencedAssembly =
     { Version: AssemblyVersion
       PublicKeyOrToken: PublicKeyOrToken
       Name: FileName
@@ -26,7 +26,7 @@ type AssemblyReference =
     member Flags: AssemblyFlags
 
 [<StructuralComparison; StructuralEquality>]
-type AssemblyDefinition =
+type DefinedAssembly =
     { Version: AssemblyVersion
       //Flags: AssemblyFlags
       PublicKey: ImmutableArray<byte>

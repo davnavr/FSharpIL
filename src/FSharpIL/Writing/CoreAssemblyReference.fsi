@@ -19,7 +19,7 @@ type CoreAssemblyMembers =
 /// <summary>Represents the assembly containing core types such as <see cref="T:System.Object"/>.</summary>
 [<Sealed>]
 type CoreAssemblyReference =
-    member Reference: AssemblyReference
+    member Reference: ReferencedAssembly
     /// <summary>The core type <see cref="T:System.Object"/>, which serves as the base type for all types.</summary>
     member Object: TypeReference<TypeKinds.ConcreteClass>
     /// <summary>
@@ -40,7 +40,7 @@ type CoreAssemblyReference =
     /// </summary>
     member TargetFrameworkAttribute: ReferencedType
 
-    new: assembly: AssemblyReference -> CoreAssemblyReference
+    new: assembly: ReferencedAssembly -> CoreAssemblyReference
 
     /// <summary>
     /// Adds a reference to <c>System.Private.CoreLib</c>, which is the core assembly for .NET Core and .NET 5+.
