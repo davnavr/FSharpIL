@@ -184,7 +184,7 @@ type TypeVisibility =
     member IsNested: bool
     member EnclosingClass: DefinedType voption
 
-and [<Sealed>] DefinedType =
+and DefinedType =
     inherit GenericType
 
     val Flags: TypeDefFlags
@@ -206,6 +206,11 @@ and [<Sealed>] DefinedType =
 module DefinedType =
     val inline (|IsInterface|NotInterface|) : tdef: DefinedType -> Choice<unit, unit>
     //val inline (|IsValueType|NotValueType|) : tdef: DefinedType -> Choice<unit, unit>
+
+[<AutoOpen>]
+module internal ModuleType =
+    /// <summary>Represents the special <c>&lt;Module&gt;</c> class, which contains global fields and methods (II.10.8).</summary>
+    val ModuleType : DefinedType
 
 [<RequireQualifiedAccess>]
 module TypeVisibility =

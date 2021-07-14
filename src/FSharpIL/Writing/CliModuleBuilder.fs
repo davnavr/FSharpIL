@@ -19,7 +19,7 @@ open FSharpIL.Utilities.Collections
 
 [<AbstractClass>]
 type DefinedMethodBody =
-    val LocalTypes: Signatures.LocalVarSig
+    val LocalTypes: LocalVarSig
     val InitLocals: InitLocals
 
     new (localTypes, initLocals) = { LocalTypes = localTypes; InitLocals = initLocals }
@@ -165,7 +165,7 @@ type MemberIndices =
 [<IsReadOnly; Struct>]
 type DefinedMethodBodyWriter
     (
-        localVarSource: Signatures.LocalVarSig -> TableIndex<StandaloneSigRow>,
+        localVarSource: LocalVarSig -> TableIndex<StandaloneSigRow>,
         methodTokenSource: MethodTokenSource,
         fieldTokenSource: FieldTokenSource,
         typeTokenSource: TypeTokenSource,
@@ -180,6 +180,8 @@ type DefinedMethodBodyWriter
 
 type ModuleBuilderSerializer
     (
+        header,
+        root,
         moduleBuilderObj: obj,
         name: Identifier,
         mvid,
@@ -200,8 +202,8 @@ type ModuleBuilderSerializer
         let guids = GuidStreamBuilder 1
         let blobs = BlobStreamBuilder 512
         CliMetadataBuilder (
-            CliHeader.defaultFields,
-            CliMetadataRoot.defaultFields,
+            header,
+            root,
             FSharpIL.Writing.Cil.MethodBodyList(),
             MetadataTablesBuilder((fun str guid _ -> ModuleRow.create (str.Add name) (guid.Add mvid)), strings, guids, blobs),
             strings,
@@ -226,14 +228,13 @@ type ModuleBuilderSerializer
             |> ValueSome
         | None -> ValueNone
 
-    let assemblyReferenceLookup = Dictionary<AssemblyReference, TableIndex<AssemblyRefRow>> assemblyReferences.Count
+    let assemblyReferenceLookup = Dictionary<ReferencedAssembly, TableIndex<AssemblyRefRow>> assemblyReferences.Count
     let referencedTypeLookup = Dictionary<ReferencedType, _> referencedTypes.Count
     let definedTypeLookup = Dictionary<DefinedType, _> definedTypes.Count
-    let typeSpecLookup = Dictionary<TypeSpec, TableIndex<TypeSpecRow>> typeSpecSet.Count
 
     let fieldSignatures = Dictionary<_, FieldSigOffset>((definedTypeLookup.Count + referencedTypes.Count) * 8)
-    let methodDefSignatures = Dictionary<Signatures.MethodDefSig, MethodDefSigOffset>(definedTypeLookup.Count * 16)
-    let methodRefSignatures = Dictionary<Signatures.MethodRefSig, MemberRefSigOffset>(referencedTypes.Count * 32) // TODO: Helper function for getting and adding signatures.
+    let methodDefSignatures = Dictionary<MethodDefSig, MethodDefSigOffset>(definedTypeLookup.Count * 16)
+    let methodRefSignatures = Dictionary<MethodRefSig, MemberRefSigOffset>(referencedTypes.Count * 32) // TODO: Helper function for getting and adding signatures.
     //let localVarSignatures = Dictionary<Signatures.LocalVarSig, TableIndex<StandaloneSigRow>>(methodDefSignatures.Count)
 
     let mutable methodDefParams = TableIndex<ParamRow>.One
@@ -258,7 +259,7 @@ type ModuleBuilderSerializer
         | TypeDefOrRefOrSpec.Ref tref -> TypeDefOrRef.Ref(serializer.SerializeReferencedType(tref, referencedTypes.[tref]))
         | TypeDefOrRefOrSpec.Spec tspec -> TypeDefOrRef.Spec(serializer.SerializeTypeSpec tspec)
 
-    let localVarSource (signature: LocalVarSig<_, _>) =
+    let localVarSource (signature: LocalVarSig) =
         if signature.IsDefaultOrEmpty
         then Unchecked.defaultof<_>
         else
@@ -375,6 +376,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
     member internal this.Serialize() =
         let serializer =
             ModuleBuilderSerializer (
+                header',
+                root',
                 this,
                 name,
                 this.Mvid,

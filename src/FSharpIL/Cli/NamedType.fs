@@ -317,7 +317,6 @@ module TypeVisibility =
     let NestedFamilyAndAssembly parent = TypeVisibility(TypeDefFlags.NestedFamAndAssem, ValueSome parent)
     let NestedFamilyOrAssembly parent = TypeVisibility(TypeDefFlags.NestedFamOrAssem, ValueSome parent)
 
-[<Sealed>]
 type DefinedType =
     inherit GenericType
 
@@ -420,3 +419,15 @@ module ClassExtends =
     let DefinedGeneric (NamedType extends: InstantiatedType<DefinedType>) = ClassExtends(ValueSome extends)
     let Referenced (NamedType extends: ReferencedType) = ClassExtends(ValueSome extends)
     let ReferencedGeneric (NamedType extends: InstantiatedType<ReferencedType>) = ClassExtends(ValueSome extends)
+
+[<AutoOpen>]
+module ModuleType =
+    let ModuleType =
+        DefinedType (
+            Unchecked.defaultof<TypeDefFlags>,
+            ClassExtends.Null, // According to ECMA-335, the module class "does not have a base type" (II.10.8).
+            ValueNone,
+            ValueNone,
+            Identifier.ofStr "<Module>",
+            GenericParamList.empty
+        )
