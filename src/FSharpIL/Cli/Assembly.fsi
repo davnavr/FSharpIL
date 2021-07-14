@@ -5,16 +5,6 @@ open System.Collections.Immutable
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-[<System.Runtime.CompilerServices.IsReadOnly>]
-type AssemblyVersion = struct
-    val Major: uint16
-    val Minor: uint16
-    val Build: uint16
-    val Revision: uint16
-
-    new : major: uint16 * minor: uint16 * build: uint16 * revision: uint16 -> AssemblyVersion
-end
-
 [<StructuralComparison; StructuralEquality>]
 type ReferencedAssembly =
     { Version: AssemblyVersion

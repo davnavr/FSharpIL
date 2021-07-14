@@ -1,28 +1,38 @@
-﻿namespace FSharpIL.Writing
+﻿/// Contains types and modules for building CLI metadata modules (I.9).
+module FSharpIL.Writing.BuildCli
 
-open FSharpIL.Metadata.Tables
+open FSharpIL
+open FSharpIL.Metadata
 
 open FSharpIL.Cli
 
 [<NoComparison; NoEquality>]
-type UpdateModule =
+[<RequireQualifiedAccess>]
+type ModuleUpdate =
     internal
     | AddDefinedType of DefinedType
     | Finish
 
 [<RequireQualifiedAccess>]
-module UpdateModule =
-    val finish : UpdateModule
-
-    // TODO: Have module with functions for defining specific types e.g. addDefinedInterface, addDefinedEnum, etc. Maybe make a "DefineType" module.
-    val addDefinedType : definition: DefinedType -> UpdateModule // TODO: Maybe just search the tree and add any missing types (parent, extends)
+module ModuleUpdate =
+    val finish : ModuleUpdate
 
 [<NoComparison; NoEquality>]
 type ModuleBuilder<'State> =
-    { ReferenceType: 'State -> ReferencedType -> 'State
+    { Update: 'State -> ModuleUpdate
+      Warning: ('State -> IValidationWarning -> 'State) option
+      ReferenceType: 'State -> ReferencedType -> 'State
       DefineType: 'State -> DefinedType -> 'State }
 
 [<RequireQualifiedAccess>]
 module ModuleBuilder =
     [<GeneralizableValue>]
     val ignored<'State> : ModuleBuilder<'State>
+
+    val run<'State> :
+        header: CliHeader ->
+        root: CliMetadataRoot<Omitted, Omitted> ->
+        name: Identifier ->
+        mvid: System.Guid ->
+        builder: ModuleBuilder<'State> ->
+        state: 'State -> ValidationResult<CliModuleBuilder * 'State>

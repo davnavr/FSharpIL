@@ -19,10 +19,15 @@ val ofSectionBuilders<'State> :
     sections: System.Collections.Immutable.ImmutableArray<SectionBuilder<'State>> ->
     PEFile
 
+val ofMetadataBuilder : flags: FileCharacteristics -> builder: CliMetadataBuilder -> PEFile
+
+/// <summary>Creates a Portable Executable file from a CLI metadata module.</summary>
+val ofModuleBuilder : flags: FileCharacteristics -> builder: CliModuleBuilder -> PEFile
+
 // TODO: Consider making a version that uses a struct implementing an interface, and make sure to benchmark it.
 // TODO: Make mvid an option to generate Guid deterministically based on the contents of the module.
 
-/// <summary>Creates a Portable Executable file from a CLI metadata module.</summary>
+/// <summary>Creates a Portable Executable file containing a CLI metadata module.</summary>
 /// <param name="flags">Flags that specify whether the file is a library or an executable.</param>
 /// <param name="header">The fields of the CLI header.</param>
 /// <param name="root">
@@ -32,12 +37,11 @@ val ofSectionBuilders<'State> :
 /// <param name="mvid">
 /// An identifier used to distinguish between two versions of the same module, can be randomly generated.
 /// </param>
-/// <param name="update">The function used to update the contents of the CLI module.</param>
-/// <param name="warning">The function used to update the state given a validation warning.</param>
-/// <param name="state">The initial state.</param>
 /// <param name="builder">
-/// The collection of functions used to update the state given the modifications made to the CLI module.
+/// The collection of functions used to update the contents of the CLI module and to update the state given the modifications
+/// made to the CLI module or any generated validation warnings.
 /// </param>
+/// <param name="state">The initial state.</param>
 /// <returns>
 /// If successful, the portable executable file containing the CLI module and the final state value; otherwise, an error object
 /// describing why the generated CLI metadata was invalid.
@@ -48,8 +52,6 @@ val ofModule<'State> :
     root: CliMetadataRoot<Omitted, Omitted> ->
     name: Identifier ->
     mvid: Guid ->
-    update: ('State -> ModuleBuilderCommand) ->
-    warning: ('State -> IValidationWarning -> 'State) option ->
+    builder: BuildCli.ModuleBuilder<'State> ->
     state: 'State ->
-    builder: ModuleBuilder<'State> ->
     ValidationResult<PEFile * 'State>

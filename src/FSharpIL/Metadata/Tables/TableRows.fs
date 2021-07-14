@@ -574,6 +574,16 @@ type FieldRvaRow =
     interface ITableRow
     interface IEquatable<FieldRvaRow> with member this.Equals other = this.Equals other
 
+[<System.Runtime.CompilerServices.IsReadOnly>]
+type AssemblyVersion = struct // TODO: Update row types for Assembly and AssemblyRef to use this struct.
+    val Major: uint16
+    val Minor: uint16
+    val Build: uint16
+    val Revision: uint16
+
+    new(major, minor, build, revision) = { Major = major; Minor = minor; Build = build; Revision = revision }
+end
+
 /// <summary>Specifies the algorithm used to compute the hash for the contents of an assembly (II.23.1.1).</summary>
 type AssemblyHashAlgorithm =
     | None = 0u

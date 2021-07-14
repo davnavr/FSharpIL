@@ -42,13 +42,6 @@ type DefinedTypeMembers =
 
     // TODO: For these add methods, also return a mutable list of custom attributes
 
-    member AddField: field: DefinedField -> ValidationResult<FieldArg>
-
-    // TODO: Have special types for static method calls and instance method calls, since static does not work with callvirt
-    member AddMethod: method: DefinedMethod * body: DefinedMethodBody voption -> ValidationResult<MethodCallTarget>
-    member AddEntryPoint: method: EntryPointMethod * body: DefinedMethodBody -> ValidationResult<MethodCallTarget>
-    member ContainsMethod: method: DefinedMethod -> bool
-
 [<Sealed>]
 type ReferencedTypeMembers =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<ReferencedField>
@@ -60,9 +53,6 @@ type ReferencedTypeMembers =
     member MethodCount: int32
     //member PropertyCount: int32
     //member EventCount: int32
-
-    member ReferenceMethod: ReferencedMethod -> ValidationResult<MethodCallTarget>
-    member ContainsMethod: method: ReferencedMethod -> bool
 
 [<Sealed>]
 type CustomAttributeList =
@@ -77,6 +67,8 @@ type CliModuleBuilder =
     new :
         name: Identifier *
         ?mvid: Guid *
+        ?header: CliHeader *
+        ?root: CliMetadataRoot<FSharpIL.Omitted, FSharpIL.Omitted> *
         ?assembly: DefinedAssembly *
         ?warnings: ValidationWarningsBuilder *
         ?typeDefCapacity: int32 *

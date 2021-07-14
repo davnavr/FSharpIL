@@ -5,16 +5,6 @@ open System.Collections.Immutable
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-[<System.Runtime.CompilerServices.IsReadOnly>]
-type AssemblyVersion = struct // TODO: Move this type to FSharpIL.Metadata.Tables
-    val Major: uint16
-    val Minor: uint16
-    val Build: uint16
-    val Revision: uint16
-
-    new(major, minor, build, revision) = { Major = major; Minor = minor; Build = build; Revision = revision }
-end
-
 [<StructuralComparison; StructuralEquality>]
 type ReferencedAssembly = // TODO: Maybe rename these types to ReferencedAssembly and DefinedAssembly?
     { Version: AssemblyVersion

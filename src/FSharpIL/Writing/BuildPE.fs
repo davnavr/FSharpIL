@@ -120,21 +120,22 @@ let ofSectionBuilders fileHeader (optionalHeader: OptionalHeader) (sections: Imm
 
     PEFile(fileHeader, optionalHeader, directories, Unsafe.As &sections', fileHeadersSize)
 
-let ofModule flags header root name mvid update warning state builder =
+let ofMetadataBuilder flags builder =
+    let text =
+        SectionBuilder.ofList SectionName.text SectionCharacteristics.text [
+            SectionContent.SetCliHeader
+            SectionContent.WriteMetadata builder
+        ]
+
+    ofSectionBuilders
+        { DefaultHeaders.coffHeader with Characteristics = flags }
+        DefaultHeaders.optionalHeader
+        (ImmutableArray.Create text)
+
+let ofModuleBuilder flags (builder: CliModuleBuilder) = builder.Serialize() |> ofMetadataBuilder flags
+
+let ofModule flags header root name mvid builder state =
     validated {
-        let! struct(metadata, state') = failwith "bad"
-
-        let text =
-            SectionBuilder.ofList SectionName.text SectionCharacteristics.text [
-                SectionContent.SetCliHeader
-                SectionContent.WriteMetadata metadata
-            ]
-
-        let file =
-            ofSectionBuilders
-                { DefaultHeaders.coffHeader with Characteristics = flags }
-                DefaultHeaders.optionalHeader
-                (ImmutableArray.Create text)
-
-        return file, state'
+        let! metadata, state' = BuildCli.ModuleBuilder.run header root name mvid builder state
+        return ofModuleBuilder flags metadata, state'
     }
