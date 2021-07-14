@@ -6,16 +6,12 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-open FSharpIL.Cli.Signatures
-
 [<AbstractClass>]
 type Field =
     val Name: Identifier
-    val Signature: FieldSig
+    val Type: NamedType
 
-    new (name, signature) = { Name = name; Signature = signature }
-
-    member this.Type = this.Signature.FieldType
+    new (name, fieldType) = { Name = name; Type = fieldType }
 
     abstract Equals: other: Field -> bool
     default this.Equals(other: Field) = this.Name = other.Name && this.Type = other.Type
@@ -25,7 +21,7 @@ type Field =
         | :? Field as other -> this.Equals(other = other)
         | _ -> false
 
-    override this.GetHashCode() = HashCode.Combine(this.Name, this.Signature)
+    override this.GetHashCode() = HashCode.Combine(this.Name, this.Type)
 
     interface IEquatable<Field> with member this.Equals other = this.Equals(other = other)
 
@@ -80,13 +76,6 @@ type FieldDefinition<'Kind when 'Kind :> IAttributeTag<FieldFlags> and 'Kind : s
         signature
     )
 
-type DefinedField with
-    static member Instance(visibility, flags, name, signature) =
-        FieldDefinition<FieldKinds.Instance>(visibility, flags, name, signature)
-
-    static member Static(visibility, flags, name, signature) =
-        FieldDefinition<FieldKinds.Static>(visibility, flags, name, signature)
-
 [<AbstractClass>]
 type ReferencedField =
     inherit Field
@@ -106,10 +95,6 @@ type ReferencedField =
 type FieldReference<'Kind when 'Kind :> IAttributeTag<FieldFlags>> (visibility, name, signature) =
     inherit ReferencedField(visibility, name, signature)
 
-type ReferencedField with
-    static member Instance(visibility, name, signature) = FieldReference<FieldKinds.Instance>(visibility, name, signature)
-    static member Static(visibility, name, signature) = FieldReference<FieldKinds.Static>(visibility, name, signature)
-
 [<RequireQualifiedAccess>]
 module Field =
     let inline (|Defined|Referenced|) (field: Field) =
@@ -128,7 +113,7 @@ module DefinedField =
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
-type FieldArg (owner: FSharpIL.Cli.Type, field: Field) =
+type FieldArg (owner: NamedType, field: Field) =
     member _.Owner = owner
     member _.Field = field
 

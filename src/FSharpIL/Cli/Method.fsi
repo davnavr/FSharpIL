@@ -5,10 +5,7 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
-
-open FSharpIL.Cli.Signatures
 
 [<IsReadOnly>]
 type MethodName = struct
@@ -44,13 +41,26 @@ module MethodName =
 module MethodNamePatterns =
     val (|MethodName|) : name: MethodName -> Identifier
 
+[<IsReadOnly>]
+type MethodReturnType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ReturnType and MethodParameterType
+    val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
+    val Type: NamedType voption
+end
+
+[<RequireQualifiedAccess>]
+module MethodReturnType =
+    val Type : argType: NamedType -> MethodReturnType
+    val ByRef : argType: NamedType -> MethodReturnType
+    val TypedByRef : MethodReturnType
+    val Void : MethodReturnType
+
 [<AbstractClass>]
 type Method =
-    val HasThis: MethodThis
-    val CallingConvention: CallingConventions
+    val HasThis: FSharpIL.Metadata.Signatures.MethodThis
+    val CallingConvention: FSharpIL.Metadata.Signatures.CallingConventions
     val Name: Identifier
-    val ReturnType: ReturnType
-    val ParameterTypes: ImmutableArray<ParamItem>
+    val ReturnType: MethodReturnType
+    val ParameterTypes: ImmutableArray<MethodParameterType>
 
     abstract Equals: other: Method -> bool
     default Equals: other: Method -> bool
@@ -64,7 +74,7 @@ type Method =
 module MethodKinds =
     type IKind = interface
         inherit IAttributeTag<MethodDefFlags>
-        abstract MethodThis: MethodThis
+        abstract MethodThis: FSharpIL.Metadata.Signatures.MethodThis
     end
 
     type [<Struct>] Instance = interface IKind
@@ -83,7 +93,6 @@ type DefinedMethod =
     val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
 
-    member Signature: MethodDefSig
     //member Visibility: MemberVisibility
 
     override Equals: Method -> bool
@@ -119,67 +128,12 @@ type EntryPointMethod = struct
     member Kind: EntryPointKind
 end
 
-type DefinedMethod with
-    static member Instance:
-        visibility: MemberVisibility *
-        flags: MethodAttributes<MethodKinds.Instance> *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
-        parameterList: ParameterList -> MethodDefinition<MethodKinds.Instance>
-
-    static member Virtual:
-        visibility: MemberVisibility *
-        flags: MethodAttributes<MethodKinds.Virtual> *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
-        parameterList: ParameterList -> MethodDefinition<MethodKinds.Virtual>
-
-    static member Final:
-        visibility: MemberVisibility *
-        flags: MethodAttributes<MethodKinds.Final> *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
-        parameterList: ParameterList -> MethodDefinition<MethodKinds.Final>
-
-    static member Static:
-        visibility: MemberVisibility *
-        flags: MethodAttributes<MethodKinds.Static> *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
-        parameterList: ParameterList -> MethodDefinition<MethodKinds.Static>
-
-    static member Abstract:
-        visibility: MemberVisibility *
-        flags: MethodAttributes<MethodKinds.Abstract> *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
-        parameterList: ParameterList -> MethodDefinition<MethodKinds.Abstract>
-
-    static member Constructor:
-        visibility: MemberVisibility *
-        flags: MethodAttributes<MethodKinds.ObjectConstructor> *
-        parameterTypes: ImmutableArray<ParamItem> *
-        parameterList: ParameterList -> MethodDefinition<MethodKinds.ObjectConstructor>
-
-    static member ClassConstructor: MethodDefinition<MethodKinds.ClassConstructor>
-
-    static member EntryPoint:
-        visibility: MemberVisibility *
-        flags: MethodAttributes<MethodKinds.Static> *
-        name: MethodName *
-        kind: EntryPointKind -> EntryPointMethod
-
 [<AbstractClass>]
 type ReferencedMethod =
     inherit Method
     val Visibility: ExternalVisibility
 
-    member Signature: MethodRefSig
+    //val VarArgParameterTypes // TODO: Have field for VarArg types in ReferencedMethod.
 
     override Equals: Method -> bool
 
@@ -189,45 +143,10 @@ type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> =
     inherit ReferencedMethod
 end
 
-type ReferencedMethod with
-    static member Instance:
-        visibility: ExternalVisibility *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Instance>
-
-    static member Virtual:
-        visibility: ExternalVisibility *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Virtual>
-
-    static member Final:
-        visibility: ExternalVisibility *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Final>
-
-    static member Static:
-        visibility: ExternalVisibility *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Static>
-
-    static member Abstract:
-        visibility: ExternalVisibility *
-        returnType: ReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Abstract>
-
-    static member Constructor:
-        visibility: ExternalVisibility *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.ObjectConstructor>
-
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
 type MethodCallTarget = // TODO: Prevent calling of default constructor?
-    member Owner: FSharpIL.Cli.Type
+    member Owner: NamedType
     member Method: Method
 
 [<RequireQualifiedAccess>]

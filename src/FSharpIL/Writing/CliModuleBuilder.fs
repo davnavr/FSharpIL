@@ -79,13 +79,17 @@ type ConstructedCustomAttribute = struct
           Signature = { FixedArgs = fixedArgs; NamedArgs = namedArgs } }
 end
 
+/// Returns the number of fixed arguments from the specified constructor method.
+type CustomAttributeResolver = CustomAttributeCtor -> ValidationResult<int32>
+
 [<Sealed>]
 type CustomAttributeList
     (
         owner: obj,
         lookup: Dictionary<obj, _>,
-        resolver: CustomAttributeCtor -> ValidationResult<int32>
-    ) =
+        resolver: CustomAttributeResolver
+    )
+    =
     let mutable attributes = Unchecked.defaultof<ImmutableArray<ConstructedCustomAttribute>.Builder>
 
     member _.Count = if isNull attributes then 0 else attributes.Count
@@ -246,31 +250,10 @@ type ModuleBuilderSerializer
           EventList = TableIndex.One
           PropertyList = TableIndex.One }
 
-    let namedTypeMapping =
-        function
-        | DefinedType tdef ->
-            MetadataSignatures.TypeDefOrRefEncoded.Def(serializer.SerializeDefinedType(tdef, definedTypes.[tdef]))
-        | ReferencedType tref ->
-            MetadataSignatures.TypeDefOrRefEncoded.Ref(serializer.SerializeReferencedType(tref, referencedTypes.[tref]))
-
-    let modifierTypeMapping =
-        function
-        | TypeDefOrRefOrSpec.Def tdef -> TypeDefOrRef.Def(serializer.SerializeDefinedType(tdef, definedTypes.[tdef]))
-        | TypeDefOrRefOrSpec.Ref tref -> TypeDefOrRef.Ref(serializer.SerializeReferencedType(tref, referencedTypes.[tref]))
-        | TypeDefOrRefOrSpec.Spec tspec -> TypeDefOrRef.Spec(serializer.SerializeTypeSpec tspec)
-
-    let localVarSource (signature: LocalVarSig) =
-        if signature.IsDefaultOrEmpty
-        then Unchecked.defaultof<_>
-        else
-            // TODO: Consider caching local variable signatures in localVarSignatures dictionary.
-            Blob.mapLocalVarSig namedTypeMapping modifierTypeMapping signature
-            |> failwith "TODO: write locals to blob stream"
-
     let methodTokenSource = { MethodCalls = ImmutableArray.CreateBuilder(definedTypes.Count * 64) }
     let fieldTokenSource = { FieldInstructions = ImmutableArray.CreateBuilder methodTokenSource.MethodCalls.Capacity }
     let typeTokenSource =
-        { TypeInstructions = ImmutableArray.CreateBuilder(definedTypes.Count + referencedTypes.Count + typeSpecSet.Count) }
+        { TypeInstructions = ImmutableArray.CreateBuilder(definedTypes.Count + referencedTypes.Count) }
 
     member private _.SerializeAssemblyReferences() =
         for assem in assemblyReferences do
@@ -288,24 +271,6 @@ type ModuleBuilderSerializer
     member this.Serialize() =
         this.SerializeAssemblyReferences()
 
-        for KeyValue(tref, members) in referencedTypes do this.SerializeReferencedType(tref, members) |> ignore
-
-        // Write the special <Module> type.
-        this.SerializeDefinedType(ModuleType, moduleGlobalMembers) |> ignore
-
-        for KeyValue(tdef, members) in definedTypes do this.SerializeDefinedType(tdef, members) |> ignore
-
-        builder.EntryPointToken <-
-            match entryPointToken with
-            | NoEntryPoint -> EntryPointToken.Null
-            | EntryPointMethod(owner, method) -> EntryPointToken.MethodDef definedTypeLookup.[owner].Methods.[method.Method]
-            //| EntryPointFile file -> EntryPointToken.File(failwith "TODO: get entry point file")
-
-        this.SerializeGenericParams()
-        this.SerializeCustomAttributes()
-        this.PatchMethodCalls()
-        this.PatchFieldInstructions()
-        this.PatchTypeInstructions()
 
         builder
 
@@ -320,7 +285,6 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         ?warnings,
         ?typeDefCapacity,
         ?typeRefCapacity,
-        ?typeSpecCapacity,
         ?assemblyRefCapacity
     )
     as builder
@@ -338,12 +302,12 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         function
         | CustomAttributeCtor.Def(tdef, ctor) ->
             match definedTypes.TryGetValue tdef with
-            | true, members when members.ContainsMethod ctor -> Ok ctor.ParameterTypes.Length
+            //| true, members when members.ContainsMethod ctor -> Ok ctor.ParameterTypes.Length
             | true, _ -> Error(noImpl "error for defined attribute ctor not found")
             | false, _ -> Error(noImpl "error for defined attribute type not found")
         | CustomAttributeCtor.Ref(tref, ctor) ->
             match referencedTypes.TryGetValue tref with
-            | true, members when members.ContainsMethod ctor -> Ok ctor.ParameterTypes.Length
+            //| true, members when members.ContainsMethod ctor -> Ok ctor.ParameterTypes.Length
             | true, _ -> Error(noImpl "error for referenced attribute ctor not found")
             | false, _ -> Error(noImpl "error for referenced attribute type not found")
 

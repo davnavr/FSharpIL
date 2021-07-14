@@ -73,7 +73,6 @@ type CliModuleBuilder =
         ?warnings: ValidationWarningsBuilder *
         ?typeDefCapacity: int32 *
         ?typeRefCapacity: int32 *
-        ?typeSpecCapacity: int32 *
         ?assemblyRefCapacity: int32 -> CliModuleBuilder
 
     member Mvid: Guid

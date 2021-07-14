@@ -7,8 +7,6 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-// TOOD: Update Field.fs and Method.fs to use NamedType.
-
 [<AbstractClass>]
 type NamedType =
     member TypeName: Identifier
@@ -26,7 +24,7 @@ type NamedType =
 module NamedTypePatterns =
     val inline internal (|NamedType|) : #NamedType -> NamedType
     val inline (|IsSystemType|) : expected: string -> #NamedType -> bool
-    // TODO: Add cases for pointer types.
+    // TODO: Add cases for unmanaged pointer types.
     //val inline (|DefinedType|ReferencedType|InstantiatedType|ArrayType|PrimitiveType|) : NamedType -> Choice<DefinedType, ReferencedType, InstantiatedType, ArrayType, PrimitiveType>
 
 type GenericParamKind =

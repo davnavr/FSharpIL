@@ -5,8 +5,6 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-open FSharpIL.Cli.Signatures
-
 [<IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]
 type ParameterKind =
@@ -14,13 +12,28 @@ type ParameterKind =
     | InRef
     | OutRef
 
+[<IsReadOnly>]
+type MethodParameterType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ParamItem and MethodReturnType
+    val Tag: FSharpIL.Metadata.Signatures.ParamItemTag
+    val Type: NamedType voption
+
+    internal new (tag, argType) = { Tag = tag; Type = argType }
+end
+
 [<IsReadOnly; Struct>]
 type Parameter =
     { Kind: ParameterKind
       DefaultValue: Constant voption
       ParamName: Identifier voption } // TODO: Have field that allows setting of Optional flag.
+      //ParamType: MethodParameterType // This will make ParameterList obsolete.
 
-type ParameterList = int32 -> ParamItem -> Parameter
+[<RequireQualifiedAccess>]
+module MethodParameterType =
+    let Type argType = MethodParameterType(FSharpIL.Metadata.Signatures.ParamItemTag.Param, ValueSome argType)
+    let ByRef argType = MethodParameterType(FSharpIL.Metadata.Signatures.ParamItemTag.ByRef, ValueSome argType)
+    let TypedByRef = MethodParameterType(FSharpIL.Metadata.Signatures.ParamItemTag.TypedByRef, ValueNone)
+
+type ParameterList = int32 -> MethodParameterType -> Parameter
 
 [<RequireQualifiedAccess>]
 module Parameter =
