@@ -42,9 +42,14 @@ module MethodNamePatterns =
     val (|MethodName|) : name: MethodName -> Identifier
 
 [<IsReadOnly>]
+[<NoComparison; CustomEquality>]
 type MethodReturnType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ReturnType and MethodParameterType
     val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
     val Type: NamedType voption
+
+    member Equals: other: MethodReturnType -> bool
+
+    interface IEquatable<MethodReturnType>
 end
 
 [<RequireQualifiedAccess>]
@@ -71,6 +76,15 @@ type Method =
     interface IEquatable<Method>
 
 [<RequireQualifiedAccess>]
+module Method =
+    [<Sealed>]
+    type SignatureComparer = class
+        interface System.Collections.Generic.IEqualityComparer<Method>
+    end
+
+    val comparer : SignatureComparer
+
+[<RequireQualifiedAccess>]
 module MethodKinds =
     type IKind = interface
         inherit IAttributeTag<MethodDefFlags>
@@ -85,13 +99,21 @@ module MethodKinds =
     type [<Struct>] ObjectConstructor = interface IKind
     type [<Struct>] ClassConstructor = interface IKind
 
-[<AbstractClass>]
 type DefinedMethod =
     inherit Method
 
     val Flags: MethodDefFlags
     val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
+
+    internal new:
+        implFlags: MethodImplFlags *
+        flags: MethodDefFlags *
+        methodThis: FSharpIL.Metadata.Signatures.MethodThis *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> *
+        parameterList: ParameterList -> DefinedMethod
 
     //member Visibility: MemberVisibility
 

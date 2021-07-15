@@ -27,6 +27,10 @@ module NamedTypePatterns =
     // TODO: Add cases for unmanaged pointer types.
     //val inline (|DefinedType|ReferencedType|InstantiatedType|ArrayType|PrimitiveType|) : NamedType -> Choice<DefinedType, ReferencedType, InstantiatedType, ArrayType, PrimitiveType>
 
+[<RequireQualifiedAccess>]
+module NamedType =
+    val toElemType: NamedType -> FSharpIL.Metadata.Blobs.ElemType voption
+
 type GenericParamKind =
     | Invariant
     | Covariant
@@ -189,12 +193,12 @@ and DefinedType =
     val Extends: ClassExtends
 
     internal new:
-        TypeDefFlags *
-        ClassExtends *
-        Identifier voption *
-        DefinedType voption *
-        Identifier *
-        GenericParamList -> DefinedType
+        flags: TypeDefFlags *
+        extends: ClassExtends *
+        typeNamespace: Identifier voption *
+        enclosing: DefinedType voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> DefinedType
 
     member Visibility: TypeVisibility
     /// Gets the type that contains this nested type (II.22.32).
@@ -209,6 +213,76 @@ module DefinedType =
 module internal ModuleType =
     /// <summary>Represents the special <c>&lt;Module&gt;</c> class, which contains global fields and methods (II.10.8).</summary>
     val ModuleType : DefinedType
+
+[<RequireQualifiedAccess>]
+module TypeKinds =
+    type ConcreteClass = struct
+        interface IAttributeTag<TypeDefFlags>
+        interface TypeAttributes.IHasStaticMethods
+        interface TypeAttributes.IHasLayout
+        interface TypeAttributes.IHasStringFormat
+        interface TypeAttributes.ISerializableType
+    end
+
+    type AbstractClass = struct
+        interface IAttributeTag<TypeDefFlags>
+        interface TypeAttributes.IHasStaticMethods
+        interface TypeAttributes.IHasLayout
+        interface TypeAttributes.IHasStringFormat
+        interface TypeAttributes.ISerializableType
+    end
+
+    type SealedClass = struct
+        interface IAttributeTag<TypeDefFlags>
+        interface TypeAttributes.IHasStaticMethods
+        interface TypeAttributes.IHasLayout
+        interface TypeAttributes.IHasStringFormat
+        interface TypeAttributes.ISerializableType
+    end
+
+    type StaticClass = struct
+        interface IAttributeTag<TypeDefFlags>
+        interface TypeAttributes.IHasStaticMethods
+        interface TypeAttributes.IHasLayout
+        interface TypeAttributes.IHasStringFormat
+        interface TypeAttributes.ISerializableType
+    end
+
+    type Delegate = struct
+        interface IAttributeTag<TypeDefFlags>
+        interface TypeAttributes.ISerializableType
+    end
+
+    type Enum = struct
+        interface IAttributeTag<TypeDefFlags>
+        interface TypeAttributes.ISerializableType
+    end
+
+    type Interface = struct
+        interface IAttributeTag<TypeDefFlags>
+        interface TypeAttributes.IHasStaticMethods
+    end
+
+    type ValueType = struct
+        interface IAttributeTag<TypeDefFlags>
+        interface TypeAttributes.IHasStaticMethods
+        interface TypeAttributes.IHasLayout
+        interface TypeAttributes.IHasStringFormat
+        interface TypeAttributes.ISerializableType
+    end
+
+[<Sealed>]
+type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
+    inherit DefinedType
+
+    internal new:
+        visibility: TypeVisibility *
+        flags: TypeAttributes<'Kind> *
+        extends: ClassExtends *
+        typeNamespace: Identifier voption *
+        enclosingClass: DefinedType voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> TypeDefinition<'Kind>
 
 [<RequireQualifiedAccess>]
 module TypeVisibility =

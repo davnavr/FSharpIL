@@ -41,32 +41,6 @@ module EntryPoint =
         | NoEntryPoint -> None
         | EntryPointMethod(owner, method) -> Method(struct(owner, method))
 
-[<Sealed>]
-type DefinedTypeMembers =
-    val private owner: DefinedType
-    val private warnings: ValidationWarningsBuilder option
-    val private entryPointToken: EntryPoint ref
-    [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
-    [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
-    [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
-
-    new (owner, warnings, entryPointToken) = { owner = owner; warnings = warnings; entryPointToken = entryPointToken }
-
-    member this.FieldCount = this.Field.Count
-    member this.MethodCount = this.Method.Count
-
-[<Sealed>]
-type ReferencedTypeMembers = class
-    val private owner: ReferencedType
-    val private warnings: ValidationWarningsBuilder option
-    [<DefaultValue>] val mutable Field: HybridHashSet<ReferencedField>
-    [<DefaultValue>] val mutable Method: HybridHashSet<ReferencedMethod>
-
-    new (owner, warnings) = { owner = owner; warnings = warnings }
-
-    member this.FieldCount = this.Field.Count
-    member this.MethodCount = this.Method.Count
-end
 
 [<IsReadOnly>]
 [<NoComparison; NoEquality>]
@@ -82,11 +56,25 @@ end
 /// Returns the number of fixed arguments from the specified constructor method.
 type CustomAttributeResolver = CustomAttributeCtor -> ValidationResult<int32>
 
+[<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
+type CustomAttributeOwner =
+    { Owner: obj }
+
+    interface IEquatable<CustomAttributeOwner> with member this.Equals other = this.Owner.Equals other.Owner
+
+(*
+type CustomAttributeOwner =
+    (CliModuleBuilder
+    |DefinedAssembly
+    |DefinedType)
+*)
+
 [<Sealed>]
-type CustomAttributeList
+type CustomAttributeList // TODO: Make this a struct somehow.
     (
-        owner: obj,
-        lookup: Dictionary<obj, _>,
+        owner: CustomAttributeOwner,
+        lookup: Dictionary<CustomAttributeOwner, _>,
         resolver: CustomAttributeResolver
     )
     =
@@ -97,7 +85,7 @@ type CustomAttributeList
     static member private CreateFixedArgsLoop
         (
             fixedArgs: byref<FixedArg[]>,
-            parameterTypes: ImmutableArray<Signatures.ParamItem>,
+            parameterTypes: ImmutableArray<MethodParameterType>,
             parameterNames: ImmutableArray<Parameter>,
             fixedArgsSource: FixedArgSource,
             i
@@ -109,21 +97,18 @@ type CustomAttributeList
                 then ValueNone
                 else parameterNames.ItemRef(i).ParamName
 
-            let fixedArgType =
-                let paramType = &parameterTypes.ItemRef i
-                match ValueOption.bind EncodedType.toElemType paramType.ParamType with
-                | ValueSome etype -> Ok etype
-                | _ -> Error(noImpl "error for invalid custom attribute argument type")
-
-            match fixedArgType with
-            | Ok fixedArgType' ->
-                match fixedArgsSource i paramName fixedArgType' with
-                | Ok fixedArg ->
-                    fixedArgs.[i] <- fixedArg
-                    CustomAttributeList.CreateFixedArgsLoop(&fixedArgs, parameterTypes, parameterNames, fixedArgsSource, i + 1)
-                | Error(ValueSome err) -> Error err
-                | Error ValueNone -> Error(noImpl "error for no argument provided to custom attribute constructor")
-            | Error err -> Error err
+            match parameterTypes.[i] with
+            | MethodParameterType.Type t ->
+                match NamedType.toElemType t with
+                | ValueSome etype ->
+                    match fixedArgsSource i paramName etype with
+                    | Ok fixedArg ->
+                        fixedArgs.[i] <- fixedArg
+                        CustomAttributeList.CreateFixedArgsLoop(&fixedArgs, parameterTypes, parameterNames, fixedArgsSource, i + 1)
+                    | Error(ValueSome err) -> Error err
+                    | Error ValueNone -> Error(noImpl "error for no argument provided to custom attribute constructor")
+                | ValueNone -> Error(noImpl "error for invalid custom attribute argument type")
+            | _ -> Error(noImpl "error for custom attribute argument type cannot be byref type")
         else Ok(Unsafe.As<_, ImmutableArray<FixedArg>> &fixedArgs)
 
     static member private CreateFixedArgs(fixedArgsSource, numFixedArgs, customAttribCtor) =
@@ -147,6 +132,61 @@ type CustomAttributeList
 
             attributes.Add(ConstructedCustomAttribute(attrib.Constructor, fixedArguments, attrib.NamedArguments))
         }
+
+[<Sealed>]
+type DefinedTypeMembers =
+    val private owner: DefinedType
+    val private warnings: ValidationWarningsBuilder option
+    val private entryPointToken: EntryPoint ref
+    [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
+    [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
+    [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
+
+    new (owner, warnings, entryPointToken) = { owner = owner; warnings = warnings; entryPointToken = entryPointToken }
+
+    member this.FieldCount = this.Field.Count
+    member this.MethodCount = this.Method.Count
+
+    member this.AddDefinedMethod(method, body: DefinedMethodBody voption) =
+        // TODO: Check that owner is the correct kind of type to own this kind of method.
+        if this.Method.Add method then
+            match body with
+            | ValueSome body' -> this.MethodBodyLookup.[method] <- body'
+            | ValueNone -> ()
+
+            Ok(MethodCallTarget.Defined(this.owner, method))
+        else ValidationResult.Error(noImpl "error for duplicate method")
+
+    member this.AddDefinedMethod(implFlags, flags, methodThis, returnType, name, parameterTypes, parameterList, body) =
+        this.AddDefinedMethod(DefinedMethod(implFlags, flags, methodThis, returnType, name, parameterTypes, parameterList), body)
+
+    member this.DefineMethod(implFlags, flags, methodThis, returnType, name, parameterTypes, parameterList, body, attributes) =
+        validated {
+            let! target = this.AddDefinedMethod(implFlags, flags, methodThis, returnType, name, parameterTypes, parameterList, body)
+
+            // TODO: Create helepr function for creating custom attribute lists.
+            match attributes with
+            | ValueSome attributes' -> attributes' := (failwith "TODO: How to get access to custom attribute list maker from here.": CustomAttributeList)
+            | ValueNone -> ()
+
+            return target
+        }
+
+    member this.ContainsField field = this.Field.Contains field
+    member this.ContainsMethod method = this.Method.Contains method
+
+[<Sealed>]
+type ReferencedTypeMembers = class
+    val private owner: ReferencedType
+    val private warnings: ValidationWarningsBuilder option
+    [<DefaultValue>] val mutable Field: HybridHashSet<ReferencedField>
+    [<DefaultValue>] val mutable Method: HybridHashSet<ReferencedMethod>
+
+    new (owner, warnings) = { owner = owner; warnings = warnings }
+
+    member this.FieldCount = this.Field.Count
+    member this.MethodCount = this.Method.Count
+end
 
 [<IsReadOnly; Struct>]
 type ReferencedTypeEntry =
@@ -182,10 +222,42 @@ type DefinedMethodBodyWriter
               MaxStack = body.WriteInstructions(&builder, methodTokenSource, fieldTokenSource, typeTokenSource)
               LocalVariables = localVarSource body.LocalTypes }
 
+[<System.Obsolete>]
+type IBlobLookup<'Sig, 'Blob> = interface
+    abstract Write: 'Sig * BlobStreamBuilder -> 'Blob
+end
+
+[<System.Obsolete>]
+type FieldSignatureLookup = struct
+    interface IBlobLookup<Field, FieldSigOffset> with
+        [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+        member _.Write(field, blobs) =
+            failwith "bad" // TODO: How to get access to lookup for typeRef and typeDef?
+end
+
+[<System.Obsolete>]
+[<Struct>]
+type BlobSignatureLookup<'Lookup, 'Sig, 'Blob
+    when 'Lookup :> IBlobLookup<'Sig, 'Blob>
+    and 'Lookup : struct
+    and 'Sig : equality
+    and 'Blob : struct>
+    =
+    val mutable private signatures: LateInitDictionary<'Sig, 'Blob>
+    //val something: 'Sig -> 'Blob
+
+    member this.GetOrAdd(blobs, signature) =
+        match this.signatures.TryGetValue signature with
+        | true, existing -> existing
+        | false, _ ->
+            let blob = Unchecked.defaultof<'Lookup>.Write(signature, blobs)
+            this.signatures.[signature] <- blob
+            blob
+
 type ModuleBuilderSerializer
     (
-        header,
-        root,
+        cliMetadataHeader,
+        cliMetadataRoot,
         moduleBuilderObj: obj,
         name: Identifier,
         mvid,
@@ -206,8 +278,8 @@ type ModuleBuilderSerializer
         let guids = GuidStreamBuilder 1
         let blobs = BlobStreamBuilder 512
         CliMetadataBuilder (
-            header,
-            root,
+            cliMetadataHeader,
+            cliMetadataRoot,
             FSharpIL.Writing.Cil.MethodBodyList(),
             MetadataTablesBuilder((fun str guid _ -> ModuleRow.create (str.Add name) (guid.Add mvid)), strings, guids, blobs),
             strings,
@@ -236,10 +308,8 @@ type ModuleBuilderSerializer
     let referencedTypeLookup = Dictionary<ReferencedType, _> referencedTypes.Count
     let definedTypeLookup = Dictionary<DefinedType, _> definedTypes.Count
 
-    let fieldSignatures = Dictionary<_, FieldSigOffset>((definedTypeLookup.Count + referencedTypes.Count) * 8)
-    let methodDefSignatures = Dictionary<MethodDefSig, MethodDefSigOffset>(definedTypeLookup.Count * 16)
-    let methodRefSignatures = Dictionary<MethodRefSig, MemberRefSigOffset>(referencedTypes.Count * 32) // TODO: Helper function for getting and adding signatures.
-    //let localVarSignatures = Dictionary<Signatures.LocalVarSig, TableIndex<StandaloneSigRow>>(methodDefSignatures.Count)
+    let mutable fieldSigLookup = BlobSignatureLookup<FieldSignatureLookup, _, _>()
+    let methodSigLookup = Dictionary<Method, _>(64, Method.comparer)
 
     let mutable methodDefParams = TableIndex<ParamRow>.One
 
@@ -252,8 +322,6 @@ type ModuleBuilderSerializer
 
     let methodTokenSource = { MethodCalls = ImmutableArray.CreateBuilder(definedTypes.Count * 64) }
     let fieldTokenSource = { FieldInstructions = ImmutableArray.CreateBuilder methodTokenSource.MethodCalls.Capacity }
-    let typeTokenSource =
-        { TypeInstructions = ImmutableArray.CreateBuilder(definedTypes.Count + referencedTypes.Count) }
 
     member private _.SerializeAssemblyReferences() =
         for assem in assemblyReferences do
@@ -268,9 +336,56 @@ type ModuleBuilderSerializer
                       Culture = builder.Strings.Add assem.Culture
                       HashValue = builder.Blob.Add assem.HashValue }
 
+    member private _.GetMethodSig method =
+        match methodSigLookup.TryGetValue method with
+        | true, existing -> existing
+        | false, _ ->
+            let blob = failwith "TODO: Get method signature"
+            methodSigLookup.[method] <- blob
+            blob
+
+    member private this.SerializeReferencedType(tref, members) =
+        match referencedTypeLookup.TryGetValue tref with
+        | true, { TypeRef = i } -> i
+        | false, _ ->
+            let rscope =
+                match tref.ResolutionScope with
+                | TypeReferenceParent.Null -> ResolutionScope.Null
+                | TypeReferenceParent.Assembly assem -> ResolutionScope.AssemblyRef assemblyReferenceLookup.[assem]
+                | TypeReferenceParent.Type parent ->
+                    ResolutionScope.TypeRef(this.SerializeReferencedType(parent, referencedTypes.[parent]))
+
+            let i =
+                builder.Tables.TypeRef.Add
+                    { ResolutionScope = rscope
+                      TypeName = builder.Strings.Add tref.TypeName
+                      TypeNamespace = builder.Strings.Add tref.TypeNamespace }
+
+            let members' = Dictionary<obj, TableIndex<MemberRefRow>>(members.FieldCount + members.MethodCount)
+
+            for field in members.Field do
+                members'.[field] <-
+                    builder.Tables.MemberRef.Add
+                        { Class = MemberRefParent.TypeRef i
+                          Name = builder.Strings.Add field.Name
+                          Signature = { MemberRefSig = fieldSigLookup.GetOrAdd(builder.Blob, field).FieldSig } }
+
+            for method in members.Method do
+                members'.[method] <-
+                    builder.Tables.MemberRef.Add
+                        { Class = MemberRefParent.TypeRef i
+                          Name = builder.Strings.Add method.Name
+                          Signature =
+                            // TODO: Use separate lookup if method reference signature has any VarArgs.
+                            { MemberRefSig = this.GetMethodSig(method).MethodDefSig } }
+
+            referencedTypeLookup.[tref] <- { TypeRef = i; Members = members' }
+            i
+
     member this.Serialize() =
         this.SerializeAssemblyReferences()
 
+        for KeyValue(tref, members) in referencedTypes do this.SerializeReferencedType(tref, members) |> ignore
 
         builder
 
@@ -279,9 +394,9 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
     (
         name,
         ?mvid,
-        ?header,
-        ?root,
-        ?assembly: DefinedAssembly,
+        ?cliMetadataHeader,
+        ?cliMetadataRoot,
+        ?assembly,
         ?warnings,
         ?typeDefCapacity,
         ?typeRefCapacity,
@@ -289,13 +404,14 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
     )
     as builder
     =
-    let header' = defaultArg header CliHeader.latestDefault
-    let root' = defaultArg root CliMetadataRoot.defaultFields
+    let cliMetadataHeader' = defaultArg cliMetadataHeader CliHeader.latestDefault
+    let cliMetadataRoot' = defaultArg cliMetadataRoot CliMetadataRoot.defaultFields
+    let mutable assemblyDef, assemblyDefAttributes = assembly, None
     let assemblyRefs = HashSet<ReferencedAssembly>(defaultArg assemblyRefCapacity 8)
     let definedTypes = Dictionary<DefinedType, DefinedTypeMembers>(defaultArg typeDefCapacity 16)
     let referencedTypes = Dictionary<ReferencedType, ReferencedTypeMembers>(defaultArg typeRefCapacity 32)
-    let attributes = Dictionary<obj, ImmutableArray<_>.Builder> 8
-    let gparams = Dictionary<obj, GenericParamList> 16
+    let attributes = Dictionary<CustomAttributeOwner, ImmutableArray<_>.Builder> 8
+    let genericParameterLists = Dictionary<obj, GenericParamList> 16 // TODO: Make a GenericParamOwner struct.
     let entryPointToken = ref Unchecked.defaultof<EntryPoint>
 
     let customAttributeResolver =
@@ -311,42 +427,74 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             | true, _ -> Error(noImpl "error for referenced attribute ctor not found")
             | false, _ -> Error(noImpl "error for referenced attribute type not found")
 
-    member val AssemblyCustomAttributes =
-        match assembly with
-        | Some assembly' -> Some(CustomAttributeList(assembly', attributes, customAttributeResolver))
-        | None -> None
-
     member val UserStrings = UserStringStreamBuilder 1
     member val ValidationWarnings = ValidationWarningsCollection(?warnings = warnings)
     member val Mvid = Option.defaultWith Guid.NewGuid mvid
-    member val ModuleCustomAttributes = CustomAttributeList(builder, attributes, customAttributeResolver)
+    member val ModuleCustomAttributes = CustomAttributeList({ Owner = builder }, attributes, customAttributeResolver)
     member val GlobalMembers = DefinedTypeMembers(ModuleType, warnings, entryPointToken)
     member _.Name: Identifier = name
-    member _.Assembly = assembly
     member _.EntryPoint = !entryPointToken
+    member _.Assembly = assemblyDef
+    member _.AssemblyCustomAttributes = assemblyDefAttributes
 
-    member _.DefinedTypes = definedTypes.Keys :> IReadOnlyCollection<_>
-    member _.ReferencedTypes = referencedTypes.Keys :> IReadOnlyCollection<_>
-    member _.ReferencedAssemblies = assemblyRefs :> IReadOnlyCollection<_>
+    member inline private _.CreateAttributeList owner =
+        CustomAttributeList({ Owner = owner }, attributes, customAttributeResolver)
 
-    member inline private _.CreateAttributeList owner = CustomAttributeList(owner, attributes, customAttributeResolver)
+    member this.DefineAssembly assembly =
+        match assemblyDef with
+        | Some existing -> ValidationResult.Error(failwith "TODO: Warning for duplicate assembly definition")
+        | None ->
+            let attrs = this.CreateAttributeList assembly
+            assemblyDef <- Some assembly
+            assemblyDefAttributes <- Some attrs
+            Ok attrs
 
-    member _.ReferenceAssembly assem =
-        if not (assemblyRefs.Add assem) then
+    member _.ReferenceAssembly assembly =
+        if not (assemblyRefs.Add assembly) then
             match warnings with
             | Some warnings' -> warnings'.Add(failwith "TODO: Warning for duplicate assembly reference")
             | None -> ()
 
+    member private _.AddDefinedType(flags, extends, tnamespace, enclosing, tname, gparameters) =
+        let tdef = DefinedType(flags, extends, tnamespace, enclosing, tname, gparameters)
+        match definedTypes.TryGetValue tdef with
+        | true, existing -> ValidationResult<_>.Error(noImpl "TODO: error for duplicate type def")
+        | false, _ ->
+            // TODO: Check that extends and nestedclass are already contained in the Module.
+            let members = DefinedTypeMembers(tdef, warnings, entryPointToken)
+            definedTypes.[tdef] <- members
+            genericParameterLists.[tdef] <- tdef.GenericParameters
+            Ok(struct(tdef, members))
+
+    member this.DefineType(flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
+        validated {
+            let! struct(tdef, members) =
+                this.AddDefinedType(flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+            return struct(this.CreateAttributeList tdef, members)
+        }
+
+    member this.DefineType(flags, extends, typeNamespace, enclosingClass, typeName, genericParameters, attributes) =
+        validated {
+            let! struct(tdef, members) =
+                this.AddDefinedType(flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+
+            match attributes with
+            | ValueSome attributes' -> attributes' := this.CreateAttributeList tdef
+            | ValueNone -> ()
+
+            return members
+        }
+
     member internal this.Serialize() =
         let serializer =
             ModuleBuilderSerializer (
-                header',
-                root',
+                cliMetadataHeader',
+                cliMetadataRoot',
                 this,
                 name,
                 this.Mvid,
                 attributes,
-                gparams,
+                genericParameterLists,
                 this.UserStrings,
                 assembly,
                 this.EntryPoint,

@@ -17,9 +17,12 @@ type ModuleUpdate =
 module ModuleUpdate =
     val finish : ModuleUpdate
 
+//type SomeDispatchThing =
+//    member _.SendSomeUpdate<'T when 'T : struct>() = ...
+
 [<NoComparison; NoEquality>]
 type ModuleBuilder<'State> =
-    { Update: 'State -> ModuleUpdate
+    { Update: 'State -> ModuleUpdate // Update: 'State -> SomeDispatchThing -> SomeReturnType
       Warning: ('State -> IValidationWarning -> 'State) option
       ReferenceType: 'State -> ReferencedType -> 'State
       DefineType: 'State -> DefinedType -> 'State }

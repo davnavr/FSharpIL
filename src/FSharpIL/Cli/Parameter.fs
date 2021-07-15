@@ -3,6 +3,7 @@
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
 [<IsReadOnly; Struct>]
@@ -14,10 +15,15 @@ type ParameterKind =
 
 [<IsReadOnly>]
 type MethodParameterType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ParamItem and MethodReturnType
-    val Tag: FSharpIL.Metadata.Signatures.ParamItemTag
-    val Type: NamedType voption
+    val Tag: ParamItemTag
+    val private argType: NamedType
 
-    internal new (tag, argType) = { Tag = tag; Type = argType }
+    internal new (tag, argType) = { Tag = tag; argType = argType }
+
+    member this.Type =
+        if this.argType <> Unchecked.defaultof<_>
+        then ValueSome this.argType
+        else ValueNone
 end
 
 [<IsReadOnly; Struct>]
@@ -25,13 +31,19 @@ type Parameter =
     { Kind: ParameterKind
       DefaultValue: Constant voption
       ParamName: Identifier voption } // TODO: Have field that allows setting of Optional flag.
-      //ParamType: MethodParameterType // This will make ParameterList obsolete.
 
 [<RequireQualifiedAccess>]
 module MethodParameterType =
-    let Type argType = MethodParameterType(FSharpIL.Metadata.Signatures.ParamItemTag.Param, ValueSome argType)
-    let ByRef argType = MethodParameterType(FSharpIL.Metadata.Signatures.ParamItemTag.ByRef, ValueSome argType)
-    let TypedByRef = MethodParameterType(FSharpIL.Metadata.Signatures.ParamItemTag.TypedByRef, ValueNone)
+    let inline (|Type|ByRef|TypedByRef|) (ptype: MethodParameterType) =
+        match ptype.Tag with
+        | ParamItemTag.Param -> Type(ptype.Type.Value)
+        | ParamItemTag.ByRef -> ByRef(ptype.Type.Value)
+        | ParamItemTag.TypedByRef
+        | _ -> TypedByRef
+
+    let Type argType = MethodParameterType(ParamItemTag.Param, argType)
+    let ByRef argType = MethodParameterType(ParamItemTag.ByRef, argType)
+    let TypedByRef = MethodParameterType(ParamItemTag.TypedByRef, Unchecked.defaultof<NamedType>)
 
 type ParameterList = int32 -> MethodParameterType -> Parameter
 

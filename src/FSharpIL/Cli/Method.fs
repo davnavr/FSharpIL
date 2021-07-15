@@ -43,11 +43,16 @@ module MethodName =
 module MethodNamePatterns = let (|MethodName|) name = MethodName.toIdentifier name
 
 [<IsReadOnly>]
+[<NoComparison; CustomEquality>]
 type MethodReturnType = struct
     val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
     val Type: NamedType voption
 
     new (tag, argType) = { Tag = tag; Type = argType }
+
+    member this.Equals(other: MethodReturnType) = this.Tag = other.Tag && this.Type = other.Type
+
+    interface IEquatable<MethodReturnType> with member this.Equals other = this.Equals other
 end
 
 [<RequireQualifiedAccess>]
@@ -203,7 +208,6 @@ module MethodKinds =
                     MethodDefFlags.Static ||| MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName
     end
 
-[<AbstractClass>]
 type DefinedMethod =
     inherit Method
 
@@ -211,18 +215,18 @@ type DefinedMethod =
     val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
 
-    new (iflags, flags, mthis, rtype, MethodName name, parameterTypes: ImmutableArray<_>, parameterList) =
+    new (implFlags, flags, methodThis, returnType, MethodName name, parameterTypes: ImmutableArray<_>, parameterList) =
         let mutable parameters = Array.zeroCreate parameterTypes.Length
         let cconv = checkMethodSig<MethodDefParamIterator, _> (parameters, parameterList) parameterTypes
         { inherit Method (
-              mthis,
+              methodThis,
               cconv,
               name,
-              rtype,
+              returnType,
               parameterTypes
           )
           Flags = flags
-          ImplFlags = iflags
+          ImplFlags = implFlags
           Parameters = Unsafe.As &parameters }
 
     override this.Equals(other: Method) =
@@ -318,6 +322,22 @@ type ReferencedMethod =
         match other with
         | :? ReferencedMethod -> base.Equals other
         | _ -> false
+
+[<RequireQualifiedAccess>]
+module Method =
+    [<Sealed>]
+    type SignatureComparer () =
+        interface System.Collections.Generic.IEqualityComparer<Method> with // TODO: Account for VarArg types as well when comparing signatures.
+            member _.Equals(x, y) =
+                x.ParameterTypes = y.ParameterTypes && // TODO: Make helper functions for faster comparisons
+                x.ReturnType.Equals(other = y.ReturnType) &&
+                x.CallingConvention = y.CallingConvention &&
+                x.HasThis.Equals(other = y.HasThis)
+
+            member _.GetHashCode method =
+                HashCode.Combine(method.HasThis, method.CallingConvention, method.ReturnType, method.ParameterTypes)
+
+    let comparer = SignatureComparer()
 
 [<Sealed>]
 type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>

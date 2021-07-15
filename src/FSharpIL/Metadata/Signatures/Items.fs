@@ -171,9 +171,17 @@ module ReturnType =
     let TypedByRef modifiers = ReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
     let Void modifiers = ReturnType(ReturnTypeTag.Void, modifiers, ValueNone)
 
-type [<IsReadOnly; Struct>] MethodThis internal (tag: CallConvFlags) = member _.Tag = tag
+[<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
+type MethodThis internal (tag: CallConvFlags) =
+    member _.Tag = tag
+
+    member _.Equals(other: MethodThis) = tag = other.Tag
+
+    interface System.IEquatable<MethodThis> with member this.Equals other = this.Equals(other = other)
 
 (*
+[<IsReadOnly; Struct>]
 type MethodThis =
     | NoThis
     | HasThis

@@ -1,6 +1,5 @@
 ﻿module FSharpIL.Writing.BuildCli
 
-open System
 open System.Collections.Generic
 
 open FSharpIL.Metadata
@@ -37,14 +36,18 @@ module ModuleBuilder =
 
     let run header root name mvid builder state =
         let builder' =
+            let warnings =
+                match builder.Warning with
+                | Some _ -> Some(LinkedList<_>() :> ICollection<_>)
+                | None -> None
+
             CliModuleBuilder (
                 name = name,
                 mvid = mvid,
-                ?assembly = failwith "TODO: How to get assembly?",
-                header = header,
-                root = root,
-                ?warnings = Option.map (fun _ -> LinkedList<_>() :> ICollection<_>) builder.Warning
-           )
+                cliMetadataHeader = header,
+                cliMetadataRoot = root,
+                ?warnings = warnings
+            )
 
         let rec inner state =
             match builder.Update state with

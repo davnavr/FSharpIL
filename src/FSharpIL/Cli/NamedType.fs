@@ -323,8 +323,8 @@ type DefinedType =
     val Flags: TypeDefFlags
     val Extends: ClassExtends
 
-    new (flags, extends, ns, enclosing, tname, gparams) =
-        { inherit GenericType(ns, Convert.unsafeValueOption<DefinedType, _> enclosing, tname, gparams)
+    new (flags, extends, typeNamespace, enclosing, typeName, genericParameters) =
+        { inherit GenericType(typeNamespace, Convert.unsafeValueOption<DefinedType, _> enclosing, typeName, genericParameters)
           Flags = flags
           Extends = extends }
 
@@ -431,3 +431,101 @@ module ModuleType =
             Identifier.ofStr "<Module>",
             GenericParamList.empty
         )
+
+[<RequireQualifiedAccess>]
+module NamedType =
+    let rec toElemType (t: NamedType) =
+        match t with
+        | :? PrimitiveType as prim -> EncodedType.toElemType prim.Encoded
+        | :? SZArrayType as arr -> toElemType arr.ElementType
+        // TODO: How to convert Enum types?
+        | _ -> ValueNone
+
+[<RequireQualifiedAccess>]
+module TypeKinds =
+    type ConcreteClass = struct
+        interface TypeAttributes.IHasStaticMethods
+        interface TypeAttributes.IHasLayout
+        interface TypeAttributes.IHasStringFormat
+        interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = Unchecked.defaultof<_>
+    end
+
+    type AbstractClass = struct
+        interface TypeAttributes.IHasStaticMethods
+        interface TypeAttributes.IHasLayout
+        interface TypeAttributes.IHasStringFormat
+        interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Abstract
+    end
+
+    type SealedClass = struct
+        interface TypeAttributes.IHasStaticMethods
+        interface TypeAttributes.IHasLayout
+        interface TypeAttributes.IHasStringFormat
+        interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
+    end
+
+    type StaticClass = struct
+        interface TypeAttributes.IHasStaticMethods
+        interface TypeAttributes.IHasLayout
+        interface TypeAttributes.IHasStringFormat
+        interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Abstract ||| TypeDefFlags.Sealed
+    end
+
+    type Delegate = struct
+        interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
+    end
+
+    type Enum = struct
+        interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Abstract
+    end
+
+    type Interface = struct
+        interface TypeAttributes.IHasStaticMethods
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+                    get() = TypeDefFlags.Abstract ||| TypeDefFlags.Interface
+    end
+
+    type ValueType = struct
+        interface TypeAttributes.IHasStaticMethods
+        interface TypeAttributes.IHasLayout
+        interface TypeAttributes.IHasStringFormat
+        interface TypeAttributes.ISerializableType
+        interface IAttributeTag<TypeDefFlags> with
+            member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
+    end
+
+[<Sealed>]
+type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct>
+    (
+        visibility: TypeVisibility,
+        flags: TypeAttributes<'Kind>,
+        extends: ClassExtends,
+        typeNamespace: Identifier voption,
+        enclosingClass: DefinedType voption,
+        typeName: Identifier,
+        genericParameters: GenericParamList
+    )
+    =
+    inherit DefinedType (
+        visibility.Flag ||| Unchecked.defaultof<'Kind>.RequiredFlags ||| flags.Flags,
+        extends,
+        typeNamespace,
+        enclosingClass,
+        typeName,
+        genericParameters
+    )
