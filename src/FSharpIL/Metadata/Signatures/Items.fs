@@ -144,6 +144,7 @@ type ReturnType // TODO: Rename to RetType
     member _.IsByRef = tag = ReturnTypeTag.ByRef
 
     /// <summary>Represents a <c>void</c> return type without any custom modifiers.</summary>
+    [<System.Obsolete("Obsolete when Modified case of EncodedType is used.")>]
     static member val RVoid = ReturnType(ReturnTypeTag.Void, ImmutableArray.Empty, ValueNone)
 
 (*
@@ -172,13 +173,8 @@ module ReturnType =
     let Void modifiers = ReturnType(ReturnTypeTag.Void, modifiers, ValueNone)
 
 [<IsReadOnly; Struct>]
-[<NoComparison; CustomEquality>]
 type MethodThis internal (tag: CallConvFlags) =
     member _.Tag = tag
-
-    member _.Equals(other: MethodThis) = tag = other.Tag
-
-    interface System.IEquatable<MethodThis> with member this.Equals other = this.Equals(other = other)
 
 (*
 [<IsReadOnly; Struct>]
@@ -203,6 +199,7 @@ type CallingConventions = struct
     val Tag: CallConvFlags
     /// <summary>The number of generic parameters, stored in <c>GenParamCount</c> (II.23.2.1).</summary>
     val Count: uint32
+
     internal new (tag, count) = { Tag = tag; Count = count }
 end
 

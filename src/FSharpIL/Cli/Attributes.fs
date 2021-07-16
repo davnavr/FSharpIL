@@ -31,10 +31,10 @@ type Attributes<'Tag, 'Flags, 'Op, 'Num
 
     static member val None = Unchecked.defaultof<Attributes<'Tag, 'Flags, 'Op, 'Num>>
 
-    static member inline private BitwiseOr(left: 'Flags, right: 'Flags): 'Flags =
+    static member inline private BitwiseOr(left: 'Flags, right: 'Flags): 'Flags = // TODO: Fix, boxing occurs with OfValue
         EnumOfValue(Unchecked.defaultof<'Op>.Or(EnumToValue left, EnumToValue right))
 
-    static member op_Implicit(flags: Attributes<'Tag, 'Flags, 'Op, 'Num>) =
+    static member op_Implicit(flags: Attributes<'Tag, 'Flags, 'Op, 'Num>) = // TODO: Fix, boxing occurs with ToValue
         EnumToValue<_, 'Num>(Attributes<'Tag, 'Flags, 'Op, 'Num>.BitwiseOr(flags.Flags, Unchecked.defaultof<'Tag>.RequiredFlags))
 
     static member (|||) (left: Attributes<'Tag, 'Flags, 'Op, 'Num>, right: Attributes<'Tag, 'Flags, 'Op, 'Num>) =

@@ -1,5 +1,7 @@
 ﻿namespace FSharpIL.PortableExecutable
 
+open FSharpIL.Utilities.Compare
+
 /// Flags describing the characteristics of a PE file section (II.25.3).
 [<System.Flags>]
 type SectionCharacteristics =
@@ -48,4 +50,4 @@ module SectionCharacteristics =
 [<RequireQualifiedAccess>]
 module SectionHeader =
     /// Determines whether the specified Relative Virtual Address is contain within the specfied section.
-    let contains (rva: Rva) header = rva >= header.VirtualAddress && rva < (header.VirtualAddress + header.VirtualSize)
+    let contains (rva: Rva) header = rva .>= header.VirtualAddress && rva <. (header.VirtualAddress + header.VirtualSize)

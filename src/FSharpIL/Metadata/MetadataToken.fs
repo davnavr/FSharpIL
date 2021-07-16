@@ -25,16 +25,21 @@ type MetadataTokenType =
 /// Represents a metadata token (III.1.9).
 /// </summary>
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
 type MetadataToken internal (value: uint32) =
     static let [<Literal>] IndexMask = 0xFFFFFFu
+
     internal new (tag: MetadataTokenType, index) =
         if index > IndexMask then argOutOfRange "index" index "The index must be able to fit into 3 bytes"
         MetadataToken((uint32 tag <<< 24) ||| index)
+
     member _.Index = value &&& IndexMask
     member _.Type = LanguagePrimitives.EnumOfValue<_, MetadataTokenType>(uint8(value >>> 24))
     member _.IsNull = value = 0u
     member _.Value = value
+
     static member op_Implicit(token: MetadataToken) = token.Value
+
     override this.ToString() =
         if this.IsNull
         then System.String.Empty

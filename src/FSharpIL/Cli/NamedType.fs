@@ -11,6 +11,7 @@ open FSharpIL.Metadata.Tables
 
 open FSharpIL.Utilities
 open FSharpIL.Utilities.Collections
+open FSharpIL.Utilities.Compare
 
 [<Sealed>]
 type InstantiatedType<'Inst when 'Inst :> GenericType> (instantiator: int32 -> GenericParam -> NamedType, t: 'Inst) =
@@ -45,9 +46,9 @@ type NamedType (ns: Identifier voption, parent: NamedType voption, tname: Identi
         | _ -> false
 
     member this.Equals(other: NamedType) =
-        this.TypeNamespace = other.TypeNamespace &&
-        this.TypeName = other.TypeName &&
-        this.EnclosingType = other.EnclosingType &&
+        Equatable.voption this.TypeNamespace other.TypeNamespace &&
+        this.TypeName === other.TypeName &&
+        Equatable.voption this.EnclosingType other.EnclosingType &&
         this.CaseEquals other
 
     override this.Equals obj =
@@ -90,7 +91,7 @@ type GenericParam =
       RequiresDefaultConstructor: bool
       Constraints: ImmutableArray<NamedType> } // TODO: Constraint list should be a set.
 
-    member this.Equals other = this.Name = other.Name
+    member this.Equals other = this.Name === other.Name
 
     override this.GetHashCode() = this.Name.GetHashCode()
 

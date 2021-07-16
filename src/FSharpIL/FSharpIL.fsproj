@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <Compile Include="Utilities\Fail.fs" />
+    <Compile Include="Utilities\Compare.fs" />
     <Compile Include="Utilities\Flags.fs" />
     <Compile Include="Utilities\Convert.fs" />
     <Compile Include="Utilities\Result.fs" />

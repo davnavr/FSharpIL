@@ -8,6 +8,8 @@ open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
+open FSharpIL.Utilities.Compare
+
 [<IsReadOnly>]
 type MethodName = struct
     val Name: Identifier
@@ -43,16 +45,11 @@ module MethodName =
 module MethodNamePatterns = let (|MethodName|) name = MethodName.toIdentifier name
 
 [<IsReadOnly>]
-[<NoComparison; CustomEquality>]
 type MethodReturnType = struct
     val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
     val Type: NamedType voption
 
     new (tag, argType) = { Tag = tag; Type = argType }
-
-    member this.Equals(other: MethodReturnType) = this.Tag = other.Tag && this.Type = other.Type
-
-    interface IEquatable<MethodReturnType> with member this.Equals other = this.Equals other
 end
 
 [<RequireQualifiedAccess>]
@@ -79,11 +76,11 @@ type Method =
 
     abstract Equals: other: Method -> bool
     default this.Equals(other: Method) =
-        this.Name = other.Name
-        && this.ParameterTypes = other.ParameterTypes
-        && this.HasThis = other.HasThis
-        && this.ReturnType = other.ReturnType
-        && this.CallingConvention = other.CallingConvention
+        this.Name === other.Name &&
+        Equatable.blocks this.ParameterTypes other.ParameterTypes &&
+        this.ReturnType === other.ReturnType &&
+        this.HasThis === other.HasThis &&
+        this.CallingConvention === other.CallingConvention
 
     override this.Equals(obj: obj) =
         match obj with
@@ -329,10 +326,10 @@ module Method =
     type SignatureComparer () =
         interface System.Collections.Generic.IEqualityComparer<Method> with // TODO: Account for VarArg types as well when comparing signatures.
             member _.Equals(x, y) =
-                x.ParameterTypes = y.ParameterTypes && // TODO: Make helper functions for faster comparisons
-                x.ReturnType.Equals(other = y.ReturnType) &&
-                x.CallingConvention = y.CallingConvention &&
-                x.HasThis.Equals(other = y.HasThis)
+                Equatable.blocks x.ParameterTypes y.ParameterTypes &&
+                x.ReturnType === y.ReturnType &&
+                x.CallingConvention === y.CallingConvention &&
+                x.HasThis === y.HasThis
 
             member _.GetHashCode method =
                 HashCode.Combine(method.HasThis, method.CallingConvention, method.ReturnType, method.ParameterTypes)

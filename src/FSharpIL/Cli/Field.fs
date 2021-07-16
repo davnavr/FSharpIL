@@ -6,6 +6,8 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
+open FSharpIL.Utilities.Compare
+
 [<AbstractClass>]
 type Field =
     val Name: Identifier
@@ -14,7 +16,7 @@ type Field =
     new (name, fieldType) = { Name = name; Type = fieldType }
 
     abstract Equals: other: Field -> bool
-    default this.Equals(other: Field) = this.Name = other.Name && this.Type = other.Type
+    default this.Equals(other: Field) = this.Name === other.Name && this.Type.Equals(other = other.Type)
 
     override this.Equals(obj: obj) =
         match obj with

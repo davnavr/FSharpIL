@@ -42,14 +42,9 @@ module MethodNamePatterns =
     val (|MethodName|) : name: MethodName -> Identifier
 
 [<IsReadOnly>]
-[<NoComparison; CustomEquality>]
 type MethodReturnType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ReturnType and MethodParameterType
     val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
     val Type: NamedType voption
-
-    member Equals: other: MethodReturnType -> bool
-
-    interface IEquatable<MethodReturnType>
 end
 
 [<RequireQualifiedAccess>]

@@ -4,9 +4,18 @@ open System
 open System.Runtime.CompilerServices
 
 /// <summary>Represents an offset into the <c>#Strings</c> metadata stream pointing to a non-empty string.</summary>
-type [<IsReadOnly; Struct; RequireQualifiedAccess>] IdentifierOffset = internal { Offset: StringOffset }
+[<IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
+[<StructuralComparison; StructuralEquality>]
+type IdentifierOffset =
+    internal { Offset: StringOffset }
+
 /// <summary>Represents an offset into the <c>#Strings</c> metadata stream pointing to the name of an assembly or file.</summary>
-type [<IsReadOnly; Struct; RequireQualifiedAccess>] FileNameOffset = internal { Offset: IdentifierOffset }
+[<IsReadOnly; Struct>]
+[<RequireQualifiedAccess>]
+[<StructuralComparison; StructuralEquality>]
+type FileNameOffset =
+    internal { Offset: IdentifierOffset }
 
 /// <summary>
 /// Represents a <see cref="T:System.String"/> that cannot be <see langword="null"/>, be empty, or contain any null characters.

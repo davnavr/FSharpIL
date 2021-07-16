@@ -10,7 +10,6 @@ open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Blobs
 open FSharpIL.Metadata.Signatures
-open FSharpIL.Metadata.Signatures.MetadataSignatures
 
 [<IsReadOnly; Struct>]
 type internal BlobEntry =
