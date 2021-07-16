@@ -36,6 +36,7 @@ type BlobError =
     | InvalidUnsignedCompressedIntegerKind of msb: uint8
     | InvalidFieldSignatureMagic of actual: uint8
     | InvalidElementType of etype: ElementType
+    | MissingElementType
     | UnexpectedTypeSpec of TableIndex<TypeSpecRow>
     | InvalidGenericInstantiationKind of ElementType voption
     | MissingGenericArguments
@@ -68,6 +69,7 @@ type BlobError =
         | InvalidFieldSignatureMagic actual ->
             sprintf "expected field signature to begin with the byte 0x06, but got 0x%02X" actual
         | InvalidElementType etype -> sprintf "the element type %A (0x%02X) is invalid" etype (uint8 etype)
+        | MissingElementType -> "expected ELEMENT_TYPE byte but got the end of the blob instead"
         | UnexpectedTypeSpec { TableIndex = i } ->
             sprintf "expected TypeDef or TypeRef but got an index (0x%08X) into the TypeSpec table instead" i
         | InvalidGenericInstantiationKind etype ->

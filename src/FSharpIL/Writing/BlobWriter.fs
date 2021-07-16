@@ -70,8 +70,12 @@ let customMod (modifier: CustomMod) (wr: byref<ChunkedMemoryBuilder>) =
     elem (if modifier.Required then ElementType.CModReqd else ElementType.CModOpt) &wr
     typeDefOrRefOrSpec modifier.ModifierType &wr
 
-let customModifierList (modifiers: CustomModifiers) (wr: byref<ChunkedMemoryBuilder>) =
-    for modifier in modifiers do customMod modifier &wr
+let rec customModList modifiers (wr: byref<ChunkedMemoryBuilder>) =
+    match modifiers with
+    | [] -> ()
+    | current :: remaining ->
+        customMod current &wr
+        customModList remaining &wr
 
 let arrayShape (shape: inref<ArrayShape>) (wr: byref<ChunkedMemoryBuilder>) =
     compressedUnsigned shape.Rank &wr
@@ -119,15 +123,18 @@ let rec etype (t: EncodedType) (wr: byref<ChunkedMemoryBuilder>) =
     | EncodedType.Object -> elem ElementType.Object &wr
     | EncodedType.Ptr ptr ->
         elem ElementType.Ptr &wr
-        customModifierList ptr.Modifiers &wr
         match ptr with
-        | Pointer.Void _ -> elem ElementType.Void &wr
-        | Pointer.Type(_, item) -> etype item &wr
+        | Pointer.Void modifiers ->
+            customModList modifiers &wr
+            elem ElementType.Void &wr
+        | Pointer.Type item -> etype item &wr
     | EncodedType.String -> elem ElementType.String &wr
-    | EncodedType.SZArray(modifiers, item) ->
+    | EncodedType.SZArray item ->
         elem ElementType.SZArray &wr
-        customModifierList modifiers &wr
         etype item &wr
+    | EncodedType.Modified(modifiers, t) ->
+        customModList modifiers &wr
+        etype t &wr
 
 and genericInst (inst: GenericInst) (wr: byref<ChunkedMemoryBuilder>) =
     elem ElementType.GenericInst &wr
@@ -137,20 +144,33 @@ and genericInst (inst: GenericInst) (wr: byref<ChunkedMemoryBuilder>) =
     for arg in inst.GenericArguments do etype arg &wr
 
 and retType (item: inref<ReturnType>) (wr: byref<ChunkedMemoryBuilder>) =
-    customModifierList item.CustomModifiers &wr
-    if item.IsVoid then elem ElementType.Void &wr
-    elif item.IsTypedByRef then elem ElementType.TypedByRef &wr
-    else
-        if item.IsByRef then elem ElementType.ByRef &wr
-        etype item.ReturnType.Value &wr
+    // Writes the custom modifiers before the VOID, BYREF, or TYPEDBYREF bytes.
+    if item.Tag <> ReturnTypeTag.Type then customModList item.Modifiers &wr
+
+    match item.Tag with
+    | ReturnTypeTag.Void -> elem ElementType.Void &wr
+    | ReturnTypeTag.ByRef -> elem ElementType.ByRef &wr
+    | ReturnTypeTag.TypedByRef -> elem ElementType.TypedByRef &wr
+    | ReturnTypeTag.Type
+    | _ -> ()
+
+    match item.ReturnType with
+    | ValueSome rtype -> etype rtype &wr
+    | ValueNone -> ()
 
 and param (item: inref<ParamItem>) (wr: byref<ChunkedMemoryBuilder>) =
-    customModifierList item.CustomModifiers &wr
-    if item.IsTypedByRef
-    then elem ElementType.TypedByRef &wr
-    else
-        if item.IsByRef then elem ElementType.ByRef &wr
-        etype item.ParamType.Value &wr
+    // Writes the custom modifiers before the BYREF or TYPEDBYREF bytes.
+    if item.Tag <> ParamItemTag.Param then customModList item.Modifiers &wr
+
+    match item.Tag with
+    | ParamItemTag.ByRef -> elem ElementType.ByRef &wr
+    | ParamItemTag.TypedByRef -> elem ElementType.TypedByRef &wr
+    | ParamItemTag.Param
+    | _ -> ()
+
+    match item.ParamType with
+    | ValueSome ptype -> etype ptype &wr
+    | ValueNone -> ()
 
 and inline parameters (parameters: ImmutableArray<ParamItem>) (wr: byref<_>) =
     for i = 0 to parameters.Length - 1 do param (&parameters.ItemRef i) &wr
@@ -178,13 +198,11 @@ and methodRefSig (signature: inref<MethodRefSig>) (wr: byref<ChunkedMemoryBuilde
 
 let fieldSig (signature: inref<FieldSig>) (wr: byref<ChunkedMemoryBuilder>) =
     wr.Write 0x6uy // FIELD
-    customModifierList signature.CustomModifiers &wr
     etype signature.FieldType &wr
 
 let propertySig (signature: inref<PropertySig>) (wr: byref<ChunkedMemoryBuilder>) =
     wr.Write(if signature.HasThis then 0x28uy else 0x8uy) // PROPERTY
     compressedUnsigned (uint32 signature.Parameters.Length) &wr // ParamCount
-    customModifierList signature.CustomModifiers &wr
     etype signature.PropertyType &wr
     parameters signature.Parameters &wr
 

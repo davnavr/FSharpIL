@@ -297,7 +297,7 @@ type ModuleBuilderSerializer
 
     let getFieldSig =
         createBlobLookup Field.signatureComparer <| fun (field: Field) ->
-            let signature = { FieldSig.CustomModifiers = ImmutableArray.Empty; FieldType = getEncodedType field.Type }
+            let signature = { FieldType = getEncodedType field.Type }
             builder.Blob.Add &signature
 
     let getMethodSig =

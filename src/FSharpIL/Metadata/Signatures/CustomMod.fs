@@ -13,6 +13,7 @@ type CustomMod<'ModifierType> =
     | ModReq of ModifierType: 'ModifierType
 *)
 
+[<System.Obsolete>]
 type CustomModifiers = System.Collections.Immutable.ImmutableArray<CustomMod>
 
 [<AutoOpen>]
@@ -20,12 +21,13 @@ module CustomModPatterns =
     let inline (|ModOpt|ModReq|) { Required = req; ModifierType = mtype } =
         if req then ModReq mtype else ModOpt mtype
 
-    let inline (|NoRequiredModifiers|HasRequiredModifiers|) (modifiers: CustomModifiers) =
-        let mutable i, allOptionalModifiers = 0, true
-        while allOptionalModifiers && i < modifiers.Length do
-            allOptionalModifiers <- not (modifiers.ItemRef i).Required
-            i <- i + 1
-        if allOptionalModifiers then NoRequiredModifiers else HasRequiredModifiers
+    let inline (|NoRequiredModifiers|HasRequiredModifiers|) modifiers =
+        let rec inner =
+            function
+            | [] -> NoRequiredModifiers
+            | { CustomMod.Required = true } :: _ -> HasRequiredModifiers
+            | _ :: remaining -> inner remaining
+        inner modifiers
 
     let inline ModOpt mtype = { Required = false; ModifierType = mtype }
     let inline ModReq mtype = { Required = true; ModifierType = mtype }

@@ -18,7 +18,7 @@ let inline ensureLastItem (chunk: inref<ChunkedMemory>) result =
     | Error err -> Error err
 
 // TODO: How to return size as well?
-let compressedUnsigned (chunk: byref<ChunkedMemory>) =
+let compressedUnsigned (chunk: byref<ChunkedMemory>) = // TODO: Check that chunk has correct size.
     let parsed = chunk.[0u]
     if parsed &&& 0b1000_0000uy = 0uy then // 1 byte
         chunk <- chunk.Slice 1u
@@ -56,28 +56,25 @@ let typeDefOrRef (chunk: byref<_>) =
     | Ok(TypeDefOrRef.Spec tspec) -> Error(UnexpectedTypeSpec tspec)
     | Error err -> Error err
 
-let rec customMod (chunk: byref<ChunkedMemory>) (modifiers: ImmutableArray<CustomMod>.Builder) =
-    match LanguagePrimitives.EnumOfValue chunk.[0u] with
-    | ElementType.CModOpt
-    | ElementType.CModReqd as elem ->
-        let modifiers' =
-            match modifiers with
-            | null -> ImmutableArray.CreateBuilder()
-            | _ -> modifiers
-        match typeDefOrRefOrSpec &chunk with
-        | Ok mtype ->
-            modifiers'.Add { Required = elem = ElementType.CModReqd; ModifierType = mtype }
-            customMod &chunk modifiers'
-        | Error err -> Error err
-    | _ when isNull modifiers -> Ok ImmutableArray.Empty
-    | _ -> Ok(modifiers.ToImmutable())
+let rec customMod (chunk: byref<ChunkedMemory>) modifiers =
+    if chunk.Length > 0u then
+        match LanguagePrimitives.EnumOfValue chunk.[0u] with
+        | ElementType.CModOpt
+        | ElementType.CModReqd as elem ->
+            match typeDefOrRefOrSpec &chunk with
+            | Ok mtype ->
+                customMod &chunk ({ Required = elem = ElementType.CModReqd; ModifierType = mtype } :: modifiers)
+            | Error err -> Error err
+        | _ -> Ok modifiers
+    else Ok modifiers
 
-let inline customModList (chunk: byref<_>) = customMod &chunk null
+let inline customModList (chunk: byref<_>) = customMod &chunk List.empty
 
-let rec etype (chunk: byref<ChunkedMemory>) =
-    // TODO: Check that chunk is not empty.
+let rec element (chunk: byref<ChunkedMemory>) =
     let elem = LanguagePrimitives.EnumOfValue chunk.[0u]
+
     chunk <- chunk.Slice 1u
+
     match elem with
     | ElementType.Boolean -> Ok EncodedType.Boolean
     | ElementType.Char -> Ok EncodedType.Char
@@ -116,27 +113,37 @@ let rec etype (chunk: byref<ChunkedMemory>) =
             |> Ok
         | Error err -> Error err
     | ElementType.SZArray ->
-        match customModList &chunk with
-        | Ok modifiers ->
-            match etype &chunk with
-            | Ok t -> Ok(EncodedType.SZArray(modifiers, t))
-            | Error err -> Error err
+        match etype &chunk with
+        | Ok t -> Ok(EncodedType.SZArray t)
         | Error err -> Error err
     | ElementType.Ptr ->
         match customModList &chunk with
+        | Ok _ when chunk.Length = 0u -> Error MissingElementType
         | Ok modifiers ->
             match LanguagePrimitives.EnumOfValue chunk.[0u] with
             | ElementType.Void ->
                 chunk <- chunk.Slice 1u
-                Pointer.Void modifiers |> EncodedType.Ptr |> Ok
+                Ok(EncodedType.Ptr(Pointer.Void modifiers))
             | _ ->
                 match etype &chunk with
-                | Ok t -> Pointer.Type(modifiers, t) |> EncodedType.Ptr |> Ok
+                | Ok t when modifiers.IsEmpty -> Ok(EncodedType.Ptr(Pointer.Type t))
+                | Ok t -> EncodedType.Modified(modifiers, t) |> Pointer.Type |> EncodedType.Ptr |> Ok
                 | Error err -> Error err
         | Error err -> Error err
     | ElementType.GenericInst -> genericInst &chunk
     //| ElementType.Array
     | _ -> Error(InvalidElementType elem)
+
+and etype (chunk: byref<ChunkedMemory>) =
+    if chunk.Length > 0u then
+        match customModList &chunk with
+        | Ok modifiers ->
+            match element &chunk, modifiers with
+            | Ok elem, [] -> Ok elem
+            | Ok elem, _ -> Ok(EncodedType.Modified(modifiers, elem))
+            | Error err, _ -> Error err
+        | Error err -> Error err
+    else Error MissingElementType
 
 and genArgList (chunk: byref<ChunkedMemory>) (args: ImmutableArray<EncodedType>.Builder) =
     if args.Capacity = args.Count
@@ -178,11 +185,8 @@ let fieldSig (chunk: inref<ChunkedMemory>) =
     match chunk.[0u] with
     | 0x6uy ->
         let mutable chunk' = chunk.Slice 1u
-        match customModList &chunk' with
-        | Ok modifiers ->
-            match etype &chunk' with
-            | Ok ftype -> Ok { CustomModifiers = modifiers; FieldType = ftype }
-            | Error err -> Error err
+        match etype &chunk' with
+        | Ok ftype -> Ok { FieldType = ftype }
         | Error err -> Error err
     | bad -> Error(InvalidFieldSignatureMagic bad)
 
@@ -199,32 +203,34 @@ let paramOrRetType (chunk: byref<ChunkedMemory>) =
         | Error(InvalidElementType ElementType.ByRef) ->
             match etype &chunk with
             | Ok t -> struct(modifiers, Ok(ByRef t))
-            | Error err -> struct(ImmutableArray.Empty, Error err)
+            | Error err -> struct(List.empty, Error err)
         | Error(InvalidElementType ElementType.TypedByRef) -> struct(modifiers, Ok TypedByRef)
         | Error err -> struct(modifiers, Error err)
-    | Error err -> struct(ImmutableArray.Empty, Error err)
+    | Error err -> struct(List.empty, Error err)
 
 let retType (chunk: byref<ChunkedMemory>) =
-    let struct(modifiers, t) = paramOrRetType &chunk
-    match t with
-    | Ok(Type t') -> Ok(ReturnType.Type(modifiers, t'))
-    | Ok(ByRef t') -> Ok(ReturnType.ByRef(modifiers, t'))
-    | Ok TypedByRef -> Ok(ReturnType.TypedByRef modifiers)
-    | Error(InvalidElementType ElementType.Void) -> Ok(ReturnType.Void modifiers)
-    | Error err -> Error err
+    match paramOrRetType &chunk with
+    | [], Ok(Type t') -> Ok(ReturnType.Type t')
+    | modifiers, Ok(Type t') -> Ok(ReturnType.Type(EncodedType.Modified(modifiers, t')))
+    | modifiers, Ok(ByRef t') -> Ok(ReturnType.ByRef(modifiers, t'))
+    | modifiers, Ok TypedByRef -> Ok(ReturnType.TypedByRef modifiers)
+    | modifiers, Error(InvalidElementType ElementType.Void) -> Ok(ReturnType.Void modifiers)
+    | _, Error err -> Error err
 
 let rec param (chunk: byref<ChunkedMemory>) (parameters: ImmutableArray<ParamItem>.Builder) =
     if parameters.Count < parameters.Capacity then
         match paramOrRetType &chunk with
         | modifiers, Ok ptype ->
             match ptype with
-            | Type t -> ParamItem.Param(modifiers, t)
+            | Type t when modifiers.IsEmpty -> ParamItem.Param t
+            | Type t -> ParamItem.Param(EncodedType.Modified(modifiers, t))
             | ByRef t -> ParamItem.ByRef(modifiers, t)
             | TypedByRef -> ParamItem.TypedByRef modifiers
             |> parameters.Add
 
             param &chunk parameters
         | _, Error err -> Error err
+    elif parameters.Capacity = parameters.Count then Ok(parameters.MoveToImmutable())
     else Ok(parameters.ToImmutable())
 
 let paramList (chunk: byref<ChunkedMemory>) (Convert.I4 pcount) =
@@ -296,21 +302,19 @@ let propertySig (chunk: inref<ChunkedMemory>) =
         match magic with
         | 0x8uy // PROPERTY
         | 0x28uy -> // PROPERTY ||| HASTHIS
+            // TODO: Check that chunk is not empty
             let mutable chunk = chunk.Slice 1u
-            match customModList &chunk with
-            | Ok modifiers ->
-                match compressedUnsigned &chunk with
-                | Ok(_, pcount) ->
-                    match etype &chunk with
-                    | Ok ptype ->
-                        match paramList &chunk pcount with
-                        | Ok parameters ->
-                            { HasThis = magic &&& 0x20uy <> 0uy
-                              CustomModifiers = modifiers
-                              PropertyType = ptype
-                              Parameters = parameters }
-                            |> Ok
-                        | Error err -> Error err
+
+            match compressedUnsigned &chunk with // ParamCount
+            | Ok(_, pcount) ->
+                match etype &chunk with
+                | Ok ptype ->
+                    match paramList &chunk pcount with
+                    | Ok parameters ->
+                        { HasThis = magic &&& 0x20uy <> 0uy
+                          PropertyType = ptype
+                          Parameters = parameters }
+                        |> Ok
                     | Error err -> Error err
                 | Error err -> Error err
             | Error err -> Error err
@@ -318,7 +322,7 @@ let propertySig (chunk: inref<ChunkedMemory>) =
     else Error(InvalidPropertyMagic ValueNone)
 
 // TODO: Many additional typespecs are allowed by ECMA-335 augmentations (https://github.com/dotnet/runtime/blob/main/docs/design/specs/Ecma-335-Augments.md).
-    // but prevent usage of CLASS or VALUETYPE?
+// but prevent usage of CLASS or VALUETYPE?
 let typeSpec (chunk: inref<ChunkedMemory>) =
     let mutable chunk = chunk
     etype &chunk

@@ -67,20 +67,17 @@ type EncodedType =
     /// <summary>The <see cref="T:System.String"/> type.</summary>
     | String
     /// A single-dimensional array with a lower bound of zero, also known as a vector (I.8.9.1).
-    | SZArray of CustomModifiers * EncodedType
+    | SZArray of EncodedType
     | ValueType of TypeDefOrRefEncoded
     /// A generic parameter in a generic type definition.
     | Var of index: uint32
-    // TODO: For all cases, simply remove the CustomModifiers and add a new case:
-    // | Modified of modifiers: CustomModifiers * EncodedType
+    | Modified of modifiers: CustomMod list * EncodedType
 
 /// <summary>
 /// Represents a <c>FieldSig</c> item, which captures the definition of a field or global variable (II.23.2.4).
 /// </summary>
 [<IsReadOnly; Struct>]
-type FieldSig =
-    { CustomModifiers: CustomModifiers
-      FieldType: EncodedType }
+type FieldSig = { FieldType: EncodedType }
 
 type ParamItemTag =
     | Param = 0uy
@@ -91,34 +88,44 @@ type ParamItemTag =
 [<IsReadOnly>]
 type ParamItem = struct // TODO: Rename to Param
     val Tag: ParamItemTag
-    val CustomModifiers: CustomModifiers
+    val internal Modifiers: CustomMod list
     val ParamType: EncodedType voption
-    internal new (tag, modifiers, paramType) = { Tag = tag; CustomModifiers = modifiers; ParamType = paramType }
+
+    internal new (tag, modifiers, paramType) = { Tag = tag; Modifiers = modifiers; ParamType = paramType }
+
     member inline this.IsTypedByRef = this.Tag = ParamItemTag.TypedByRef
     member inline this.IsByRef = this.Tag = ParamItemTag.ByRef
+
+    member this.CustomModifiers =
+        match this.Modifiers, this.ParamType with
+        | [], ValueSome(EncodedType.Modified(modifiers', _)) -> modifiers'
+        | _ -> this.Modifiers
 end
 
 (*
 [<RequireQualifiedAccess>]
 type ParamItem =
-    | Param of CustomModifiers: CustomModifiers * ParamType: EncodedType
-    | ByRef of CustomModifiers: CustomModifiers * ParamType: EncodedType
-    | TypedByRef of CustomModifiers: CustomModifiers
+    | Param of ParamType: EncodedType
+    | ByRef of CustomModifiers: CustomMod list * ParamType: EncodedType
+    | TypedByRef of CustomModifiers: CustomMod list
 *)
 
 [<RequireQualifiedAccess>]
 module ParamItem =
     let inline (|Param|ByRef|TypedByRef|) (param: ParamItem) =
-        let inline ptype() = struct(param.CustomModifiers, param.ParamType.Value)
         match param.Tag with
-        | ParamItemTag.ByRef -> ByRef(ptype())
+        | ParamItemTag.ByRef -> ByRef(struct(param.CustomModifiers, param.ParamType.Value))
         | ParamItemTag.TypedByRef -> TypedByRef param.CustomModifiers
         | ParamItemTag.Param
-        | _ -> Param(ptype())
+        | _ -> Param param.ParamType.Value
 
-    let Param (modifiers, paramType) = ParamItem(ParamItemTag.Param, modifiers, ValueSome paramType)
-    let ByRef (modifiers, paramType) = ParamItem(ParamItemTag.ByRef, modifiers, ValueSome paramType)
+    let Param paramType = ParamItem(ParamItemTag.Param, List.empty, ValueSome paramType)
+    let ByRef(modifiers, toType) = ParamItem(ParamItemTag.ByRef, modifiers, ValueSome toType)
+    let ByRef' toType = ByRef(List.empty, toType)
+    /// <summary>The <see cref="T:System.TypedReference"/> type, as a parameter type.</summary>
     let TypedByRef modifiers = ParamItem(ParamItemTag.TypedByRef, modifiers, ValueNone)
+    /// <summary>The <see cref="T:System.TypedReference"/> type, as a parameter type with no custom modifiers.</summary>
+    let TypedByRef' = TypedByRef List.empty
 
 type ReturnTypeTag =
     | Type = 0uy
@@ -128,29 +135,26 @@ type ReturnTypeTag =
 
 /// <summary>Represents a <c>RetType</c> item used in method signatures (II.23.2.11).</summary>
 [<IsReadOnly; Struct>]
-type ReturnType // TODO: Rename to RetType
-    internal
-    (
-        tag: ReturnTypeTag,
-        modifiers: CustomModifiers,
-        returnType: EncodedType voption
-    )
-    =
-    member _.Tag = tag
-    member _.CustomModifiers = modifiers
-    member _.ReturnType = returnType
-    member _.IsTypedByRef = tag = ReturnTypeTag.TypedByRef
-    member _.IsVoid = tag = ReturnTypeTag.Void
-    member _.IsByRef = tag = ReturnTypeTag.ByRef
+type ReturnType = // TODO: Rename to RetType
+    val Tag: ReturnTypeTag
+    val internal Modifiers: CustomMod list
+    val ReturnType: EncodedType voption
 
-    /// <summary>Represents a <c>void</c> return type without any custom modifiers.</summary>
-    [<System.Obsolete("Obsolete when Modified case of EncodedType is used.")>]
-    static member val RVoid = ReturnType(ReturnTypeTag.Void, ImmutableArray.Empty, ValueNone)
+    internal new (tag, modifiers, returnType) = { Tag = tag; Modifiers = modifiers; ReturnType = returnType }
+
+    member this.IsTypedByRef = this.Tag = ReturnTypeTag.TypedByRef
+    member this.IsVoid = this.Tag = ReturnTypeTag.Void
+    member this.IsByRef = this.Tag = ReturnTypeTag.ByRef
+
+    member this.CustomModifiers =
+        match this.Modifiers, this.ReturnType with
+        | [], ValueSome(EncodedType.Modified(modifiers', _)) -> modifiers'
+        | _ -> this.Modifiers
 
 (*
 [<RequireQualifiedAccess>]
 type ReturnType =
-    | Type of CustomModifiers: CustomModifiers * ParamType: EncodedType
+    | Type of ParamType: EncodedType
     | ByRef of CustomModifiers: CustomModifiers * ParamType: EncodedType
     | TypedByRef of CustomModifiers: CustomModifiers
     | Void of CustomModifiers: CustomModifiers
@@ -159,18 +163,22 @@ type ReturnType =
 [<RequireQualifiedAccess>]
 module ReturnType =
     let inline (|Type|ByRef|TypedByRef|Void|) (retType: ReturnType) =
-        let inline rtype() = struct(retType.CustomModifiers, retType.ReturnType.Value)
         match retType.Tag with
-        | ReturnTypeTag.ByRef -> ByRef(rtype())
-        | ReturnTypeTag.TypedByRef -> TypedByRef retType.CustomModifiers
-        | ReturnTypeTag.Void -> Void retType.CustomModifiers
+        | ReturnTypeTag.ByRef -> ByRef retType.ReturnType.Value
+        | ReturnTypeTag.TypedByRef -> TypedByRef
+        | ReturnTypeTag.Void -> Void
         | ReturnTypeTag.Type
-        | _ -> Type(rtype())
+        | _ -> Type retType.ReturnType.Value
 
-    let Type (modifiers, paramType) = ReturnType(ReturnTypeTag.Type, modifiers, ValueSome paramType)
-    let ByRef (modifiers, paramType) = ReturnType(ReturnTypeTag.ByRef, modifiers, ValueSome paramType)
+    let Type returnType = ReturnType(ReturnTypeTag.Type, List.empty, ValueSome returnType)
+    let ByRef(modifiers, toType) = ReturnType(ReturnTypeTag.ByRef, modifiers, ValueSome toType)
+    let ByRef' toType = ByRef(List.empty, toType)
+    /// <summary>The <see cref="T:System.TypedReference"/> type, as a return type.</summary>
     let TypedByRef modifiers = ReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
     let Void modifiers = ReturnType(ReturnTypeTag.Void, modifiers, ValueNone)
+    /// <summary>The <see cref="T:System.TypedReference"/> type, as a return type with no custom modifiers.</summary>
+    let TypedByRef' = TypedByRef List.empty
+    let Void' = Void List.empty
 
 [<IsReadOnly; Struct>]
 type MethodThis internal (tag: CallConvFlags) =
@@ -275,7 +283,6 @@ module MethodRefSig =
 [<IsReadOnly; Struct>]
 type PropertySig =
     { HasThis: bool
-      CustomModifiers: CustomModifiers
       PropertyType: EncodedType
       Parameters: ImmutableArray<ParamItem> }
 
@@ -327,29 +334,18 @@ module ArrayShape =
           Sizes = ImmutableArray.Empty
           LowerBounds = ImmutableArray.Empty }
 
+/// Represents an unmanaged pointer (II.14.4).
+[<RequireQualifiedAccess>]
 [<IsReadOnly; Struct>]
 type Pointer =
-    { Modifiers: CustomModifiers
-      PointerType: EncodedType voption }
-
-    member this.IsVoid = this.PointerType.IsNone
-
-(*
-[<RequireQualifiedAccess>]
-type Pointer =
-    | Type of Modifiers: CustomModifiers * PointerType: EncodedType
-    | Void of Modifiers: CustomModifiers
-*)
+    | Type of toType: EncodedType
+    /// Represents an unmanaged pointer to a value of unknown type.
+    | Void of modifiers: CustomMod list
 
 [<RequireQualifiedAccess>]
 module Pointer =
-    let inline (|Type|Void|) { Modifiers = modifiers; PointerType = ptype } =
-        match ptype with
-        | ValueSome ptype' -> Type(struct(modifiers, ptype'))
-        | ValueNone -> Void modifiers
-
-    let inline Type(modifiers, ptype) = { Modifiers = modifiers; PointerType = ValueSome ptype }
-    let inline Void modifiers = { Modifiers = modifiers; PointerType = ValueNone }
+    /// An unmanaged pointer type to a value of unknown type, with no custom modifiers.
+    let Void' = Pointer.Void List.empty
 
 [<RequireQualifiedAccess>]
 module EncodedType =
@@ -357,9 +353,9 @@ module EncodedType =
     let rec isMethodVar (etype: EncodedType) =
         match etype with
         | EncodedType.MVar _ -> true
-        | EncodedType.SZArray(_, t)
+        | EncodedType.SZArray t
         | EncodedType.Array(t, _)
-        | EncodedType.Ptr(Pointer.Type(_, t)) -> isMethodVar t
+        | EncodedType.Ptr(Pointer.Type t) -> isMethodVar t
         | _ -> false
 
     let private toPrimitiveType (etype: EncodedType) =
@@ -385,5 +381,5 @@ module EncodedType =
         | ValueSome prim -> ValueSome(ElemType.Primitive prim)
         | ValueNone ->
             match etype with
-            | EncodedType.SZArray(NoRequiredModifiers, item) -> ValueOption.map ElemType.Primitive (toPrimitiveType item)
+            | EncodedType.SZArray item -> ValueOption.map ElemType.Primitive (toPrimitiveType item)
             | _ -> ValueNone
