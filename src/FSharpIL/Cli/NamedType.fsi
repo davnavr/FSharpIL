@@ -23,7 +23,7 @@ type NamedType =
 [<AutoOpen>]
 module NamedTypePatterns =
     val inline internal (|NamedType|) : #NamedType -> NamedType
-    val inline (|IsSystemType|) : expected: string -> #NamedType -> bool
+    val (|IsSystemType|) : expected: string -> #NamedType -> bool
     // TODO: Add cases for unmanaged pointer types.
     //val inline (|DefinedType|ReferencedType|InstantiatedType|ArrayType|PrimitiveType|) : NamedType -> Choice<DefinedType, ReferencedType, InstantiatedType, ArrayType, PrimitiveType>
 

@@ -70,7 +70,7 @@ type NamedType (ns: Identifier voption, parent: NamedType voption, tname: Identi
 module NamedTypePatterns =
     let inline (|NamedType|) (t: #NamedType) = t :> NamedType
 
-    let inline (|IsSystemType|) expected (t: #NamedType) =
+    let (|IsSystemType|) expected (t: #NamedType) =
         t.TypeNamespace = PrimitiveType.ns && t.EnclosingType.IsNone && t.TypeName = Identifier expected
 
 type GenericParamKind =

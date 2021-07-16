@@ -8,20 +8,20 @@ type CoreAssemblyMembers =
     /// <summary>
     /// The constructor for <see cref="T:System.Object"/>, called in the constructor of all directly derived types.
     /// </summary>
-    member ObjectConstructor: MethodCallTarget
-    
+    member ObjectConstructor: MethodCallTarget<ReferencedType, ReferencedMethod>
+
     /// <summary>
     /// The constructor of the <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/> type, which accepts a string
     /// containing the name of the target framework and its version.
     /// </summary>
-    member TargetFrameworkConstructor: MethodCallTarget
+    member TargetFrameworkConstructor: MethodCallTarget<ReferencedType, ReferencedMethod>
 
 /// <summary>Represents the assembly containing core types such as <see cref="T:System.Object"/>.</summary>
 [<Sealed>]
 type CoreAssemblyReference =
     member Reference: ReferencedAssembly
     /// <summary>The core type <see cref="T:System.Object"/>, which serves as the base type for all types.</summary>
-    member Object: TypeReference<TypeKinds.ConcreteClass>
+    member Object: ReferencedType //<TypeKinds.ConcreteClass>
     /// <summary>
     /// The core type <see cref="T:System.ValueType"/>, which serves as the base type for all value types (II.13).
     /// </summary>
@@ -46,8 +46,8 @@ type CoreAssemblyReference =
     /// Adds a reference to <c>System.Private.CoreLib</c>, which is the core assembly for .NET Core and .NET 5+.
     /// </summary>
     static member NetCore:
-        version: AssemblyVersion *
+        version: FSharpIL.Metadata.Tables.AssemblyVersion *
         publicKeyToken: PublicKeyToken *
         ?hash: System.Collections.Immutable.ImmutableArray<byte> -> CoreAssemblyReference
 
-    member AddReferencesTo: ModuleBuilder -> ValidationResult<CoreAssemblyMembers>
+    member AddReferencesTo: CliModuleBuilder -> ValidationResult<CoreAssemblyMembers>

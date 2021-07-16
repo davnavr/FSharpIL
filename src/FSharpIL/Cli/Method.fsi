@@ -217,6 +217,41 @@ type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> =
     inherit ReferencedMethod
 end
 
+type ReferencedMethod with
+    static member Instance:
+        visibility: ExternalVisibility *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.Instance>
+
+    static member Virtual:
+        visibility: ExternalVisibility *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.Virtual>
+
+    static member Final:
+        visibility: ExternalVisibility *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.Final>
+
+    static member Static:
+        visibility: ExternalVisibility *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.Static>
+
+    static member Abstract:
+        visibility: ExternalVisibility *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.Abstract>
+
+    static member Constructor:
+        visibility: ExternalVisibility *
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.ObjectConstructor>
+
 [<RequireQualifiedAccess>]
 module ReferencedMethod =
     val inline (|Instance|Virtual|Final|Static|Abstract|Constructor|):
@@ -244,7 +279,12 @@ module MethodCallTarget =
 
     val simplify : target: MethodCallTarget<'Owner, 'Method> -> MethodCallTarget
 
-    val inline internal convert : target: MethodCallTarget<'Owner, 'Method1> -> MethodCallTarget<'Owner, 'Method2>
+    val inline internal convert<'Owner, 'Method1, 'Method2
+        when 'Owner :> NamedType
+        and 'Method1 :> Method
+        and 'Method2 :> Method
+        and 'Method2 : not struct> :
+        target: MethodCallTarget<'Owner, 'Method1> -> MethodCallTarget<'Owner, 'Method2>
 
 [<AutoOpen>]
 module MethodCallTargetPatterns =

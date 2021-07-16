@@ -403,6 +403,30 @@ type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>
         parameterTypes
     )
 
+type ReferencedMethod with
+    static member Instance(visibility, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Instance>(visibility, returnType, name, parameterTypes)
+
+    static member Abstract(visibility, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Abstract>(visibility, returnType, name, parameterTypes)
+
+    static member Final(visibility, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Final>(visibility, returnType, name, parameterTypes)
+
+    static member Static(visibility, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Static>(visibility, returnType, name, parameterTypes)
+
+    static member Virtual(visibility, returnType, name, parameterTypes) =
+        new MethodReference<MethodKinds.Virtual>(visibility, returnType, name, parameterTypes)
+
+    static member Constructor(visibility, parameterTypes) =
+        new MethodReference<MethodKinds.ObjectConstructor> (
+            visibility,
+            MethodReturnType.Void,
+            MethodName MethodName.ctor,
+            parameterTypes
+        )
+
 [<RequireQualifiedAccess>]
 module ReferencedMethod =
     let inline (|Instance|Virtual|Final|Static|Abstract|Constructor|) (method: ReferencedMethod) =

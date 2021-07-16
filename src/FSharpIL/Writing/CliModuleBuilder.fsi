@@ -68,6 +68,12 @@ type ReferencedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
+    member ReferenceMethod: method: ReferencedMethod -> ValidationResult<MethodCallTarget<ReferencedType, ReferencedMethod>>
+
+    member ContainsField: field: ReferencedField -> bool
+    member ContainsMethod: method: ReferencedMethod -> bool
+
+
 /// Builds a CLI metadata module (I.9).
 [<Sealed>]
 type CliModuleBuilder =
@@ -110,5 +116,7 @@ type CliModuleBuilder =
 
     // TODO: For specific TypeDefinition kinds, return a struct that wraps DefinedTypeMembers and only allows addition of certain members.
     //member DefineType: TypeDefinition<TypeKinds.StaticClass> -> ValidationResult<>
+
+    member ReferenceType: reference: ReferencedType -> ValidationResult<ReferencedTypeMembers>
 
     member internal Serialize: unit -> CliMetadataBuilder

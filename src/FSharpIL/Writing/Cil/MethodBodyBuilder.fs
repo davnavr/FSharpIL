@@ -60,7 +60,7 @@ type MethodTokenSource = internal { MethodCalls: ImmutableArray<Patch<FSharpIL.C
 type FieldTokenSource = internal { FieldInstructions: ImmutableArray<Patch<FSharpIL.Cli.FieldArg>>.Builder }
 
 [<IsReadOnly; Struct>]
-type TypeTokenSource = internal { TypeInstructions: ImmutableArray<Patch<FSharpIL.Cli.TypeDefOrRefOrSpec>>.Builder }
+type TypeTokenSource = internal { TypeInstructions: ImmutableArray<Patch<FSharpIL.Cli.NamedType>>.Builder }
 
 /// Represents the destination that a branch instruction would jump to.
 [<IsReadOnly; IsByRefLike>]

@@ -38,6 +38,9 @@ module FileCharacteristics =
         | IsExe -> ImageFileFlags.ExecutableImage
         | Characteristics custom -> custom
 
+type FileCharacteristics with
+    static member op_Implicit(characteristics: FileCharacteristics) = uint16(FileCharacteristics.flags characteristics)
+
 /// Specifies the CPU type of the Portable Executable file.
 type MachineFlags =
     | Unknown = 0us

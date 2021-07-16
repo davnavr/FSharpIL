@@ -171,7 +171,7 @@ type DefinedTypeMembers (owner: DefinedType, warnings: ValidationWarningsBuilder
     member this.ContainsMethod method = this.Method.Contains method
 
 [<Sealed>]
-type ReferencedTypeMembers = class
+type ReferencedTypeMembers =
     val private owner: ReferencedType
     val private warnings: ValidationWarningsBuilder option
     [<DefaultValue>] val mutable Field: HybridHashSet<ReferencedField>
@@ -181,7 +181,15 @@ type ReferencedTypeMembers = class
 
     member this.FieldCount = this.Field.Count
     member this.MethodCount = this.Method.Count
-end
+
+    member this.ReferenceMethod(method: ReferencedMethod) =
+        // TODO: Check that the kind and owner of method are correct.
+        if this.Method.Add method
+        then ValidationResult.Ok(MethodCallTarget<ReferencedType, ReferencedMethod>(this.owner, method))
+        else Error(noImpl "error for duplicate method")
+
+    member this.ContainsField field = this.Field.Contains field
+    member this.ContainsMethod method = this.Method.Contains method
 
 [<Struct>]
 type MemberIndices =
@@ -583,6 +591,15 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             CustomAttributeList.fromRef (CustomAttribute.Owner.DefinedType definition) customAttributeLookup attributes
             return members
         }
+
+    member this.ReferenceType reference =
+        match referencedTypes.TryGetValue reference with
+        | true, existing -> ValidationResult<_>.Error(noImpl "TODO: error for duplicate type ref")
+        | false, _ ->
+            // TODO: Check that the resolution scope is already accounted for.
+            let members = ReferencedTypeMembers(reference, warnings)
+            referencedTypes.[reference] <- members
+            Ok members
 
     member internal this.Serialize() =
         let serializer =

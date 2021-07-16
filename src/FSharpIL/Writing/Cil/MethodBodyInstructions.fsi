@@ -154,7 +154,7 @@ val stsfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTok
 
 /// (0x8D) Writes an instruction that pops an integer length off of the stack and creates "a zero-based, one-dimensional array"
 /// of the specified type (III.4.20).
-val newarr: byref<MethodBodyBuilder> -> etype: FSharpIL.Cli.TypeDefOrRefOrSpec -> TypeTokenSource -> unit
+val newarr: byref<MethodBodyBuilder> -> etype: FSharpIL.Cli.NamedType -> TypeTokenSource -> unit
 
 
 
