@@ -298,7 +298,57 @@ type EntryPointMethod = struct
           ArgumentsName = if this.Method.Parameters.Length > 0 then Some(this.Method.Parameters.ItemRef(0).ParamName) else None }
 end
 
-[<AbstractClass>]
+type DefinedMethod with
+    static member Instance(visibility, flags, returnType, name, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.Instance>(visibility, flags, returnType, name, parameterTypes, parameterList)
+
+    static member Abstract(visibility, flags, returnType, name, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.Abstract>(visibility, flags, returnType, name, parameterTypes, parameterList)
+
+    static member Final(visibility, flags, returnType, name, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.Final>(visibility, flags, returnType, name, parameterTypes, parameterList)
+
+    static member Static(visibility, flags, returnType, name, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.Static>(visibility, flags, returnType, name, parameterTypes, parameterList)
+
+    static member Virtual(visibility, flags, returnType, name, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.Virtual>(visibility, flags, returnType, name, parameterTypes, parameterList)
+
+    static member Constructor(visibility, flags, parameterTypes, parameterList) =
+        new MethodDefinition<MethodKinds.ObjectConstructor> (
+            visibility,
+            flags,
+            MethodReturnType.Void,
+            MethodName MethodName.ctor,
+            parameterTypes,
+            parameterList
+        )
+
+    static member EntryPoint(visibility, flags, name, kind) =
+        DefinedMethod.Static (
+            visibility,
+            flags,
+            EntryPointKind.returnType kind,
+            name,
+            EntryPointKind.parameterTypes kind,
+            EntryPointKind.parameterList kind
+        )
+        |> EntryPointMethod
+
+[<AutoOpen>]
+module ConstructorHelpers =
+    let classConstructorDef =
+        new MethodDefinition<MethodKinds.ClassConstructor> (
+            MemberVisibility.Private,
+            MethodAttributes(),
+            MethodReturnType.Void,
+            MethodName MethodName.cctor,
+            ImmutableArray.Empty,
+            Unchecked.defaultof<_>
+        )
+
+type DefinedMethod with static member ClassConstructor = classConstructorDef
+
 type ReferencedMethod =
     inherit Method
 
@@ -334,7 +384,7 @@ module Method =
             member _.GetHashCode method =
                 HashCode.Combine(method.HasThis, method.CallingConvention, method.ReturnType, method.ParameterTypes)
 
-    let comparer = SignatureComparer()
+    let signatureComparer = SignatureComparer()
 
 [<Sealed>]
 type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>
@@ -366,17 +416,20 @@ module ReferencedMethod =
 
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
-type MethodCallTarget (owner: NamedType, method: Method) =
+type MethodCallTarget<'Owner, 'Method when 'Owner :> NamedType and 'Method :> Method> (owner: 'Owner, method: 'Method) =
     member _.Owner = owner
     member _.Method = method
 
+type MethodCallTarget = MethodCallTarget<NamedType, Method>
+
 [<RequireQualifiedAccess>]
 module MethodCallTarget =
-    let Defined (tdef: DefinedType, method: DefinedMethod) = MethodCallTarget(tdef, method)
-    let Referenced (tdef: ReferencedType, method: ReferencedMethod) = MethodCallTarget(tdef, method)
+    let inline (|Callee|) (target: MethodCallTarget<_, _>) = target.Method
 
-    let inline (|Defined|Referenced|) (target: MethodCallTarget) =
-        match target.Owner with
-        | :? ReferencedType as tref -> Referenced(struct(tref, target.Method :?> ReferencedMethod))
-        | :? DefinedType as tdef -> Defined(struct(tdef, target.Method :?> DefinedMethod))
-        | _ -> failwith "TODO: MethodSpec?"
+    let simplify (target: MethodCallTarget<_, _>) = MethodCallTarget(target.Owner, target.Method)
+
+    let inline convert (target: MethodCallTarget<_, 'Method1>) = MethodCallTarget<_, _>(target.Owner, Unsafe.As target.Method)
+
+[<AutoOpen>]
+module MethodCallTargetPatterns =
+    let inline (|MethodCallTarget|) (target: MethodCallTarget<_, _>) = struct(target.Owner, target.Method)

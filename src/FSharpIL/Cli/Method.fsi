@@ -77,7 +77,7 @@ module Method =
         interface System.Collections.Generic.IEqualityComparer<Method>
     end
 
-    val comparer : SignatureComparer
+    val signatureComparer : SignatureComparer
 
 [<RequireQualifiedAccess>]
 module MethodKinds =
@@ -101,7 +101,7 @@ type DefinedMethod =
     val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
 
-    internal new:
+    new:
         implFlags: MethodImplFlags *
         flags: MethodDefFlags *
         methodThis: FSharpIL.Metadata.Signatures.MethodThis *
@@ -142,10 +142,67 @@ module EntryPointKind =
 [<IsReadOnly>]
 type EntryPointMethod = struct
     val Method: MethodDefinition<MethodKinds.Static>
+
+    internal new: method: MethodDefinition<MethodKinds.Static> -> EntryPointMethod
+
     member Kind: EntryPointKind
 end
 
-[<AbstractClass>]
+type DefinedMethod with
+    static member Instance:
+        visibility: MemberVisibility *
+        flags: MethodAttributes<MethodKinds.Instance> *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> *
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.Instance>
+
+    static member Virtual:
+        visibility: MemberVisibility *
+        flags: MethodAttributes<MethodKinds.Virtual> *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> *
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.Virtual>
+
+    static member Final:
+        visibility: MemberVisibility *
+        flags: MethodAttributes<MethodKinds.Final> *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> *
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.Final>
+
+    static member Static:
+        visibility: MemberVisibility *
+        flags: MethodAttributes<MethodKinds.Static> *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> *
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.Static>
+
+    static member Abstract:
+        visibility: MemberVisibility *
+        flags: MethodAttributes<MethodKinds.Abstract> *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> *
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.Abstract>
+
+    static member Constructor:
+        visibility: MemberVisibility *
+        flags: MethodAttributes<MethodKinds.ObjectConstructor> *
+        parameterTypes: ImmutableArray<MethodParameterType> *
+        parameterList: ParameterList -> MethodDefinition<MethodKinds.ObjectConstructor>
+
+    static member ClassConstructor: MethodDefinition<MethodKinds.ClassConstructor>
+
+    static member EntryPoint:
+        visibility: MemberVisibility *
+        flags: MethodAttributes<MethodKinds.Static> *
+        name: MethodName *
+        kind: EntryPointKind -> EntryPointMethod
+
 type ReferencedMethod =
     inherit Method
     val Visibility: ExternalVisibility
@@ -160,12 +217,6 @@ type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> =
     inherit ReferencedMethod
 end
 
-[<IsReadOnly; Struct>]
-[<NoComparison; StructuralEquality>]
-type MethodCallTarget = // TODO: Prevent calling of default constructor?
-    member Owner: NamedType
-    member Method: Method
-
 [<RequireQualifiedAccess>]
 module ReferencedMethod =
     val inline (|Instance|Virtual|Final|Static|Abstract|Constructor|):
@@ -177,10 +228,24 @@ module ReferencedMethod =
                    MethodReference<MethodKinds.Abstract>,
                    MethodReference<MethodKinds.ObjectConstructor>>
 
+[<IsReadOnly; Struct>]
+[<NoComparison; StructuralEquality>]
+type MethodCallTarget<'Owner, 'Method when 'Owner :> NamedType and 'Method :> Method> =
+    member Owner: 'Owner
+    member Method: 'Method
+
+    internal new: owner: 'Owner * method: 'Method -> MethodCallTarget<'Owner, 'Method>
+
+type MethodCallTarget = MethodCallTarget<NamedType, Method>
+
 [<RequireQualifiedAccess>]
 module MethodCallTarget =
-    val internal Defined: DefinedType * DefinedMethod -> MethodCallTarget
-    val internal Referenced: ReferencedType * ReferencedMethod -> MethodCallTarget
+    val inline (|Callee|) : target: MethodCallTarget<'Owner, 'Method> -> 'Method
 
-    //val inline (|Defined|Referenced|Specification|)
-    val inline (|Defined|Referenced|): MethodCallTarget -> Choice<struct(DefinedType * DefinedMethod), struct(ReferencedType * ReferencedMethod)>
+    val simplify : target: MethodCallTarget<'Owner, 'Method> -> MethodCallTarget
+
+    val inline internal convert : target: MethodCallTarget<'Owner, 'Method1> -> MethodCallTarget<'Owner, 'Method2>
+
+[<AutoOpen>]
+module MethodCallTargetPatterns =
+    val inline (|MethodCallTarget|) : target: MethodCallTarget<'Owner, 'Method> -> struct('Owner * 'Method)

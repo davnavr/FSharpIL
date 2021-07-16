@@ -122,6 +122,11 @@ type internal ValidationErrorBuilder internal () =
         | None -> body()
         | err -> err
 
+    member inline _.Bind(result: ValidationResult<_>, body: _ -> IValidationError option) =
+        match result with
+        | Ok value -> body value
+        | Error err -> Some err
+
     member inline _.Combine(x: IValidationError option, y) =
         match x with
         | None -> y

@@ -31,10 +31,11 @@ module EntryPoint =
     //val (|None|Method|File|): EntryPoint -> Choice<_, _, _>
     val (|None|Method|): EntryPoint -> Choice<unit, struct(DefinedType * EntryPointMethod)>
 
-[<Sealed>]
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<NoComparison; NoEquality>]
 type CustomAttributeList =
     member Count: int32
-    member Add: CustomAttribute -> ValidationResult<unit>
+    member Add: CustomAttribute -> IValidationError option
 
 [<Sealed>]
 type DefinedTypeMembers =
@@ -47,17 +48,10 @@ type DefinedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
-    // TODO: For these add methods, also return a mutable list of custom attributes
     member DefineMethod:
-        implFlags: MethodImplFlags *
-        flags: MethodDefFlags *
-        methodThis: FSharpIL.Metadata.Signatures.MethodThis *
-        returnType: MethodReturnType *
-        name: MethodName *
-        parameterTypes: ImmutableArray<MethodParameterType> *
-        parameterList: ParameterList *
+        method: DefinedMethod *
         body: DefinedMethodBody voption *
-        attributes: CustomAttributeList ref voption -> ValidationResult<MethodCallTarget>
+        attributes: CustomAttributeList ref voption -> ValidationResult<MethodCallTarget<DefinedType, DefinedMethod>>
 
     member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool
@@ -109,23 +103,8 @@ type CliModuleBuilder =
     // TODO: For methods that add things that can also have custom attributes, figure out how to avoid allocating a CustomAttributeList if user doesn't want/need the CA list.
 
     // TODO: Expose constructors for types in Cli namespace.
-
-    member DefineType:
-        flags: TypeDefFlags *
-        extends: ClassExtends *
-        typeNamespace: Identifier voption *
-        enclosingClass: DefinedType voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> ValidationResult<struct(CustomAttributeList * DefinedTypeMembers)>
-
-    member DefineType:
-        flags: TypeDefFlags *
-        extends: ClassExtends *
-        typeNamespace: Identifier voption *
-        enclosingClass: DefinedType voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList *
-        attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers>
+    member DefineType: definition: DefinedType -> ValidationResult<struct(CustomAttributeList * DefinedTypeMembers)>
+    member DefineType: definition: DefinedType * attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers>
 
     //member DefineType: DefinedType * attributes: outref<CustomAttributeList> -> ValidationResult<DefinedTypeMembers>
 

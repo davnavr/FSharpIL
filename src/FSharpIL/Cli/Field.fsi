@@ -24,6 +24,8 @@ type DefinedField =
 
     member Flags: FieldFlags
 
+    new: flags: FieldFlags * name: Identifier * fieldType: NamedType -> DefinedField
+
     override Equals: other: Field -> bool
 
 [<Sealed>]
@@ -73,6 +75,13 @@ end
 module Field =
     val inline (|Defined|Referenced|): field: Field -> Choice<DefinedField, ReferencedField>
 
+    [<Sealed>]
+    type SignatureComparer = class
+        interface System.Collections.Generic.IEqualityComparer<Field>
+    end
+
+    val signatureComparer : SignatureComparer
+
 [<RequireQualifiedAccess>]
 module DefinedField =
     val inline (|Instance|Static|Literal|WithRva|):
@@ -84,17 +93,14 @@ module DefinedField =
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
-type FieldArg = // TODO: Prevent usage of default ctor
-    member Owner: NamedType
-    member Field: Field
+type FieldArg<'Owner, 'Field when 'Owner :> NamedType and 'Field :> Field> =
+    member Owner: 'Owner
+    member Field: 'Field
 
-[<RequireQualifiedAccess>]
-module FieldArg =
-    val Defined: DefinedType * DefinedField -> FieldArg
+    internal new: owner: 'Owner * field: 'Field -> FieldArg<'Owner, 'Field>
 
-    val Referenced: ReferencedType * ReferencedField -> FieldArg
+type FieldArg = FieldArg<NamedType, Field>
 
-    //val Specification
-
-    val inline (|Defined|Referenced|):
-        field: FieldArg -> Choice<struct(DefinedType * DefinedField), struct(ReferencedType * ReferencedField)>
+[<AutoOpen>]
+module FieldArgPatterns =
+    val inline (|FieldArg|) : field: FieldArg<'Owner, 'Field> -> struct('Owner * 'Field)

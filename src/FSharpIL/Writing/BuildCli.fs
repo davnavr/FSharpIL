@@ -51,6 +51,6 @@ module ModuleBuilder =
 
         let rec inner state =
             match builder.Update state with
-            | ModuleUpdate.Finish -> Ok(builder', state)
+            | ModuleUpdate.Finish -> ValidationResult.Ok(builder', state)
 
         inner state

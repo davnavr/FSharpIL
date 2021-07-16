@@ -8,8 +8,8 @@ open FSharpIL.Metadata.Signatures
 
 [<RequireQualifiedAccess>]
 type CustomAttributeCtor =
-    | Ref of ReferencedType * MethodReference<MethodKinds.ObjectConstructor>
-    | Def of DefinedType * MethodDefinition<MethodKinds.ObjectConstructor>
+    | Ref of MethodCallTarget<ReferencedType, MethodReference<MethodKinds.ObjectConstructor>>
+    | Def of MethodCallTarget<DefinedType, MethodDefinition<MethodKinds.ObjectConstructor>>
     //| Spec of TypeSpecification * 
 
 type FixedArgSource = int32 -> Identifier voption -> ElemType -> Result<FixedArg, IValidationError voption>

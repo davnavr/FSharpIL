@@ -28,8 +28,8 @@ type Field =
     interface IEquatable<Field> with member this.Equals other = this.Equals(other = other)
 
 [<AbstractClass>]
-type DefinedField (flags: FieldFlags, name, signature) =
-    inherit Field(name, signature)
+type DefinedField (flags: FieldFlags, name, fieldType) =
+    inherit Field(name, fieldType)
 
     member _.Flags = flags
 
@@ -104,6 +104,14 @@ module Field =
         | :? DefinedField as fdef -> Defined fdef
         | _ -> Referenced(field :?> ReferencedField)
 
+    [<Sealed>]
+    type SignatureComparer() =
+        interface System.Collections.Generic.IEqualityComparer<Field> with
+            member _.Equals(x, y) = x.Type === y.Type
+            member _.GetHashCode field = field.Type.GetHashCode()
+
+    let signatureComparer = SignatureComparer()
+
 [<RequireQualifiedAccess>]
 module DefinedField =
     let inline (|Instance|Static|Literal|WithRva|) (field: DefinedField) =
@@ -115,16 +123,12 @@ module DefinedField =
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
-type FieldArg (owner: NamedType, field: Field) =
+type FieldArg<'Owner, 'Field when 'Owner :> NamedType and 'Field :> Field> (owner: 'Owner, field: 'Field) =
     member _.Owner = owner
     member _.Field = field
 
-[<RequireQualifiedAccess>]
-module FieldArg =
-    let Defined (owner: DefinedType, field: DefinedField) = FieldArg(owner, field)
-    let Referenced (owner: ReferencedType, field: ReferencedField) = FieldArg(owner, field)
+type FieldArg = FieldArg<NamedType, Field>
 
-    let inline (|Defined|Referenced|) (field: FieldArg) =
-        match field.Owner with
-        | :? DefinedType as tdef -> Defined(struct(tdef, field.Field :?> DefinedField))
-        | _ -> Referenced(struct(field.Owner :?> ReferencedType, field.Field :?> ReferencedField))
+[<AutoOpen>]
+module FieldArgPatterns =
+    let inline (|FieldArg|) (field: FieldArg<_, _>) = struct(field.Owner, field.Field)

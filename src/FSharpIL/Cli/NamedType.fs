@@ -530,3 +530,22 @@ type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : 
         typeName,
         genericParameters
     )
+
+type DefinedType with
+    static member ConcreteClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
+        TypeDefinition<TypeKinds.ConcreteClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+
+    static member AbstractClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
+        TypeDefinition<TypeKinds.AbstractClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+
+    static member SealedClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
+        TypeDefinition<TypeKinds.SealedClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+
+    static member StaticClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
+        TypeDefinition<TypeKinds.StaticClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+
+    static member Interface(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
+        TypeDefinition<TypeKinds.Interface>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+
+    static member ValueType(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
+        TypeDefinition<TypeKinds.ValueType>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)

@@ -192,7 +192,7 @@ and DefinedType =
     val Flags: TypeDefFlags
     val Extends: ClassExtends
 
-    internal new:
+    new:
         flags: TypeDefFlags *
         extends: ClassExtends *
         typeNamespace: Identifier voption *
@@ -272,17 +272,9 @@ module TypeKinds =
     end
 
 [<Sealed>]
-type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
+type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> = class
     inherit DefinedType
-
-    internal new:
-        visibility: TypeVisibility *
-        flags: TypeAttributes<'Kind> *
-        extends: ClassExtends *
-        typeNamespace: Identifier voption *
-        enclosingClass: DefinedType voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> TypeDefinition<'Kind>
+end
 
 [<RequireQualifiedAccess>]
 module TypeVisibility =
@@ -294,6 +286,64 @@ module TypeVisibility =
     val NestedAssembly : parent: DefinedType -> TypeVisibility
     val NestedFamilyAndAssembly : parent: DefinedType -> TypeVisibility
     val NestedFamilyOrAssembly : parent: DefinedType -> TypeVisibility
+
+type DefinedType with
+    static member ConcreteClass:
+        visibility: TypeVisibility *
+        flags: TypeAttributes<TypeKinds.ConcreteClass> *
+        extends: ClassExtends *
+        typeNamespace: Identifier voption *
+        enclosingClass: DefinedType voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.ConcreteClass>
+
+    static member AbstractClass:
+        visibility: TypeVisibility *
+        flags: TypeAttributes<TypeKinds.AbstractClass> *
+        extends: ClassExtends *
+        typeNamespace: Identifier voption *
+        enclosingClass: DefinedType voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.AbstractClass>
+
+    static member SealedClass:
+        visibility: TypeVisibility *
+        flags: TypeAttributes<TypeKinds.SealedClass> *
+        extends: ClassExtends *
+        typeNamespace: Identifier voption *
+        enclosingClass: DefinedType voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.SealedClass>
+
+    static member StaticClass:
+        visibility: TypeVisibility *
+        flags: TypeAttributes<TypeKinds.StaticClass> *
+        extends: ClassExtends *
+        typeNamespace: Identifier voption *
+        enclosingClass: DefinedType voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.StaticClass>
+
+    static member Interface:
+        visibility: TypeVisibility *
+        flags: TypeAttributes<TypeKinds.Interface> *
+        extends: ClassExtends *
+        typeNamespace: Identifier voption *
+        enclosingClass: DefinedType voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.Interface>
+
+    static member ValueType:
+        visibility: TypeVisibility *
+        flags: TypeAttributes<TypeKinds.ValueType> *
+        extends: ClassExtends *
+        typeNamespace: Identifier voption *
+        enclosingClass: DefinedType voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.ValueType>
+
+    //static member Delegate
+    //static member Enum
 
 [<NoComparison; NoEquality>]
 type InstantiatedTypeArgumentsEnumerator = struct
