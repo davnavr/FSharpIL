@@ -5,10 +5,7 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
-
-open FSharpIL.Cli.Signatures
 
 [<IsReadOnly>]
 type MethodName = struct
@@ -44,13 +41,26 @@ module MethodName =
 module MethodNamePatterns =
     val (|MethodName|) : name: MethodName -> Identifier
 
+[<IsReadOnly>]
+type MethodReturnType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ReturnType and MethodParameterType
+    val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
+    val Type: NamedType voption
+end
+
+[<RequireQualifiedAccess>]
+module MethodReturnType =
+    val Type : argType: NamedType -> MethodReturnType
+    val ByRef : argType: NamedType -> MethodReturnType
+    val TypedByRef : MethodReturnType
+    val Void : MethodReturnType
+
 [<AbstractClass>]
 type Method =
-    val HasThis: MethodThis
-    val CallingConvention: CallingConventions
+    val HasThis: FSharpIL.Metadata.Signatures.MethodThis
+    val CallingConvention: FSharpIL.Metadata.Signatures.CallingConventions
     val Name: Identifier
-    val ReturnType: ReturnType
-    val ParameterTypes: ImmutableArray<ParamItem>
+    val ReturnType: MethodReturnType
+    val ParameterTypes: ImmutableArray<MethodParameterType>
 
     abstract Equals: other: Method -> bool
     default Equals: other: Method -> bool
@@ -61,10 +71,19 @@ type Method =
     interface IEquatable<Method>
 
 [<RequireQualifiedAccess>]
+module Method =
+    [<Sealed>]
+    type SignatureComparer = class
+        interface System.Collections.Generic.IEqualityComparer<Method>
+    end
+
+    val signatureComparer : SignatureComparer
+
+[<RequireQualifiedAccess>]
 module MethodKinds =
     type IKind = interface
         inherit IAttributeTag<MethodDefFlags>
-        abstract MethodThis: MethodThis
+        abstract MethodThis: FSharpIL.Metadata.Signatures.MethodThis
     end
 
     type [<Struct>] Instance = interface IKind
@@ -75,7 +94,6 @@ module MethodKinds =
     type [<Struct>] ObjectConstructor = interface IKind
     type [<Struct>] ClassConstructor = interface IKind
 
-[<AbstractClass>]
 type DefinedMethod =
     inherit Method
 
@@ -83,7 +101,15 @@ type DefinedMethod =
     val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
 
-    member Signature: MethodDefSig
+    new:
+        implFlags: MethodImplFlags *
+        flags: MethodDefFlags *
+        methodThis: FSharpIL.Metadata.Signatures.MethodThis *
+        returnType: MethodReturnType *
+        name: MethodName *
+        parameterTypes: ImmutableArray<MethodParameterType> *
+        parameterList: ParameterList -> DefinedMethod
+
     //member Visibility: MemberVisibility
 
     override Equals: Method -> bool
@@ -116,6 +142,9 @@ module EntryPointKind =
 [<IsReadOnly>]
 type EntryPointMethod = struct
     val Method: MethodDefinition<MethodKinds.Static>
+
+    internal new: method: MethodDefinition<MethodKinds.Static> -> EntryPointMethod
+
     member Kind: EntryPointKind
 end
 
@@ -123,47 +152,47 @@ type DefinedMethod with
     static member Instance:
         visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.Instance> *
-        returnType: ReturnType *
+        returnType: MethodReturnType *
         name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<MethodParameterType> *
         parameterList: ParameterList -> MethodDefinition<MethodKinds.Instance>
 
     static member Virtual:
         visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.Virtual> *
-        returnType: ReturnType *
+        returnType: MethodReturnType *
         name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<MethodParameterType> *
         parameterList: ParameterList -> MethodDefinition<MethodKinds.Virtual>
 
     static member Final:
         visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.Final> *
-        returnType: ReturnType *
+        returnType: MethodReturnType *
         name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<MethodParameterType> *
         parameterList: ParameterList -> MethodDefinition<MethodKinds.Final>
 
     static member Static:
         visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.Static> *
-        returnType: ReturnType *
+        returnType: MethodReturnType *
         name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<MethodParameterType> *
         parameterList: ParameterList -> MethodDefinition<MethodKinds.Static>
 
     static member Abstract:
         visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.Abstract> *
-        returnType: ReturnType *
+        returnType: MethodReturnType *
         name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<MethodParameterType> *
         parameterList: ParameterList -> MethodDefinition<MethodKinds.Abstract>
 
     static member Constructor:
         visibility: MemberVisibility *
         flags: MethodAttributes<MethodKinds.ObjectConstructor> *
-        parameterTypes: ImmutableArray<ParamItem> *
+        parameterTypes: ImmutableArray<MethodParameterType> *
         parameterList: ParameterList -> MethodDefinition<MethodKinds.ObjectConstructor>
 
     static member ClassConstructor: MethodDefinition<MethodKinds.ClassConstructor>
@@ -174,12 +203,11 @@ type DefinedMethod with
         name: MethodName *
         kind: EntryPointKind -> EntryPointMethod
 
-[<AbstractClass>]
 type ReferencedMethod =
     inherit Method
     val Visibility: ExternalVisibility
 
-    member Signature: MethodRefSig
+    //val VarArgParameterTypes // TODO: Have field for VarArg types in ReferencedMethod.
 
     override Equals: Method -> bool
 
@@ -192,43 +220,37 @@ end
 type ReferencedMethod with
     static member Instance:
         visibility: ExternalVisibility *
-        returnType: ReturnType *
+        returnType: MethodReturnType *
         name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Instance>
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.Instance>
 
     static member Virtual:
         visibility: ExternalVisibility *
-        returnType: ReturnType *
+        returnType: MethodReturnType *
         name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Virtual>
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.Virtual>
 
     static member Final:
         visibility: ExternalVisibility *
-        returnType: ReturnType *
+        returnType: MethodReturnType *
         name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Final>
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.Final>
 
     static member Static:
         visibility: ExternalVisibility *
-        returnType: ReturnType *
+        returnType: MethodReturnType *
         name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Static>
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.Static>
 
     static member Abstract:
         visibility: ExternalVisibility *
-        returnType: ReturnType *
+        returnType: MethodReturnType *
         name: MethodName *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.Abstract>
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.Abstract>
 
     static member Constructor:
         visibility: ExternalVisibility *
-        parameterTypes: ImmutableArray<ParamItem> -> MethodReference<MethodKinds.ObjectConstructor>
-
-[<IsReadOnly; Struct>]
-[<NoComparison; StructuralEquality>]
-type MethodCallTarget = // TODO: Prevent calling of default constructor?
-    member Owner: FSharpIL.Cli.Type
-    member Method: Method
+        parameterTypes: ImmutableArray<MethodParameterType> -> MethodReference<MethodKinds.ObjectConstructor>
 
 [<RequireQualifiedAccess>]
 module ReferencedMethod =
@@ -241,10 +263,29 @@ module ReferencedMethod =
                    MethodReference<MethodKinds.Abstract>,
                    MethodReference<MethodKinds.ObjectConstructor>>
 
+[<IsReadOnly; Struct>]
+[<NoComparison; StructuralEquality>]
+type MethodCallTarget<'Owner, 'Method when 'Owner :> NamedType and 'Method :> Method> =
+    member Owner: 'Owner
+    member Method: 'Method
+
+    internal new: owner: 'Owner * method: 'Method -> MethodCallTarget<'Owner, 'Method>
+
+type MethodCallTarget = MethodCallTarget<NamedType, Method>
+
 [<RequireQualifiedAccess>]
 module MethodCallTarget =
-    val internal Defined: DefinedType * DefinedMethod -> MethodCallTarget
-    val internal Referenced: ReferencedType * ReferencedMethod -> MethodCallTarget
+    val inline (|Callee|) : target: MethodCallTarget<'Owner, 'Method> -> 'Method
 
-    //val inline (|Defined|Referenced|Specification|)
-    val inline (|Defined|Referenced|): MethodCallTarget -> Choice<struct(DefinedType * DefinedMethod), struct(ReferencedType * ReferencedMethod)>
+    val simplify : target: MethodCallTarget<'Owner, 'Method> -> MethodCallTarget
+
+    val inline internal convert<'Owner, 'Method1, 'Method2
+        when 'Owner :> NamedType
+        and 'Method1 :> Method
+        and 'Method2 :> Method
+        and 'Method2 : not struct> :
+        target: MethodCallTarget<'Owner, 'Method1> -> MethodCallTarget<'Owner, 'Method2>
+
+[<AutoOpen>]
+module MethodCallTargetPatterns =
+    val inline (|MethodCallTarget|) : target: MethodCallTarget<'Owner, 'Method> -> struct('Owner * 'Method)

@@ -3,11 +3,12 @@
 open System
 open System.Runtime.CompilerServices
 
-open FSharpIL.Utilities
-
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Blobs
 open FSharpIL.PortableExecutable
+
+open FSharpIL.Utilities
+open FSharpIL.Utilities.Compare
 
 [<IsReadOnly; Struct>]
 type ModuleRow =
@@ -73,9 +74,9 @@ type FieldRow =
       Signature: FieldSigOffset }
 
     member this.Equals other =
-        if (this.Flags &&& other.Flags &&& FieldFlags.FieldAccessMask) = FieldFlags.CompilerControlled
-        then false
-        else this.Name = other.Name && this.Signature = other.Signature
+        this.Name === other.Name &&
+        this.Signature === other.Signature &&
+        (this.Flags &&& other.Flags &&& FieldFlags.FieldAccessMask) <> FieldFlags.CompilerControlled
 
     override this.GetHashCode() = HashCode.Combine(this.Name, this.Signature)
 
@@ -85,7 +86,7 @@ type FieldRow =
         | _ -> false
 
     interface ITableRow
-    interface IEquatable<FieldRow> with member this.Equals other = this.Equals other
+    interface IEquatable<FieldRow> with member this.Equals other = this.Equals(other = other)
 
 /// <summary>Describes the attributes of a <c>MethodDef</c> (II.23.1.10).</summary>
 [<Flags>]
@@ -206,9 +207,9 @@ type MethodDefRow =
       ParamList: TableIndex<ParamRow> }
 
     member this.Equals other =
-        if (this.Flags &&& other.Flags &&& MethodDefFlags.MemberAccessMask) = MethodDefFlags.CompilerControlled
-        then false
-        else this.Name = other.Name && this.Signature = other.Signature
+        this.Name === other.Name &&
+        this.Signature === other.Signature &&
+        (this.Flags &&& other.Flags &&& MethodDefFlags.MemberAccessMask) <> MethodDefFlags.CompilerControlled
 
     override this.GetHashCode() = HashCode.Combine(this.Name, this.Signature)
 
@@ -340,7 +341,7 @@ type ConstantRow =
       Parent: HasConstant
       Value: ConstantOffset }
 
-    member this.Equals other = this.Parent = other.Parent
+    member this.Equals other = this.Parent === other.Parent
 
     override this.GetHashCode() = this.Parent.GetHashCode()
 
@@ -350,7 +351,7 @@ type ConstantRow =
         | _ -> false
 
     interface ITableRow
-    interface IEquatable<ConstantRow> with member this.Equals other = this.Equals other
+    interface IEquatable<ConstantRow> with member this.Equals other = this.Equals(other = other)
 
 /// <summary>(0x0C) Represents a row in the <c>CustomAttribute</c> table (II.22.10).</summary>
 [<IsReadOnly; Struct>]
@@ -374,7 +375,7 @@ type ClassLayoutRow =
       ClassSize: uint32
       Parent: TableIndex<TypeDefRow> }
 
-    member this.Equals other = this.Parent = other.Parent
+    member this.Equals other = this.Parent === other.Parent
 
     override this.GetHashCode() = this.Parent.GetHashCode()
 
@@ -384,7 +385,7 @@ type ClassLayoutRow =
         | _ -> false
 
     interface ITableRow
-    interface IEquatable<ClassLayoutRow> with member this.Equals other = this.Equals other
+    interface IEquatable<ClassLayoutRow> with member this.Equals other = this.Equals(other = other)
 
 
 
@@ -415,7 +416,7 @@ type EventRow =
       Name: IdentifierOffset
       EventType: TypeDefOrRef }
 
-    member this.Equals other = this.Name = other.Name
+    member this.Equals other = this.Name === other.Name
 
     override this.GetHashCode() = this.Name.GetHashCode()
 
@@ -456,7 +457,7 @@ type PropertyRow =
       Name: IdentifierOffset
       Type: PropertySigOffset }
 
-    member this.Equals other = this.Name = other.Name && this.Type = other.Type
+    member this.Equals other = this.Name === other.Name && this.Type === other.Type
 
     override this.GetHashCode() = HashCode.Combine(this.Name, this.Type)
 
@@ -466,7 +467,7 @@ type PropertyRow =
         | _ -> false
 
     interface ITableRow
-    interface IEquatable<PropertyRow> with member this.Equals other = this.Equals other
+    interface IEquatable<PropertyRow> with member this.Equals other = this.Equals(other = other)
 
 /// <summary>
 /// (0x15) Represents a row in the <c>PropertyMap</c> table, which specifies the properties associated with a type (II.22.35).
@@ -513,7 +514,7 @@ type MethodImplRow =
       MethodBody: MethodDefOrRef
       MethodDeclaration: MethodDefOrRef }
 
-    member this.Equals other = this.Class = other.Class && this.MethodDeclaration = other.MethodDeclaration
+    member this.Equals other = this.Class === other.Class && this.MethodDeclaration === other.MethodDeclaration
 
     override this.GetHashCode() = HashCode.Combine(this.Class, this.MethodDeclaration)
 
@@ -523,7 +524,7 @@ type MethodImplRow =
         | _ -> false
 
     interface ITableRow
-    interface IEquatable<MethodImplRow> with member this.Equals other = this.Equals other
+    interface IEquatable<MethodImplRow> with member this.Equals other = this.Equals(other = other)
 
 /// <summary>(0x1A) Represents a row in the <c>ModuleRef</c> table (II.22.31).</summary>
 [<IsReadOnly; Struct>]
@@ -562,7 +563,7 @@ type FieldRvaRow =
     { Rva: FieldValueLocation
       Field: TableIndex<FieldRow> }
 
-    member this.Equals other = this.Field = other.Field
+    member this.Equals other = this.Field === other.Field
 
     override this.GetHashCode() = this.Field.GetHashCode()
 
@@ -572,7 +573,17 @@ type FieldRvaRow =
         | _ -> false
 
     interface ITableRow
-    interface IEquatable<FieldRvaRow> with member this.Equals other = this.Equals other
+    interface IEquatable<FieldRvaRow> with member this.Equals other = this.Equals(other = other)
+
+[<System.Runtime.CompilerServices.IsReadOnly>]
+type AssemblyVersion = struct // TODO: Update row types for Assembly and AssemblyRef to use this struct.
+    val Major: uint16
+    val Minor: uint16
+    val Build: uint16
+    val Revision: uint16
+
+    new(major, minor, build, revision) = { Major = major; Minor = minor; Build = build; Revision = revision }
+end
 
 /// <summary>Specifies the algorithm used to compute the hash for the contents of an assembly (II.23.1.1).</summary>
 type AssemblyHashAlgorithm =
@@ -633,12 +644,20 @@ type AssemblyRefRow =
         && this.MinorVersion = other.MinorVersion
         && this.BuildNumber = other.BuildNumber
         && this.RevisionNumber = other.RevisionNumber
-        && this.PublicKeyOrToken = other.PublicKeyOrToken
-        && this.Name = other.Name
-        && this.Culture = other.Culture
+        && this.PublicKeyOrToken === other.PublicKeyOrToken
+        && this.Name === other.Name
+        && this.Culture === other.Culture
 
     override this.GetHashCode() =
-        HashCode.Combine(this.MajorVersion, this.MinorVersion, this.BuildNumber, this.RevisionNumber, this.PublicKeyOrToken, this.Name, this.Culture)
+        HashCode.Combine (
+            this.MajorVersion,
+            this.MinorVersion,
+            this.BuildNumber,
+            this.RevisionNumber,
+            this.PublicKeyOrToken,
+            this.Name,
+            this.Culture
+        )
 
     override this.Equals obj =
         match obj with
@@ -646,7 +665,7 @@ type AssemblyRefRow =
         | _ -> false
 
     interface ITableRow
-    interface IEquatable<AssemblyRefRow> with member this.Equals other = this.Equals other
+    interface IEquatable<AssemblyRefRow> with member this.Equals other = this.Equals(other = other)
 
 
 
@@ -663,7 +682,7 @@ type FileRow =
       Name: FileNameOffset
       HashValue: BlobOffset }
 
-    member this.Equals other = this.Name = other.Name
+    member this.Equals other = this.Name === other.Name
 
     override this.GetHashCode() = this.Name.GetHashCode()
 
@@ -693,7 +712,7 @@ type ManifestResourceRow =
       Name: IdentifierOffset
       Implementation: Implementation }
 
-    member this.Equals other = this.Name = other.Name
+    member this.Equals other = this.Name === other.Name
 
     override this.GetHashCode() = this.Name.GetHashCode()
 
@@ -715,7 +734,7 @@ type NestedClassRow =
     { NestedClass: TableIndex<TypeDefRow>
       EnclosingClass: TableIndex<TypeDefRow> }
 
-    member this.Equals other = this.NestedClass = other.NestedClass
+    member this.Equals other = this.NestedClass === other.NestedClass
 
     override this.GetHashCode() = this.NestedClass.GetHashCode()
 
@@ -761,7 +780,7 @@ type GenericParamRow =
       Owner: TypeOrMethodDef
       Name: IdentifierOffset }
 
-    member this.Equals other = this.Owner = other.Owner && (this.Number = other.Number || this.Name = other.Name)
+    member this.Equals other = this.Owner === other.Owner && (this.Number = other.Number || this.Name === other.Name)
 
     override this.GetHashCode() = HashCode.Combine(this.Owner, this.Number)
 

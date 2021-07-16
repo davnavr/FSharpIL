@@ -6,10 +6,9 @@ open System.Runtime.CompilerServices
 
 open FSharpIL
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
-open FSharpIL.Cli.Signatures
+open FSharpIL.Utilities.Compare
 
 [<IsReadOnly>]
 type MethodName = struct
@@ -45,13 +44,28 @@ module MethodName =
 [<AutoOpen>]
 module MethodNamePatterns = let (|MethodName|) name = MethodName.toIdentifier name
 
+[<IsReadOnly>]
+type MethodReturnType = struct
+    val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
+    val Type: NamedType voption
+
+    new (tag, argType) = { Tag = tag; Type = argType }
+end
+
+[<RequireQualifiedAccess>]
+module MethodReturnType =
+    let Type argType = MethodReturnType(FSharpIL.Metadata.Signatures.ReturnTypeTag.Type, ValueSome argType)
+    let ByRef argType = MethodReturnType(FSharpIL.Metadata.Signatures.ReturnTypeTag.ByRef, ValueSome argType)
+    let TypedByRef = MethodReturnType(FSharpIL.Metadata.Signatures.ReturnTypeTag.TypedByRef, ValueNone)
+    let Void = MethodReturnType(FSharpIL.Metadata.Signatures.ReturnTypeTag.Void, ValueNone)
+
 [<AbstractClass>]
 type Method =
-    val HasThis: MethodThis
-    val CallingConvention: CallingConventions
+    val HasThis: FSharpIL.Metadata.Signatures.MethodThis
+    val CallingConvention: FSharpIL.Metadata.Signatures.CallingConventions
     val Name: Identifier
-    val ReturnType: ReturnType
-    val ParameterTypes: ImmutableArray<ParamItem>
+    val ReturnType: MethodReturnType
+    val ParameterTypes: ImmutableArray<MethodParameterType>
 
     new (mthis, cconv, name, rtype, ptypes) =
         { HasThis = mthis
@@ -60,19 +74,13 @@ type Method =
           ReturnType = rtype
           ParameterTypes = ptypes }
 
-    member this.DefinedSignature =
-        { HasThis = this.HasThis
-          CallingConvention = this.CallingConvention
-          ReturnType = this.ReturnType
-          Parameters = this.ParameterTypes }
-
     abstract Equals: other: Method -> bool
     default this.Equals(other: Method) =
-        this.Name = other.Name
-        && this.ParameterTypes = other.ParameterTypes
-        && this.HasThis = other.HasThis
-        && this.ReturnType = other.ReturnType
-        && this.CallingConvention = other.CallingConvention
+        this.Name === other.Name &&
+        Equatable.blocks this.ParameterTypes other.ParameterTypes &&
+        this.ReturnType === other.ReturnType &&
+        this.HasThis === other.HasThis &&
+        this.CallingConvention === other.CallingConvention
 
     override this.Equals(obj: obj) =
         match obj with
@@ -87,7 +95,7 @@ type Method =
 [<AutoOpen>]
 module MethodHelpers =
     type IParameterIterator<'State> = interface
-        abstract Update: int32 * 'State * inref<ParamItem> -> unit
+        abstract Update: int32 * 'State * inref<MethodParameterType> -> unit
     end
 
     type EmptyParameterIterator = struct
@@ -104,93 +112,99 @@ module MethodHelpers =
 
     let checkMethodSig<'Iter, 'State when 'Iter :> IParameterIterator<'State> and 'Iter : struct>
         (state: 'State)
-        (parameterTypes: ImmutableArray<ParamItem>)
+        (parameterTypes: ImmutableArray<MethodParameterType>)
         =
         let mutable gcount = 0u
         for i = 0 to parameterTypes.Length - 1 do
             let ptype = &parameterTypes.ItemRef i
 
-            match ptype with
-            | ParamItem.Param(_, t)
-            | ParamItem.ByRef(_, t) when EncodedType.isMethodVar t -> gcount <- gcount + 1u
-            |  _ -> ()
+            // TODO: Check if the type refers to a generic parameter in the method, but first NamedType needs to allow MVar and Var
+            //gcount <- gcount + 1u
 
             Unchecked.defaultof<'Iter>.Update(i, state, &ptype)
 
         if gcount > 0u
-        then CallingConventions.Generic gcount
-        else CallingConventions.Default
+        then FSharpIL.Metadata.Signatures.CallingConventions.Generic gcount
+        else FSharpIL.Metadata.Signatures.CallingConventions.Default
 
 [<RequireQualifiedAccess>]
 module MethodKinds =
     type IKind = interface
         inherit IAttributeTag<MethodDefFlags>
-        abstract MethodThis: MethodThis
+        abstract MethodThis: FSharpIL.Metadata.Signatures.MethodThis
     end
 
     type Instance = struct
         interface IKind with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = Unchecked.defaultof<_>
-            member _.MethodThis with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = HasThis
+
+            member _.MethodThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    FSharpIL.Metadata.Signatures.MethodThis.HasThis
     end
 
     type Virtual = struct
         interface IKind with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = MethodDefFlags.Virtual
-            member _.MethodThis with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = HasThis
+
+            member _.MethodThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    FSharpIL.Metadata.Signatures.MethodThis.HasThis
     end
 
     type Final = struct
         interface IKind with
             member _.MethodThis
-                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
-                    get() = HasThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    FSharpIL.Metadata.Signatures.MethodThis.HasThis
 
             member _.RequiredFlags
-                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
-                    get() = MethodDefFlags.Virtual ||| MethodDefFlags.Final
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    MethodDefFlags.Virtual ||| MethodDefFlags.Final
     end
 
     type Static = struct
         interface IKind with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = MethodDefFlags.Static
-            member _.MethodThis with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = NoThis
+
+            member _.MethodThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    FSharpIL.Metadata.Signatures.MethodThis.NoThis
     end
 
     type Abstract = struct
         interface IKind with
             member _.MethodThis
-                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
-                    get() = HasThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    FSharpIL.Metadata.Signatures.MethodThis.HasThis
 
             member _.RequiredFlags
-                with[<MethodImpl(MethodImplOptions.AggressiveInlining)>]
-                    get() = MethodDefFlags.Virtual ||| MethodDefFlags.Abstract
+                with[<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    MethodDefFlags.Virtual ||| MethodDefFlags.Abstract
     end
 
     type ObjectConstructor = struct
         interface IKind with
             member _.MethodThis
-                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
-                    get() = HasThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    FSharpIL.Metadata.Signatures.MethodThis.HasThis
 
             member _.RequiredFlags
-                with[<MethodImpl(MethodImplOptions.AggressiveInlining)>]
-                    get() = MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName
     end
 
     type ClassConstructor = struct
         interface IKind with
             member _.MethodThis
-                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
-                    get() = NoThis
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    FSharpIL.Metadata.Signatures.MethodThis.NoThis
 
             member _.RequiredFlags
-                with[<MethodImpl(MethodImplOptions.AggressiveInlining)>]
-                    get() = MethodDefFlags.Static ||| MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName
+                with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() =
+                    MethodDefFlags.Static ||| MethodDefFlags.RTSpecialName ||| MethodDefFlags.SpecialName
     end
 
-[<AbstractClass>]
 type DefinedMethod =
     inherit Method
 
@@ -198,21 +212,19 @@ type DefinedMethod =
     val ImplFlags: MethodImplFlags
     val Parameters: ImmutableArray<Parameter>
 
-    new (iflags, flags, mthis, rtype, MethodName name, parameterTypes: ImmutableArray<_>, parameterList) =
+    new (implFlags, flags, methodThis, returnType, MethodName name, parameterTypes: ImmutableArray<_>, parameterList) =
         let mutable parameters = Array.zeroCreate parameterTypes.Length
         let cconv = checkMethodSig<MethodDefParamIterator, _> (parameters, parameterList) parameterTypes
         { inherit Method (
-              mthis,
+              methodThis,
               cconv,
               name,
-              rtype,
+              returnType,
               parameterTypes
           )
           Flags = flags
-          ImplFlags = iflags
+          ImplFlags = implFlags
           Parameters = Unsafe.As &parameters }
-
-    member this.Signature = this.DefinedSignature
 
     override this.Equals(other: Method) =
         match other with
@@ -251,19 +263,15 @@ type EntryPointKind =
 
 [<RequireQualifiedAccess>]
 module EntryPointKind =
-    let exitCodeType = ReturnType.Type(ImmutableArray.Empty, EncodedType.I4)
-
-    let private argsParameterTypes =
-        ImmutableArray.Create<ParamItem>(
-            ParamItem.Param(ImmutableArray.Empty, EncodedType.SZArray(ImmutableArray.Empty, EncodedType.String))
-        )
+    let exitCodeType = MethodReturnType.Type PrimitiveType.I4
+    let argsParameterTypes = ImmutableArray.Create(MethodParameterType.Type(SZArrayType PrimitiveType.String))
 
     let ExitWithArgs argsParamName = { ReturnExitCode = true; ArgumentsName = Some argsParamName }
     let VoidWithArgs argsParamName = { ReturnExitCode = false; ArgumentsName = Some argsParamName }
     let ExitNoArgs = { ReturnExitCode = true; ArgumentsName = None }
     let VoidNoArgs = { ReturnExitCode = false; ArgumentsName = None }
 
-    let inline returnType kind = if kind.ReturnExitCode then exitCodeType else ReturnType.RVoid
+    let inline returnType kind = if kind.ReturnExitCode then exitCodeType else MethodReturnType.Void
 
     let parameterTypes kind =
         match kind with
@@ -310,7 +318,7 @@ type DefinedMethod with
         new MethodDefinition<MethodKinds.ObjectConstructor> (
             visibility,
             flags,
-            ReturnType.RVoid,
+            MethodReturnType.Void,
             MethodName MethodName.ctor,
             parameterTypes,
             parameterList
@@ -333,7 +341,7 @@ module ConstructorHelpers =
         new MethodDefinition<MethodKinds.ClassConstructor> (
             MemberVisibility.Private,
             MethodAttributes(),
-            ReturnType.RVoid,
+            MethodReturnType.Void,
             MethodName MethodName.cctor,
             ImmutableArray.Empty,
             Unchecked.defaultof<_>
@@ -341,7 +349,6 @@ module ConstructorHelpers =
 
 type DefinedMethod with static member ClassConstructor = classConstructorDef
 
-[<AbstractClass>]
 type ReferencedMethod =
     inherit Method
 
@@ -358,12 +365,26 @@ type ReferencedMethod =
           )
           Visibility = visibility }
 
-    member this.Signature = MethodRefSig(this.DefinedSignature, ImmutableArray.Empty)
-
     override _.Equals(other: Method) =
         match other with
         | :? ReferencedMethod -> base.Equals other
         | _ -> false
+
+[<RequireQualifiedAccess>]
+module Method =
+    [<Sealed>]
+    type SignatureComparer () =
+        interface System.Collections.Generic.IEqualityComparer<Method> with // TODO: Account for VarArg types as well when comparing signatures.
+            member _.Equals(x, y) =
+                Equatable.blocks x.ParameterTypes y.ParameterTypes &&
+                x.ReturnType === y.ReturnType &&
+                x.CallingConvention === y.CallingConvention &&
+                x.HasThis === y.HasThis
+
+            member _.GetHashCode method =
+                HashCode.Combine(method.HasThis, method.CallingConvention, method.ReturnType, method.ParameterTypes)
+
+    let signatureComparer = SignatureComparer()
 
 [<Sealed>]
 type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>
@@ -401,7 +422,7 @@ type ReferencedMethod with
     static member Constructor(visibility, parameterTypes) =
         new MethodReference<MethodKinds.ObjectConstructor> (
             visibility,
-            ReturnType.RVoid,
+            MethodReturnType.Void,
             MethodName MethodName.ctor,
             parameterTypes
         )
@@ -419,17 +440,20 @@ module ReferencedMethod =
 
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
-type MethodCallTarget (owner: FSharpIL.Cli.Type, method: Method) =
+type MethodCallTarget<'Owner, 'Method when 'Owner :> NamedType and 'Method :> Method> (owner: 'Owner, method: 'Method) =
     member _.Owner = owner
     member _.Method = method
 
+type MethodCallTarget = MethodCallTarget<NamedType, Method>
+
 [<RequireQualifiedAccess>]
 module MethodCallTarget =
-    let Defined (tdef: DefinedType, method: DefinedMethod) = MethodCallTarget(tdef, method)
-    let Referenced (tdef: ReferencedType, method: ReferencedMethod) = MethodCallTarget(tdef, method)
+    let inline (|Callee|) (target: MethodCallTarget<_, _>) = target.Method
 
-    let inline (|Defined|Referenced|) (target: MethodCallTarget) =
-        match target.Owner with
-        | :? ReferencedType as tref -> Referenced(struct(tref, target.Method :?> ReferencedMethod))
-        | :? DefinedType as tdef -> Defined(struct(tdef, target.Method :?> DefinedMethod))
-        | _ -> failwith "TODO: MethodSpec?"
+    let simplify (target: MethodCallTarget<_, _>) = MethodCallTarget(target.Owner, target.Method)
+
+    let inline convert (target: MethodCallTarget<_, 'Method1>) = MethodCallTarget<_, _>(target.Owner, Unsafe.As target.Method)
+
+[<AutoOpen>]
+module MethodCallTargetPatterns =
+    let inline (|MethodCallTarget|) (target: MethodCallTarget<_, _>) = struct(target.Owner, target.Method)

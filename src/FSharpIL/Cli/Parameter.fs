@@ -3,9 +3,8 @@
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
-
-open FSharpIL.Cli.Signatures
 
 [<IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]
@@ -14,13 +13,39 @@ type ParameterKind =
     | InRef
     | OutRef
 
+[<IsReadOnly>]
+type MethodParameterType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ParamItem and MethodReturnType
+    val Tag: ParamItemTag
+    val private argType: NamedType
+
+    internal new (tag, argType) = { Tag = tag; argType = argType }
+
+    member this.Type =
+        if this.argType <> Unchecked.defaultof<_>
+        then ValueSome this.argType
+        else ValueNone
+end
+
 [<IsReadOnly; Struct>]
 type Parameter =
     { Kind: ParameterKind
       DefaultValue: Constant voption
       ParamName: Identifier voption } // TODO: Have field that allows setting of Optional flag.
 
-type ParameterList = int32 -> ParamItem -> Parameter
+[<RequireQualifiedAccess>]
+module MethodParameterType =
+    let inline (|Type|ByRef|TypedByRef|) (ptype: MethodParameterType) =
+        match ptype.Tag with
+        | ParamItemTag.Param -> Type(ptype.Type.Value)
+        | ParamItemTag.ByRef -> ByRef(ptype.Type.Value)
+        | ParamItemTag.TypedByRef
+        | _ -> TypedByRef
+
+    let Type argType = MethodParameterType(ParamItemTag.Param, argType)
+    let ByRef argType = MethodParameterType(ParamItemTag.ByRef, argType)
+    let TypedByRef = MethodParameterType(ParamItemTag.TypedByRef, Unchecked.defaultof<NamedType>)
+
+type ParameterList = int32 -> MethodParameterType -> Parameter
 
 [<RequireQualifiedAccess>]
 module Parameter =

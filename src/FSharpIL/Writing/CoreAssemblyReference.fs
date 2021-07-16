@@ -7,33 +7,37 @@ open FSharpIL.Metadata
 open FSharpIL.Metadata.Signatures
 
 [<Sealed>]
-type CoreAssemblyMembers (octor: MethodCallTarget, tfmctor: MethodCallTarget) =
+type CoreAssemblyMembers (octor: MethodCallTarget<_, _>, tfmctor: MethodCallTarget<_, _>) =
     member _.ObjectConstructor = octor
     member _.TargetFrameworkConstructor = tfmctor
 
 [<Sealed>]
-type CoreAssemblyReference (assembly: AssemblyReference) =
+type CoreAssemblyReference (assembly: ReferencedAssembly) =
     static let netCoreLib = FileName.ofStr "System.Private.CoreLib"
 
     let referenceSystemType name =
-        ReferencedType.ConcreteClass (
+        ReferencedType (
             TypeReferenceParent.Assembly assembly,
             ValueSome(Identifier.ofStr "System"),
-            Identifier.ofStr name
+            Identifier.ofStr name,
+            GenericParamList.empty
         )
 
     let object = referenceSystemType "Object"
     let tfmattr =
-        ReferencedType.SealedClass (
+        ReferencedType (
             TypeReferenceParent.Assembly assembly,
             ValueSome(Identifier.ofStr "System.Runtime.Versioning"),
-            Identifier.ofStr "TargetFrameworkAttribute"
+            Identifier.ofStr "TargetFrameworkAttribute",
+            GenericParamList.empty
         )
 
     let octor = ReferencedMethod.Constructor(ExternalVisibility.Public, ImmutableArray.Empty)
     let tfmctor =
-        let str = ParamItem.Param(ImmutableArray.Empty, EncodedType.String)
-        ReferencedMethod.Constructor(ExternalVisibility.Public, ImmutableArray.Create str)
+        ReferencedMethod.Constructor (
+            ExternalVisibility.Public,
+            ImmutableArray.Create(MethodParameterType.Type PrimitiveType.String)
+        )
 
     member _.Reference = assembly
     member _.Object = object
@@ -42,7 +46,7 @@ type CoreAssemblyReference (assembly: AssemblyReference) =
     member val Enum = referenceSystemType "Enum" :> ReferencedType
     member _.TargetFrameworkAttribute = tfmattr :> ReferencedType
 
-    member this.AddReferencesTo(builder: ModuleBuilder) =
+    member this.AddReferencesTo(builder: CliModuleBuilder) =
         builder.ReferenceAssembly assembly
 
         validated {

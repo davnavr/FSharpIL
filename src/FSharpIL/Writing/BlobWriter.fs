@@ -8,7 +8,6 @@ open System.Collections.Immutable
 open FSharpIL
 open FSharpIL.Metadata.Blobs
 open FSharpIL.Metadata.Signatures
-open FSharpIL.Metadata.Signatures.MetadataSignatures
 
 let [<Literal>] MaxCompressedUnsigned = 0x1FFF_FFFFu
 let [<Literal>] MaxCompressedSigned = 268435455

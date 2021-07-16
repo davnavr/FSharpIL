@@ -2,10 +2,12 @@
 
 open System
 open System.Collections.Generic
+open System.Collections.Immutable
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Cil
+open FSharpIL.Metadata.Tables
 
 open FSharpIL.Writing.Cil
 
@@ -29,6 +31,12 @@ module EntryPoint =
     //val (|None|Method|File|): EntryPoint -> Choice<_, _, _>
     val (|None|Method|): EntryPoint -> Choice<unit, struct(DefinedType * EntryPointMethod)>
 
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<NoComparison; NoEquality>]
+type CustomAttributeList =
+    member Count: int32
+    member Add: CustomAttribute -> IValidationError option
+
 [<Sealed>]
 type DefinedTypeMembers =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
@@ -40,13 +48,12 @@ type DefinedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
-    // TODO: For these add methods, also return a mutable list of custom attributes
+    member DefineMethod:
+        method: DefinedMethod *
+        body: DefinedMethodBody voption *
+        attributes: CustomAttributeList ref voption -> ValidationResult<MethodCallTarget<DefinedType, DefinedMethod>>
 
-    member AddField: field: DefinedField -> ValidationResult<FieldArg>
-
-    // TODO: Have special types for static method calls and instance method calls, since static does not work with callvirt
-    member AddMethod: method: DefinedMethod * body: DefinedMethodBody voption -> ValidationResult<MethodCallTarget>
-    member AddEntryPoint: method: EntryPointMethod * body: DefinedMethodBody -> ValidationResult<MethodCallTarget>
+    member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool
 
 [<Sealed>]
@@ -61,38 +68,32 @@ type ReferencedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
-    member ReferenceMethod: ReferencedMethod -> ValidationResult<MethodCallTarget>
+    member ReferenceMethod: method: ReferencedMethod -> ValidationResult<MethodCallTarget<ReferencedType, ReferencedMethod>>
+
+    member ContainsField: field: ReferencedField -> bool
     member ContainsMethod: method: ReferencedMethod -> bool
 
-[<Sealed>]
-type CustomAttributeList =
-    member Count: int32
-    member Add: CustomAttribute -> ValidationResult<unit>
-
-// TODO: Instead of having return values of methods by ValidationResult, have the ModuleBuilder instance itself keep track of whether or not it is an "error". This means that methods that return an error do not leave the builder in a potentially weird state.
 
 /// Builds a CLI metadata module (I.9).
 [<Sealed>]
-type ModuleBuilder =
+type CliModuleBuilder =
     new :
         name: Identifier *
         ?mvid: Guid *
-        ?assembly: AssemblyDefinition *
+        ?cliMetadataHeader: CliHeader *
+        ?cliMetadataRoot: CliMetadataRoot<FSharpIL.Omitted, FSharpIL.Omitted> *
+        ?assembly: DefinedAssembly *
         ?warnings: ValidationWarningsBuilder *
         ?typeDefCapacity: int32 *
         ?typeRefCapacity: int32 *
-        ?typeSpecCapacity: int32 *
-        ?assemblyRefCapacity: int32 -> ModuleBuilder
+        ?assemblyRefCapacity: int32 -> CliModuleBuilder
 
     member Mvid: Guid
     member Name: Identifier
     member ModuleCustomAttributes: CustomAttributeList
-    member Assembly: AssemblyDefinition option
+    member Assembly: DefinedAssembly option
     member AssemblyCustomAttributes: CustomAttributeList option
     member EntryPoint: EntryPoint // TODO: Allow a File row to also be an entry point.
-    member DefinedTypes: IReadOnlyCollection<DefinedType>
-    member ReferencedTypes: IReadOnlyCollection<ReferencedType>
-    member ReferencedAssemblies: IReadOnlyCollection<AssemblyReference>
     member ValidationWarnings: ValidationWarningsCollection
     member UserStrings: UserStringStreamBuilder
     /// <summary>
@@ -100,11 +101,22 @@ type ModuleBuilder =
     /// </summary>
     member GlobalMembers: DefinedTypeMembers
 
-    member DefineType: DefinedType -> ValidationResult<struct(DefinedTypeMembers * CustomAttributeList)>
-    member ReferenceType: ReferencedType -> ValidationResult<ReferencedTypeMembers> // TODO: Apparently TypeRefs can have custom attributes.
+    member DefineAssembly: assembly: DefinedAssembly -> ValidationResult<CustomAttributeList>
 
-    member AddTypeSpec: TypeSpecification -> TypeSpecification
+    /// Adds a reference to another assembly.
+    member ReferenceAssembly: assembly: ReferencedAssembly -> unit
 
-    member ReferenceAssembly: AssemblyReference -> unit
+    // TODO: For methods that add things that can also have custom attributes, figure out how to avoid allocating a CustomAttributeList if user doesn't want/need the CA list.
+
+    // TODO: Expose constructors for types in Cli namespace.
+    member DefineType: definition: DefinedType -> ValidationResult<struct(CustomAttributeList * DefinedTypeMembers)>
+    member DefineType: definition: DefinedType * attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers>
+
+    //member DefineType: DefinedType * attributes: outref<CustomAttributeList> -> ValidationResult<DefinedTypeMembers>
+
+    // TODO: For specific TypeDefinition kinds, return a struct that wraps DefinedTypeMembers and only allows addition of certain members.
+    //member DefineType: TypeDefinition<TypeKinds.StaticClass> -> ValidationResult<>
+
+    member ReferenceType: reference: ReferencedType -> ValidationResult<ReferencedTypeMembers>
 
     member internal Serialize: unit -> CliMetadataBuilder

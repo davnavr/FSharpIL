@@ -47,7 +47,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
         )
 
     let consolelib =
-        { AssemblyReference.Version = AssemblyVersion(5us, 0us, 0us, 0us)
+        { ReferencedAssembly.Version = AssemblyVersion(5us, 0us, 0us, 0us)
           PublicKeyOrToken = NoPublicKeyOrToken
           Name = FileName.ofStr "System.Console"
           Culture = ValueNone
@@ -112,7 +112,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     ldarg_0 &wr
                     ldarg_1 &wr
                     newarr &wr (TypeDefOrRefOrSpec.Spec t) types
-                    stfld &wr items fields
+                    stfld &wr items fields // TODO: This needs to be a memberref to the field.
 
                     ret &wr
                     wr.EstimatedMaxStack }

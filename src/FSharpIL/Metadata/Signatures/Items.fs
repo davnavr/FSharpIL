@@ -4,10 +4,27 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata.Blobs
+open FSharpIL.Metadata.Tables
+
+/// <summary>Represents an index into the <c>TypeDef</c> or <c>TypeRef</c> table (II.23.2.8).</summary>
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type TypeDefOrRefEncoded internal (tag: bool, index: uint32) =
+    member _.IsDefinition = tag
+    member _.Index = index
+
+[<RequireQualifiedAccess>]
+module TypeDefOrRefEncoded =
+    let toCodedIndex (index: TypeDefOrRefEncoded) =
+        if index.IsDefinition
+        then TypeDefOrRef.Def { TableIndex = index.Index }
+        else TypeDefOrRef.Ref { TableIndex = index.Index }
+
+    let Def (index: TableIndex<TypeDefRow>) = TypeDefOrRefEncoded(true, index.TableIndex)
+    let Ref (index: TableIndex<TypeRefRow>) = TypeDefOrRefEncoded(false, index.TableIndex)
 
 /// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
 [<RequireQualifiedAccess>]
-type EncodedType<'TDefOrRef, 'TDefOrRefOrSpec> =
+type EncodedType =
     /// <summary>The <see cref="T:System.Boolean"/> type.</summary>
     | Boolean
     /// <summary>The <see cref="T:System.Char"/> type.</summary>
@@ -36,32 +53,34 @@ type EncodedType<'TDefOrRef, 'TDefOrRefOrSpec> =
     | I
     /// <summary>The <see cref="T:System.UIntPtr"/> type.</summary>
     | U
-    | Array of EncodedType<'TDefOrRef, 'TDefOrRefOrSpec> * ArrayShape
-    | Class of 'TDefOrRef
+    | Array of (*CustomModifiers * *) EncodedType * ArrayShape // TODO: Allow CustomModifiers for Array as described in augments.
+    | Class of TypeDefOrRefEncoded
     /// A method pointer (II.14.5).
     //| FnPtr of FunctionPointer
-    | GenericInst of GenericInst<'TDefOrRef, 'TDefOrRefOrSpec>
+    | GenericInst of GenericInst
     /// A generic parameter in a generic method.
     | MVar of index: uint32
     /// <summary>The <see cref="T:System.Object"/> type.</summary>
     | Object
     /// A native pointer (II.14.4.1).
-    | Ptr of Pointer<'TDefOrRef, 'TDefOrRefOrSpec>
+    | Ptr of Pointer
     /// <summary>The <see cref="T:System.String"/> type.</summary>
     | String
     /// A single-dimensional array with a lower bound of zero, also known as a vector (I.8.9.1).
-    | SZArray of CustomModifiers<'TDefOrRefOrSpec> * EncodedType<'TDefOrRef, 'TDefOrRefOrSpec>
-    | ValueType of 'TDefOrRef
+    | SZArray of CustomModifiers * EncodedType
+    | ValueType of TypeDefOrRefEncoded
     /// A generic parameter in a generic type definition.
     | Var of index: uint32
+    // TODO: For all cases, simply remove the CustomModifiers and add a new case:
+    // | Modified of modifiers: CustomModifiers * EncodedType
 
 /// <summary>
 /// Represents a <c>FieldSig</c> item, which captures the definition of a field or global variable (II.23.2.4).
 /// </summary>
 [<IsReadOnly; Struct>]
-type FieldSig<'TDefOrRef, 'TDefOrRefOrSpec> =
-    { CustomModifiers: CustomModifiers<'TDefOrRefOrSpec>
-      FieldType: EncodedType<'TDefOrRef, 'TDefOrRefOrSpec> }
+type FieldSig =
+    { CustomModifiers: CustomModifiers
+      FieldType: EncodedType }
 
 type ParamItemTag =
     | Param = 0uy
@@ -70,10 +89,10 @@ type ParamItemTag =
 
 /// <summary>Represents a <c>Param</c> item used in method signatures (II.23.2.10).</summary>
 [<IsReadOnly>]
-type ParamItem<'TDefOrRef, 'TDefOrRefOrSpec> = struct // TODO: Rename to Param
+type ParamItem = struct // TODO: Rename to Param
     val Tag: ParamItemTag
-    val CustomModifiers: CustomModifiers<'TDefOrRefOrSpec>
-    val ParamType: EncodedType<'TDefOrRef, 'TDefOrRefOrSpec> voption
+    val CustomModifiers: CustomModifiers
+    val ParamType: EncodedType voption
     internal new (tag, modifiers, paramType) = { Tag = tag; CustomModifiers = modifiers; ParamType = paramType }
     member inline this.IsTypedByRef = this.Tag = ParamItemTag.TypedByRef
     member inline this.IsByRef = this.Tag = ParamItemTag.ByRef
@@ -89,7 +108,7 @@ type ParamItem =
 
 [<RequireQualifiedAccess>]
 module ParamItem =
-    let inline (|Param|ByRef|TypedByRef|) (param: ParamItem<'TDefOrRef, 'TDefOrRefOrSpec>) =
+    let inline (|Param|ByRef|TypedByRef|) (param: ParamItem) =
         let inline ptype() = struct(param.CustomModifiers, param.ParamType.Value)
         match param.Tag with
         | ParamItemTag.ByRef -> ByRef(ptype())
@@ -109,13 +128,14 @@ type ReturnTypeTag =
 
 /// <summary>Represents a <c>RetType</c> item used in method signatures (II.23.2.11).</summary>
 [<IsReadOnly; Struct>]
-type ReturnType<'TDefOrRef, 'TDefOrRefOrSpec> // TODO: Rename to RetType
+type ReturnType // TODO: Rename to RetType
     internal
     (
         tag: ReturnTypeTag,
-        modifiers: CustomModifiers<'TDefOrRefOrSpec>,
-        returnType: EncodedType<'TDefOrRef, 'TDefOrRefOrSpec> voption
-    ) =
+        modifiers: CustomModifiers,
+        returnType: EncodedType voption
+    )
+    =
     member _.Tag = tag
     member _.CustomModifiers = modifiers
     member _.ReturnType = returnType
@@ -124,7 +144,8 @@ type ReturnType<'TDefOrRef, 'TDefOrRefOrSpec> // TODO: Rename to RetType
     member _.IsByRef = tag = ReturnTypeTag.ByRef
 
     /// <summary>Represents a <c>void</c> return type without any custom modifiers.</summary>
-    static member val RVoid = ReturnType<'TDefOrRef, 'TDefOrRefOrSpec>(ReturnTypeTag.Void, ImmutableArray.Empty, ValueNone)
+    [<System.Obsolete("Obsolete when Modified case of EncodedType is used.")>]
+    static member val RVoid = ReturnType(ReturnTypeTag.Void, ImmutableArray.Empty, ValueNone)
 
 (*
 [<RequireQualifiedAccess>]
@@ -137,7 +158,7 @@ type ReturnType =
 
 [<RequireQualifiedAccess>]
 module ReturnType =
-    let inline (|Type|ByRef|TypedByRef|Void|) (retType: ReturnType<'TDefOrRef, 'TDefOrRefOrSpec>) =
+    let inline (|Type|ByRef|TypedByRef|Void|) (retType: ReturnType) =
         let inline rtype() = struct(retType.CustomModifiers, retType.ReturnType.Value)
         match retType.Tag with
         | ReturnTypeTag.ByRef -> ByRef(rtype())
@@ -151,9 +172,12 @@ module ReturnType =
     let TypedByRef modifiers = ReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
     let Void modifiers = ReturnType(ReturnTypeTag.Void, modifiers, ValueNone)
 
-type [<IsReadOnly; Struct>] MethodThis internal (tag: CallConvFlags) = member _.Tag = tag
+[<IsReadOnly; Struct>]
+type MethodThis internal (tag: CallConvFlags) =
+    member _.Tag = tag
 
 (*
+[<IsReadOnly; Struct>]
 type MethodThis =
     | NoThis
     | HasThis
@@ -175,6 +199,7 @@ type CallingConventions = struct
     val Tag: CallConvFlags
     /// <summary>The number of generic parameters, stored in <c>GenParamCount</c> (II.23.2.1).</summary>
     val Count: uint32
+
     internal new (tag, count) = { Tag = tag; Count = count }
 end
 
@@ -200,17 +225,17 @@ module CallingConventions =
 
 /// <summary>Represents a <c>MethodDefSig</c>, which captures the signature of a method or global function (II.23.2.1).</summary>
 [<IsReadOnly; Struct>]
-type MethodDefSig<'TDefOrRef, 'TDefOrRefOrSpec> =
+type MethodDefSig =
     { HasThis: MethodThis
       CallingConvention: CallingConventions
-      ReturnType: ReturnType<'TDefOrRef, 'TDefOrRefOrSpec>
-      Parameters: ImmutableArray<ParamItem<'TDefOrRef, 'TDefOrRefOrSpec>> }
+      ReturnType: ReturnType
+      Parameters: ImmutableArray<ParamItem> }
 
 /// <summary>Represents a <c>MethodRefSig</c>, which captures "the call site signature for a method" (II.23.2.2).</summary>
 [<IsReadOnly>]
-type MethodRefSig<'TDefOrRef, 'TDefOrRefOrSpec> = struct
-    val Signature: MethodDefSig<'TDefOrRef, 'TDefOrRefOrSpec>
-    val VarArgParams: ImmutableArray<ParamItem<'TDefOrRef, 'TDefOrRefOrSpec>>
+type MethodRefSig = struct
+    val Signature: MethodDefSig
+    val VarArgParams: ImmutableArray<ParamItem>
 
     internal new (signature, varArgParams) = { Signature = signature; VarArgParams = varArgParams }
 
@@ -248,25 +273,25 @@ module MethodRefSig =
         )
 
 [<IsReadOnly; Struct>]
-type PropertySig<'TDefOrRef, 'TDefOrRefOrSpec> =
+type PropertySig =
     { HasThis: bool
-      CustomModifiers: CustomModifiers<'TDefOrRefOrSpec>
-      PropertyType: EncodedType<'TDefOrRef, 'TDefOrRefOrSpec>
-      Parameters: ImmutableArray<ParamItem<'TDefOrRef, 'TDefOrRefOrSpec>> }
+      CustomModifiers: CustomModifiers
+      PropertyType: EncodedType
+      Parameters: ImmutableArray<ParamItem> }
 
 [<IsReadOnly; Struct>]
-type GenericArgList<'TDefOrRef, 'TDefOrRefOrSpec> =
-    internal { GenArgs: ImmutableArray<EncodedType<'TDefOrRef, 'TDefOrRefOrSpec>> }
+type GenericArgList =
+    internal { GenArgs: ImmutableArray<EncodedType> }
     member this.Count = uint32 this.GenArgs.Length
     member this.Item with get i = this.GenArgs.[i]
     member this.GetEnumerator() = this.GenArgs.GetEnumerator()
 
 /// Represents a generic instantiation (II.23.2.12 and II.23.2.14).
 [<IsReadOnly; Struct>]
-type GenericInst<'TDefOrRef, 'TDefOrRefOrSpec> =
+type GenericInst =
     { IsValueType: bool
-      GenericType: 'TDefOrRef
-      GenericArguments: GenericArgList<'TDefOrRef, 'TDefOrRefOrSpec> }
+      GenericType: TypeDefOrRefEncoded
+      GenericArguments: GenericArgList }
 
 (*
 [<RequireQualifiedAccess>]
@@ -295,10 +320,17 @@ type ArrayShape =
       /// <remarks>Corresponds to the <c>NumLoBounds</c> item and <c>LoBound</c> items in the signature.</remarks>
       LowerBounds: ImmutableArray<int32> }
 
+[<RequireQualifiedAccess>]
+module ArrayShape =
+    let internal ofVector =
+        { Rank = 1u
+          Sizes = ImmutableArray.Empty
+          LowerBounds = ImmutableArray.Empty }
+
 [<IsReadOnly; Struct>]
-type Pointer<'TDefOrRef, 'TDefOrRefOrSpec> =
-    { Modifiers: CustomModifiers<'TDefOrRefOrSpec>
-      PointerType: EncodedType<'TDefOrRef, 'TDefOrRefOrSpec> voption }
+type Pointer =
+    { Modifiers: CustomModifiers
+      PointerType: EncodedType voption }
 
     member this.IsVoid = this.PointerType.IsNone
 
@@ -322,7 +354,7 @@ module Pointer =
 [<RequireQualifiedAccess>]
 module EncodedType =
     /// Gets a value indicating whether the specified type is or references a generic parameter in a method.
-    let rec isMethodVar (etype: EncodedType<_, _>) =
+    let rec isMethodVar (etype: EncodedType) =
         match etype with
         | EncodedType.MVar _ -> true
         | EncodedType.SZArray(_, t)
@@ -330,7 +362,7 @@ module EncodedType =
         | EncodedType.Ptr(Pointer.Type(_, t)) -> isMethodVar t
         | _ -> false
 
-    let private toPrimitiveType (etype: EncodedType<_, _>) =
+    let private toPrimitiveType (etype: EncodedType) =
         match etype with
         | EncodedType.Boolean -> ValueSome PrimitiveElemType.Bool
         | EncodedType.Char -> ValueSome PrimitiveElemType.Char
@@ -348,7 +380,7 @@ module EncodedType =
         //| _ -> ValueSome(ElemType.Primitive(PrimitiveElemType.Type))
         | _ -> ValueNone
 
-    let toElemType (etype: EncodedType<_, _>) =
+    let toElemType (etype: EncodedType) =
         match toPrimitiveType etype with
         | ValueSome prim -> ValueSome(ElemType.Primitive prim)
         | ValueNone ->

@@ -96,7 +96,7 @@ let readCoffHeader (src: HeaderReader<_>) (coff: outref<_>) reader ustate =
               SymbolTablePointer = Bytes.toU4 8 buffer
               SymbolCount = Bytes.toU4 12 buffer
               OptionalHeaderSize = Bytes.toU2 16 buffer
-              Characteristics = LanguagePrimitives.EnumOfValue(Bytes.toU2 18 buffer) }
+              Characteristics = Characteristics(LanguagePrimitives.EnumOfValue(Bytes.toU2 18 buffer)) }
         StructureReader.read reader.ReadCoffHeader coff offset ustate ReadOptionalHeader
     else Failure UnexpectedEndOfFile
 

@@ -5,14 +5,10 @@ open System
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-open FSharpIL.Cli.Signatures
-
 [<AbstractClass>]
 type Field =
     val Name: Identifier
-    val Signature: FieldSig
-
-    member Type: EncodedType
+    val Type: NamedType
 
     abstract Equals: other: Field -> bool
     default Equals: other: Field -> bool
@@ -27,6 +23,8 @@ type DefinedField =
     inherit Field
 
     member Flags: FieldFlags
+
+    new: flags: FieldFlags * name: Identifier * fieldType: NamedType -> DefinedField
 
     override Equals: other: Field -> bool
 
@@ -57,22 +55,6 @@ type FieldDefinition<'Kind when 'Kind :> IAttributeTag<FieldFlags> and 'Kind : s
     inherit DefinedField
 end
 
-type DefinedField with
-    static member Instance:
-        visibility: MemberVisibility *
-        flags: FieldAttributes<FieldKinds.Instance> *
-        name: Identifier *
-        signature: FieldSig -> FieldDefinition<FieldKinds.Instance>
-
-    static member Static:
-        visibility: MemberVisibility *
-        flags: FieldAttributes<FieldKinds.Static> *
-        name: Identifier *
-        signature: FieldSig -> FieldDefinition<FieldKinds.Static>
-
-    //static member Literal // TODO: How to enforce correct field type?
-    //static member Rva
-
 [<AbstractClass>]
 type ReferencedField = class
     inherit Field
@@ -89,22 +71,16 @@ type FieldReference<'Kind when 'Kind :> IAttributeTag<FieldFlags>> = class
     inherit ReferencedField
 end
 
-type ReferencedField with
-    static member Instance:
-        visibility: ExternalVisibility *
-        name: Identifier *
-        signature: FieldSig -> FieldReference<FieldKinds.Instance>
-
-    static member Static:
-        visibility: ExternalVisibility *
-        name: Identifier *
-        signature: FieldSig -> FieldReference<FieldKinds.Static>
-
-    //static member Literal
-
 [<RequireQualifiedAccess>]
 module Field =
     val inline (|Defined|Referenced|): field: Field -> Choice<DefinedField, ReferencedField>
+
+    [<Sealed>]
+    type SignatureComparer = class
+        interface System.Collections.Generic.IEqualityComparer<Field>
+    end
+
+    val signatureComparer : SignatureComparer
 
 [<RequireQualifiedAccess>]
 module DefinedField =
@@ -117,15 +93,14 @@ module DefinedField =
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
-type FieldArg = // TODO: Prevent usage of default ctor
-    member Owner: FSharpIL.Cli.Type
-    member Field: Field
+type FieldArg<'Owner, 'Field when 'Owner :> NamedType and 'Field :> Field> =
+    member Owner: 'Owner
+    member Field: 'Field
 
-[<RequireQualifiedAccess>]
-module FieldArg =
-    val Defined: DefinedType * DefinedField -> FieldArg
+    internal new: owner: 'Owner * field: 'Field -> FieldArg<'Owner, 'Field>
 
-    val Referenced: ReferencedType * ReferencedField -> FieldArg
+type FieldArg = FieldArg<NamedType, Field>
 
-    val inline (|Defined|Referenced|):
-        field: FieldArg -> Choice<struct(DefinedType * DefinedField), struct(ReferencedType * ReferencedField)>
+[<AutoOpen>]
+module FieldArgPatterns =
+    val inline (|FieldArg|) : field: FieldArg<'Owner, 'Field> -> struct('Owner * 'Field)

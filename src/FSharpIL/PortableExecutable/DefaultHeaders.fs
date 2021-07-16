@@ -11,7 +11,7 @@ let coffHeader =
       SymbolTablePointer = 0u
       SymbolCount = 0u
       OptionalHeaderSize = Omitted
-      Characteristics = ImageFileFlags.dll }
+      Characteristics = FileCharacteristics.IsDll }
 
 let standardFields =
     { Magic = Omitted

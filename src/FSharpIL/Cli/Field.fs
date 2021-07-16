@@ -6,32 +6,30 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-open FSharpIL.Cli.Signatures
+open FSharpIL.Utilities.Compare
 
 [<AbstractClass>]
 type Field =
     val Name: Identifier
-    val Signature: FieldSig
+    val Type: NamedType
 
-    new (name, signature) = { Name = name; Signature = signature }
-
-    member this.Type = this.Signature.FieldType
+    new (name, fieldType) = { Name = name; Type = fieldType }
 
     abstract Equals: other: Field -> bool
-    default this.Equals(other: Field) = this.Name = other.Name && this.Type = other.Type
+    default this.Equals(other: Field) = this.Name === other.Name && this.Type.Equals(other = other.Type)
 
     override this.Equals(obj: obj) =
         match obj with
         | :? Field as other -> this.Equals(other = other)
         | _ -> false
 
-    override this.GetHashCode() = HashCode.Combine(this.Name, this.Signature)
+    override this.GetHashCode() = HashCode.Combine(this.Name, this.Type)
 
     interface IEquatable<Field> with member this.Equals other = this.Equals(other = other)
 
 [<AbstractClass>]
-type DefinedField (flags: FieldFlags, name, signature) =
-    inherit Field(name, signature)
+type DefinedField (flags: FieldFlags, name, fieldType) =
+    inherit Field(name, fieldType)
 
     member _.Flags = flags
 
@@ -80,13 +78,6 @@ type FieldDefinition<'Kind when 'Kind :> IAttributeTag<FieldFlags> and 'Kind : s
         signature
     )
 
-type DefinedField with
-    static member Instance(visibility, flags, name, signature) =
-        FieldDefinition<FieldKinds.Instance>(visibility, flags, name, signature)
-
-    static member Static(visibility, flags, name, signature) =
-        FieldDefinition<FieldKinds.Static>(visibility, flags, name, signature)
-
 [<AbstractClass>]
 type ReferencedField =
     inherit Field
@@ -106,16 +97,20 @@ type ReferencedField =
 type FieldReference<'Kind when 'Kind :> IAttributeTag<FieldFlags>> (visibility, name, signature) =
     inherit ReferencedField(visibility, name, signature)
 
-type ReferencedField with
-    static member Instance(visibility, name, signature) = FieldReference<FieldKinds.Instance>(visibility, name, signature)
-    static member Static(visibility, name, signature) = FieldReference<FieldKinds.Static>(visibility, name, signature)
-
 [<RequireQualifiedAccess>]
 module Field =
     let inline (|Defined|Referenced|) (field: Field) =
         match field with
         | :? DefinedField as fdef -> Defined fdef
         | _ -> Referenced(field :?> ReferencedField)
+
+    [<Sealed>]
+    type SignatureComparer() =
+        interface System.Collections.Generic.IEqualityComparer<Field> with
+            member _.Equals(x, y) = x.Type === y.Type
+            member _.GetHashCode field = field.Type.GetHashCode()
+
+    let signatureComparer = SignatureComparer()
 
 [<RequireQualifiedAccess>]
 module DefinedField =
@@ -128,16 +123,12 @@ module DefinedField =
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
-type FieldArg (owner: FSharpIL.Cli.Type, field: Field) =
+type FieldArg<'Owner, 'Field when 'Owner :> NamedType and 'Field :> Field> (owner: 'Owner, field: 'Field) =
     member _.Owner = owner
     member _.Field = field
 
-[<RequireQualifiedAccess>]
-module FieldArg =
-    let Defined (owner: DefinedType, field: DefinedField) = FieldArg(owner, field)
-    let Referenced (owner: ReferencedType, field: ReferencedField) = FieldArg(owner, field)
+type FieldArg = FieldArg<NamedType, Field>
 
-    let inline (|Defined|Referenced|) (field: FieldArg) =
-        match field.Owner with
-        | :? DefinedType as tdef -> Defined(struct(tdef, field.Field :?> DefinedField))
-        | _ -> Referenced(struct(field.Owner :?> ReferencedType, field.Field :?> ReferencedField))
+[<AutoOpen>]
+module FieldArgPatterns =
+    let inline (|FieldArg|) (field: FieldArg<_, _>) = struct(field.Owner, field.Field)

@@ -1,5 +1,7 @@
 ﻿namespace FSharpIL.Metadata.Tables
 
+open FSharpIL.Utilities
+
 /// <summary>
 /// Specifies the sizes of offsets into the <c>#Strings</c>, <c>#GUID</c>, and <c>#Blob</c> streams (II.24.2.6).
 /// </summary>
@@ -15,7 +17,7 @@ type HeapSizes =
 
 [<AutoOpen>]
 module HeapSizes =
-    let inline private isLarge (flags: HeapSizes) heap = if flags.HasFlag heap then 4u else 2u
+    let inline private isLarge (flags: HeapSizes) heap = if Flags.set heap flags then 4u else 2u
     type HeapSizes with
         member this.StringSize = isLarge this HeapSizes.String
         member this.GuidSize = isLarge this HeapSizes.Guid

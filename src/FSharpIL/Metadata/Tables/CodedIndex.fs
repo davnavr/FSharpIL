@@ -14,11 +14,12 @@ type CodedIndex<'Tag when 'Tag : enum<uint8> and 'Tag : comparison> = struct
 
     member this.IsNull = this.Index = 0u
 
-    member this.Equals(other: CodedIndex<'Tag>) = this.Tag = other.Tag && this.Index = other.Index
+    member this.Equals(other: CodedIndex<'Tag>) = // TODO: Fix, comparison of tag here causes boxing.
+        LanguagePrimitives.EnumToValue this.Tag = LanguagePrimitives.EnumToValue other.Tag && this.Index = other.Index
 
     member this.CompareTo(other: CodedIndex<'Tag>) =
         match compare this.Index other.Index with
-        | 0 -> compare this.Tag other.Tag
+        | 0 -> compare (LanguagePrimitives.EnumToValue this.Tag) (LanguagePrimitives.EnumToValue other.Tag)
         | result -> result
 
     override this.Equals obj =
