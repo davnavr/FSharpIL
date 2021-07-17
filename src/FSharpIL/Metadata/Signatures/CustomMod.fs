@@ -8,9 +8,9 @@ type TypeDefOrRefOrSpecEncoded = FSharpIL.Metadata.Tables.TypeDefOrRef
 type CustomMod = { Required: bool; ModifierType: TypeDefOrRefOrSpecEncoded }
 
 (*
-type CustomMod<'ModifierType> =
-    | ModOpt of ModifierType: 'ModifierType
-    | ModReq of ModifierType: 'ModifierType
+type CustomMod =
+    | ModOpt of ModifierType: TypeDefOrRefOrSpecEncoded
+    | ModReq of ModifierType: TypeDefOrRefOrSpecEncoded
 *)
 
 [<System.Obsolete>]

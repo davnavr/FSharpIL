@@ -290,19 +290,63 @@ type ModuleBuilderSerializer
                 lookup.[blob] <- offset
                 offset
 
-    let rec getEncodedType (t: NamedType) =
+    let typeDefEncoded definition =
+        TypeDefOrRefEncoded.Def(serializer.SerializeDefinedType(definition, definedTypes.[definition]))
+
+    let typeRefEncoded reference =
+        TypeDefOrRefEncoded.Ref(serializer.SerializeReferencedType reference)
+
+    let typeDefOrRef: NamedType -> _ =
+        function
+        | :? DefinedType as tdef -> typeDefEncoded tdef
+        | :? ReferencedType as tref -> typeRefEncoded tref
+        | bad -> invalidOp(sprintf "Expected defined or referenced type but got %A" bad)
+
+    let rec typeDefOrRefOrSpec: NamedType -> _ =
+        function
+        | :? DefinedType as tdef -> TypeDefOrRef.Def(serializer.SerializeDefinedType(tdef, definedTypes.[tdef]))
+        | :? ReferencedType as tref -> TypeDefOrRef.Ref(serializer.SerializeReferencedType tref)
+        | tspec ->  TypeDefOrRef.Spec(getTypeSpec(getEncodedType tspec))
+
+    and getTypeSpec =
+        createBlobLookup EqualityComparer.Default <| fun (tspec: EncodedType) ->
+            builder.Tables.TypeSpec.Add { TypeSpec = builder.Blob.Add tspec }
+
+    // TODO: How to decide if VALUETYPE or CLASS should be used? Maybe make a ClassType and ValueType derived from NamedType while also checking if a DefinedType is derived from ValueType or Enum
+    and getEncodedType (t: NamedType) =
         match t with
         | :? PrimitiveType as prim -> prim.Encoded
+        | :? DefinedType as tdef -> EncodedType.Class(typeDefEncoded tdef)
+        | :? ReferencedType as tref -> EncodedType.Class(typeRefEncoded tref)
+        | :? SZArrayType as arr -> EncodedType.SZArray(getEncodedType arr.ElementType)
+        | :? ArrayType as arr -> EncodedType.Array(getEncodedType arr.ElementType, arr.Shape)
+        | :? InstantiatedType<DefinedType> as inst ->
+            if inst.Arguments.Count > 0 then
+                let mutable arguments = Array.zeroCreate<EncodedType> inst.Arguments.Count
+                for i = 0 to arguments.Length - 1 do arguments.[i] <- getEncodedType inst.Arguments.[i]
+                GenericInst.Class(typeDefEncoded inst.Instantiated, failwith "bad") |> EncodedType.GenericInst
+            else getEncodedType inst.Instantiated
+        // :? InstantiatedType<ReferencedType>
+        | :? ModifiedType as modf when modf.Modifiers.Length > 0 ->
+            let rec inner i modifiers =
+                if i >= 0 then
+                    let modf' =  modf.Modifiers.[i]
+                    inner
+                        (i - 1)
+                        ({ CustomMod.Required = modf'.Required; ModifierType = typeDefOrRefOrSpec modf'.Modifier } :: modifiers)
+                else modifiers
+            EncodedType.Modified(inner (modf.Modifiers.Length - 1) List.empty, getEncodedType modf.Modified)
+        | :? ModifiedType as modf -> getEncodedType modf.Modified
         | _ -> invalidOp(sprintf "Cannot encode unsupported type %s" (t.GetType().Name))
+
+    let getMethodSig =
+        createBlobLookup Method.signatureComparer <| fun (method: Method) ->
+            failwith "TODO: Get method signature"
 
     let getFieldSig =
         createBlobLookup Field.signatureComparer <| fun (field: Field) ->
             let signature = { FieldType = getEncodedType field.Type }
             builder.Blob.Add &signature
-
-    let getMethodSig =
-        createBlobLookup Method.signatureComparer <| fun (method: Method) ->
-            failwith "TODO: Get method signature"
 
     let mutable methodDefParams = TableIndex<ParamRow>.One
 
@@ -330,32 +374,33 @@ type ModuleBuilderSerializer
                       Culture = builder.Strings.Add assem.Culture
                       HashValue = builder.Blob.Add assem.HashValue }
 
-    member private this.SerializeReferencedType(tref, members) =
-        match referencedTypeLookup.TryGetValue tref with
+    member private this.SerializeReferencedType(reference: ReferencedType) =
+        let members = referencedTypes.[reference]
+        match referencedTypeLookup.TryGetValue reference with
         | true, i -> i
         | false, _ ->
             let rscope =
-                match tref.ResolutionScope with
+                match reference.ResolutionScope with
                 | TypeReferenceParent.Null -> ResolutionScope.Null
                 | TypeReferenceParent.Assembly assem -> ResolutionScope.AssemblyRef assemblyReferenceLookup.[assem]
                 | TypeReferenceParent.Type parent ->
-                    ResolutionScope.TypeRef(this.SerializeReferencedType(parent, referencedTypes.[parent]))
+                    ResolutionScope.TypeRef(this.SerializeReferencedType parent)
 
             let i =
                 builder.Tables.TypeRef.Add
                     { ResolutionScope = rscope
-                      TypeName = builder.Strings.Add tref.TypeName
-                      TypeNamespace = builder.Strings.Add tref.TypeNamespace }
+                      TypeName = builder.Strings.Add reference.TypeName
+                      TypeNamespace = builder.Strings.Add reference.TypeNamespace }
 
             for field in members.Field do
-                referencedFieldLookup.[FieldArg<_, _>(tref, field)] <-
+                referencedFieldLookup.[FieldArg<_, _>(reference, field)] <-
                     builder.Tables.MemberRef.Add
                         { Class = MemberRefParent.TypeRef i
                           Name = builder.Strings.Add field.Name
                           Signature = { MemberRefSig = getFieldSig(field).FieldSig } }
 
             for method in members.Method do
-                referencedMethodLookup.[MethodCallTarget<_, _>(tref, method)] <-
+                referencedMethodLookup.[MethodCallTarget<_, _>(reference, method)] <-
                     builder.Tables.MemberRef.Add
                         { Class = MemberRefParent.TypeRef i
                           Name = builder.Strings.Add method.Name
@@ -363,19 +408,18 @@ type ModuleBuilderSerializer
                             // TODO: Use separate lookup if method reference signature has any VarArgs.
                             { MemberRefSig = getMethodSig(method).MethodDefSig } }
 
-            referencedTypeLookup.[tref] <- i
+            referencedTypeLookup.[reference] <- i
             i
 
-    member private this.SerializeDefinedType(tdef, members: DefinedTypeMembers) =
-        match definedTypeLookup.TryGetValue tdef with
+    member private this.SerializeDefinedType(definition, members: DefinedTypeMembers) =
+        match definedTypeLookup.TryGetValue definition with
         | true, i -> i
         | false, _ ->
             let extends =
-                match tdef.Extends with
+                match definition.Extends with
                 | ClassExtends.Null -> Unchecked.defaultof<TypeDefOrRef>
-                | ClassExtends.Defined tdef -> TypeDefOrRef.Def(this.SerializeDefinedType(tdef, members))
-                | ClassExtends.Referenced tref  ->
-                    TypeDefOrRef.Ref(this.SerializeReferencedType(tref, referencedTypes.[tref]))
+                | ClassExtends.Defined tdef -> TypeDefOrRef.Def(this.SerializeDefinedType(tdef, definedTypes.[tdef]))
+                | ClassExtends.Referenced tref  -> TypeDefOrRef.Ref(this.SerializeReferencedType tref)
                 // TODO: Handle generic instantiations
 
             let mutable fieldWasAdded = false
@@ -391,7 +435,7 @@ type ModuleBuilderSerializer
                     fieldWasAdded <- true
                     indices.FieldList <- i'
 
-                definedFieldLookup.[FieldArg<_, _>(tdef, field)] <- i'
+                definedFieldLookup.[FieldArg<_, _>(definition, field)] <- i'
 
             let mutable methodWasAdded = false
 
@@ -432,18 +476,18 @@ type ModuleBuilderSerializer
                     methodWasAdded <- true
                     indices.MethodList <- i
 
-                definedMethodLookup.[MethodCallTarget<_, _>(tdef, method)] <- i
+                definedMethodLookup.[MethodCallTarget<_, _>(definition, method)] <- i
 
             let i =
                 builder.Tables.TypeDef.Add
-                    { Flags = tdef.Flags
-                      TypeName = builder.Strings.Add tdef.TypeName
-                      TypeNamespace = builder.Strings.Add tdef.TypeNamespace
+                    { Flags = definition.Flags
+                      TypeName = builder.Strings.Add definition.TypeName
+                      TypeNamespace = builder.Strings.Add definition.TypeNamespace
                       Extends = extends
                       FieldList = indices.FieldList
                       MethodList = indices.MethodList }
 
-            definedTypeLookup.[tdef] <- i
+            definedTypeLookup.[definition] <- i
             i
 
 
@@ -485,7 +529,7 @@ type ModuleBuilderSerializer
     member this.Serialize() =
         this.SerializeAssemblyReferences()
 
-        for KeyValue(tref, members) in referencedTypes do this.SerializeReferencedType(tref, members) |> ignore
+        for tref in referencedTypes.Keys do this.SerializeReferencedType tref |> ignore
 
         this.SerializeDefinedType(ModuleType, moduleGlobalMembers) |> ignore
 

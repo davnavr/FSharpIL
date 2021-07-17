@@ -24,6 +24,7 @@ module TypeDefOrRefEncoded =
 
 /// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
 [<RequireQualifiedAccess>]
+[<NoComparison; StructuralEquality>]
 type EncodedType =
     /// <summary>The <see cref="T:System.Boolean"/> type.</summary>
     | Boolean
@@ -53,7 +54,7 @@ type EncodedType =
     | I
     /// <summary>The <see cref="T:System.UIntPtr"/> type.</summary>
     | U
-    | Array of (*CustomModifiers * *) EncodedType * ArrayShape // TODO: Allow CustomModifiers for Array as described in augments.
+    | Array of EncodedType * ArrayShape
     | Class of TypeDefOrRefEncoded
     /// A method pointer (II.14.5).
     //| FnPtr of FunctionPointer

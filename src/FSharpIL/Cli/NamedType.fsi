@@ -376,6 +376,8 @@ type InstantiatedTypeArguments = struct
     interface System.Collections.Generic.IReadOnlyList<NamedType>
 end
 
+// TODO: Make common subclass GenericTypeInstantiation
+
 [<Sealed>]
 type InstantiatedType<'Inst when 'Inst :> GenericType> = class
     inherit NamedType
