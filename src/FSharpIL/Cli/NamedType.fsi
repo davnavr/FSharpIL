@@ -130,6 +130,8 @@ module PrimitiveType =
     val Object : PrimitiveType
     val String : PrimitiveType
 
+//type NativePointerType
+
 type ArrayType =
     inherit NamedType
 

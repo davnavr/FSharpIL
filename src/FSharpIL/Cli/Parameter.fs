@@ -1,5 +1,6 @@
 ﻿namespace FSharpIL.Cli
 
+open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
@@ -16,9 +17,10 @@ type ParameterKind =
 [<IsReadOnly>]
 type MethodParameterType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ParamItem and MethodReturnType
     val Tag: ParamItemTag
+    val CustomModifiers: ImmutableArray<ModifierType>
     val private argType: NamedType
 
-    internal new (tag, argType) = { Tag = tag; argType = argType }
+    internal new (tag, modifiers, argType) = { Tag = tag; CustomModifiers = modifiers; argType = argType }
 
     member this.Type =
         if this.argType <> Unchecked.defaultof<_>
@@ -37,13 +39,14 @@ module MethodParameterType =
     let inline (|Type|ByRef|TypedByRef|) (ptype: MethodParameterType) =
         match ptype.Tag with
         | ParamItemTag.Param -> Type(ptype.Type.Value)
-        | ParamItemTag.ByRef -> ByRef(ptype.Type.Value)
+        | ParamItemTag.ByRef -> ByRef(struct(ptype.CustomModifiers, ptype.Type.Value))
         | ParamItemTag.TypedByRef
         | _ -> TypedByRef
 
-    let Type argType = MethodParameterType(ParamItemTag.Param, argType)
-    let ByRef argType = MethodParameterType(ParamItemTag.ByRef, argType)
-    let TypedByRef = MethodParameterType(ParamItemTag.TypedByRef, Unchecked.defaultof<NamedType>)
+    let Type argType = MethodParameterType(ParamItemTag.Param, ImmutableArray.Empty, argType)
+    let ByRef(modifiers, argType) = MethodParameterType(ParamItemTag.ByRef, modifiers, argType)
+    let TypedByRef modifiers = MethodParameterType(ParamItemTag.TypedByRef, modifiers, Unchecked.defaultof<NamedType>)
+    let TypedByRef' = TypedByRef ImmutableArray.Empty
 
 type ParameterList = int32 -> MethodParameterType -> Parameter
 

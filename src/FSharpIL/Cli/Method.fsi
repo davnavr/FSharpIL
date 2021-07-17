@@ -44,15 +44,34 @@ module MethodNamePatterns =
 [<IsReadOnly>]
 type MethodReturnType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ReturnType and MethodParameterType
     val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
+    val CustomModifiers: ImmutableArray<ModifierType>
     val Type: NamedType voption
 end
 
+(*
+[<RequireQualifiedAccess>]
+type MethodReturnType =
+    | Type of Type: Namedtype
+    | ByRef of CustomModifiers: ImmutableArray<ModifierType> * Type: Namedtype
+    | TypedByRef of CustomModifiers: ImmutableArray<ModifierType>
+    | Void of CustomModifiers: ImmutableArray<ModifierType>
+*)
+
 [<RequireQualifiedAccess>]
 module MethodReturnType =
-    val Type : argType: NamedType -> MethodReturnType
-    val ByRef : argType: NamedType -> MethodReturnType
-    val TypedByRef : MethodReturnType
-    val Void : MethodReturnType
+    val inline (|Type|ByRef|TypedByRef|Void|) :
+        returnType: MethodReturnType ->
+            Choice<NamedType,
+                   struct(ImmutableArray<ModifierType> * NamedType),
+                   ImmutableArray<ModifierType>,
+                   ImmutableArray<ModifierType>>
+
+    val Type : returnType: NamedType -> MethodReturnType
+    val ByRef : modifiers: ImmutableArray<ModifierType> * returnType: NamedType -> MethodReturnType
+    val TypedByRef : modifiers: ImmutableArray<ModifierType> -> MethodReturnType
+    val TypedByRef' : MethodReturnType
+    val Void : modifiers: ImmutableArray<ModifierType> -> MethodReturnType
+    val Void' : MethodReturnType
 
 [<AbstractClass>]
 type Method =

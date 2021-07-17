@@ -47,17 +47,30 @@ module MethodNamePatterns = let (|MethodName|) name = MethodName.toIdentifier na
 [<IsReadOnly>]
 type MethodReturnType = struct
     val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
+    val CustomModifiers: ImmutableArray<ModifierType>
     val Type: NamedType voption
 
-    new (tag, argType) = { Tag = tag; Type = argType }
+    new (tag, modifiers, argType) = { Tag = tag; CustomModifiers = modifiers; Type = argType }
 end
 
 [<RequireQualifiedAccess>]
 module MethodReturnType =
-    let Type argType = MethodReturnType(FSharpIL.Metadata.Signatures.ReturnTypeTag.Type, ValueSome argType)
-    let ByRef argType = MethodReturnType(FSharpIL.Metadata.Signatures.ReturnTypeTag.ByRef, ValueSome argType)
-    let TypedByRef = MethodReturnType(FSharpIL.Metadata.Signatures.ReturnTypeTag.TypedByRef, ValueNone)
-    let Void = MethodReturnType(FSharpIL.Metadata.Signatures.ReturnTypeTag.Void, ValueNone)
+    open FSharpIL.Metadata.Signatures
+
+    let inline (|Type|ByRef|TypedByRef|Void|) (returnType: MethodReturnType) =
+        match returnType.Tag with
+        | ReturnTypeTag.Type -> Type returnType.Type.Value
+        | ReturnTypeTag.ByRef -> ByRef(struct(returnType.CustomModifiers, returnType.Type.Value))
+        | ReturnTypeTag.Void -> Void returnType.CustomModifiers
+        | ReturnTypeTag.TypedByRef
+        | _ -> TypedByRef returnType.CustomModifiers
+
+    let Type returnType = MethodReturnType(ReturnTypeTag.Type, ImmutableArray.Empty, ValueSome returnType)
+    let ByRef(modifiers, returnType) = MethodReturnType(ReturnTypeTag.ByRef, modifiers, ValueSome returnType)
+    let TypedByRef modifiers = MethodReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
+    let TypedByRef' = TypedByRef ImmutableArray.Empty
+    let Void modifiers = MethodReturnType(ReturnTypeTag.Void, modifiers, ValueNone)
+    let Void' = Void ImmutableArray.Empty
 
 [<AbstractClass>]
 type Method =
@@ -271,7 +284,7 @@ module EntryPointKind =
     let ExitNoArgs = { ReturnExitCode = true; ArgumentsName = None }
     let VoidNoArgs = { ReturnExitCode = false; ArgumentsName = None }
 
-    let inline returnType kind = if kind.ReturnExitCode then exitCodeType else MethodReturnType.Void
+    let inline returnType kind = if kind.ReturnExitCode then exitCodeType else MethodReturnType.Void'
 
     let parameterTypes kind =
         match kind with
@@ -318,7 +331,7 @@ type DefinedMethod with
         new MethodDefinition<MethodKinds.ObjectConstructor> (
             visibility,
             flags,
-            MethodReturnType.Void,
+            MethodReturnType.Void',
             MethodName MethodName.ctor,
             parameterTypes,
             parameterList
@@ -341,7 +354,7 @@ module ConstructorHelpers =
         new MethodDefinition<MethodKinds.ClassConstructor> (
             MemberVisibility.Private,
             MethodAttributes(),
-            MethodReturnType.Void,
+            MethodReturnType.Void',
             MethodName MethodName.cctor,
             ImmutableArray.Empty,
             Unchecked.defaultof<_>
@@ -422,7 +435,7 @@ type ReferencedMethod with
     static member Constructor(visibility, parameterTypes) =
         new MethodReference<MethodKinds.ObjectConstructor> (
             visibility,
-            MethodReturnType.Void,
+            MethodReturnType.Void',
             MethodName MethodName.ctor,
             parameterTypes
         )

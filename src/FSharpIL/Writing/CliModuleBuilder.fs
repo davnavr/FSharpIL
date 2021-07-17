@@ -308,12 +308,22 @@ type ModuleBuilderSerializer
         | :? ReferencedType as tref -> TypeDefOrRef.Ref(serializer.SerializeReferencedType tref)
         | tspec ->  TypeDefOrRef.Spec(getTypeSpec(getEncodedType tspec))
 
+    and getCustomModifiers (modifiers: ImmutableArray<ModifierType>) =
+        let rec inner i modifiers' =
+            if i >= 0 then
+                let modf' = modifiers.[i]
+                inner
+                    (i - 1)
+                    ({ CustomMod.Required = modf'.Required; ModifierType = typeDefOrRefOrSpec modf'.Modifier } :: modifiers')
+            else modifiers'
+        inner 0 List.empty
+
     and getTypeSpec =
         createBlobLookup EqualityComparer.Default <| fun (tspec: EncodedType) ->
             builder.Tables.TypeSpec.Add { TypeSpec = builder.Blob.Add tspec }
 
     // TODO: How to decide if VALUETYPE or CLASS should be used? Maybe make a ClassType and ValueType derived from NamedType while also checking if a DefinedType is derived from ValueType or Enum
-    and getEncodedType (t: NamedType) =
+    and getEncodedType (t: NamedType) = // TODO: Implement caching for EncodedType instances.
         match t with
         | :? PrimitiveType as prim -> prim.Encoded
         | :? DefinedType as tdef -> EncodedType.Class(typeDefEncoded tdef)
@@ -328,20 +338,42 @@ type ModuleBuilderSerializer
             else getEncodedType inst.Instantiated
         // :? InstantiatedType<ReferencedType>
         | :? ModifiedType as modf when modf.Modifiers.Length > 0 ->
-            let rec inner i modifiers =
-                if i >= 0 then
-                    let modf' =  modf.Modifiers.[i]
-                    inner
-                        (i - 1)
-                        ({ CustomMod.Required = modf'.Required; ModifierType = typeDefOrRefOrSpec modf'.Modifier } :: modifiers)
-                else modifiers
-            EncodedType.Modified(inner (modf.Modifiers.Length - 1) List.empty, getEncodedType modf.Modified)
+            EncodedType.Modified(getCustomModifiers modf.Modifiers, getEncodedType modf.Modified)
         | :? ModifiedType as modf -> getEncodedType modf.Modified
         | _ -> invalidOp(sprintf "Cannot encode unsupported type %s" (t.GetType().Name))
 
+    let getParameterTypes (parameters: ImmutableArray<MethodParameterType>) =
+        if parameters.IsDefaultOrEmpty
+        then ImmutableArray<ParamItem>.Empty
+        else
+            let mutable parameters' = Array.zeroCreate<ParamItem> parameters.Length
+
+            for i = 0 to parameters'.Length - 1 do
+                let param = &parameters.ItemRef i
+                let paramType =
+                    match param.Type with
+                    | ValueSome paramType' -> ValueSome(getEncodedType paramType')
+                    | ValueNone -> ValueNone
+
+                parameters'.[i] <- ParamItem(param.Tag, getCustomModifiers param.CustomModifiers, paramType)
+
+            Unsafe.As &parameters'
+
     let getMethodSig =
         createBlobLookup Method.signatureComparer <| fun (method: Method) ->
-            failwith "TODO: Get method signature"
+            let signature =
+                { HasThis = method.HasThis
+                  CallingConvention = method.CallingConvention
+                  ReturnType =
+                    let returnType = &method.ReturnType
+                    let returnType' =
+                        match returnType.Type with
+                        | ValueSome returnType' -> ValueSome(getEncodedType returnType')
+                        | ValueNone -> ValueNone
+
+                    ReturnType(returnType.Tag, getCustomModifiers returnType.CustomModifiers, returnType')
+                  Parameters = getParameterTypes method.ParameterTypes }
+            builder.Blob.Add &signature
 
     let getFieldSig =
         createBlobLookup Field.signatureComparer <| fun (field: Field) ->

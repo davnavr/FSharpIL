@@ -191,6 +191,8 @@ and [<IsReadOnly; Struct>] ParamItem = // TODO: Rename to Param
     val internal Modifiers: CustomMod list
     val ParamType: EncodedType voption // TODO: Consider using Unchecked.defaultof<EncodedType> instead of ValueNone to save 4 bytes.
 
+    internal new: tag: ParamItemTag * modifiers: CustomMod list * paramType: EncodedType voption -> ParamItem
+
     member inline IsByRef: bool
     member inline IsTypedByRef: bool
 
@@ -222,6 +224,8 @@ and [<IsReadOnly; Struct>] ReturnType = // TODO: Rename to RetType
     val Tag: ReturnTypeTag
     val internal Modifiers: CustomMod list
     val ReturnType: EncodedType voption // TODO: Consider using Unchecked.defaultof<EncodedType> instead of ValueNone to save 4 bytes.
+
+    internal new: tag: ReturnTypeTag * modifiers: CustomMod list * returnType: EncodedType voption -> ReturnType
 
     member inline IsVoid: bool
     member inline IsByRef: bool
