@@ -59,6 +59,7 @@
     <Compile Include="Metadata\EntryPointToken.fs" />
     <Compile Include="Metadata\Signatures\CustomAttrib.fs" />
     <Compile Include="Metadata\Signatures\CustomMod.fs" />
+    <Compile Include="Metadata\Signatures\Items.fsi" />
     <Compile Include="Metadata\Signatures\Items.fs" />
     <Compile Include="Metadata\Signatures\LocalVarSig.fs" />
     <Compile Include="Metadata\Cil\MethodBody.fs" />

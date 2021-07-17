@@ -93,7 +93,7 @@ let example() =
         let! console' = builder.ReferenceType console
 
         (* Add reference to methods defined in a referenced types *)
-        let stringArg = ParamItem.Param(ImmutableArray.Empty, EncodedType.String)
+        let stringArg = ParamItem.Type(ImmutableArray.Empty, EncodedType.String)
 
         // member new: string -> System.Runtime.Versioning.TargetFrameworkAttribute
         let tfmctor =

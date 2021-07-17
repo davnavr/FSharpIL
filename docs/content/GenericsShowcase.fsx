@@ -97,7 +97,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
             DefinedMethod.Constructor (
                 MemberVisibility.Public,
                 flags = MethodAttributes.HideBySig,
-                parameterTypes = ImmutableArray.Create(ParamItem.Param(ImmutableArray.Empty, EncodedType.I4)),
+                parameterTypes = ImmutableArray.Create(ParamItem.Type(ImmutableArray.Empty, EncodedType.I4)),
                 parameterList = (fun _ _ -> Parameter.named(Identifier.ofStr "capacity"))
             )
 

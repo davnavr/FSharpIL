@@ -222,8 +222,8 @@ let rec param (chunk: byref<ChunkedMemory>) (parameters: ImmutableArray<ParamIte
         match paramOrRetType &chunk with
         | modifiers, Ok ptype ->
             match ptype with
-            | Type t when modifiers.IsEmpty -> ParamItem.Param t
-            | Type t -> ParamItem.Param(EncodedType.Modified(modifiers, t))
+            | Type t when modifiers.IsEmpty -> ParamItem.Type t
+            | Type t -> ParamItem.Type(EncodedType.Modified(modifiers, t))
             | ByRef t -> ParamItem.ByRef(modifiers, t)
             | TypedByRef -> ParamItem.TypedByRef modifiers
             |> parameters.Add
