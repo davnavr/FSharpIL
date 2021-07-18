@@ -21,11 +21,11 @@ would produce the same or similar CLI metadata as the example is shown in single
 *)
 open System.Collections.Immutable
 
-open FSharpIL.Cli
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
-open FSharpIL.PortableExecutable
+
+open FSharpIL.Cli
 
 open FSharpIL.Writing
 open FSharpIL.Writing.Cil
@@ -133,27 +133,25 @@ let example() =
 
         let! members = builder.DefineType(program, ValueNone)
 
-        (* Create the body of the entrypoint method *)
-        let mainbody =
-            { new DefinedMethodBody() with
-                override _.WriteInstructions(wr, tokens) =
-                    // System.Console.WriteLine "Hello World!"
-                    ldstr &wr "Hello World!" tokens
-                    call &wr writeln tokens
-                    ret &wr
-                    wr.EstimatedMaxStack }
-
         (* Create the entrypoint method of the current assembly *)
         // static member public Main: unit -> unit
-        let maindef =
-            DefinedMethod.EntryPoint (
-                visibility = MemberVisibility.Public,
-                flags = MethodAttributes.HideBySig,
-                name = MethodName.ofStr "Main",
-                kind = EntryPointKind.VoidNoArgs
-            )
-
-        let! _ = members.DefineEntryPoint(maindef, mainbody, ValueNone)
+        let! _ =
+            let main =
+                DefinedMethod.EntryPoint (
+                    visibility = MemberVisibility.Public,
+                    flags = MethodAttributes.HideBySig,
+                    name = MethodName.ofStr "Main",
+                    kind = EntryPointKind.VoidNoArgs
+                )
+            let body =
+                { new DefinedMethodBody() with
+                    override _.WriteInstructions(wr, tokens) =
+                        // System.Console.WriteLine "Hello World!"
+                        ldstr &wr "Hello World!" tokens
+                        call &wr writeln tokens
+                        ret &wr
+                        wr.EstimatedMaxStack }
+            members.DefineEntryPoint(main, body, attributes = ValueNone)
 
         (* Sets the target framework of the assembly, this is so the CoreCLR and tools such as ILSpy can recognize it *)
         // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
@@ -165,7 +163,7 @@ let example() =
     }
     |> ValidationResult.get
 
-    BuildPE.ofModuleBuilder FileCharacteristics.IsExe builder
+    BuildPE.ofModuleBuilder FSharpIL.PortableExecutable.FileCharacteristics.IsExe builder
 
 (*** hide ***)
 #if COMPILED && !BENCHMARK

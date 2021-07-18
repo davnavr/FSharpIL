@@ -148,4 +148,13 @@ type CliModuleBuilder =
     member ReferenceType: reference: ReferencedType -> ValidationResult<ReferencedTypeMembers>
     member ReferenceType: reference: TypeReference<'Kind> -> ValidationResult<ReferencedTypeMembers<'Kind>>
 
+    /// <summary>
+    /// Attempts to add a <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/> to the current assembly.
+    /// </summary>
+    /// <returns>
+    /// <c>None</c> if the attribute was successfully added; otherwise an error object if the current assembly is not defined or
+    /// if the custom attribute constructor does not take exactly 1 argument.
+    /// </returns>
+    member SetTargetFramework: tfm: string * ctor: CustomAttributeCtor -> IValidationError option
+
     member internal Serialize: unit -> CliMetadataBuilder

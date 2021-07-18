@@ -30,8 +30,8 @@ module Equatable =
     type BlockComparer<'T when 'T :> IEquatable<'T>> =
         | BlockComparer
 
-        interface IEqualityComparer<ImmutableArray<'T>> with // TODO: Benchmark if using inref will speed up for structs or slow down for classes.
-            member _.Equals(x, y) = blocks x y // TODO: Make comparison function for block that uses inref for the elements of one of the arrays.
+        interface IEqualityComparer<ImmutableArray<'T>> with
+            member _.Equals(x, y) = blocks x y
             member _.GetHashCode obj =
                 let mutable hcode = HashCode()
 

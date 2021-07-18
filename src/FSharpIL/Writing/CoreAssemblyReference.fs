@@ -4,7 +4,6 @@ open System.Collections.Immutable
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Signatures
 
 [<Sealed>]
 type CoreAssemblyMembers (octor: MethodCallTarget<_, _>, tfmctor: MethodCallTarget<_, _>) =

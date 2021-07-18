@@ -744,6 +744,22 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             return ReferencedTypeMembers<'Kind> members
         }
 
+    member this.SetTargetFramework(tfm, ctor: CustomAttributeCtor) =
+        match this.AssemblyCustomAttributes with
+        | Some attributes' ->
+            // TODO: Check that type of TargetFrameworkAttribute is correct.
+            // TODO: Check that TargetFrameworkAttribute ctor defines at least one argument.
+            attributes'.Add
+                { Constructor = ctor
+                  FixedArguments =
+                    fun i _ ->
+                        function
+                        | _ when i > 0 -> Error(noImpl "TODO: Error for TargetFrameworkAttribute cannot have > 1 argument")
+                        | ElemType.Primitive PrimitiveElemType.String -> Ok(FixedArg.Elem (Elem.SerString tfm))
+                        | bad -> Error(noImpl "TODO: Error for bad TargetFrameworkAttribute argument type")
+                  NamedArguments = ImmutableArray.Empty }
+        | None -> Some(noImpl "TODO: Error for not assembly")
+
     member internal this.Serialize() =
         let serializer =
             ModuleBuilderSerializer (
