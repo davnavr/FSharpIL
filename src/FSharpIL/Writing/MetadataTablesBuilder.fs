@@ -33,7 +33,7 @@ type RowTableBuilder<'Row, 'Serializer
 
 /// <summary>Builds the metadata tables stored in the <c>#~</c> metadata stream (II.24.2.6 and II.22).</summary>
 [<Sealed>]
-type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid, blob) as builder =
+type MetadataTablesBuilder (moduleRowBuilder: RowBuilder<ModuleRow>, strings, guid, blob) as builder =
     static let [<Literal>] MaxSmallHeapOffset = 65535u
     let valid = ref ValidTableFlags.Module
 
@@ -49,7 +49,7 @@ type MetadataTablesBuilder (moduleBuilder: RowBuilder<ModuleRow>, strings, guid,
         flags
 
     /// (0x00)
-    member val Module = moduleBuilder strings guid blob
+    member val Module = moduleRowBuilder strings guid blob
     /// (0x01)
     member val TypeRef = RowTableBuilder<_, RowSerializers.TypeRef>(valid, ValidTableFlags.TypeRef)
     /// (0x02)

@@ -136,9 +136,9 @@ let example() =
         (* Create the body of the entrypoint method *)
         let mainbody =
             { new DefinedMethodBody() with
-                override _.WriteInstructions(wr, methods, _, _) =
+                override _.WriteInstructions(wr, strings, methods, _, _) =
                     // System.Console.WriteLine "Hello World!"
-                    ldstr &wr (builder.UserStrings.AddFolded "Hello World!")
+                    ldstr &wr "Hello World!" strings
                     call &wr writeln methods
                     ret &wr
                     wr.EstimatedMaxStack }

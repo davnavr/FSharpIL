@@ -46,6 +46,8 @@ type MethodReturnType = struct // TODO: Avoid code duplication with FSharpIL.Met
     val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
     val CustomModifiers: ImmutableArray<ModifierType>
     val Type: NamedType voption
+
+    member inline IsVoid: bool
 end
 
 (*

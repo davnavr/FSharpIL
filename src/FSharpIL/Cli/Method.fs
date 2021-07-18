@@ -51,6 +51,8 @@ type MethodReturnType = struct
     val Type: NamedType voption
 
     new (tag, modifiers, argType) = { Tag = tag; CustomModifiers = modifiers; Type = argType }
+
+    member inline this.IsVoid = this.Tag = FSharpIL.Metadata.Signatures.ReturnTypeTag.Void
 end
 
 [<RequireQualifiedAccess>]

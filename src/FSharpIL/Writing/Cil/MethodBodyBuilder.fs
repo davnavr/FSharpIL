@@ -53,6 +53,14 @@ type internal Patch<'Target> =
           estimatedMaxStack = 0us
           instructions = this.InstructionWriter }
 
+// TODO: Merge these structs into one reference type.
+[<NoComparison; NoEquality>]
+type MetadataTokenSource =
+    internal { A: unit }
+
+[<IsReadOnly; Struct>]
+type StringTokenSource = internal { UserStrings: ImmutableArray<Patch<string>>.Builder }
+
 [<IsReadOnly; Struct>]
 type MethodTokenSource = internal { MethodCalls: ImmutableArray<Patch<FSharpIL.Cli.MethodCallTarget>>.Builder }
 

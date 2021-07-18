@@ -28,7 +28,12 @@ type DefinedMethodBody =
     new () = DefinedMethodBody ImmutableArray.Empty
 
     /// Writes the instructions of the method body, and returns the maximum number of items on the stack.
-    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource * FieldTokenSource * TypeTokenSource -> uint16
+    abstract WriteInstructions:
+        byref<MethodBodyBuilder> *
+        StringTokenSource *
+        MethodTokenSource *
+        FieldTokenSource *
+        TypeTokenSource -> uint16
 
 type EntryPoint =
     private
@@ -211,6 +216,7 @@ type MemberIndices =
 type DefinedMethodBodyWriter
     (
         localVarSource: ImmutableArray<LocalVariableType> -> TableIndex<StandaloneSigRow>,
+        stringTokenSource: StringTokenSource,
         methodTokenSource: MethodTokenSource,
         fieldTokenSource: FieldTokenSource,
         typeTokenSource: TypeTokenSource,
@@ -220,7 +226,7 @@ type DefinedMethodBodyWriter
     interface IMethodBodySource with
         member _.Create builder =
             { InitLocals = body.InitLocals
-              MaxStack = body.WriteInstructions(&builder, methodTokenSource, fieldTokenSource, typeTokenSource)
+              MaxStack = body.WriteInstructions(&builder, stringTokenSource, methodTokenSource, fieldTokenSource, typeTokenSource)
               LocalVariables = localVarSource body.LocalTypes }
 
 [<AutoOpen>]
@@ -232,12 +238,10 @@ type ModuleBuilderSerializer
     (
         cliMetadataHeader,
         cliMetadataRoot,
-        moduleBuilderObj: obj,
         name: Identifier,
         mvid,
         attributes: CustomAttribute.LookupBuilder,
         gparams: Dictionary<_, _>,
-        userStringStream,
         assembly: DefinedAssembly option,
         entryPointToken: EntryPoint,
         assemblyReferences: HashSet<ReferencedAssembly>,
@@ -246,20 +250,17 @@ type ModuleBuilderSerializer
         referencedTypes: Dictionary<ReferencedType, ReferencedTypeMembers>
     )
     as serializer
-    =
+    = // TODO: Move this all into the Serialize method.
     let builder =
-        let strings = StringsStreamBuilder 1024
-        let guids = GuidStreamBuilder 1
-        let blobs = BlobStreamBuilder 512
         CliMetadataBuilder (
             cliMetadataHeader,
             cliMetadataRoot,
             FSharpIL.Writing.Cil.MethodBodyList(),
-            MetadataTablesBuilder((fun str guid _ -> ModuleRow.create (str.Add name) (guid.Add mvid)), strings, guids, blobs),
-            strings,
-            userStringStream,
-            guids,
-            blobs
+            (fun str guid _ -> ModuleRow.create (str.Add name) (guid.Add mvid)),
+            StringsStreamBuilder 512,
+            UserStringStreamBuilder 1,
+            GuidStreamBuilder 1,
+            BlobStreamBuilder 256
         )
 
     let assemblyDefIndex =
@@ -421,6 +422,7 @@ type ModuleBuilderSerializer
           EventList = TableIndex.One
           PropertyList = TableIndex.One }
 
+    let stringTokenSource = { UserStrings = ImmutableArray.CreateBuilder() }
     let methodTokenSource = { MethodCalls = ImmutableArray.CreateBuilder() }
     let fieldTokenSource = { FieldInstructions = ImmutableArray.CreateBuilder() }
     let typeTokenSource = { TypeInstructions = ImmutableArray.CreateBuilder() }
@@ -521,6 +523,7 @@ type ModuleBuilderSerializer
                             let writer =
                                 DefinedMethodBodyWriter (
                                     getLocalsSig,
+                                    stringTokenSource,
                                     methodTokenSource,
                                     fieldTokenSource,
                                     typeTokenSource,
@@ -560,7 +563,7 @@ type ModuleBuilderSerializer
 
             for KeyValue({ CustomAttribute.Owner = parent }, attrs) in attributes do
                 let index =
-                    if Object.ReferenceEquals(parent, moduleBuilderObj) then
+                    if Object.ReferenceEquals(parent, ModuleType) then
                         HasCustomAttribute.Module
                     elif assembly.IsSome && Object.ReferenceEquals(parent, assembly.Value) then
                         HasCustomAttribute.Assembly assemblyDefIndex.Value
@@ -587,6 +590,13 @@ type ModuleBuilderSerializer
                     |> ignore
 
             builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.CustomAttribute
+
+    member private _.PatchUserStrings() =
+        let stringTokenList = stringTokenSource.UserStrings
+        for i = 0 to stringTokenList.Count - 1 do
+            let instr = &stringTokenList.ItemRef i
+            let mutable writer = instr.Instructions
+            Unsafe.writeStringInstruction &writer instr.Opcode (builder.UserString.AddFolded instr.Target)
 
     member private _.PatchMethodCalls() =
         let methodCallList = methodTokenSource.MethodCalls
@@ -620,6 +630,7 @@ type ModuleBuilderSerializer
 
         //this.SerializeGenericParameters()
         this.SerializeCustomAttributes()
+        this.PatchUserStrings()
         this.PatchMethodCalls()
         //this.PatchFieldInstructions()
         //this.PatchTypeInstructions()
@@ -660,7 +671,6 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         ?typeRefCapacity,
         ?assemblyRefCapacity
     )
-    as builder
     =
     let cliMetadataHeader' = defaultArg cliMetadataHeader CliHeader.latestDefault
     let cliMetadataRoot' = defaultArg cliMetadataRoot CliMetadataRoot.defaultFields
@@ -694,7 +704,6 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         | Some assembly' -> Some(createAttributeList(CustomAttribute.Owner.DefinedAssembly assembly'))
         | None -> None
 
-    member val UserStrings = UserStringStreamBuilder 1
     member val ValidationWarnings = ValidationWarningsCollection(?warnings = warnings)
     member val Mvid = Option.defaultWith Guid.NewGuid mvid
     member val ModuleCustomAttributes = createAttributeList(CustomAttribute.Owner.DefinedType ModuleType)
@@ -762,12 +771,10 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             ModuleBuilderSerializer (
                 cliMetadataHeader',
                 cliMetadataRoot',
-                this,
                 name,
                 this.Mvid,
                 customAttributeLookup,
                 genericParameterLists,
-                this.UserStrings,
                 assembly,
                 this.EntryPoint,
                 assemblyRefs,

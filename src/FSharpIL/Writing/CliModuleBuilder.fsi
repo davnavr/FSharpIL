@@ -22,7 +22,12 @@ type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allo
     new: localTypes: ImmutableArray<LocalVariableType> -> DefinedMethodBody
     new: unit -> DefinedMethodBody
 
-    abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource * FieldTokenSource * TypeTokenSource -> uint16
+    abstract WriteInstructions:
+        byref<MethodBodyBuilder> *
+        StringTokenSource *
+        MethodTokenSource *
+        FieldTokenSource *
+        TypeTokenSource -> uint16
 
 type EntryPoint
 
@@ -124,7 +129,6 @@ type CliModuleBuilder =
     member AssemblyCustomAttributes: CustomAttributeList option
     member EntryPoint: EntryPoint // TODO: Allow a File row to also be an entry point.
     member ValidationWarnings: ValidationWarningsCollection
-    member UserStrings: UserStringStreamBuilder
     /// <summary>
     /// Gets the members of the <c>&lt;Module&gt;</c> special type, which represents the global members defined in the module.
     /// </summary>

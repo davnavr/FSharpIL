@@ -24,6 +24,12 @@ module Unsafe =
 
     val writeBranchInstruction: short: Opcode -> long: Opcode -> byref<MethodBodyBuilder> -> byref<BranchTarget>
 
+    val writeStringInstruction:
+        byref<MethodBodyBuilder> ->
+        opcode: Opcode ->
+        UserStringOffset ->
+        unit
+
     val writeCallInstruction:
         byref<MethodBodyBuilder> ->
         opcode: Opcode ->
@@ -50,6 +56,14 @@ module Branch =
     val inline createLabel: inref<MethodBodyBuilder> -> Label
     /// Sets the target of a branch instruction.
     val setTarget: branch: byref<BranchTarget> -> destination: Label -> unit
+
+/// <summary>
+/// Contains functions for generating the <c>ldstr</c> (0x72) instruction, which loads a literal string from the <c>#US</c> heap
+/// (III.4.16).
+/// </summary>
+/// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
+module Ldstr =
+    val inline ofMetadataToken: byref<MethodBodyBuilder> -> offset: UserStringOffset -> unit
 
 /// Contains functions for generating instructions that call methods specified by a metadata token.
 module Call =
@@ -123,10 +137,9 @@ val callvirt: byref<MethodBodyBuilder> -> method: MethodCallTarget<#NamedType, #
 
 
 /// <summary>
-/// (0x72) Writes an instruction that loads a literal string from the <c>#US</c> heap (III.4.16).
+/// (0x72) Writes an instruction that pushes a string literal onto the stack (III.4.16).
 /// </summary>
-/// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
-val ldstr: byref<MethodBodyBuilder> -> offset: UserStringOffset -> unit
+val ldstr: byref<MethodBodyBuilder> -> string -> StringTokenSource -> unit
 
 
 

@@ -41,6 +41,11 @@ module Unsafe =
         failwith "TODO: Fix, changes to the branch target won't propogate if the internal array of targets is reallocated."
         &System.Runtime.CompilerServices.Unsafe.AsRef(&targets.ItemRef i)
 
+    let writeStringInstruction (wr: byref<_>) opcode { UserStringOffset = offset } =
+        writeRawOpcode &wr opcode
+        writeMetadataToken &wr (MetadataToken(MetadataTokenType.UserStringHeap, offset))
+        incrMaxStack &wr
+
     let writeCallInstruction (wr: byref<_>) opcode (method: MethodMetadataToken) hasRetValue =
         writeRawOpcode &wr opcode
         writeMetadataToken &wr method.Token
@@ -59,12 +64,15 @@ module Unsafe =
 open Unsafe
 
 [<RequireQualifiedAccess>]
+module Ldstr =
+    let inline ofMetadataToken (wr: byref<_>) offset = writeStringInstruction &wr Opcode.Ldstr offset
+
+[<RequireQualifiedAccess>]
 module Branch =
     let inline createLabel (wr: inref<_>) = Label &wr
     let setTarget (branch: byref<BranchTarget>) (destination: Label) =
         branch.Target <- int32(int64 destination.Destination.MethodBodyOffset - int64 branch.Position.MethodBodyOffset)
 
-/// Contains functions for generating instructions that call methods specified by a metadata token.
 module Call =
     let call (stream: byref<_>) method hasRetValue = writeCallInstruction &stream Opcode.Call method hasRetValue
     let callvirt (stream: byref<_>) method hasRetValue = writeCallInstruction &stream Opcode.Callvirt method hasRetValue
@@ -90,7 +98,8 @@ let inline patched (wr: byref<_>) opcode target (patches: System.Collections.Imm
 
 let inline patchedMethodCall (wr: byref<_>) opcode (target: FSharpIL.Cli.MethodCallTarget<_, _>) patches =
     patched &wr opcode (FSharpIL.Cli.MethodCallTarget(target.Owner, target.Method)) patches.MethodCalls
-    incrMaxStack &wr
+    if not target.Method.ReturnType.IsVoid then
+        incrMaxStack &wr
 
 let call (wr: byref<_>) method methodTokenSource =
     patchedMethodCall &wr Opcode.Call method methodTokenSource
@@ -102,9 +111,8 @@ let inline ret (wr: byref<_>) = writeRawOpcode &wr Opcode.Ret
 let callvirt (wr: byref<_>) method methodTokenSource =
     patchedMethodCall &wr Opcode.Callvirt method methodTokenSource
 
-let ldstr (wr: byref<_>) { UserStringOffset = offset } =
-    writeRawOpcode &wr Opcode.Ldstr
-    writeMetadataToken &wr (MetadataToken(MetadataTokenType.UserStringHeap, offset))
+let ldstr (wr: byref<_>) str { UserStrings = strings } =
+    patched &wr Opcode.Ldstr str strings
     incrMaxStack &wr
 
 let inline patchedFieldInstruction (wr: byref<_>) opcode field pushesFieldValue patches =
