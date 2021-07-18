@@ -6,28 +6,30 @@ open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Cil
 
+open FSharpIL.Cli
+
 module Unsafe =
-    let writeOpcodeHelper (wr: byref<ChunkedMemoryBuilder>) opcode =
+    let writeOpcodeHelper (stream: byref<ChunkedMemoryBuilder>) opcode =
         if opcode < Opcode.Arglist
-        then wr.Write(uint8 opcode)
+        then stream.Write(uint8 opcode)
         else
             let opcode' = uint16 opcode
-            wr.Write(uint8(opcode' >>> 8))
-            wr.Write(uint8(opcode' &&& 0xFFus))
+            stream.Write(uint8(opcode' >>> 8))
+            stream.Write(uint8(opcode' &&& 0xFFus))
 
-    let getInstructionStream (builder: byref<_>) = &builder.instructions
+    let getInstructionStream (wr: byref<_>) = &wr.instructions
 
-    let incrMaxStack (builder: byref<_>) = builder.estimatedMaxStack <- Checked.(+) builder.estimatedMaxStack 1us
+    let incrMaxStack (stream: byref<_>) = stream.estimatedMaxStack <- Checked.(+) stream.estimatedMaxStack 1us
 
-    let writeRawOpcode (builder: byref<_>) opcode = writeOpcodeHelper &builder.instructions opcode
+    let writeRawOpcode (stream: byref<_>) opcode = writeOpcodeHelper &stream.instructions opcode
 
-    let inline writePushingOpcode (builder: byref<_>) opcode =
-        writeRawOpcode &builder opcode
-        incrMaxStack &builder
+    let inline writePushingOpcode (stream: byref<_>) opcode =
+        writeRawOpcode &stream opcode
+        incrMaxStack &stream
 
     /// <summary>Writes a metadata token (III.1.9).</summary>
-    let writeMetadataToken (builder: byref<_>) (token: MetadataToken) =
-        let mutable wr = &builder.instructions
+    let writeMetadataToken (stream: byref<_>) (token: MetadataToken) =
+        let mutable wr = &stream.instructions
         let index = token.Index
         // For some reason, usage of |> here prevents writer from updating correctly.
         wr.Write(uint8(index &&& 0xFFu))
@@ -35,118 +37,108 @@ module Unsafe =
         wr.Write(uint8((index >>> 16) &&& 0xFFu))
         wr.Write(uint8 token.Type)
 
-    let writeBranchInstruction short long ({ branchTargetList = targets } as builder: byref<_>) =
+    let writeStringOffset (stream: byref<_>) { UserStringOffset = offset } =
+        writeMetadataToken &stream (MetadataToken(MetadataTokenType.UserStringHeap, offset))
+
+    let writeBranchInstruction short long ({ branchTargetList = targets } as stream: byref<_>) =
         let i = targets.Count
-        targets.Add(BranchTarget({ MethodBodyOffset = builder.instructions.Length }, short, long))
+        targets.Add(BranchTarget({ MethodBodyOffset = stream.instructions.Length }, short, long))
         failwith "TODO: Fix, changes to the branch target won't propogate if the internal array of targets is reallocated."
         &System.Runtime.CompilerServices.Unsafe.AsRef(&targets.ItemRef i)
 
-    let writeStringInstruction (wr: byref<_>) opcode { UserStringOffset = offset } =
-        writeRawOpcode &wr opcode
-        writeMetadataToken &wr (MetadataToken(MetadataTokenType.UserStringHeap, offset))
-        incrMaxStack &wr
+    let inline writeStringToken (stream: byref<_>) (str: string) (tokens: MetadataTokenSource) =
+        writeStringOffset &stream (tokens.GetUserString str)
 
-    let writeCallInstruction (wr: byref<_>) opcode (method: MethodMetadataToken) hasRetValue =
-        writeRawOpcode &wr opcode
-        writeMetadataToken &wr method.Token
-        if hasRetValue then incrMaxStack &wr
+    let inline writeMethodToken (stream: byref<_>) (method: MethodCallTarget<_, _>) (tokens: MetadataTokenSource) =
+        writeMetadataToken &stream ((tokens.GetMethodToken method).Token)
 
-    let writeFieldInstruction (wr: byref<_>) opcode (field: FieldMetadataToken) pushesFieldValue =
-        writeRawOpcode &wr opcode
-        writeMetadataToken &wr field.Token
-        if pushesFieldValue then incrMaxStack &wr
+    let inline writeFieldToken (stream: byref<_>) (field: FieldArg<_, _>) (tokens: MetadataTokenSource) =
+        writeMetadataToken &stream ((tokens.GetFieldToken field).Token)
 
-    let writeTypeInstruction (wr: byref<_>) opcode (typeTok: TypeMetadataToken) =
-        writeRawOpcode &wr opcode
-        writeMetadataToken &wr typeTok.Token
-        incrMaxStack &wr
+    let inline writeTypeToken (stream: byref<_>) t (tokens: MetadataTokenSource) =
+        writeMetadataToken &stream ((tokens.GetTypeToken t).Token)
+
+    let inline writeFieldInstruction (stream: byref<_>) opcode pushesFieldValue field tokens =
+        writeRawOpcode &stream opcode
+        writeFieldToken &stream field tokens
+        if pushesFieldValue then incrMaxStack &stream
+
+    let inline writeTypeInstruction (stream: byref<_>) opcode t tokens =
+        writeRawOpcode &stream opcode
+        writeTypeToken &stream t tokens
+        incrMaxStack &stream // Assumes that all instruction that take a typeTok returns something onto the stack.
 
 open Unsafe
 
 [<RequireQualifiedAccess>]
 module Ldstr =
-    let inline ofMetadataToken (wr: byref<_>) offset = writeStringInstruction &wr Opcode.Ldstr offset
+    let inline ofOffset (stream: byref<_>) offset =
+        writeRawOpcode &stream Opcode.Ldstr
+        writeStringOffset &stream offset
+        incrMaxStack &stream
+
+    let inline ofString (stream: byref<_>) str tokens =
+        writeRawOpcode &stream Opcode.Ldstr
+        writeStringToken &stream str tokens
+        incrMaxStack &stream
+
+    let inline ofMemory (stream: byref<_>) (str: inref<System.ReadOnlyMemory<_>>) (tokens: MetadataTokenSource) =
+        writeRawOpcode &stream Opcode.Ldstr
+        writeStringOffset &stream (tokens.GetUserString &str)
+        incrMaxStack &stream
 
 [<RequireQualifiedAccess>]
 module Branch =
-    let inline createLabel (wr: inref<_>) = Label &wr
+    let inline createLabel (stream: inref<_>) = Label &stream
     let setTarget (branch: byref<BranchTarget>) (destination: Label) =
         branch.Target <- int32(int64 destination.Destination.MethodBodyOffset - int64 branch.Position.MethodBodyOffset)
 
 module Call =
-    let call (stream: byref<_>) method hasRetValue = writeCallInstruction &stream Opcode.Call method hasRetValue
-    let callvirt (stream: byref<_>) method hasRetValue = writeCallInstruction &stream Opcode.Callvirt method hasRetValue
+    let inline instr (stream: byref<_>) opcode (method: MethodMetadataToken) hasRetValue =
+        writeRawOpcode &stream opcode
+        writeMetadataToken &stream method.Token
+        if hasRetValue then incrMaxStack &stream
 
-let inline nop (wr: byref<_>) = writeRawOpcode &wr Opcode.Nop
-let inline ``break`` (wr: byref<_>) = writeRawOpcode &wr Opcode.Break
-let inline ldarg_0 (wr: byref<_>) = writePushingOpcode &wr Opcode.Ldarg_0
-let inline ldarg_1 (wr: byref<_>) = writePushingOpcode &wr Opcode.Ldarg_1
-let inline ldarg_2 (wr: byref<_>) = writePushingOpcode &wr Opcode.Ldarg_2
-let inline ldarg_3 (wr: byref<_>) = writePushingOpcode &wr Opcode.Ldarg_3
+    let instr' (stream: byref<_>) opcode method (tokens: MetadataTokenSource) =
+        instr &stream opcode (tokens.GetMethodToken method) (not method.Method.ReturnType.IsVoid)
+
+    let call (stream: byref<_>) method hasRetValue = instr &stream Opcode.Call method hasRetValue
+    let callvirt (stream: byref<_>) method hasRetValue = instr &stream Opcode.Callvirt method hasRetValue
+
+let inline nop (stream: byref<_>) = writeRawOpcode &stream Opcode.Nop
+let inline ``break`` (stream: byref<_>) = writeRawOpcode &stream Opcode.Break
+let inline ldarg_0 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldarg_0
+let inline ldarg_1 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldarg_1
+let inline ldarg_2 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldarg_2
+let inline ldarg_3 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldarg_3
 
 let inline ldarg_s (stream: byref<_>) (num: uint8) =
     writeRawOpcode &stream Opcode.Ldarg_s
     (getInstructionStream &stream).Write num
     incrMaxStack &stream
 
-let inline pop (wr: byref<_>) = writeRawOpcode &wr Opcode.Pop
+let inline pop (stream: byref<_>) = writeRawOpcode &stream Opcode.Pop
 
-// TODO: Don't forget to reserve correct amount of bytes for 2-byte long opcodes
-let inline patched (wr: byref<_>) opcode target (patches: System.Collections.Immutable.ImmutableArray<_>.Builder) =
-    // 1 byte for opcode, 4 bytes for metadata token.
-    patches.Add { Target = target; Opcode = opcode; InstructionWriter = wr.instructions.ReserveBytes 5 }
-
-let inline patchedMethodCall (wr: byref<_>) opcode (target: FSharpIL.Cli.MethodCallTarget<_, _>) patches =
-    patched &wr opcode (FSharpIL.Cli.MethodCallTarget(target.Owner, target.Method)) patches.MethodCalls
-    if not target.Method.ReturnType.IsVoid then
-        incrMaxStack &wr
-
-let call (wr: byref<_>) method methodTokenSource =
-    patchedMethodCall &wr Opcode.Call method methodTokenSource
+let call (stream: byref<_>) method tokens = Call.instr' &stream Opcode.Call method tokens
 
 //let calli ({ TableIndex = index }: TableIndex<StandaloneSigRow>)
 
 let inline ret (wr: byref<_>) = writeRawOpcode &wr Opcode.Ret
 
-let callvirt (wr: byref<_>) method methodTokenSource =
-    patchedMethodCall &wr Opcode.Callvirt method methodTokenSource
+let callvirt (stream: byref<_>) method tokens = Call.instr' &stream Opcode.Callvirt method tokens
 
-let ldstr (wr: byref<_>) str { UserStrings = strings } =
-    patched &wr Opcode.Ldstr str strings
-    incrMaxStack &wr
+let inline ldstr (stream: byref<_>) str tokens = Ldstr.ofString &stream str tokens
 
-let inline patchedFieldInstruction (wr: byref<_>) opcode field pushesFieldValue patches =
-    patched
-        &wr
-        opcode
-        field
-        patches.FieldInstructions
-    if pushesFieldValue then incrMaxStack &wr
+let inline ldfld (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Ldfld true field tokens
+let inline ldflda (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Ldflda true field tokens
+let inline stfld (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Stfld false field tokens
+let inline ldsfld (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Ldsfld true field tokens
+let inline ldsflda (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Ldsflda true field tokens
+let inline stsfld (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Stfld false field tokens
 
-let ldfld (wr: byref<_>) field fieldTokenSource =
-    patchedFieldInstruction &wr Opcode.Ldfld field true fieldTokenSource
-
-let ldflda (wr: byref<_>) field fieldTokenSource =
-    patchedFieldInstruction &wr Opcode.Ldflda field true fieldTokenSource
-
-let stfld (wr: byref<_>) field fieldTokenSource =
-    patchedFieldInstruction &wr Opcode.Stfld field false fieldTokenSource
-
-let ldsfld (wr: byref<_>) field fieldTokenSource =
-    patchedFieldInstruction &wr Opcode.Ldsfld field true fieldTokenSource
-
-let ldsflda (wr: byref<_>) field fieldTokenSource =
-    patchedFieldInstruction &wr Opcode.Ldsflda field true fieldTokenSource
-
-let stsfld (wr: byref<_>) field fieldTokenSource =
-    patchedFieldInstruction &wr Opcode.Stfld field false fieldTokenSource
-
-let inline patchedTypeInstruction (wr: byref<_>) opcode typeTok patches =
-    patched &wr opcode typeTok patches.TypeInstructions
-    incrMaxStack &wr // Assumes that all instruction that take a typeTok returns something onto the stack.
-
-let newarr (wr: byref<_>) etype typeTokenSource =
-    patchedTypeInstruction &wr Opcode.Newarr etype typeTokenSource
+let inline newarr (stream: byref<_>) etype typeTokenSource =
+    writeTypeInstruction &stream Opcode.Newarr etype typeTokenSource
+    incrMaxStack &stream
 
 let inline ldarg (wr: byref<_>) (num: uint16) =
     writeRawOpcode &wr Opcode.Ldarg

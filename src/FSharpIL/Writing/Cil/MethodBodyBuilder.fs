@@ -7,7 +7,8 @@ open System.Runtime.CompilerServices
 open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Cil
-open FSharpIL.Metadata.Tables
+
+open FSharpIL.Cli
 
 type [<IsReadOnly; Struct>] MethodBodyOffset = private { MethodBodyOffset : uint32 }
 
@@ -42,33 +43,13 @@ type MethodBodyBuilder =
     /// <remarks>This estimate might be higher than the number of items that is actually needed by the method.</remarks>
     member this.EstimatedMaxStack = this.estimatedMaxStack
 
-[<Struct>]
-type internal Patch<'Target> =
-    { Target: 'Target
-      Opcode: Opcode
-      InstructionWriter: ChunkedMemoryBuilder }
-
-    member this.Instructions =
-        { branchTargetList = Unchecked.defaultof<_>
-          estimatedMaxStack = 0us
-          instructions = this.InstructionWriter }
-
-// TODO: Merge these structs into one reference type.
-[<NoComparison; NoEquality>]
-type MetadataTokenSource =
-    internal { A: unit }
-
-[<IsReadOnly; Struct>]
-type StringTokenSource = internal { UserStrings: ImmutableArray<Patch<string>>.Builder }
-
-[<IsReadOnly; Struct>]
-type MethodTokenSource = internal { MethodCalls: ImmutableArray<Patch<FSharpIL.Cli.MethodCallTarget>>.Builder }
-
-[<IsReadOnly; Struct>]
-type FieldTokenSource = internal { FieldInstructions: ImmutableArray<Patch<FSharpIL.Cli.FieldArg>>.Builder }
-
-[<IsReadOnly; Struct>]
-type TypeTokenSource = internal { TypeInstructions: ImmutableArray<Patch<FSharpIL.Cli.NamedType>>.Builder }
+[<AbstractClass>]
+type MetadataTokenSource internal () =
+    abstract GetUserString: string -> UserStringOffset
+    abstract GetUserString: inref<ReadOnlyMemory<char>> -> UserStringOffset
+    abstract GetMethodToken: method: MethodCallTarget<#NamedType, #Method> -> MethodMetadataToken
+    abstract GetFieldToken: field: FieldArg<#NamedType, #Field> -> FieldMetadataToken
+    abstract GetTypeToken: NamedType -> TypeMetadataToken
 
 /// Represents the destination that a branch instruction would jump to.
 [<IsReadOnly; IsByRefLike>]

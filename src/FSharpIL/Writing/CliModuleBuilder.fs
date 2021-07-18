@@ -28,12 +28,7 @@ type DefinedMethodBody =
     new () = DefinedMethodBody ImmutableArray.Empty
 
     /// Writes the instructions of the method body, and returns the maximum number of items on the stack.
-    abstract WriteInstructions:
-        byref<MethodBodyBuilder> *
-        StringTokenSource *
-        MethodTokenSource *
-        FieldTokenSource *
-        TypeTokenSource -> uint16
+    abstract WriteInstructions: byref<MethodBodyBuilder> * MetadataTokenSource -> uint16
 
 type EntryPoint =
     private
@@ -216,17 +211,14 @@ type MemberIndices =
 type DefinedMethodBodyWriter
     (
         localVarSource: ImmutableArray<LocalVariableType> -> TableIndex<StandaloneSigRow>,
-        stringTokenSource: StringTokenSource,
-        methodTokenSource: MethodTokenSource,
-        fieldTokenSource: FieldTokenSource,
-        typeTokenSource: TypeTokenSource,
+        metadataTokenSource: MetadataTokenSource,
         body: DefinedMethodBody
     )
     =
     interface IMethodBodySource with
         member _.Create builder =
             { InitLocals = body.InitLocals
-              MaxStack = body.WriteInstructions(&builder, stringTokenSource, methodTokenSource, fieldTokenSource, typeTokenSource)
+              MaxStack = body.WriteInstructions(&builder, metadataTokenSource)
               LocalVariables = localVarSource body.LocalTypes }
 
 [<AutoOpen>]
@@ -422,10 +414,26 @@ type ModuleBuilderSerializer
           EventList = TableIndex.One
           PropertyList = TableIndex.One }
 
-    let stringTokenSource = { UserStrings = ImmutableArray.CreateBuilder() }
-    let methodTokenSource = { MethodCalls = ImmutableArray.CreateBuilder() }
-    let fieldTokenSource = { FieldInstructions = ImmutableArray.CreateBuilder() }
-    let typeTokenSource = { TypeInstructions = ImmutableArray.CreateBuilder() }
+    let metadataTokenSource =
+        { new MetadataTokenSource() with
+            member _.GetUserString(str: string) = builder.UserString.AddFolded str
+            member _.GetUserString(str: inref<ReadOnlyMemory<char>>) = builder.UserString.AddFolded str
+
+            member _.GetFieldToken field =
+                match field.Owner :> NamedType with
+                | :? DefinedType as tdef ->
+                    FieldMetadataToken.Def definedFieldLookup.[FieldArg<_, _>(tdef, Unsafe.As field.Field)]
+                | :? ReferencedType as tref ->
+                    FieldMetadataToken.Ref referencedFieldLookup.[FieldArg<_, _>(tref, Unsafe.As field.Field)]
+
+            member _.GetMethodToken method =
+                match method.Owner :> NamedType with
+                | :? DefinedType as tdef ->
+                    MethodMetadataToken.Def definedMethodLookup.[MethodCallTarget<_, _>(tdef, Unsafe.As method.Method)]
+                | :? ReferencedType as tref ->
+                    MethodMetadataToken.Ref referencedMethodLookup.[MethodCallTarget<_, _>(tref, Unsafe.As method.Method)]
+
+            member _.GetTypeToken t = TypeMetadataToken.ofCodedIndex(typeDefOrRefOrSpec t) }
 
     member private _.SerializeAssemblyReferences() =
         for assem in assemblyReferences do
@@ -521,12 +529,9 @@ type ModuleBuilderSerializer
                         match members.MethodBodyLookup.TryGetValue method with
                         | true, body' ->
                             let writer =
-                                DefinedMethodBodyWriter (
+                                DefinedMethodBodyWriter ( // TODO: How to prevent module from being modified while method bodies are being written?
                                     getLocalsSig,
-                                    stringTokenSource,
-                                    methodTokenSource,
-                                    fieldTokenSource,
-                                    typeTokenSource,
+                                    metadataTokenSource,
                                     body'
                                 )
 
@@ -591,29 +596,6 @@ type ModuleBuilderSerializer
 
             builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.CustomAttribute
 
-    member private _.PatchUserStrings() =
-        let stringTokenList = stringTokenSource.UserStrings
-        for i = 0 to stringTokenList.Count - 1 do
-            let instr = &stringTokenList.ItemRef i
-            let mutable writer = instr.Instructions
-            Unsafe.writeStringInstruction &writer instr.Opcode (builder.UserString.AddFolded instr.Target)
-
-    member private _.PatchMethodCalls() =
-        let methodCallList = methodTokenSource.MethodCalls
-        for i = 0 to methodCallList.Count - 1 do
-            let call = &methodCallList.ItemRef i
-            let mutable writer = call.Instructions
-            let token =
-                match call.Target.Owner with
-                | :? DefinedType as tdef ->
-                    MethodMetadataToken.Def
-                        definedMethodLookup.[MethodCallTarget<_, _>(tdef, call.Target.Method :?> DefinedMethod)]
-                | :? ReferencedType as tref ->
-                    MethodMetadataToken.Ref
-                        referencedMethodLookup.[MethodCallTarget<_, _>(tref, call.Target.Method :?> ReferencedMethod)]
-                | _ -> noImpl "TODO: Patch method calls for TypeSpec"
-            Unsafe.writeCallInstruction &writer call.Opcode token false // MaxStack will not be updated
-
     member this.Serialize() =
         this.SerializeAssemblyReferences()
 
@@ -630,10 +612,6 @@ type ModuleBuilderSerializer
 
         //this.SerializeGenericParameters()
         this.SerializeCustomAttributes()
-        this.PatchUserStrings()
-        this.PatchMethodCalls()
-        //this.PatchFieldInstructions()
-        //this.PatchTypeInstructions()
 
         builder
 

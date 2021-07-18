@@ -22,12 +22,7 @@ type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allo
     new: localTypes: ImmutableArray<LocalVariableType> -> DefinedMethodBody
     new: unit -> DefinedMethodBody
 
-    abstract WriteInstructions:
-        byref<MethodBodyBuilder> *
-        StringTokenSource *
-        MethodTokenSource *
-        FieldTokenSource *
-        TypeTokenSource -> uint16
+    abstract WriteInstructions: byref<MethodBodyBuilder> * MetadataTokenSource -> uint16
 
 type EntryPoint
 

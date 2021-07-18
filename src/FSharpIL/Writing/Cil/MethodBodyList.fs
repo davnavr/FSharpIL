@@ -54,7 +54,7 @@ end
 /// Represents the method bodies of the CLI metadata (II.25.4).
 [<Sealed>]
 type MethodBodyList internal () =
-    static let [<Literal>] BodyChunkSize = 64
+    static let [<Literal>] BodyChunkSize = 64 // TODO: Figure out how to allow reuse of method body chunks.
     let bodies = ImmutableArray.CreateBuilder<MethodBody>()
     let mutable offset = 0u
 

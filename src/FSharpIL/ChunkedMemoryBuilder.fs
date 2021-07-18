@@ -10,11 +10,11 @@ open FSharpIL.Utilities
 // TODO: Should the builder type be a struct or reference type?
 /// Builds a non-contiguous region of memory split into chunks of equal sizes.
 type ChunkedMemoryBuilder = struct
-    val mutable private current: LinkedListNode<byte[]>
+    val mutable internal Current: LinkedListNode<byte[]>
     val mutable private pos: int32
     val mutable private length: uint32
 
-    internal new (current, position, length) = { current = current; pos = position; length = length }
+    internal new (current, position, length) = { Current = current; pos = position; length = length }
 
     /// <param name="size">The size of each chunk in bytes.</param>
     /// <exception cref="T:System.ArgumentOutOfRangeException">
@@ -25,9 +25,9 @@ type ChunkedMemoryBuilder = struct
         let chunks = LinkedList()
         ChunkedMemoryBuilder(chunks.AddFirst(Array.zeroCreate size), 0, 0u)
 
-    member this.ChunkCount = this.current.List.Count
+    member this.ChunkCount = this.Current.List.Count
     member this.ChunkPosition = this.pos
-    member this.ChunkSize = this.current.Value.Length
+    member this.ChunkSize = this.Current.Value.Length
     member this.FreeBytes = this.ChunkSize - this.pos
     member this.Length = this.length
 
@@ -36,16 +36,16 @@ type ChunkedMemoryBuilder = struct
         this.length <- this.length + uint32 count
 
     member private this.CheckNextChunk() =
-        if this.pos >= this.current.Value.Length then
-            this.current <-
-                match this.current.Next with
-                | null -> this.current.List.AddAfter(this.current, Array.zeroCreate this.ChunkSize)
+        if this.pos >= this.Current.Value.Length then
+            this.Current <-
+                match this.Current.Next with
+                | null -> this.Current.List.AddAfter(this.Current, Array.zeroCreate this.ChunkSize)
                 | existing -> existing
             this.pos <- 0
 
     member this.Write(value: uint8) =
         this.CheckNextChunk()
-        this.current.Value.[this.pos] <- value
+        this.Current.Value.[this.pos] <- value
         this.IncrementPosition 1
 
     member this.Write(data: ReadOnlySpan<byte>) =
@@ -53,7 +53,7 @@ type ChunkedMemoryBuilder = struct
         while i < data.Length do
             this.CheckNextChunk()
             let length = min this.FreeBytes (data.Length - i)
-            let destination = Span<_>(this.current.Value, this.pos, length)
+            let destination = Span<_>(this.Current.Value, this.pos, length)
             data.Slice(i, length).CopyTo destination
             i <- i + length
             this.IncrementPosition length
@@ -98,8 +98,8 @@ type ChunkedMemoryBuilder = struct
         let free = this.FreeBytes
         let sb = System.Text.StringBuilder((free + 1) * 5)
         Printf.bprintf sb "(%i)" free
-        for i = this.pos to this.current.Value.Length - 1 do
-            Printf.bprintf sb " 0x%02X" this.current.Value.[i]
+        for i = this.pos to this.Current.Value.Length - 1 do
+            Printf.bprintf sb " 0x%02X" this.Current.Value.[i]
         sb.ToString()
 
     /// Copies the contents of this builder to a new immutable non-contiguous region of memory.
@@ -107,7 +107,7 @@ type ChunkedMemoryBuilder = struct
         if this.length = 0u
         then ChunkedMemory.empty
         else
-            let mutable remaining, chunk, chunki = this.length, this.current, this.pos
+            let mutable remaining, chunk, chunki = this.length, this.Current, this.pos
 
             let mutable results =
                 let chunkl = uint32 this.ChunkSize
@@ -148,7 +148,7 @@ type ChunkedMemoryBuilder = struct
                 "The builder must have zero free bytes available in the current chunk, add the required padding bytes by \
                 calling MoveToEnd()"
         else
-            let chunks = this.current.List
+            let chunks = this.Current.List
             let expectedTotalLength = uint32 chunks.Count * uint32 this.ChunkSize
 
             if expectedTotalLength <> this.Length then
@@ -161,14 +161,14 @@ type ChunkedMemoryBuilder = struct
                 chunks'.[i] <- current'.Value
                 current' <- current'.Next
 
-            this.current <-
+            this.Current <-
                 let replacement = LinkedList()
                 replacement.AddFirst(Array.zeroCreate this.ChunkSize)
 
             ChunkedMemory(Unsafe.As &chunks', 0u, expectedTotalLength)
 
     member this.ReserveBytes count =
-        let clone = ChunkedMemoryBuilder(this.current, this.pos, 0u)
+        let clone = ChunkedMemoryBuilder(this.Current, this.pos, 0u)
         this.SkipBytes count
         clone
 
