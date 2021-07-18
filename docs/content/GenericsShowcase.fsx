@@ -27,6 +27,7 @@ open FSharpIL.Metadata.Signatures
 open FSharpIL.Writing
 open FSharpIL.Writing.Cil
 
+#if false
 let example() = // TODO: Make helper function to add reference to System.Private.CoreLib and System.Console for example scripts.
     let namespace' = Identifier.ofStr "GenericsShowcase"
 
@@ -141,6 +142,9 @@ let example() = // TODO: Make helper function to add reference to System.Private
     |> ValidationResult.get
 
     BuildPE.exeFromModule builder
+#endif
+
+let example() = failwith "Bad n"
 
 (*** hide ***)
 #if COMPILED

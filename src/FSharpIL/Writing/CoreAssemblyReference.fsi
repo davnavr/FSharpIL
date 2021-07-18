@@ -8,20 +8,20 @@ type CoreAssemblyMembers =
     /// <summary>
     /// The constructor for <see cref="T:System.Object"/>, called in the constructor of all directly derived types.
     /// </summary>
-    member ObjectConstructor: MethodCallTarget<ReferencedType, ReferencedMethod>
+    member ObjectConstructor: MethodCallTarget<TypeReference<TypeKinds.ConcreteClass>, MethodReference<MethodKinds.ObjectConstructor>>
 
     /// <summary>
     /// The constructor of the <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/> type, which accepts a string
     /// containing the name of the target framework and its version.
     /// </summary>
-    member TargetFrameworkConstructor: MethodCallTarget<ReferencedType, ReferencedMethod>
+    member TargetFrameworkConstructor: MethodCallTarget<TypeReference<TypeKinds.SealedClass>, MethodReference<MethodKinds.ObjectConstructor>>
 
 /// <summary>Represents the assembly containing core types such as <see cref="T:System.Object"/>.</summary>
 [<Sealed>]
 type CoreAssemblyReference =
     member Reference: ReferencedAssembly
     /// <summary>The core type <see cref="T:System.Object"/>, which serves as the base type for all types.</summary>
-    member Object: ReferencedType //<TypeKinds.ConcreteClass>
+    member Object: TypeReference<TypeKinds.ConcreteClass>
     /// <summary>
     /// The core type <see cref="T:System.ValueType"/>, which serves as the base type for all value types (II.13).
     /// </summary>
@@ -38,7 +38,7 @@ type CoreAssemblyReference =
     /// The <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/> type, which identifies the target framework that
     /// the current assembly or module was compiled with (.NET Core, .NET Framework, .NET standard, etc.).
     /// </summary>
-    member TargetFrameworkAttribute: ReferencedType
+    member TargetFrameworkAttribute: TypeReference<TypeKinds.SealedClass>
 
     new: assembly: ReferencedAssembly -> CoreAssemblyReference
 

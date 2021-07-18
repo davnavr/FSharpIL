@@ -3,6 +3,7 @@
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
@@ -31,7 +32,7 @@ module EntryPoint =
     //val (|None|Method|File|): EntryPoint -> Choice<_, _, _>
     val (|None|Method|): EntryPoint -> Choice<unit, struct(DefinedType * EntryPointMethod)>
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<IsReadOnly; Struct>]
 [<NoComparison; NoEquality>]
 type CustomAttributeList =
     member Count: int32
@@ -53,15 +54,23 @@ type DefinedTypeMembers =
         body: DefinedMethodBody voption *
         attributes: CustomAttributeList ref voption -> ValidationResult<MethodCallTarget<DefinedType, DefinedMethod>>
 
+    member DefineEntryPoint:
+        method: EntryPointMethod *
+        body: DefinedMethodBody *
+        attributes: CustomAttributeList ref voption ->
+            ValidationResult<MethodCallTarget<DefinedType, MethodDefinition<MethodKinds.Static>>>
+
     member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool
+
+//[<IsReadOnly; Struct>]
+//type DefinedTypeMembers<'Owner when 'Owner :> DefinedType> =
+//    val Members: DefinedTypeMembers
 
 [<Sealed>]
 type ReferencedTypeMembers =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<ReferencedField>
     [<DefaultValue>] val mutable internal Method: HybridHashSet<ReferencedMethod>
-
-    internal new: owner: ReferencedType * warnings: ValidationWarningsBuilder option -> ReferencedTypeMembers
 
     member FieldCount: int32
     member MethodCount: int32
@@ -73,6 +82,27 @@ type ReferencedTypeMembers =
     member ContainsField: field: ReferencedField -> bool
     member ContainsMethod: method: ReferencedMethod -> bool
 
+[<IsReadOnly; Struct>]
+type ReferencedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> =
+    val Members: ReferencedTypeMembers
+
+[<AbstractClass; Sealed; Extension>]
+type TypeMemberExtensions =
+    [<Extension>]
+    static member ReferenceMethod :
+        members: ReferencedTypeMembers<'Kind> *
+        method: MethodReference<MethodKinds.ObjectConstructor> ->
+            ValidationResult<MethodCallTarget<TypeReference<'Kind>, MethodReference<MethodKinds.ObjectConstructor>>>
+            when 'Kind :> TypeKinds.IHasConstructor
+
+    [<Extension>]
+    static member ReferenceMethod :
+        members: ReferencedTypeMembers<'Kind> *
+        method: MethodReference<MethodKinds.Static> ->
+            ValidationResult<MethodCallTarget<TypeReference<'Kind>, MethodReference<MethodKinds.Static>>>
+            when 'Kind :> TypeAttributes.IHasStaticMethods
+
+    //static member DefineEntryPoint
 
 /// Builds a CLI metadata module (I.9).
 [<Sealed>]
@@ -118,5 +148,6 @@ type CliModuleBuilder =
     //member DefineType: TypeDefinition<TypeKinds.StaticClass> -> ValidationResult<>
 
     member ReferenceType: reference: ReferencedType -> ValidationResult<ReferencedTypeMembers>
+    member ReferenceType: reference: TypeReference<'Kind> -> ValidationResult<ReferencedTypeMembers<'Kind>>
 
     member internal Serialize: unit -> CliMetadataBuilder

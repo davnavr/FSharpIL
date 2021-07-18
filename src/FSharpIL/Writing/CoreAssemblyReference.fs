@@ -16,7 +16,7 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
     static let netCoreLib = FileName.ofStr "System.Private.CoreLib"
 
     let referenceSystemType name =
-        ReferencedType (
+        ReferencedType.ConcreteClass (
             TypeReferenceParent.Assembly assembly,
             ValueSome(Identifier.ofStr "System"),
             Identifier.ofStr name,
@@ -25,7 +25,7 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
 
     let object = referenceSystemType "Object"
     let tfmattr =
-        ReferencedType (
+        ReferencedType.SealedClass (
             TypeReferenceParent.Assembly assembly,
             ValueSome(Identifier.ofStr "System.Runtime.Versioning"),
             Identifier.ofStr "TargetFrameworkAttribute",
@@ -44,7 +44,7 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
     member val ValueType = referenceSystemType "ValueType" :> ReferencedType
     member val Delegate = referenceSystemType "Delegate" :> ReferencedType
     member val Enum = referenceSystemType "Enum" :> ReferencedType
-    member _.TargetFrameworkAttribute = tfmattr :> ReferencedType
+    member _.TargetFrameworkAttribute = tfmattr
 
     member this.AddReferencesTo(builder: CliModuleBuilder) =
         builder.ReferenceAssembly assembly

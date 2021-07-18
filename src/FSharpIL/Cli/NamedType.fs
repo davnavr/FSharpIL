@@ -280,11 +280,10 @@ module TypeReferenceParent =
         | TypeReferenceParent.Assembly _ -> ValueNone
         | TypeReferenceParent.Type(NamedType t) -> ValueSome t
 
-[<Sealed>]
-type ReferencedType (rscope, ns, tname, gparams) =
-    inherit GenericType(ns, TypeReferenceParent.toType rscope, tname, gparams)
+type ReferencedType (resolutionScope, typeNamespace, typeName, genericParameters) =
+    inherit GenericType(typeNamespace, TypeReferenceParent.toType resolutionScope, typeName, genericParameters)
 
-    member _.ResolutionScope = rscope
+    member _.ResolutionScope = resolutionScope
 
 [<IsReadOnly; Struct>]
 type ClassExtends (extends: NamedType voption) =
@@ -444,11 +443,14 @@ module NamedType =
 
 [<RequireQualifiedAccess>]
 module TypeKinds =
+    type IHasConstructor = interface end
+
     type ConcreteClass = struct
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
+        interface IHasConstructor
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = Unchecked.defaultof<_>
     end
@@ -458,6 +460,7 @@ module TypeKinds =
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
+        interface IHasConstructor
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Abstract
     end
@@ -467,6 +470,7 @@ module TypeKinds =
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
+        interface IHasConstructor
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
     end
@@ -476,6 +480,7 @@ module TypeKinds =
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
+        interface IHasConstructor
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags
                 with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Abstract ||| TypeDefFlags.Sealed
@@ -483,6 +488,7 @@ module TypeKinds =
 
     type Delegate = struct
         interface TypeAttributes.ISerializableType
+        interface IHasConstructor
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
     end
@@ -506,6 +512,7 @@ module TypeKinds =
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
+        interface IHasConstructor
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
     end
@@ -549,3 +556,27 @@ type DefinedType with
 
     static member ValueType(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
         TypeDefinition<TypeKinds.ValueType>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+
+[<Sealed>]
+type TypeReference<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>>
+    (
+        parent: TypeReferenceParent,
+        typeNamespace: Identifier voption,
+        typeName: Identifier,
+        genericParameters: GenericParamList
+    )
+    =
+    inherit ReferencedType(parent, typeNamespace, typeName, genericParameters)
+
+type ReferencedType with
+    static member ConcreteClass(resolutionScope, typeNamespace, typeName, genericParameters) =
+        TypeReference<TypeKinds.ConcreteClass>(resolutionScope, typeNamespace, typeName, genericParameters)
+
+
+
+
+    static member SealedClass(resolutionScope, typeNamespace, typeName, genericParameters) =
+        TypeReference<TypeKinds.SealedClass>(resolutionScope, typeNamespace, typeName, genericParameters)
+
+    static member StaticClass(resolutionScope, typeNamespace, typeName, genericParameters) =
+        TypeReference<TypeKinds.StaticClass>(resolutionScope, typeNamespace, typeName, genericParameters)

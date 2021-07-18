@@ -19,7 +19,7 @@ open FSharpIL.Utilities.Collections
 
 [<AbstractClass>]
 type DefinedMethodBody =
-    val LocalTypes: LocalVarSig
+    val LocalTypes: LocalVarSig // ImmutableArray<
     val InitLocals: InitLocals
 
     new (localTypes, initLocals) = { LocalTypes = localTypes; InitLocals = initLocals }
@@ -165,6 +165,12 @@ type DefinedTypeMembers (owner: DefinedType, warnings: ValidationWarningsBuilder
             let! target = this.AddDefinedMethod(method, body)
             CustomAttributeList.fromRef (CustomAttribute.Owner.DefinedMethod method) attrs attributes
             return target
+        }
+
+    member this.DefineEntryPoint(method: EntryPointMethod, body, attributes) =
+        validated {
+            let! target = this.DefineMethod(method.Method, ValueSome body, attributes)
+            return MethodCallTarget<_, _>(target.Owner, method.Method)
         }
 
     member this.ContainsField field = this.Field.Contains field
@@ -316,7 +322,7 @@ type ModuleBuilderSerializer
                     (i - 1)
                     ({ CustomMod.Required = modf'.Required; ModifierType = typeDefOrRefOrSpec modf'.Modifier } :: modifiers')
             else modifiers'
-        inner 0 List.empty
+        inner (modifiers.Length - 1) List.empty
 
     and getTypeSpec =
         createBlobLookup EqualityComparer.Default <| fun (tspec: EncodedType) ->
@@ -379,6 +385,10 @@ type ModuleBuilderSerializer
         createBlobLookup Field.signatureComparer <| fun (field: Field) ->
             let signature = { FieldType = getEncodedType field.Type }
             builder.Blob.Add &signature
+
+    let getLocalsSig =
+        createBlobLookup () <| fun (locals: LocalVarSig) ->
+            failwith "bad"
 
     let mutable methodDefParams = TableIndex<ParamRow>.One
 
@@ -522,8 +532,6 @@ type ModuleBuilderSerializer
             definedTypeLookup.[definition] <- i
             i
 
-
-
     member private _.SerializeCustomAttributes() =
         if attributes.OwnerCount > 0 then
             let lookup = SortedList<HasCustomAttribute, _> attributes.OwnerCount
@@ -558,6 +566,22 @@ type ModuleBuilderSerializer
 
             builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.CustomAttribute
 
+    member private _.PatchMethodCalls() =
+        let methodCallList = methodTokenSource.MethodCalls
+        for i = 0 to methodCallList.Count - 1 do
+            let call = &methodCallList.ItemRef i
+            let mutable writer = call.Instructions
+            let token =
+                match call.Target.Owner with
+                | :? DefinedType as tdef ->
+                    MethodMetadataToken.Def
+                        definedMethodLookup.[MethodCallTarget<_, _>(tdef, call.Target.Method :?> DefinedMethod)]
+                | :? ReferencedType as tref ->
+                    MethodMetadataToken.Ref
+                        referencedMethodLookup.[MethodCallTarget<_, _>(tref, call.Target.Method :?> ReferencedMethod)]
+                | _ -> noImpl "TODO: Patch method calls for TypeSpec"
+            Unsafe.writeCallInstruction &writer call.Opcode token false // MaxStack will not be updated
+
     member this.Serialize() =
         this.SerializeAssemblyReferences()
 
@@ -572,11 +596,34 @@ type ModuleBuilderSerializer
             | NoEntryPoint -> EntryPointToken.Null
             | EntryPointMethod call -> EntryPointToken.MethodDef definedMethodLookup.[MethodCallTarget.convert call]
 
+        //this.SerializeGenericParameters()
         this.SerializeCustomAttributes()
-
-        // PATCHES
+        this.PatchMethodCalls()
+        //this.PatchFieldInstructions()
+        //this.PatchTypeInstructions()
 
         builder
+
+[<IsReadOnly; Struct>]
+type ReferencedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> =
+    val Members: ReferencedTypeMembers
+
+    new (members) = { Members = members }
+
+    member this.ReferenceMethod<'Method when 'Method :> ReferencedMethod and 'Method : not struct>(method: 'Method) =
+        match this.Members.ReferenceMethod method with
+        | Ok target -> Ok(MethodCallTarget<TypeReference<'Kind>, 'Method>(Unsafe.As target.Owner, method))
+        | Error err -> Error err
+
+[<AbstractClass; Sealed>]
+type TypeMemberExtensions = // TODO: For these extension methods, call internal version that skips some validation.
+    static member ReferenceMethod(members: ReferencedTypeMembers<'Kind> when 'Kind :> TypeKinds.IHasConstructor, method) =
+        members.ReferenceMethod<MethodReference<MethodKinds.ObjectConstructor>> method
+
+    static member ReferenceMethod(members: ReferencedTypeMembers<'Kind> when 'Kind :> TypeAttributes.IHasStaticMethods, method) =
+        members.ReferenceMethod<MethodReference<MethodKinds.Static>> method
+
+    //static member DefineEntryPoint(members: ReferenceTypeMembers<'Kind> 
 
 [<Sealed>]
 type CliModuleBuilder // TODO: Consider making an immutable version of this class.
@@ -595,7 +642,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
     =
     let cliMetadataHeader' = defaultArg cliMetadataHeader CliHeader.latestDefault
     let cliMetadataRoot' = defaultArg cliMetadataRoot CliMetadataRoot.defaultFields
-    let mutable assemblyDef, assemblyDefAttributes = assembly, None
+    let mutable assemblyDef = assembly
     let assemblyRefs = HashSet<ReferencedAssembly>(defaultArg assemblyRefCapacity 8)
     let definedTypes = Dictionary<DefinedType, DefinedTypeMembers>(defaultArg typeDefCapacity 16)
     let referencedTypes = Dictionary<ReferencedType, ReferencedTypeMembers>(defaultArg typeRefCapacity 32)
@@ -611,7 +658,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             | false, _ -> Error(noImpl "error for defined attribute type not found")
         | CustomAttributeCtor.Ref(MethodCallTarget(tref, ctor)) ->
             match referencedTypes.TryGetValue tref with
-            //| true, members when members.ContainsMethod ctor -> Ok ctor.ParameterTypes.Length
+            | true, members when members.ContainsMethod ctor -> Ok ctor.ParameterTypes.Length
             | true, _ -> Error(noImpl "error for referenced attribute ctor not found")
             | false, _ -> Error(noImpl "error for referenced attribute type not found")
 
@@ -619,6 +666,11 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
     let createAttributeList owner = CustomAttributeList(owner, customAttributeLookup)
     let defineMembersFor owner = DefinedTypeMembers(owner, warnings, entryPointToken, customAttributeLookup)
+
+    let mutable assemblyDefAttributes =
+        match assembly with
+        | Some assembly' -> Some(createAttributeList(CustomAttribute.Owner.DefinedAssembly assembly'))
+        | None -> None
 
     member val UserStrings = UserStringStreamBuilder 1
     member val ValidationWarnings = ValidationWarningsCollection(?warnings = warnings)
@@ -668,7 +720,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             return members
         }
 
-    member this.ReferenceType reference =
+    member _.ReferenceType reference =
         match referencedTypes.TryGetValue reference with
         | true, existing -> ValidationResult<_>.Error(noImpl "TODO: error for duplicate type ref")
         | false, _ ->
@@ -676,6 +728,12 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             let members = ReferencedTypeMembers(reference, warnings)
             referencedTypes.[reference] <- members
             Ok members
+
+    member this.ReferenceType(reference: TypeReference<'Kind>) =
+        validated {
+            let! members = this.ReferenceType(reference :> ReferencedType)
+            return ReferencedTypeMembers<'Kind> members
+        }
 
     member internal this.Serialize() =
         let serializer =

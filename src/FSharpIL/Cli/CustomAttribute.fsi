@@ -12,6 +12,10 @@ type CustomAttributeCtor =
     | Def of MethodCallTarget<DefinedType, MethodDefinition<MethodKinds.ObjectConstructor>>
     //| Spec of TypeSpecification * 
 
+    static member Referenced :
+        target: MethodCallTarget<TypeReference<'Kind>, MethodReference<MethodKinds.ObjectConstructor>> ->
+            CustomAttributeCtor when 'Kind :> TypeKinds.IHasConstructor
+
 type FixedArgSource = int32 -> Identifier voption -> ElemType -> Result<FixedArg, IValidationError voption>
 
 [<NoComparison; ReferenceEquality>]

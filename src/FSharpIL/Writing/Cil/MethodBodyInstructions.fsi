@@ -6,6 +6,8 @@ open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Cil
 
+open FSharpIL.Cli
+
 module Unsafe =
     val getInstructionStream: byref<MethodBodyBuilder> -> byref<ChunkedMemoryBuilder>
 
@@ -106,7 +108,7 @@ val inline pop: byref<MethodBodyBuilder> -> unit
 
 
 /// (0x28) Writes an instruction that calls the specified method (III.3.19).
-val call: byref<MethodBodyBuilder> -> method: FSharpIL.Cli.MethodCallTarget -> MethodTokenSource -> unit
+val call: byref<MethodBodyBuilder> -> method: MethodCallTarget<#NamedType, #Method> -> MethodTokenSource -> unit
 
 
 
@@ -116,7 +118,7 @@ val inline ret: byref<MethodBodyBuilder> -> unit
 
 
 /// <summary>(0x6F) Writes an instruction that calls a method associated with an object (III.4.2).</summary>
-val callvirt: byref<MethodBodyBuilder> -> method: FSharpIL.Cli.MethodCallTarget -> MethodTokenSource -> unit
+val callvirt: byref<MethodBodyBuilder> -> method: MethodCallTarget<#NamedType, #Method> -> MethodTokenSource -> unit
 
 
 
@@ -139,16 +141,16 @@ val ldflda: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTok
 
 /// (0x7D) Writes an instruction that pops a member reference and a value off of the stack, storing the value into an instance
 /// field (III.4.28).
-val stfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
+val stfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
 
 /// (0x7E) Writes an instruction that loads the value of a static field onto the stack (III.4.14).
 val ldsfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
 
 /// (0x7F) Writes an instruction that pushes an unmanaged pointer to a static field onto the stack (III.4.15).
-val ldsflda: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
+val ldsflda: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
 
 /// (0x80) Writes an instruction that pops a value off of the stack and stores it into a static field (III.4.30).
-val stsfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit
+val stsfld: byref<MethodBodyBuilder> -> field: FSharpIL.Cli.FieldArg -> FieldTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
 
 
 

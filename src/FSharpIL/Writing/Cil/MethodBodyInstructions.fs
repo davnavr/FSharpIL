@@ -88,8 +88,8 @@ let inline patched (wr: byref<_>) opcode target (patches: System.Collections.Imm
     // 1 byte for opcode, 4 bytes for metadata token.
     patches.Add { Target = target; Opcode = opcode; InstructionWriter = wr.instructions.ReserveBytes 5 }
 
-let inline patchedMethodCall (wr: byref<_>) opcode method patches =
-    patched &wr opcode method patches.MethodCalls
+let inline patchedMethodCall (wr: byref<_>) opcode (target: FSharpIL.Cli.MethodCallTarget<_, _>) patches =
+    patched &wr opcode (FSharpIL.Cli.MethodCallTarget(target.Owner, target.Method)) patches.MethodCalls
     incrMaxStack &wr
 
 let call (wr: byref<_>) method methodTokenSource =

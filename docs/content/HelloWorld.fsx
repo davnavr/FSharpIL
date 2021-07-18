@@ -24,6 +24,7 @@ open System.Collections.Immutable
 open FSharpIL.Cli
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Signatures
+open FSharpIL.Metadata.Tables
 open FSharpIL.PortableExecutable
 
 open FSharpIL.Writing
@@ -31,10 +32,10 @@ open FSharpIL.Writing.Cil
 
 let example() =
     let builder =
-        ModuleBuilder (
+        CliModuleBuilder (
             name = Identifier.ofStr "HelloWorld.exe",
             assembly =
-                { AssemblyDefinition.Version = AssemblyVersion(1us, 0us, 0us, 0us)
+                { DefinedAssembly.Version = AssemblyVersion(1us, 0us, 0us, 0us)
                   PublicKey = ImmutableArray.Empty
                   Name = FileName.ofStr "HelloWorld"
                   Culture = ValueNone }
@@ -70,14 +71,17 @@ let example() =
             ReferencedType.ConcreteClass (
                 resolutionScope = TypeReferenceParent.Assembly mscorlib,
                 typeNamespace = system,
-                typeName = Identifier.ofStr "Object"
+                typeName = Identifier.ofStr "Object",
+                genericParameters = GenericParamList.empty
             )
 
         let tfmattr =
+            // [<Sealed>] type TargetFrameworkAttribute
             ReferencedType.SealedClass (
                 resolutionScope = TypeReferenceParent.Assembly mscorlib,
                 typeNamespace = ValueSome(Identifier.ofStr "System.Runtime.Versioning"),
-                typeName = Identifier.ofStr "TargetFrameworkAttribute"
+                typeName = Identifier.ofStr "TargetFrameworkAttribute",
+                genericParameters = GenericParamList.empty
             )
 
         let console =
@@ -85,32 +89,32 @@ let example() =
             ReferencedType.StaticClass (
                 resolutionScope = TypeReferenceParent.Assembly consolelib,
                 typeNamespace = system,
-                typeName = Identifier.ofStr "Console"
+                typeName = Identifier.ofStr "Console",
+                genericParameters = GenericParamList.empty
             )
 
         let! _ = builder.ReferenceType object
         let! tfmattr' = builder.ReferenceType tfmattr
         let! console' = builder.ReferenceType console
 
-        (* Add reference to methods defined in a referenced types *)
-        let stringArg = ParamItem.Type(ImmutableArray.Empty, EncodedType.String)
+        (* Add references to methods defined in a referenced types *)
 
-        // member new: string -> System.Runtime.Versioning.TargetFrameworkAttribute
+        // new: string -> System.Runtime.Versioning.TargetFrameworkAttribute
         let tfmctor =
             ReferencedMethod.Constructor (
                 visibility = ExternalVisibility.Public,
-                parameterTypes = ImmutableArray.Create stringArg
+                parameterTypes = ImmutableArray.Create(MethodParameterType.Type PrimitiveType.String)
             )
 
-        let! _ = tfmattr'.ReferenceMethod tfmctor
+        let! tfmctor' = tfmattr'.ReferenceMethod tfmctor
 
         // static member WriteLine: string -> unit
         let! writeln =
             ReferencedMethod.Static (
                 visibility = ExternalVisibility.Public,
-                returnType = ReturnType.RVoid,
+                returnType = MethodReturnType.Void',
                 name = MethodName.ofStr "WriteLine",
-                parameterTypes = ImmutableArray.Create stringArg
+                parameterTypes = ImmutableArray.Create(MethodParameterType.Type PrimitiveType.String)
             )
             |> console'.ReferenceMethod
 
@@ -123,16 +127,17 @@ let example() =
                 typeNamespace = ValueSome(Identifier.ofStr "HelloWorld"),
                 enclosingClass = ValueNone,
                 typeName = Identifier.ofStr "Program",
-                extends = ClassExtends.ConcreteRef object,
+                extends = ClassExtends.Referenced object,
                 genericParameters = GenericParamList.empty
             )
 
-        let! struct(members, _) = builder.DefineType program
+        let! members = builder.DefineType(program, ValueNone)
 
         (* Create the body of the entrypoint method *)
-        let body =
+        let mainbody =
             { new DefinedMethodBody() with
                 override _.WriteInstructions(wr, methods, _, _) =
+                    // System.Console.WriteLine "Hello World!"
                     ldstr &wr (builder.UserStrings.AddFolded "Hello World!")
                     call &wr writeln methods
                     ret &wr
@@ -140,27 +145,27 @@ let example() =
 
         (* Create the entrypoint method of the current assembly *)
         // static member public Main: unit -> unit
-        let! _ =
-            let def =
-                DefinedMethod.EntryPoint (
-                    visibility = MemberVisibility.Public,
-                    flags = MethodAttributes.HideBySig,
-                    name = MethodName.ofStr "Main",
-                    kind = EntryPointKind.VoidNoArgs
-                )
-            members.AddEntryPoint(def, body)
+        let maindef =
+            DefinedMethod.EntryPoint (
+                visibility = MemberVisibility.Public,
+                flags = MethodAttributes.HideBySig,
+                name = MethodName.ofStr "Main",
+                kind = EntryPointKind.VoidNoArgs
+            )
+
+        let! _ = members.DefineEntryPoint(maindef, mainbody, ValueNone)
 
         (* Sets the target framework of the assembly, this is so the CoreCLR and tools such as ILSpy can recognize it *)
         // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
         do!
             builder.AssemblyCustomAttributes.Value.Add
-                { Constructor = CustomAttributeCtor.Ref(tfmattr, tfmctor)
+                { Constructor = CustomAttributeCtor.Referenced tfmctor'
                   FixedArguments = fun _ _ _ -> Ok(FixedArg.Elem (Elem.SerString ".NETCoreApp,Version=v5.0"))
                   NamedArguments = ImmutableArray.Empty }
     }
     |> ValidationResult.get
 
-    BuildPE.exeFromModule builder
+    BuildPE.ofModuleBuilder FileCharacteristics.IsExe builder
 
 (*** hide ***)
 #if COMPILED && !BENCHMARK

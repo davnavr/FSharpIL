@@ -163,14 +163,18 @@ type TypeReferenceParent =
     | Assembly of ReferencedAssembly
     //| Module of ModuleReference
 
-and [<Sealed>] ReferencedType =
+and ReferencedType =
     inherit GenericType
 
     //val Flags: TypeDefFlags voption
 
     member ResolutionScope: TypeReferenceParent
 
-    internal new: TypeReferenceParent * Identifier voption * Identifier * GenericParamList -> ReferencedType
+    new:
+        resolutionScope: TypeReferenceParent *
+        typeNamespace: Identifier voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> ReferencedType
 
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
@@ -218,8 +222,11 @@ module internal ModuleType =
 
 [<RequireQualifiedAccess>]
 module TypeKinds =
+    type IHasConstructor = interface end
+
     type ConcreteClass = struct
         interface IAttributeTag<TypeDefFlags>
+        interface IHasConstructor
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
@@ -228,6 +235,7 @@ module TypeKinds =
 
     type AbstractClass = struct
         interface IAttributeTag<TypeDefFlags>
+        interface IHasConstructor
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
@@ -236,6 +244,7 @@ module TypeKinds =
 
     type SealedClass = struct
         interface IAttributeTag<TypeDefFlags>
+        interface IHasConstructor
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
@@ -244,6 +253,7 @@ module TypeKinds =
 
     type StaticClass = struct
         interface IAttributeTag<TypeDefFlags>
+        interface IHasConstructor
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
@@ -252,6 +262,7 @@ module TypeKinds =
 
     type Delegate = struct
         interface IAttributeTag<TypeDefFlags>
+        interface IHasConstructor
         interface TypeAttributes.ISerializableType
     end
 
@@ -267,6 +278,7 @@ module TypeKinds =
 
     type ValueType = struct
         interface IAttributeTag<TypeDefFlags>
+        interface IHasConstructor
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
@@ -346,6 +358,33 @@ type DefinedType with
 
     //static member Delegate
     //static member Enum
+
+[<Sealed>]
+type TypeReference<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> = class
+    inherit ReferencedType
+end
+
+type ReferencedType with
+    static member ConcreteClass:
+        resolutionScope: TypeReferenceParent *
+        typeNamespace: Identifier voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> TypeReference<TypeKinds.ConcreteClass>
+
+
+
+
+    static member SealedClass:
+        resolutionScope: TypeReferenceParent *
+        typeNamespace: Identifier voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> TypeReference<TypeKinds.SealedClass>
+
+    static member StaticClass:
+        resolutionScope: TypeReferenceParent *
+        typeNamespace: Identifier voption *
+        typeName: Identifier *
+        genericParameters: GenericParamList -> TypeReference<TypeKinds.StaticClass>
 
 [<NoComparison; NoEquality>]
 type InstantiatedTypeArgumentsEnumerator = struct
