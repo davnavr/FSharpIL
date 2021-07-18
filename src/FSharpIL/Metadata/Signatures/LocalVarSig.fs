@@ -11,13 +11,15 @@ type LocalVariableTag =
 /// <summary>Represents a <c>Constraint</c> item (II.23.2.9).</summary>
 [<RequireQualifiedAccess>]
 type Constraint =
+    /// Indicates that the value pointed to by this local variable should not be moved "by the actions of garbage collection"
+    /// (II.23.2.9).
     | Pinned
 
 /// <summary>Represents a single local variable in a <c>LocalVarSig</c> item (II.23.2.6).</summary>
 [<IsReadOnly; Struct>]
 type LocalVariable internal
     (
-        modifiers: CustomModifiers,
+        modifiers: CustomMod list,
         constraints: Constraint list,
         tag: LocalVariableTag,
         ltype: EncodedType voption
@@ -39,6 +41,9 @@ type LocalVariable =
 
 [<RequireQualifiedAccess>]
 module LocalVariable =
+    /// <summary>A constraint list containing the currently only kind of constraint, <c>PINNED</c> (II.23.2.9).</summary>
+    let pinned = [ Constraint.Pinned ]
+
     let inline (|Local|ByRef|TypedByRef|) (local: LocalVariable) =
         let inline info() = struct(local.CustomMod, local.Constraints, local.Type.Value)
         match local.Tag with
@@ -53,7 +58,7 @@ module LocalVariable =
     let ByRef(modifiers, constraints, localType) =
         LocalVariable(modifiers, constraints, LocalVariableTag.ByRef, ValueSome localType)
 
-    let TypedByRef = LocalVariable(ImmutableArray.Empty, List.empty, LocalVariableTag.TypedByRef, ValueNone)
+    let TypedByRef modifiers = LocalVariable(modifiers, List.empty, LocalVariableTag.TypedByRef, ValueNone)
 
 /// <summary>
 /// Represents a <c>LocalVarSig</c> item, which describes the types of all of the local variables of a method (II.23.2.6).

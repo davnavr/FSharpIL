@@ -16,10 +16,11 @@ open FSharpIL.Writing.Cil
 
 open FSharpIL.Utilities
 open FSharpIL.Utilities.Collections
+open FSharpIL.Utilities.Compare
 
 [<AbstractClass>]
 type DefinedMethodBody =
-    val LocalTypes: LocalVarSig // ImmutableArray<
+    val LocalTypes: ImmutableArray<LocalVariableType>
     val InitLocals: InitLocals
 
     new (localTypes, initLocals) = { LocalTypes = localTypes; InitLocals = initLocals }
@@ -53,7 +54,7 @@ module CustomAttribute =
     [<IsReadOnly; Struct>]
     [<NoComparison; CustomEquality>]
     type Owner =
-        private { Owner: obj }
+        { Owner: obj }
         interface IEquatable<Owner> with member this.Equals other = this.Owner.Equals other.Owner
 
         static member DefinedAssembly (assembly: DefinedAssembly) = { Owner = assembly }
@@ -207,7 +208,7 @@ type MemberIndices =
 [<IsReadOnly; Struct>]
 type DefinedMethodBodyWriter
     (
-        localVarSource: LocalVarSig -> TableIndex<StandaloneSigRow>,
+        localVarSource: ImmutableArray<LocalVariableType> -> TableIndex<StandaloneSigRow>,
         methodTokenSource: MethodTokenSource,
         fieldTokenSource: FieldTokenSource,
         typeTokenSource: TypeTokenSource,
@@ -387,8 +388,27 @@ type ModuleBuilderSerializer
             builder.Blob.Add &signature
 
     let getLocalsSig =
-        createBlobLookup () <| fun (locals: LocalVarSig) ->
-            failwith "bad"
+        let lookup =
+            createBlobLookup Equatable.BlockComparer <| fun (locals: ImmutableArray<LocalVariableType>) ->
+                let mutable locals' = Array.zeroCreate<LocalVariable> locals.Length
+
+                for i = 0 to locals'.Length - 1 do
+                    let lvar = &locals.ItemRef i
+                    let constraints = if lvar.IsPinned then LocalVariable.pinned else List.empty
+                    let ltype =
+                        match lvar.Type with
+                        | ValueSome ltype' -> ValueSome(getEncodedType ltype')
+                        | ValueNone -> ValueNone
+
+                    locals'.[i] <- LocalVariable(getCustomModifiers lvar.CustomModifiers, constraints, lvar.Tag, ltype)
+
+                failwith "TODO: Add locals to blob stream": TableIndex<StandaloneSigRow>
+                //builder.Blob.Add(Unsafe.As &locals')
+
+        fun (locals: ImmutableArray<_>) ->
+            if locals.IsDefaultOrEmpty
+            then { TableIndex = 0u }
+            else lookup locals
 
     let mutable methodDefParams = TableIndex<ParamRow>.One
 
@@ -498,7 +518,7 @@ type ModuleBuilderSerializer
                         | true, body' ->
                             let writer =
                                 DefinedMethodBodyWriter (
-                                    noImpl "TODO: Figure out how to get local var info",
+                                    getLocalsSig,
                                     methodTokenSource,
                                     fieldTokenSource,
                                     typeTokenSource,
@@ -536,7 +556,7 @@ type ModuleBuilderSerializer
         if attributes.OwnerCount > 0 then
             let lookup = SortedList<HasCustomAttribute, _> attributes.OwnerCount
 
-            for KeyValue(parent, attrs) in attributes do
+            for KeyValue({ CustomAttribute.Owner = parent }, attrs) in attributes do
                 let index =
                     if Object.ReferenceEquals(parent, moduleBuilderObj) then
                         HasCustomAttribute.Module

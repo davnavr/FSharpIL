@@ -580,3 +580,23 @@ type ReferencedType with
 
     static member StaticClass(resolutionScope, typeNamespace, typeName, genericParameters) =
         TypeReference<TypeKinds.StaticClass>(resolutionScope, typeNamespace, typeName, genericParameters)
+
+[<IsReadOnly; Struct>]
+type LocalVariableType =
+    val CustomModifiers: ImmutableArray<ModifierType>
+    val IsPinned: bool
+    val Tag: LocalVariableTag
+    val Type: NamedType voption
+
+    new (modifiers, pinned, tag, ltype) =
+        { CustomModifiers = modifiers
+          IsPinned = pinned
+          Tag = tag
+          Type = ltype }
+
+[<RequireQualifiedAccess>]
+module LocalVariableType =
+    let Type(pinned, localVarType) = LocalVariableType(ImmutableArray.Empty, pinned, LocalVariableTag.Type, ValueSome localVarType)
+    let ByRef(modifiers, pinned, localVarType) = LocalVariableType(modifiers, pinned, LocalVariableTag.ByRef, ValueSome localVarType)
+    let TypedByRef modifiers = LocalVariableType(modifiers, false, LocalVariableTag.TypedByRef, ValueNone)
+    let TypedByRef' = TypedByRef ImmutableArray.Empty

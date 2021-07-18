@@ -27,6 +27,19 @@ module Equatable =
         | ValueNone, ValueNone -> true
         | _ -> false
 
+    type BlockComparer<'T when 'T :> IEquatable<'T>> =
+        | BlockComparer
+
+        interface IEqualityComparer<ImmutableArray<'T>> with // TODO: Benchmark if using inref will speed up for structs or slow down for classes.
+            member _.Equals(x, y) = blocks x y // TODO: Make comparison function for block that uses inref for the elements of one of the arrays.
+            member _.GetHashCode obj =
+                let mutable hcode = HashCode()
+
+                if not obj.IsDefaultOrEmpty then
+                    for i = 0 to obj.Length - 1 do hcode.Add obj.[i] // NOTE: Hopefully this doesn't cause too much struct copying
+
+                hcode.ToHashCode()
+
 /// <summary>Equality operator for objects implementing <see cref="T:System.IEquatable`1"/>.</summary>
 let inline (===) x y = Equatable.equals x y
 

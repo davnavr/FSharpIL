@@ -60,11 +60,10 @@ type GenericParam = // TODO: Make this inherit NamedType
 module GenericParam =
     val named : Identifier -> GenericParam
 
-[<IsReadOnly>]
+[<IsReadOnly; Struct>]
 [<NoComparison; NoEquality>]
-type GenericParamList = struct // TODO: Make this type lazy.
+type GenericParamList = // TODO: Make this type lazy.
     member Parameters: ImmutableArray<GenericParam>
-end
 
 [<RequireQualifiedAccess>]
 module GenericParamList =
@@ -386,8 +385,9 @@ type ReferencedType with
         typeName: Identifier *
         genericParameters: GenericParamList -> TypeReference<TypeKinds.StaticClass>
 
+[<Struct>]
 [<NoComparison; NoEquality>]
-type InstantiatedTypeArgumentsEnumerator = struct
+type InstantiatedTypeArgumentsEnumerator =
     val mutable internal Index: int32
     val internal Parameters: ImmutableArray<GenericParam>
     val internal Instantiator: int32 -> GenericParam -> NamedType
@@ -399,11 +399,10 @@ type InstantiatedTypeArgumentsEnumerator = struct
     member MoveNext: unit -> bool
 
     interface System.Collections.Generic.IEnumerator<NamedType>
-end
 
 [<IsReadOnly; Struct>]
 [<NoComparison; CustomEquality>]
-type InstantiatedTypeArguments = struct
+type InstantiatedTypeArguments =
     member Count: int32
     member Item: index: int32 -> NamedType with get
 
@@ -415,7 +414,6 @@ type InstantiatedTypeArguments = struct
 
     interface IEquatable<InstantiatedTypeArguments>
     interface System.Collections.Generic.IReadOnlyList<NamedType>
-end
 
 // TODO: Make common subclass GenericTypeInstantiation
 
@@ -443,3 +441,34 @@ module ClassExtends =
     val DefinedGeneric: extends: InstantiatedType<DefinedType> -> ClassExtends
     val Referenced: extends: ReferencedType -> ClassExtends
     val ReferencedGeneric: extends: InstantiatedType<ReferencedType> -> ClassExtends
+
+/// Describes the type of a local variable (II.23.2.6).
+[<IsReadOnly; Struct>]
+[<NoComparison; StructuralEquality>]
+type LocalVariableType =
+    val CustomModifiers: ImmutableArray<ModifierType>
+    /// <summary>
+    /// Gets a value indicating whether the value pointed to by this local variable can move during garbage collection (II.23.2.9).
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/> if the value pointed to by this local variable cannot be moved during garbage collection;
+    /// otherwise <see langword="false"/>.
+    /// </returns>
+    val IsPinned: bool
+    val Tag: FSharpIL.Metadata.Signatures.LocalVariableTag
+    val Type: NamedType voption
+
+    internal new:
+        modifiers: ImmutableArray<ModifierType> *
+        pinned: bool *
+        tag: FSharpIL.Metadata.Signatures.LocalVariableTag *
+        NamedType voption -> LocalVariableType
+
+    interface IEquatable<LocalVariableType>
+
+[<RequireQualifiedAccess>]
+module LocalVariableType =
+    val Type : pinned: bool * localVarType: NamedType -> LocalVariableType
+    val ByRef : modifiers: ImmutableArray<ModifierType> * pinned: bool * localVarType: NamedType -> LocalVariableType
+    val TypedByRef : modifiers: ImmutableArray<ModifierType> -> LocalVariableType
+    val TypedByRef' : LocalVariableType

@@ -1,7 +1,6 @@
 ﻿namespace FSharpIL.Writing
 
 open System
-open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
@@ -17,10 +16,10 @@ open FSharpIL.Utilities.Collections
 [<AbstractClass>]
 type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allow its usage in the FSharpIL.Cli namespace.
     val InitLocals: InitLocals
-    val LocalTypes: Signatures.LocalVarSig
+    val LocalTypes: ImmutableArray<LocalVariableType>
 
-    new: localTypes: Signatures.LocalVarSig * initLocals: InitLocals -> DefinedMethodBody
-    new: localTypes: Signatures.LocalVarSig -> DefinedMethodBody
+    new: localTypes: ImmutableArray<LocalVariableType> * initLocals: InitLocals -> DefinedMethodBody
+    new: localTypes: ImmutableArray<LocalVariableType> -> DefinedMethodBody
     new: unit -> DefinedMethodBody
 
     abstract WriteInstructions: byref<MethodBodyBuilder> * MethodTokenSource * FieldTokenSource * TypeTokenSource -> uint16
