@@ -144,18 +144,18 @@ let example() = // TODO: Make helper function to add reference to System.Private
     BuildPE.exeFromModule builder
 #endif
 
-let example() = failwith "Bad n"
-
 (*** hide ***)
 #if COMPILED
 [<Tests>]
 let tests =
     testList "generics showcase" [
+#if false
         testCaseExec (lazy example()) "name of test case" __SOURCE_DIRECTORY__ "exout" "GenericsShowcase.dll" <| fun dotnet ->
             let out = dotnet.StandardOutput.ReadLine()
             dotnet.StandardError.ReadToEnd() |> stderr.Write
 
             fun() ->
                 test <@ 1 = 2 @>
+#endif
     ]
 #endif

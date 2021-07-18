@@ -171,7 +171,9 @@ type DefinedTypeMembers (owner: DefinedType, warnings: ValidationWarningsBuilder
     member this.DefineEntryPoint(method: EntryPointMethod, body, attributes) =
         validated {
             let! target = this.DefineMethod(method.Method, ValueSome body, attributes)
-            return MethodCallTarget<_, _>(target.Owner, method.Method)
+            let target' = MethodCallTarget<_, _>(target.Owner, method.Method)
+            entryPointToken := EntryPoint.EntryPointMethod target'
+            return target'
         }
 
     member this.ContainsField field = this.Field.Contains field
@@ -717,7 +719,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             | Some warnings' -> warnings'.Add(failwith "TODO: Warning for duplicate assembly reference")
             | None -> ()
 
-    member private _.AddDefinedType tdef =
+    member private _.AddDefinedType tdef = // TODO: Prevent addition of type named <Module>
         match definedTypes.TryGetValue tdef with
         | true, existing -> ValidationResult<_>.Error(noImpl "TODO: error for duplicate type def")
         | false, _ ->

@@ -157,7 +157,7 @@ type ChunkedMemoryBuilder = struct
             let mutable chunks' = Array.zeroCreate<byte[]> chunks.Count
             let mutable current' = chunks.First
 
-            for i = 0 to chunks'.Length do
+            for i = 0 to chunks'.Length - 1 do
                 chunks'.[i] <- current'.Value
                 current' <- current'.Next
 

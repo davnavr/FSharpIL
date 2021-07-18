@@ -82,6 +82,9 @@ let ofSectionBuilders fileHeader (optionalHeader: OptionalHeader) (sections: Imm
         let (name, flags, ustate, builder) = sections.[i] voffset foffset
 
         let struct(size, ustate') = writeSectionBuilder &bstate voffset foffset ustate builder
+
+        bstate.SectionContent.MoveToEnd()
+
         let content = bstate.SectionContent.MoveToImmutable()
 
         let header =
