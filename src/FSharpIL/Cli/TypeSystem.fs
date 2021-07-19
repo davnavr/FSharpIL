@@ -55,7 +55,8 @@ type CliType =
     | Modified of modified: ImmutableArray<ModifierType> * CliType
     | Class of NamedType
     | ValueType of NamedType
-    | Var of GenericParamType
+    | DefinedTypeVar of GenericParamType<DefinedType>
+    | ReferencedTypeVar of GenericParamType<ReferencedType>
 
 and [<Struct>] ClassExtends (extends: CliType voption) =
     member _.Extends = extends
@@ -66,11 +67,24 @@ and TypeReferenceParent =
     | Assembly of ReferencedAssembly
     //| Module of ModuleReference
 
-and TypeReference =
+and [<NoComparison; CustomEquality>] TypeReference =
     { Flags: TypeDefFlags voption
       ResolutionScope: TypeReferenceParent
       TypeNamespace: Identifier voption
       TypeName: Identifier }
+
+    override this.GetHashCode() = HashCode.Combine(this.ResolutionScope, this.TypeNamespace, this.TypeName)
+
+    interface IEquatable<TypeReference> with
+        member this.Equals other =
+            this.TypeName === other.TypeName &&
+            Equatable.voption this.TypeNamespace other.TypeNamespace &&
+            this.ResolutionScope = other.ResolutionScope
+
+    override this.Equals obj =
+        match obj with
+        | :? TypeReference as other -> this === other
+        | _ -> false
 
 and [<AbstractClass; Sealed>] NamedTypeComparers private () =
     static member val CompareDefined = Unchecked.defaultof<DefinedType -> DefinedType -> bool> with get, set
@@ -92,7 +106,7 @@ and NamedType =
     | DefinedType of DefinedType
     | ReferencedType of ReferencedType
 
-and TypeDefinition =
+and [<NoComparison; CustomEquality>] TypeDefinition =
     { Flags: TypeDefFlags
       Extends: ClassExtends
       EnclosingClass: DefinedType voption
@@ -100,6 +114,19 @@ and TypeDefinition =
       TypeName: Identifier }
 
     member this.IsNested = this.EnclosingClass.IsSome
+
+    override this.GetHashCode() = HashCode.Combine(this.EnclosingClass, this.TypeNamespace, this.TypeName)
+
+    interface IEquatable<TypeDefinition> with
+        member this.Equals other =
+            this.TypeName === other.TypeName &&
+            Equatable.voption this.TypeNamespace other.TypeNamespace &&
+            Equatable.voption this.EnclosingClass other.EnclosingClass
+
+    override this.Equals obj =
+        match obj with
+        | :? TypeDefinition as other -> this === other
+        | _ -> false
 
 and [<Struct>] ModifierType (required: bool, modifier: CliType) =
     member _.Required = required
@@ -114,11 +141,19 @@ and [<Struct>] GenericParam =
     val Flags: GenericParamFlags
     val Constraints: ImmutableArray<CliType>
 
-and [<Sealed>] GenericParamType (owner: GenericParamOwner, i, flags, name, constraints) =
-    member _.Sequence: uint16 = i
-    member _.Flags: GenericParamFlags = flags
-    member _.Name: Identifier = name
-    member _.Constraints: ImmutableArray<CliType> = constraints
+and [<Sealed>] GenericParamType<'Owner when 'Owner :> IEquatable<'Owner>>
+    (
+        owner: 'Owner,
+        i: uint16,
+        flags: GenericParamFlags,
+        name: Identifier,
+        constraints: ImmutableArray<CliType>
+    )
+    =
+    member _.Sequence = i
+    member _.Flags = flags
+    member _.Name = name
+    member _.Constraints = constraints
     member _.Owner = owner
 
     member _.Kind =
@@ -137,16 +172,21 @@ and [<Sealed>] GenericParamType (owner: GenericParamOwner, i, flags, name, const
         then NonNullableValueTypeConstraint
         else NoSpecialConstriant
 
-    interface IEquatable<GenericParamType> with member _.Equals other = owner === other.Owner && i = other.Sequence
+    interface IEquatable<GenericParamType<'Owner>> with member _.Equals other = owner === other.Owner && i = other.Sequence
 
     override this.Equals obj =
         match obj with
-        | :? GenericParamType as other -> this === other
+        | :? GenericParamType<'Owner> as other -> this === other
         | _ -> false
 
     override _.GetHashCode() = HashCode.Combine(owner, i)
 
-and [<Struct>] GenericParamListIndexer (initializer: int32 -> GenericParamType, parameters: GenericParamType[]) =
+and [<Struct>] GenericParamListIndexer<'Owner when 'Owner :> IEquatable<'Owner>>
+    (
+        initializer: int32 -> GenericParamType<'Owner>,
+        parameters: GenericParamType<'Owner>[]
+    )
+    =
     member _.Max = parameters.Length - 1
 
     member this.Item with get index =
@@ -162,9 +202,9 @@ and [<Struct>] GenericParamListIndexer (initializer: int32 -> GenericParamType, 
             initialized
         else existing
 
-and [<Struct>] GenericParamListEnumerator =
+and [<Struct>] GenericParamListEnumerator<'Owner when 'Owner :> IEquatable<'Owner>> =
     val mutable private i: int32
-    val private indexer: GenericParamListIndexer
+    val private indexer: GenericParamListIndexer<'Owner>
 
     new (indexer) = { i = -1; indexer = indexer }
 
@@ -184,36 +224,41 @@ and [<Struct>] GenericParamListEnumerator =
 
     interface IDisposable with member _.Dispose() = ()
 
-    interface IEnumerator<GenericParamType> with member this.Current = this.Current
+    interface IEnumerator<GenericParamType<'Owner>> with member this.Current = this.Current
 
-and [<Struct; NoComparison; CustomEquality>] GenericParamList private
+and [<Struct; NoComparison; CustomEquality>] GenericParamList<'Owner when 'Owner :> IEquatable<'Owner>> private
     (
-        initializer: int32 -> GenericParamType,
-        parameters: GenericParamType[]
+        initializer: int32 -> GenericParamType<'Owner>,
+        parameters: GenericParamType<'Owner>[]
     )
     =
     member _.Indexer = GenericParamListIndexer(initializer, parameters)
     member _.Count = parameters.Length
     member this.Item with get index = this.Indexer.[index]
-    member this.GetEnumerator() = new GenericParamListEnumerator(this.Indexer)
+    member this.GetEnumerator() = new GenericParamListEnumerator<'Owner>(this.Indexer)
 
     new (initializer, count) = GenericParamList(initializer, Array.zeroCreate count)
 
-    interface IReadOnlyList<GenericParamType> with
+    interface IReadOnlyList<GenericParamType<'Owner>> with
         member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator
         member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
         member this.Count = this.Count
         member this.Item with get index = this.[index]
 
-    interface IEquatable<GenericParamList> with
+    interface IEquatable<GenericParamList<'Owner>> with
         member this.Equals other = this.Count = other.Count && Equatable.sequences this other
 
-and [<Sealed>] GenericType<'Type when 'Type : not struct> (tdef: 'Type, parameters: ImmutableArray<GenericParam>) =
+and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IEquatable<'Type>>
+    (
+        tdef: 'Type,
+        parameters: ImmutableArray<GenericParam>
+    )
+    =
     let initializer i =
         let parameter = parameters.[i]
-        GenericParamType(failwith "OWNER" tdef, uint16 i, parameter.Flags, parameter.Name, parameter.Constraints)
+        GenericParamType<'Type>(tdef, uint16 i, parameter.Flags, parameter.Name, parameter.Constraints)
     member _.Type = tdef
-    member val Parameters = GenericParamList(initializer, parameters.Length)
+    member val Parameters = GenericParamList<'Type>(initializer, parameters.Length)
 
 type GenericParam with
     new (name, flags, constraints) = { Name = name; Flags = flags; Constraints = constraints }

@@ -52,7 +52,7 @@ type GenericSpecialConstraint =
     interface IEquatable<GenericSpecialConstraint>
 
 [<Sealed>]
-type GenericParamType =
+type GenericParamType<'Owner when 'Owner :> IEquatable<'Owner>> =
     member Sequence: uint16
     member Flags: GenericParamFlags
     member Name: Identifier
@@ -64,46 +64,43 @@ type GenericParamType =
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
-    interface IEquatable<GenericParamType>
+    interface IEquatable<GenericParamType<'Owner>>
 
-[<IsReadOnly; NoComparison; NoEquality>]
-type private GenericParamListIndexer = struct end
+and [<IsReadOnly; NoComparison; NoEquality>] private GenericParamListIndexer<'Owner when 'Owner :> IEquatable<'Owner>> =
+    struct end
 
-[<Struct; NoComparison; NoEquality>]
-type GenericParamListEnumerator =
+and [<Struct; NoComparison; NoEquality>] GenericParamListEnumerator<'Owner when 'Owner :> IEquatable<'Owner>> =
     val mutable private i: int32
-    val private indexer: GenericParamListIndexer
+    val private indexer: GenericParamListIndexer<'Owner>
 
-    member Current: GenericParamType
+    member Current: GenericParamType<'Owner>
     member MoveNext: unit -> bool
 
-    interface IEnumerator<GenericParamType>
+    interface IEnumerator<GenericParamType<'Owner>>
 
-[<IsReadOnly; Struct; NoComparison; CustomEquality>]
-type GenericParamList =
+and [<IsReadOnly; Struct; NoComparison; CustomEquality>] GenericParamList<'Owner when 'Owner :> IEquatable<'Owner>> =
     member Count : int32
     /// <summary>Gets the generic parameter at the specified index.</summary>
     /// <param name="index">The index of the generic parameter to retrieve.</param>
     /// <exception cref="T:System.ArgumentOutOfRangeException">
     /// Thrown when the <paramref name="index"/> is negative or exceeds the index of the last generic parameter in the list.
     /// </exception>
-    member Item: index: int32 -> GenericParamType with get
-    member GetEnumerator: unit -> GenericParamListEnumerator
+    member Item: index: int32 -> GenericParamType<'Owner> with get
+    member GetEnumerator: unit -> GenericParamListEnumerator<'Owner>
 
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
-    interface IEnumerable<GenericParamType>
-    interface IReadOnlyCollection<GenericParamType>
-    interface IReadOnlyList<GenericParamType>
-    interface IEquatable<GenericParamList>
+    interface IEnumerable<GenericParamType<'Owner>>
+    interface IReadOnlyCollection<GenericParamType<'Owner>>
+    interface IReadOnlyList<GenericParamType<'Owner>>
+    interface IEquatable<GenericParamList<'Owner>>
 
-[<Sealed>]
-type GenericType<'Type when 'Type : not struct> =
+and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IEquatable<'Type>> =
     member Type: 'Type
-    member Parameters: GenericParamList
+    member Parameters: GenericParamList<'Type>
 
-val inline (|GenericType|) : GenericType<'Type> -> struct('Type * GenericParamList)
+val inline (|GenericType|) : GenericType<'Type> -> struct('Type * GenericParamList<'Type>)
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type TypeReferenceParent =
@@ -126,6 +123,9 @@ and [<RequireQualifiedAccess; NoComparison; CustomEquality>] ReferencedType =
     | Reference of TypeReference
     | Generic of GenericType<TypeReference>
 
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
+
     interface IEquatable<ReferencedType>
 
 /// Represents a type in the type system of the Common Language Infrastructure (II.7.1).
@@ -141,7 +141,10 @@ type CliType =
     | Class of NamedType
     | ValueType of NamedType
     //| Pointer of UnmanagedPointerType
-    | Var of GenericParamType
+    | DefinedTypeVar of GenericParamType<DefinedType>
+    | ReferencedTypeVar of GenericParamType<ReferencedType>
+    // TODO: Allow using of GenericParamType<SomeMethod>
+    //| DefinedMethodVar
 
     interface IEquatable<CliType>
 
@@ -176,21 +179,17 @@ and [<NoComparison; CustomEquality>] TypeDefinition =
 
 and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] ModifierType = interface IEquatable<ModifierType>
 
-[<IsReadOnly; Struct; NoComparison; CustomEqualityAttribute>]
-type GenericParamOwner =
-    interface IEquatable<GenericParamOwner>
-
-type GenericParamType with
+type GenericParamType<'Owner when 'Owner :> IEquatable<'Owner>> with
     /// TODO: Don't forget to skip duplicate while writing generic constraints. (Maybe just make an error when the CliModuleBuilder first gets a hold of a duplicate)
     member Constraints: ImmutableArray<CliType> // TODO: Instead, make custom colelction type w/ a ctor function that explicitly says it will ignore attributes.
-    member Owner: GenericParamOwner
+    member Owner: 'Owner
 
     internal new:
-        owner: GenericParamOwner *
+        owner: 'Owner *
         i: uint16 *
         flags: GenericParamFlags *
         name: Identifier *
-        constraints: ImmutableArray<CliType> -> GenericParamType
+        constraints: ImmutableArray<CliType> -> GenericParamType<'Owner>
 
 type ModifierType with
     member Required: bool
@@ -251,7 +250,7 @@ type GenericParam =
         requiresDefaultConstructor: bool *
         constraints: ImmutableArray<CliType> -> GenericParam
 
-type GenericType<'Type when 'Type : not struct> with
+type GenericType<'Type when 'Type : not struct and 'Type :> IEquatable<'Type>> with
     new: 'Type * parameters: ImmutableArray<GenericParam> -> GenericType<'Type>
 
 [<RequireQualifiedAccess>]
