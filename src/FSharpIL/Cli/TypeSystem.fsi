@@ -257,66 +257,58 @@ type GenericType<'Type when 'Type : not struct and 'Type :> IEquatable<'Type>> w
 module TypeKinds =
     type IHasConstructor = interface end
 
-    type ConcreteClass = struct
+    type [<Struct>] ConcreteClass =
         interface IAttributeTag<TypeDefFlags>
         interface IHasConstructor
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
-    end
 
-    type AbstractClass = struct
+    type [<Struct>] AbstractClass =
         interface IAttributeTag<TypeDefFlags>
         interface IHasConstructor
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
-    end
 
-    type SealedClass = struct
+    type [<Struct>] SealedClass =
         interface IAttributeTag<TypeDefFlags>
         interface IHasConstructor
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
-    end
 
-    type StaticClass = struct
+    type [<Struct>] StaticClass =
         interface IAttributeTag<TypeDefFlags>
         interface IHasConstructor
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
-    end
 
-    type Delegate = struct
+    type [<Struct>] Delegate =
         interface IAttributeTag<TypeDefFlags>
         interface IHasConstructor
         interface TypeAttributes.ISerializableType
-    end
 
-    type Enum = struct
+    type [<Struct>] Enum =
         interface IAttributeTag<TypeDefFlags>
         interface TypeAttributes.ISerializableType
-    end
 
-    type Interface = struct
+    type [<Struct>] Interface =
         interface IAttributeTag<TypeDefFlags>
         interface TypeAttributes.IHasStaticMethods
-    end
 
-    type ValueType = struct
+    type [<Struct>] ValueType =
         interface IAttributeTag<TypeDefFlags>
         interface IHasConstructor
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
-    end
 
 [<IsReadOnly; Struct>]
 [<NoComparison; NoEquality>]

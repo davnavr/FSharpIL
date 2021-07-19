@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Cli
 
 open System
+open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
@@ -8,7 +9,7 @@ open FSharpIL.Metadata.Tables
 [<AbstractClass>]
 type Field =
     val Name: Identifier
-    val Type: NamedType
+    val Type: CliType
 
     abstract Equals: other: Field -> bool
     default Equals: other: Field -> bool
@@ -24,16 +25,15 @@ type DefinedField =
 
     member Flags: FieldFlags
 
-    new: flags: FieldFlags * name: Identifier * fieldType: NamedType -> DefinedField
+    new: flags: FieldFlags * name: Identifier * fieldType: CliType -> DefinedField
 
     override Equals: other: Field -> bool
 
-[<Sealed>]
-type LiteralFieldDefinition = class
+[<Sealed; Class>]
+type LiteralFieldDefinition =
     inherit DefinedField
 
     member Value: Constant
-end
 
 /// Represents a defined field whose value is stored at the specified Relative Virtual Address (II.16.3.2).
 [<Sealed>]
@@ -50,35 +50,30 @@ module FieldKinds =
     type [<Struct>] Static =
         interface IAttributeTag<FieldFlags>
 
-[<Sealed>]
-type FieldDefinition<'Kind when 'Kind :> IAttributeTag<FieldFlags> and 'Kind : struct> = class
+[<Sealed; Class>]
+type FieldDefinition<'Kind when 'Kind :> IAttributeTag<FieldFlags> and 'Kind : struct> =
     inherit DefinedField
-end
 
 [<AbstractClass>]
-type ReferencedField = class
+type ReferencedField =
     inherit Field
 
     val Visibility: ExternalVisibility
 
     override Equals: other: Field -> bool
-end
 
 //LiteralFieldReference
 
-[<Sealed>]
-type FieldReference<'Kind when 'Kind :> IAttributeTag<FieldFlags>> = class
+[<Sealed; Class>]
+type FieldReference<'Kind when 'Kind :> IAttributeTag<FieldFlags>> =
     inherit ReferencedField
-end
 
 [<RequireQualifiedAccess>]
 module Field =
     val inline (|Defined|Referenced|): field: Field -> Choice<DefinedField, ReferencedField>
 
-    [<Sealed>]
-    type SignatureComparer = class
-        interface System.Collections.Generic.IEqualityComparer<Field>
-    end
+    [<Sealed; Class>]
+    type SignatureComparer = interface System.Collections.Generic.IEqualityComparer<Field>
 
     val signatureComparer : SignatureComparer
 
@@ -90,17 +85,3 @@ module DefinedField =
                    FieldDefinition<FieldKinds.Static>,
                    LiteralFieldDefinition,
                    RvaFieldDefinition>
-
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-[<NoComparison; StructuralEquality>]
-type FieldArg<'Owner, 'Field when 'Owner :> NamedType and 'Field :> Field> =
-    member Owner: 'Owner
-    member Field: 'Field
-
-    internal new: owner: 'Owner * field: 'Field -> FieldArg<'Owner, 'Field>
-
-type FieldArg = FieldArg<NamedType, Field>
-
-[<AutoOpen>]
-module FieldArgPatterns =
-    val inline (|FieldArg|) : field: FieldArg<'Owner, 'Field> -> struct('Owner * 'Field)

@@ -18,7 +18,7 @@ type ParameterKind =
 type MethodParameterType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ParamItem and MethodReturnType
     val Tag: ParamItemTag
     val CustomModifiers: ImmutableArray<ModifierType>
-    val private argType: NamedType
+    val private argType: CliType
 
     internal new (tag, modifiers, argType) = { Tag = tag; CustomModifiers = modifiers; argType = argType }
 
@@ -45,7 +45,7 @@ module MethodParameterType =
 
     let Type argType = MethodParameterType(ParamItemTag.Param, ImmutableArray.Empty, argType)
     let ByRef(modifiers, argType) = MethodParameterType(ParamItemTag.ByRef, modifiers, argType)
-    let TypedByRef modifiers = MethodParameterType(ParamItemTag.TypedByRef, modifiers, Unchecked.defaultof<NamedType>)
+    let TypedByRef modifiers = MethodParameterType(ParamItemTag.TypedByRef, modifiers, Unchecked.defaultof<CliType>)
     let TypedByRef' = TypedByRef ImmutableArray.Empty
 
 type ParameterList = int32 -> MethodParameterType -> Parameter

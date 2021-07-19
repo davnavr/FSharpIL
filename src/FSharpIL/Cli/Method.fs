@@ -48,7 +48,7 @@ module MethodNamePatterns = let (|MethodName|) name = MethodName.toIdentifier na
 type MethodReturnType = struct
     val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
     val CustomModifiers: ImmutableArray<ModifierType>
-    val Type: NamedType voption
+    val Type: CliType voption
 
     new (tag, modifiers, argType) = { Tag = tag; CustomModifiers = modifiers; Type = argType }
 
@@ -278,8 +278,13 @@ type EntryPointKind =
 
 [<RequireQualifiedAccess>]
 module EntryPointKind =
-    let exitCodeType = MethodReturnType.Type PrimitiveType.I4
-    let argsParameterTypes = ImmutableArray.Create(MethodParameterType.Type(SZArrayType PrimitiveType.String))
+    let exitCodeType = MethodReturnType.Type(CliType.Primitive PrimitiveType.I4)
+        
+    let argsParameterTypes = // string[]
+        CliType.Primitive PrimitiveType.String
+        |> CliType.SZArray
+        |> MethodParameterType.Type
+        |> ImmutableArray.Create
 
     let ExitWithArgs argsParamName = { ReturnExitCode = true; ArgumentsName = Some argsParamName }
     let VoidWithArgs argsParamName = { ReturnExitCode = false; ArgumentsName = Some argsParamName }
@@ -452,23 +457,3 @@ module ReferencedMethod =
         | :? MethodReference<MethodKinds.Static> as method' -> Static method'
         | :? MethodReference<MethodKinds.Abstract> as method' -> Abstract method'
         | _ -> Constructor(method :?> MethodReference<MethodKinds.ObjectConstructor>)
-
-[<IsReadOnly; Struct>]
-[<NoComparison; StructuralEquality>]
-type MethodCallTarget<'Owner, 'Method when 'Owner :> NamedType and 'Method :> Method> (owner: 'Owner, method: 'Method) =
-    member _.Owner = owner
-    member _.Method = method
-
-type MethodCallTarget = MethodCallTarget<NamedType, Method>
-
-[<RequireQualifiedAccess>]
-module MethodCallTarget =
-    let inline (|Callee|) (target: MethodCallTarget<_, _>) = target.Method
-
-    let simplify (target: MethodCallTarget<_, _>) = MethodCallTarget(target.Owner, target.Method)
-
-    let inline convert (target: MethodCallTarget<_, 'Method1>) = MethodCallTarget<_, _>(target.Owner, Unsafe.As target.Method)
-
-[<AutoOpen>]
-module MethodCallTargetPatterns =
-    let inline (|MethodCallTarget|) (target: MethodCallTarget<_, _>) = struct(target.Owner, target.Method)

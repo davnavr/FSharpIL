@@ -7,12 +7,11 @@ open System.Runtime.CompilerServices
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-[<IsReadOnly>]
-type MethodName = struct
+[<IsReadOnly; Struct>]
+type MethodName =
     val internal Name: Identifier
     internal new : name: Identifier -> MethodName
     override ToString: unit -> string
-end
 
 [<RequireQualifiedAccess>]
 module MethodName =
@@ -45,7 +44,7 @@ module MethodNamePatterns =
 type MethodReturnType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ReturnType and MethodParameterType
     val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
     val CustomModifiers: ImmutableArray<ModifierType>
-    val Type: NamedType voption
+    val Type: CliType voption
 
     member inline IsVoid: bool
 end
@@ -63,13 +62,13 @@ type MethodReturnType =
 module MethodReturnType =
     val inline (|Type|ByRef|TypedByRef|Void|) :
         returnType: MethodReturnType ->
-            Choice<NamedType,
-                   struct(ImmutableArray<ModifierType> * NamedType),
+            Choice<CliType,
+                   struct(ImmutableArray<ModifierType> * CliType),
                    ImmutableArray<ModifierType>,
                    ImmutableArray<ModifierType>>
 
-    val Type : returnType: NamedType -> MethodReturnType
-    val ByRef : modifiers: ImmutableArray<ModifierType> * returnType: NamedType -> MethodReturnType
+    val Type : returnType: CliType -> MethodReturnType
+    val ByRef : modifiers: ImmutableArray<ModifierType> * returnType: CliType -> MethodReturnType
     val TypedByRef : modifiers: ImmutableArray<ModifierType> -> MethodReturnType
     val TypedByRef' : MethodReturnType
     val Void : modifiers: ImmutableArray<ModifierType> -> MethodReturnType
@@ -283,30 +282,3 @@ module ReferencedMethod =
                    MethodReference<MethodKinds.Static>,
                    MethodReference<MethodKinds.Abstract>,
                    MethodReference<MethodKinds.ObjectConstructor>>
-
-[<IsReadOnly; Struct>]
-[<NoComparison; StructuralEquality>]
-type MethodCallTarget<'Owner, 'Method when 'Owner :> NamedType and 'Method :> Method> =
-    member Owner: 'Owner
-    member Method: 'Method
-
-    internal new: owner: 'Owner * method: 'Method -> MethodCallTarget<'Owner, 'Method>
-
-type MethodCallTarget = MethodCallTarget<NamedType, Method>
-
-[<RequireQualifiedAccess>]
-module MethodCallTarget =
-    val inline (|Callee|) : target: MethodCallTarget<'Owner, 'Method> -> 'Method
-
-    val simplify : target: MethodCallTarget<'Owner, 'Method> -> MethodCallTarget
-
-    val inline internal convert<'Owner, 'Method1, 'Method2
-        when 'Owner :> NamedType
-        and 'Method1 :> Method
-        and 'Method2 :> Method
-        and 'Method2 : not struct> :
-        target: MethodCallTarget<'Owner, 'Method1> -> MethodCallTarget<'Owner, 'Method2>
-
-[<AutoOpen>]
-module MethodCallTargetPatterns =
-    val inline (|MethodCallTarget|) : target: MethodCallTarget<'Owner, 'Method> -> struct('Owner * 'Method)

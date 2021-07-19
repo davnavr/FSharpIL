@@ -78,6 +78,7 @@
     <Compile Include="Cli\Parameter.fs" />
     <Compile Include="Cli\Method.fsi" />
     <Compile Include="Cli\Method.fs" />
+    <Compile Include="Cli\Member.fs" />
     <Compile Include="Cli\CustomAttribute.fsi" />
     <Compile Include="Cli\CustomAttribute.fs" />
     <Compile Include="Writing\Cil\MethodBodyBuilder.fs" />
