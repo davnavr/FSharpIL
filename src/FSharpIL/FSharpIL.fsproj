@@ -70,8 +70,8 @@
     <Compile Include="Cli\Attributes.fs" />
     <Compile Include="Cli\Assembly.fsi" />
     <Compile Include="Cli\Assembly.fs" />
-    <Compile Include="Cli\NamedType.fsi" />
-    <Compile Include="Cli\NamedType.fs" />
+    <Compile Include="Cli\TypeSystem.fsi" />
+    <Compile Include="Cli\TypeSystem.fs" />
     <Compile Include="Cli\Constant.fs" />
     <Compile Include="Cli\Field.fsi" />
     <Compile Include="Cli\Field.fs" />

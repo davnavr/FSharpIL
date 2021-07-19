@@ -123,6 +123,7 @@ type EncodedType =
     /// <summary>The <see cref="T:System.UIntPtr"/> type.</summary>
     | U
     | Array of EncodedType * ArrayShape
+    /// A user-defined reference type.
     | Class of TypeDefOrRefEncoded
     /// A method pointer (II.14.5).
     //| FnPtr of FunctionPointer
@@ -135,8 +136,9 @@ type EncodedType =
     | Ptr of Pointer
     /// <summary>The <see cref="T:System.String"/> type.</summary>
     | String
-    /// A single-dimensional array with a lower bound of zero, also known as a vector (I.8.9.1).
+    /// A single-dimensional array with a lower bound of zero, also known as a vector (I.8.9.1 and II.14.1).
     | SZArray of EncodedType
+    /// A user-defined value type.
     | ValueType of TypeDefOrRefEncoded
     /// A generic parameter in a generic type definition.
     | Var of index: uint32
