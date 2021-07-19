@@ -40,9 +40,9 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
 
     member _.Reference = assembly
     member _.Object = object
-    member val ValueType = referenceSystemType "ValueType" :> ReferencedType
-    member val Delegate = referenceSystemType "Delegate" :> ReferencedType
-    member val Enum = referenceSystemType "Enum" :> ReferencedType
+    member val ValueType = referenceSystemType "ValueType" :> TypeReference
+    member val Delegate = referenceSystemType "Delegate" :> TypeReference
+    member val Enum = referenceSystemType "Enum" :> TypeReference
     member _.TargetFrameworkAttribute = tfmattr
 
     member this.AddReferencesTo(builder: CliModuleBuilder) =

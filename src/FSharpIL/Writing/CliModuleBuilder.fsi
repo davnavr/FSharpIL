@@ -29,7 +29,7 @@ type EntryPoint
 [<RequireQualifiedAccess>]
 module EntryPoint =
     //val (|None|Method|File|): EntryPoint -> Choice<_, _, _>
-    val (|None|Method|): EntryPoint -> Choice<unit, struct(DefinedType * EntryPointMethod)>
+    val (|None|Method|): EntryPoint -> Choice<unit, struct(TypeDefinition * EntryPointMethod)>
 
 [<IsReadOnly; Struct>]
 [<NoComparison; NoEquality>]
@@ -51,13 +51,13 @@ type DefinedTypeMembers =
     member DefineMethod:
         method: DefinedMethod *
         body: DefinedMethodBody voption *
-        attributes: CustomAttributeList ref voption -> ValidationResult<MethodCallTarget<DefinedType, DefinedMethod>>
+        attributes: CustomAttributeList ref voption -> ValidationResult<MethodCallTarget<TypeDefinition, DefinedMethod>>
 
     member DefineEntryPoint:
         method: EntryPointMethod *
         body: DefinedMethodBody *
         attributes: CustomAttributeList ref voption ->
-            ValidationResult<MethodCallTarget<DefinedType, MethodDefinition<MethodKinds.Static>>>
+            ValidationResult<MethodCallTarget<TypeDefinition, MethodDefinition<MethodKinds.Static>>>
 
     member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool
@@ -76,7 +76,7 @@ type ReferencedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
-    member ReferenceMethod: method: ReferencedMethod -> ValidationResult<MethodCallTarget<ReferencedType, ReferencedMethod>>
+    member ReferenceMethod: method: ReferencedMethod -> ValidationResult<MethodCallTarget<TypeReference, ReferencedMethod>>
 
     member ContainsField: field: ReferencedField -> bool
     member ContainsMethod: method: ReferencedMethod -> bool
@@ -137,15 +137,15 @@ type CliModuleBuilder =
     // TODO: For methods that add things that can also have custom attributes, figure out how to avoid allocating a CustomAttributeList if user doesn't want/need the CA list.
 
     // TODO: Expose constructors for types in Cli namespace.
-    member DefineType: definition: DefinedType -> ValidationResult<struct(CustomAttributeList * DefinedTypeMembers)>
-    member DefineType: definition: DefinedType * attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers>
+    member DefineType: definition: TypeDefinition -> ValidationResult<struct(CustomAttributeList * DefinedTypeMembers)>
+    member DefineType: definition: TypeDefinition * attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers>
 
     //member DefineType: DefinedType * attributes: outref<CustomAttributeList> -> ValidationResult<DefinedTypeMembers>
 
     // TODO: For specific TypeDefinition kinds, return a struct that wraps DefinedTypeMembers and only allows addition of certain members.
     //member DefineType: TypeDefinition<TypeKinds.StaticClass> -> ValidationResult<>
 
-    member ReferenceType: reference: ReferencedType -> ValidationResult<ReferencedTypeMembers>
+    member ReferenceType: reference: TypeReference -> ValidationResult<ReferencedTypeMembers>
     member ReferenceType: reference: TypeReference<'Kind> -> ValidationResult<ReferencedTypeMembers<'Kind>>
 
     /// <summary>

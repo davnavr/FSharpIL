@@ -35,24 +35,6 @@ module PrimitiveType =
     val Object : PrimitiveType
     val String : PrimitiveType
 
-[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
-type TypeReferenceParent =
-    | Null
-    | Type of ReferencedType
-    | Assembly of ReferencedAssembly
-    //| Module of ModuleReference
-
-    interface IEquatable<TypeReferenceParent>
-
-/// Represents a type defined outside of the current module.
-and [<NoComparison; CustomEquality>] ReferencedType =
-    { Flags: TypeDefFlags voption
-      ResolutionScope: TypeReferenceParent
-      TypeNamespace: Identifier voption
-      TypeName: Identifier }
-
-    interface IEquatable<ReferencedType>
-
 [<IsReadOnly; Struct; NoComparison; CustomEquality>]
 type GenericParamKind =
     | Invariant
@@ -98,7 +80,7 @@ type GenericParamListEnumerator =
     interface IEnumerator<GenericParamType>
 
 [<IsReadOnly; Struct; NoComparison; CustomEquality>]
-type GenericParamList = // TODO: First field is a single mutable array whose elements are lazily created when item at the specified index is requested. Factory function makes item.
+type GenericParamList =
     member Count : int32
     /// <summary>Gets the generic parameter at the specified index.</summary>
     /// <param name="index">The index of the generic parameter to retrieve.</param>
@@ -115,6 +97,36 @@ type GenericParamList = // TODO: First field is a single mutable array whose ele
     interface IReadOnlyCollection<GenericParamType>
     interface IReadOnlyList<GenericParamType>
     interface IEquatable<GenericParamList>
+
+[<Sealed>]
+type GenericType<'Type when 'Type : not struct> =
+    member Type: 'Type
+    member Parameters: GenericParamList
+
+val inline (|GenericType|) : GenericType<'Type> -> struct('Type * GenericParamList)
+
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
+type TypeReferenceParent =
+    | Type of ReferencedType
+    | Assembly of ReferencedAssembly
+    //| Module of ModuleReference
+
+    interface IEquatable<TypeReferenceParent>
+
+/// Represents a type defined outside of the current module.
+and [<NoComparison; CustomEquality>] TypeReference =
+    { Flags: TypeDefFlags voption
+      ResolutionScope: TypeReferenceParent
+      TypeNamespace: Identifier voption
+      TypeName: Identifier }
+
+    interface IEquatable<TypeReference>
+
+and [<RequireQualifiedAccess; NoComparison; CustomEquality>] ReferencedType =
+    | Reference of TypeReference
+    | Generic of GenericType<TypeReference>
+
+    interface IEquatable<ReferencedType>
 
 /// Represents a type in the type system of the Common Language Infrastructure (II.7.1).
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
@@ -133,20 +145,23 @@ type CliType =
 
     interface IEquatable<CliType>
 
-and [<NoComparison; CustomEquality>] NamedType = // TODO: Make DefinedType and ReferencedType their own struct union types.
-    /// Represents a non-generic type defined in the current module.
+and [<RequireQualifiedAccess; NoComparison; CustomEquality>] DefinedType =
+    | Definition of TypeDefinition
+    | Generic of GenericType<TypeDefinition>
+
+    interface IEquatable<DefinedType>
+
+and [<NoComparison; CustomEquality>] NamedType =
+    /// Represents a type defined in the current module.
     | DefinedType of DefinedType
-    /// Represents a non-generic type defined outside of the current module.
+    /// Represents a type defined outside of the current module.
     | ReferencedType of ReferencedType
-    //| DefinedGenericType of GenericParamList * DefinedType
-    //| ReferencedGenericType of GenericParamList * ReferencedType
-    // TODO: Figure out how and where to allow generic type instantiations.
 
     interface IEquatable<NamedType>
 
 and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] ClassExtends = interface IEquatable<ClassExtends>
 
-and [<NoComparison; CustomEquality>] DefinedType =
+and [<NoComparison; CustomEquality>] TypeDefinition =
     { Flags: TypeDefFlags
       Extends: ClassExtends
       /// The type that contains this nested type (II.22.32).
@@ -157,7 +172,7 @@ and [<NoComparison; CustomEquality>] DefinedType =
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
-    interface IEquatable<DefinedType>
+    interface IEquatable<TypeDefinition>
 
 and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] ModifierType = interface IEquatable<ModifierType>
 
@@ -208,7 +223,7 @@ module TypeVisibility =
     val NestedFamilyAndAssembly : parent: DefinedType -> TypeVisibility
     val NestedFamilyOrAssembly : parent: DefinedType -> TypeVisibility
 
-type DefinedType with
+type TypeDefinition with
     member Visibility: TypeVisibility
     member IsNested: bool
 
@@ -236,9 +251,8 @@ type GenericParam =
         requiresDefaultConstructor: bool *
         constraints: ImmutableArray<CliType> -> GenericParam
 
-[<RequireQualifiedAccess>]
-module GenericParamList =
-    val singleton : owner: GenericParamOwner -> parameter: GenericParam -> GenericParamList
+type GenericType<'Type when 'Type : not struct> with
+    new: 'Type * parameters: ImmutableArray<GenericParam> -> GenericType<'Type>
 
 [<RequireQualifiedAccess>]
 module TypeKinds =
@@ -308,13 +322,11 @@ module TypeKinds =
 [<IsReadOnly; Struct>]
 [<NoComparison; NoEquality>]
 type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
-    member Definition: DefinedType
+    member Definition: TypeDefinition
 
-val inline (|TypeDefinition|): definition: TypeDefinition<'Kind> -> DefinedType
+val inline (|TypeDefinition|): definition: TypeDefinition<'Kind> -> TypeDefinition
 
-/// Contains methods for defining types in a correct manner.
-[<AbstractClass; Sealed>]
-type TypeDefinition =
+type TypeDefinition with
     static member ConcreteClass:
         visibility: TypeVisibility *
         flags: TypeAttributes<TypeKinds.ConcreteClass> *
@@ -369,12 +381,11 @@ type TypeDefinition =
 [<IsReadOnly; Struct>]
 [<NoComparison; NoEquality>]
 type TypeReference<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> =
-    member Reference: ReferencedType
+    member Reference: TypeReference
 
-val inline (|TypeReference|): reference: TypeReference<'Kind> -> ReferencedType
+val inline (|TypeReference|): reference: TypeReference<'Kind> -> TypeReference
 
-[<AbstractClass; Sealed>]
-type TypeReference = // TODO: Allow optional setting of flags.
+type TypeReference with
     static member ConcreteClass:
         resolutionScope: TypeReferenceParent *
         typeNamespace: Identifier voption *
@@ -396,4 +407,4 @@ type TypeReference = // TODO: Allow optional setting of flags.
 [<AutoOpen>]
 module internal ModuleType =
     /// <summary>Represents the special <c>&lt;Module&gt;</c> class, which contains global fields and methods (II.10.8).</summary>
-    val ModuleType : DefinedType
+    val ModuleType : TypeDefinition

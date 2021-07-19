@@ -25,15 +25,15 @@ type CoreAssemblyReference =
     /// <summary>
     /// The core type <see cref="T:System.ValueType"/>, which serves as the base type for all value types (II.13).
     /// </summary>
-    member ValueType: ReferencedType
+    member ValueType: TypeReference
     /// <summary>
     /// The core type <see cref="T:System.Delegate"/>, which serves as the base type for all delegates (II.14.6).
     /// </summary>
-    member Delegate: ReferencedType
+    member Delegate: TypeReference
     /// <summary>
     /// The core type <see cref="T:System.Enum"/>, which serves as the base type for all enumeration types (II.14.3).
     /// </summary>
-    member Enum: ReferencedType
+    member Enum: TypeReference
     /// <summary>
     /// The <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/> type, which identifies the target framework that
     /// the current assembly or module was compiled with (.NET Core, .NET Framework, .NET standard, etc.).

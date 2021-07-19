@@ -36,18 +36,6 @@ module PrimitiveType =
     let Object = PrimitiveType EncodedType.Object
     let String = PrimitiveType EncodedType.String
 
-type TypeReferenceParent =
-    | Null
-    | Type of ReferencedType
-    | Assembly of ReferencedAssembly
-    //| Module of ModuleReference
-
-and ReferencedType =
-    { Flags: TypeDefFlags voption
-      ResolutionScope: TypeReferenceParent
-      TypeNamespace: Identifier voption
-      TypeName: Identifier }
-
 [<IsReadOnly; Struct>]
 type GenericParamKind =
     | Invariant
@@ -73,28 +61,38 @@ and [<Struct>] ClassExtends (extends: CliType voption) =
     member _.Extends = extends
     member _.IsNull = extends.IsNone
 
+and TypeReferenceParent =
+    | Type of ReferencedType
+    | Assembly of ReferencedAssembly
+    //| Module of ModuleReference
+
+and TypeReference =
+    { Flags: TypeDefFlags voption
+      ResolutionScope: TypeReferenceParent
+      TypeNamespace: Identifier voption
+      TypeName: Identifier }
+
+and [<AbstractClass; Sealed>] NamedTypeComparers private () =
+    static member val CompareDefined = Unchecked.defaultof<DefinedType -> DefinedType -> bool> with get, set
+    static member val CompareReferenced = Unchecked.defaultof<ReferencedType -> ReferencedType -> bool> with get, set
+
+and [<NoComparison; CustomEquality>] ReferencedType =
+    | Reference of TypeReference
+    | Generic of GenericType<TypeReference>
+
+    interface IEquatable<ReferencedType> with member this.Equals other = NamedTypeComparers.CompareReferenced this other
+
+and [<NoComparison; CustomEquality>] DefinedType =
+    | Definition of TypeDefinition
+    | Generic of GenericType<TypeDefinition>
+
+    interface IEquatable<DefinedType> with member this.Equals other = NamedTypeComparers.CompareDefined this other
+
 and NamedType =
     | DefinedType of DefinedType
     | ReferencedType of ReferencedType
 
-    member this.TypeNamespace =
-        match this with
-        | DefinedType { TypeNamespace = ns }
-        | ReferencedType { TypeNamespace = ns } -> ns
-
-    member this.TypeName =
-        match this with
-        | DefinedType { TypeName = name }
-        | ReferencedType { TypeName = name } -> name
-
-    member this.EnclosingType =
-        match this with
-        | DefinedType { EnclosingClass = ValueSome parent } -> ValueSome(DefinedType parent)
-        | ReferencedType { ResolutionScope = TypeReferenceParent.Type parent } -> ValueSome(ReferencedType parent)
-        | ReferencedType { ResolutionScope = TypeReferenceParent.Null | TypeReferenceParent.Assembly _ }
-        | DefinedType { EnclosingClass = ValueNone } -> ValueNone
-
-and DefinedType =
+and TypeDefinition =
     { Flags: TypeDefFlags
       Extends: ClassExtends
       EnclosingClass: DefinedType voption
@@ -110,6 +108,11 @@ and [<Struct>] ModifierType (required: bool, modifier: CliType) =
 and [<Struct; NoComparison; CustomEquality>] GenericParamOwner (a: obj) = // TODO: Move this to a different file.
     interface IEquatable<GenericParamOwner> with
         member _.Equals other = failwith "bad"
+
+and [<Struct>] GenericParam =
+    val Name: Identifier
+    val Flags: GenericParamFlags
+    val Constraints: ImmutableArray<CliType>
 
 and [<Sealed>] GenericParamType (owner: GenericParamOwner, i, flags, name, constraints) =
     member _.Sequence: uint16 = i
@@ -205,12 +208,14 @@ and [<Struct; NoComparison; CustomEquality>] GenericParamList private
     interface IEquatable<GenericParamList> with
         member this.Equals other = this.Count = other.Count && Equatable.sequences this other
 
-[<Struct>]
-type GenericParam =
-    val Name: Identifier
-    val Flags: GenericParamFlags
-    val Constraints: ImmutableArray<CliType>
+and [<Sealed>] GenericType<'Type when 'Type : not struct> (tdef: 'Type, parameters: ImmutableArray<GenericParam>) =
+    let initializer i =
+        let parameter = parameters.[i]
+        GenericParamType(failwith "OWNER" tdef, uint16 i, parameter.Flags, parameter.Name, parameter.Constraints)
+    member _.Type = tdef
+    member val Parameters = GenericParamList(initializer, parameters.Length)
 
+type GenericParam with
     new (name, flags, constraints) = { Name = name; Flags = flags; Constraints = constraints }
 
     new (name, kind, special, requiresDefaultConstructor, constraints) =
@@ -230,6 +235,47 @@ type GenericParam =
         if requiresDefaultConstructor then flags <- flags ||| GenericParamFlags.DefaultConstructorConstraint
 
         { Name = name; Flags = flags; Constraints = constraints }
+
+let inline (|GenericType|) (gtype: GenericType<'Type>) = struct(gtype.Type, gtype.Parameters)
+
+do NamedTypeComparers.CompareDefined <- fun x y ->
+    match x, y with
+    | DefinedType.Definition x', DefinedType.Definition y'
+    | DefinedType.Generic(GenericType(x', _)), DefinedType.Definition y'
+    | DefinedType.Definition x', DefinedType.Generic(GenericType(y', _))
+    | DefinedType.Generic(GenericType(x', _)), DefinedType.Generic(GenericType(y', _))-> x' === y'
+
+do NamedTypeComparers.CompareReferenced <- fun x y ->
+    match x, y with
+    | ReferencedType.Reference x', ReferencedType.Reference y'
+    | ReferencedType.Generic(GenericType(x', _)), ReferencedType.Reference y'
+    | ReferencedType.Reference x', ReferencedType.Generic(GenericType(y', _))
+    | ReferencedType.Generic(GenericType(x', _)), ReferencedType.Generic(GenericType(y', _))-> x' === y'
+
+type NamedType with
+    member this.TypeNamespace =
+        match this with
+        | DefinedType(DefinedType.Definition { TypeNamespace = ns })
+        | DefinedType(DefinedType.Generic(GenericType({ TypeNamespace = ns }, _)))
+        | ReferencedType(ReferencedType.Reference { TypeNamespace = ns })
+        | ReferencedType(ReferencedType.Generic (GenericType({ TypeNamespace = ns }, _))) -> ns
+
+    member this.TypeName =
+        match this with
+        | DefinedType(DefinedType.Definition { TypeName = name })
+        | DefinedType(DefinedType.Generic(GenericType({ TypeName = name }, _)))
+        | ReferencedType(ReferencedType.Reference { TypeName = name })
+        | ReferencedType(ReferencedType.Generic(GenericType({ TypeName = name }, _))) -> name
+
+    member this.EnclosingType =
+        match this with
+        | DefinedType(DefinedType.Definition { EnclosingClass = ValueSome parent })
+        | DefinedType(DefinedType.Generic(GenericType({ EnclosingClass = ValueSome parent }, _))) ->
+            ValueSome(DefinedType parent)
+        | ReferencedType(ReferencedType.Reference { ResolutionScope = TypeReferenceParent.Type parent })
+        | ReferencedType(ReferencedType.Generic(GenericType({ ResolutionScope = TypeReferenceParent.Type parent }, _))) ->
+            ValueSome(ReferencedType parent)
+        | _ -> ValueNone
 
 [<RequireQualifiedAccess>]
 module ClassExtends =
@@ -313,6 +359,7 @@ module TypeKinds =
     end
 
 [<IsReadOnly; Struct>]
+[<NoComparison; StructuralEquality>]
 type TypeVisibility private (flag: TypeDefFlags, parent: DefinedType) =
     member _.Flag = flag
     member _.EnclosingClass = if Object.ReferenceEquals(parent, null) then ValueNone else ValueSome parent
@@ -331,14 +378,8 @@ module TypeVisibility =
     let NestedFamilyAndAssembly parent = TypeVisibility(TypeDefFlags.NestedFamAndAssem, ValueSome parent)
     let NestedFamilyOrAssembly parent = TypeVisibility(TypeDefFlags.NestedFamOrAssem, ValueSome parent)
 
-type DefinedType with
+type TypeDefinition with
     member this.Visibility = TypeVisibility(this.Flags &&& TypeDefFlags.VisibilityMask, this.EnclosingClass)
-
-module GenericParamList =
-    let createGenericParam owner (parameter: GenericParam) i =
-        GenericParamType(owner, uint16 i, parameter.Flags, parameter.Name, parameter.Constraints)
-
-    let singleton owner parameter = GenericParamList(createGenericParam owner parameter, 1)
 
 [<Struct>]
 type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct>
@@ -352,7 +393,7 @@ type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : 
     )
     =
     member _.Definition =
-        { DefinedType.TypeName = typeName
+        { TypeDefinition.TypeName = typeName
           TypeNamespace = typeNamespace
           Flags = visibility.Flag ||| flags.Flags ||| Unchecked.defaultof<'Kind>.RequiredFlags
           Extends = extends
@@ -360,8 +401,7 @@ type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : 
 
 let inline (|TypeDefinition|) (definition: TypeDefinition<'Kind>) = definition.Definition
 
-[<AbstractClass; Sealed>]
-type TypeDefinition =
+type TypeDefinition with
     static member ConcreteClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName) =
         TypeDefinition<TypeKinds.ConcreteClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName)
 
@@ -389,15 +429,14 @@ type TypeReference<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : s
     )
     =
     member _.Reference =
-        { ReferencedType.TypeName = typeName
+        { TypeReference.TypeName = typeName
           TypeNamespace = typeNamespace
           Flags = ValueSome Unchecked.defaultof<'Kind>.RequiredFlags
           ResolutionScope = parent }
 
 let inline (|TypeReference|) (reference: TypeReference<'Kind>) = reference.Reference
 
-[<AbstractClass; Sealed>]
-type TypeReference =
+type TypeReference with
     static member ConcreteClass(resolutionScope, typeNamespace, typeName) =
         TypeReference<TypeKinds.ConcreteClass>(resolutionScope, typeNamespace, typeName)
 
@@ -413,7 +452,7 @@ type TypeReference =
 [<AutoOpen>]
 module ModuleType =
     let ModuleType =
-        { DefinedType.Flags = Unchecked.defaultof<TypeDefFlags>
+        { TypeDefinition.Flags = Unchecked.defaultof<TypeDefFlags>
           Extends = ClassExtends.Null // According to ECMA-335, the module class "does not have a base type" (II.10.8).
           EnclosingClass = ValueNone
           TypeNamespace = ValueNone

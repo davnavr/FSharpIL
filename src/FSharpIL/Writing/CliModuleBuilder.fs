@@ -33,7 +33,7 @@ type DefinedMethodBody =
 type EntryPoint =
     private
     | NoEntryPoint
-    | EntryPointMethod of MethodCallTarget<DefinedType, MethodDefinition<MethodKinds.Static>>
+    | EntryPointMethod of MethodCallTarget<TypeDefinition, MethodDefinition<MethodKinds.Static>>
 
 [<RequireQualifiedAccess>]
 module EntryPoint =
@@ -58,7 +58,7 @@ module CustomAttribute =
         interface IEquatable<Owner> with member this.Equals other = this.Owner.Equals other.Owner
 
         static member DefinedAssembly (assembly: DefinedAssembly) = { Owner = assembly }
-        static member DefinedType (tdef: DefinedType) = { Owner = tdef }
+        static member DefinedType (tdef: TypeDefinition) = { Owner = tdef }
         static member DefinedMethod (mdef: DefinedMethod) = { Owner = mdef }
 
     let rec private createFixedArgsLoop
@@ -143,7 +143,7 @@ module CustomAttributeList =
         | ValueNone -> ()
 
 [<Sealed>]
-type DefinedTypeMembers (owner: DefinedType, warnings: ValidationWarningsBuilder option, entryPointToken: EntryPoint ref, attrs) =
+type DefinedTypeMembers (owner: TypeDefinition, warnings: ValidationWarningsBuilder option, entryPointToken: EntryPoint ref, attrs) =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
     [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
     [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
@@ -158,7 +158,7 @@ type DefinedTypeMembers (owner: DefinedType, warnings: ValidationWarningsBuilder
             | ValueSome body' -> this.MethodBodyLookup.[method] <- body'
             | ValueNone -> ()
 
-            Ok(MethodCallTarget<DefinedType, DefinedMethod>(owner, method))
+            Ok(MethodCallTarget<TypeDefinition, DefinedMethod>(owner, method))
         else ValidationResult.Error(noImpl "error for duplicate method")
 
     member this.DefineMethod(method, body, attributes) =
@@ -181,7 +181,7 @@ type DefinedTypeMembers (owner: DefinedType, warnings: ValidationWarningsBuilder
 
 [<Sealed>]
 type ReferencedTypeMembers =
-    val private owner: ReferencedType
+    val private owner: TypeReference
     val private warnings: ValidationWarningsBuilder option
     [<DefaultValue>] val mutable Field: HybridHashSet<ReferencedField>
     [<DefaultValue>] val mutable Method: HybridHashSet<ReferencedMethod>
@@ -194,7 +194,7 @@ type ReferencedTypeMembers =
     member this.ReferenceMethod(method: ReferencedMethod) =
         // TODO: Check that the kind and owner of method are correct.
         if this.Method.Add method
-        then ValidationResult.Ok(MethodCallTarget<ReferencedType, ReferencedMethod>(this.owner, method))
+        then ValidationResult.Ok(MethodCallTarget<TypeReference, ReferencedMethod>(this.owner, method))
         else Error(noImpl "error for duplicate method")
 
     member this.ContainsField field = this.Field.Contains field
@@ -237,9 +237,9 @@ type ModuleBuilderSerializer
         assembly: DefinedAssembly option,
         entryPointToken: EntryPoint,
         assemblyReferences: HashSet<ReferencedAssembly>,
-        definedTypes: Dictionary<DefinedType, DefinedTypeMembers>,
+        definedTypes: Dictionary<TypeDefinition, DefinedTypeMembers>,
         moduleGlobalMembers: DefinedTypeMembers,
-        referencedTypes: Dictionary<ReferencedType, ReferencedTypeMembers>
+        referencedTypes: Dictionary<TypeReference, ReferencedTypeMembers>
     )
     as serializer
     = // TODO: Move this all into the Serialize method.
@@ -273,13 +273,13 @@ type ModuleBuilderSerializer
 
     let assemblyReferenceLookup = Dictionary<ReferencedAssembly, TableIndex<AssemblyRefRow>> assemblyReferences.Count
 
-    let referencedTypeLookup = Dictionary<ReferencedType, _> referencedTypes.Count
-    let referencedFieldLookup = Dictionary<FieldArg<ReferencedType, ReferencedField>, _>()
-    let referencedMethodLookup = Dictionary<MethodCallTarget<ReferencedType, ReferencedMethod>, _>()
+    let referencedTypeLookup = Dictionary<TypeReference, _> referencedTypes.Count
+    let referencedFieldLookup = Dictionary<FieldArg<TypeReference, ReferencedField>, _>()
+    let referencedMethodLookup = Dictionary<MethodCallTarget<TypeReference, ReferencedMethod>, _>()
 
-    let definedTypeLookup = Dictionary<DefinedType, _> definedTypes.Count
-    let definedFieldLookup = Dictionary<FieldArg<DefinedType, DefinedField>, _>()
-    let definedMethodLookup = Dictionary<MethodCallTarget<DefinedType, DefinedMethod>, _>()
+    let definedTypeLookup = Dictionary<TypeDefinition, _> definedTypes.Count
+    let definedFieldLookup = Dictionary<FieldArg<TypeDefinition, DefinedField>, _>()
+    let definedMethodLookup = Dictionary<MethodCallTarget<TypeDefinition, DefinedMethod>, _>()
 
     let createBlobLookup comparer writer =
         let lookup = Dictionary<'Blob, 'Offset>(comparer = comparer)
@@ -300,13 +300,13 @@ type ModuleBuilderSerializer
 
     let typeDefOrRef: NamedType -> _ =
         function
-        | :? DefinedType as tdef -> typeDefEncoded tdef
+        | :? TypeDefinition as tdef -> typeDefEncoded tdef
         | :? ReferencedType as tref -> typeRefEncoded tref
         | bad -> invalidOp(sprintf "Expected defined or referenced type but got %A" bad)
 
     let rec typeDefOrRefOrSpec: NamedType -> _ =
         function
-        | :? DefinedType as tdef -> TypeDefOrRef.Def(serializer.SerializeDefinedType(tdef, definedTypes.[tdef]))
+        | :? TypeDefinition as tdef -> TypeDefOrRef.Def(serializer.SerializeDefinedType(tdef, definedTypes.[tdef]))
         | :? ReferencedType as tref -> TypeDefOrRef.Ref(serializer.SerializeReferencedType tref)
         | tspec ->  TypeDefOrRef.Spec(getTypeSpec(getEncodedType tspec))
 
@@ -421,14 +421,14 @@ type ModuleBuilderSerializer
 
             member _.GetFieldToken field =
                 match field.Owner :> NamedType with
-                | :? DefinedType as tdef ->
+                | :? TypeDefinition as tdef ->
                     FieldMetadataToken.Def definedFieldLookup.[FieldArg<_, _>(tdef, Unsafe.As field.Field)]
                 | :? ReferencedType as tref ->
                     FieldMetadataToken.Ref referencedFieldLookup.[FieldArg<_, _>(tref, Unsafe.As field.Field)]
 
             member _.GetMethodToken method =
                 match method.Owner :> NamedType with
-                | :? DefinedType as tdef ->
+                | :? TypeDefinition as tdef ->
                     MethodMetadataToken.Def definedMethodLookup.[MethodCallTarget<_, _>(tdef, Unsafe.As method.Method)]
                 | :? ReferencedType as tref ->
                     MethodMetadataToken.Ref referencedMethodLookup.[MethodCallTarget<_, _>(tref, Unsafe.As method.Method)]
@@ -448,7 +448,7 @@ type ModuleBuilderSerializer
                       Culture = builder.Strings.Add assem.Culture
                       HashValue = builder.Blob.Add assem.HashValue }
 
-    member private this.SerializeReferencedType(reference: ReferencedType) =
+    member private this.SerializeReferencedType(reference: TypeReference) =
         let members = referencedTypes.[reference]
         match referencedTypeLookup.TryGetValue reference with
         | true, i -> i
@@ -654,8 +654,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
     let cliMetadataRoot' = defaultArg cliMetadataRoot CliMetadataRoot.defaultFields
     let mutable assemblyDef = assembly
     let assemblyRefs = HashSet<ReferencedAssembly>(defaultArg assemblyRefCapacity 8)
-    let definedTypes = Dictionary<DefinedType, DefinedTypeMembers>(defaultArg typeDefCapacity 16)
-    let referencedTypes = Dictionary<ReferencedType, ReferencedTypeMembers>(defaultArg typeRefCapacity 32)
+    let definedTypes = Dictionary<TypeDefinition, DefinedTypeMembers>(defaultArg typeDefCapacity 16)
+    let referencedTypes = Dictionary<TypeReference, ReferencedTypeMembers>(defaultArg typeRefCapacity 32)
     let genericParameterLists = Dictionary<obj, GenericParamList> 16 // TODO: Make a GenericParamOwner struct.
     let entryPointToken = ref Unchecked.defaultof<EntryPoint>
 
@@ -740,7 +740,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
     member this.ReferenceType(reference: TypeReference<'Kind>) =
         validated {
-            let! members = this.ReferenceType(reference :> ReferencedType)
+            let! members = this.ReferenceType(reference :> TypeReference)
             return ReferencedTypeMembers<'Kind> members
         }
 

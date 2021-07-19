@@ -8,8 +8,8 @@ open FSharpIL.Metadata.Signatures
 
 [<RequireQualifiedAccess>]
 type CustomAttributeCtor =
-    | Ref of MethodCallTarget<ReferencedType, MethodReference<MethodKinds.ObjectConstructor>>
-    | Def of MethodCallTarget<DefinedType, MethodDefinition<MethodKinds.ObjectConstructor>>
+    | Ref of MethodCallTarget<TypeReference, MethodReference<MethodKinds.ObjectConstructor>>
+    | Def of MethodCallTarget<TypeDefinition, MethodDefinition<MethodKinds.ObjectConstructor>>
     //| Spec of TypeSpecification * 
 
     static member Referenced :
