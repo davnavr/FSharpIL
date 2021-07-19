@@ -71,8 +71,7 @@ let example() =
             ReferencedType.ConcreteClass (
                 resolutionScope = TypeReferenceParent.Assembly mscorlib,
                 typeNamespace = system,
-                typeName = Identifier.ofStr "Object",
-                genericParameters = GenericParamList.empty
+                typeName = Identifier.ofStr "Object"
             )
 
         let tfmattr =
@@ -80,8 +79,7 @@ let example() =
             ReferencedType.SealedClass (
                 resolutionScope = TypeReferenceParent.Assembly mscorlib,
                 typeNamespace = ValueSome(Identifier.ofStr "System.Runtime.Versioning"),
-                typeName = Identifier.ofStr "TargetFrameworkAttribute",
-                genericParameters = GenericParamList.empty
+                typeName = Identifier.ofStr "TargetFrameworkAttribute"
             )
 
         let console =
@@ -89,8 +87,7 @@ let example() =
             ReferencedType.StaticClass (
                 resolutionScope = TypeReferenceParent.Assembly consolelib,
                 typeNamespace = system,
-                typeName = Identifier.ofStr "Console",
-                genericParameters = GenericParamList.empty
+                typeName = Identifier.ofStr "Console"
             )
 
         let! _ = builder.ReferenceType object
@@ -127,8 +124,7 @@ let example() =
                 typeNamespace = ValueSome(Identifier.ofStr "HelloWorld"),
                 enclosingClass = ValueNone,
                 typeName = Identifier.ofStr "Program",
-                extends = ClassExtends.Referenced object,
-                genericParameters = GenericParamList.empty
+                extends = ClassExtends.Referenced object
             )
 
         let! members = builder.DefineType(program, ValueNone)

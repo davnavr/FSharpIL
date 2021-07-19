@@ -62,9 +62,9 @@ type DefinedTypeMembers =
     member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool
 
-//[<IsReadOnly; Struct>]
-//type DefinedTypeMembers<'Owner when 'Owner :> DefinedType> =
-//    val Members: DefinedTypeMembers
+[<IsReadOnly; Struct>]
+type DefinedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> =
+    val Members: DefinedTypeMembers
 
 [<Sealed>]
 type ReferencedTypeMembers =
@@ -103,6 +103,11 @@ type TypeMemberExtensions =
 
     //static member DefineEntryPoint
 
+[<IsReadOnly; Struct>]
+type DefinedGenericMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> = struct
+    val Members: DefinedTypeMembers<'Kind>
+end
+
 /// Builds a CLI metadata module (I.9).
 [<Sealed>]
 type CliModuleBuilder =
@@ -136,7 +141,6 @@ type CliModuleBuilder =
 
     // TODO: For methods that add things that can also have custom attributes, figure out how to avoid allocating a CustomAttributeList if user doesn't want/need the CA list.
 
-    // TODO: Expose constructors for types in Cli namespace.
     member DefineType: definition: DefinedType -> ValidationResult<struct(CustomAttributeList * DefinedTypeMembers)>
     member DefineType: definition: DefinedType * attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers>
 
@@ -144,6 +148,10 @@ type CliModuleBuilder =
 
     // TODO: For specific TypeDefinition kinds, return a struct that wraps DefinedTypeMembers and only allows addition of certain members.
     //member DefineType: TypeDefinition<TypeKinds.StaticClass> -> ValidationResult<>
+
+    member DefineGenericType:
+        definition: GenericType<TypeDefinition<'Kind>> *
+        attributes: CustomAttributeList ref voption -> ValidationResult<DefinedGenericMembers<'Kind>>
 
     member ReferenceType: reference: ReferencedType -> ValidationResult<ReferencedTypeMembers>
     member ReferenceType: reference: TypeReference<'Kind> -> ValidationResult<ReferencedTypeMembers<'Kind>>

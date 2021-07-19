@@ -72,8 +72,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
                 typeNamespace = ValueSome namespace',
                 enclosingClass = ValueNone,
                 typeName = Identifier.ofStr "ArrayList`1",
-                extends = ClassExtends.Referenced mscorlib.Object,
-                genericParameters = GenericParamList.ofSeq [ GenericParam.named(Identifier.ofStr "T") ]
+                extends = ClassExtends.Referenced mscorlib.Object
             )
 
         // val private items: 'T[]

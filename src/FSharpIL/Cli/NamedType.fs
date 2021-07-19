@@ -13,12 +13,24 @@ open FSharpIL.Utilities
 open FSharpIL.Utilities.Collections
 open FSharpIL.Utilities.Compare
 
-[<Sealed>]
-type InstantiatedType<'Inst when 'Inst :> GenericType> (instantiator: int32 -> GenericParam -> NamedType, t: 'Inst) =
-    inherit NamedType(t.TypeNamespace, t.EnclosingType, t.TypeName)
+[<AbstractClass>]
+type GenericTypeInstantiation (instantiator: GenericParamType -> NamedType, inst: GenericType) = class
+    inherit NamedType(inst.TypeNamespace, inst.EnclosingType, inst.TypeName)
 
-    member val Arguments = InstantiatedTypeArguments(t.GenericParameters.Parameters, instantiator)
-    member _.Instantiated = t
+    member _.Instantiated = inst
+    member val Arguments = InstantiatedTypeArguments(inst.GenericParameters, instantiator)
+end
+
+[<Sealed>]
+type InstantiatedType<'Inst when 'Inst :> GenericType and 'Inst : not struct>
+    (
+        instantiator: GenericParamType -> NamedType,
+        inst: 'Inst
+    )
+    =
+    inherit GenericTypeInstantiation(instantiator, inst)
+
+    member _.Instantiated = Unsafe.As<'Inst> base.Instantiated
 
 [<AbstractClass>]
 type NamedType (ns: Identifier voption, parent: NamedType voption, tname: Identifier) =
@@ -29,20 +41,19 @@ type NamedType (ns: Identifier voption, parent: NamedType voption, tname: Identi
 
     member private this.CaseEquals(other: NamedType) =
         match this, other with
-        | (:? ModifiedType as mtype), _ -> mtype.Modified.Equals(other = other)
-        | _, (:? ModifiedType as mtype) -> this.Equals(other = mtype.Modified)
-        | (:? PrimitiveType as x), (:? PrimitiveType as y) -> x.Encoded = y.Encoded
+        | (:? ModifiedType as x), (:? ModifiedType as y) -> x.Modified === y.Modified && Equatable.blocks x.Modifiers y.Modifiers
+        | (:? PrimitiveType as x), (:? PrimitiveType as y) -> x.Encoded === y.Encoded
         | (:? ArrayType), (:? SZArrayType)
         | (:? SZArrayType), (:? ArrayType) -> false
-        | (:? ArrayType as x), (:? ArrayType as y) -> x.ElementType.Equals(other = y.ElementType)
+        | (:? ArrayType as x), (:? ArrayType as y) -> x.ElementType === y.ElementType
         | (:? PrimitiveType), _
         | _, (:? PrimitiveType)
         | (:? DefinedType), (:? DefinedType)
         | (:? ReferencedType), (:? ReferencedType) -> true
-        | (:? InstantiatedType<DefinedType> as x), (:? InstantiatedType<DefinedType> as y) ->
-            x.Instantiated.Equals(other = y.Instantiated) && x.Arguments.Equals(other = y.Arguments)
-        | (:? InstantiatedType<ReferencedType> as x), (:? InstantiatedType<ReferencedType> as y) ->
-            x.Instantiated.Equals(other = y.Instantiated) && x.Arguments.Equals(other = y.Arguments)
+        | (:? GenericType as x), (:? GenericType as y) -> x.Definition === y.Definition
+        | (:? GenericTypeInstantiation as x), (:? GenericTypeInstantiation as y) ->
+            x.Instantiated.Equals(other = y.Instantiated) && x.Arguments === y.Arguments
+        | (:? GenericParamType as x), (:? GenericParamType as y) -> x.Owner = y.Owner && x.Sequence = y.Sequence
         | _ -> false
 
     member this.Equals(other: NamedType) =
@@ -73,6 +84,93 @@ module NamedTypePatterns =
     let (|IsSystemType|) expected (t: #NamedType) =
         t.TypeNamespace = PrimitiveType.ns && t.EnclosingType.IsNone && t.TypeName = Identifier expected
 
+[<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
+type GenericParam =
+    val Name: Identifier
+    val Flags: GenericParamFlags
+    val Constraints: GenericConstraintSet
+
+    new (name, flags, constraints) = { Name = name; Flags = flags; Constraints = constraints }
+
+    member this.Equals(other: GenericParam) = this.Name === other.Name
+
+    override this.GetHashCode() = this.Name.GetHashCode()
+
+    override this.Equals(obj: obj) =
+        match obj with
+        | :? GenericParam as other -> this.Equals(other = other)
+        | _ -> false
+
+    interface IEquatable<GenericParam> with member this.Equals other = this.Equals(other = other)
+
+[<Struct>]
+type GenericConstraintSetEnumerator =
+    val mutable inner: ImmutableHashSet<NamedType>.Enumerator
+
+    new (inner) = { inner = inner }
+
+    member this.Current = this.inner.Current
+    member this.MoveNext() = this.inner.MoveNext()
+
+    interface IEnumerator<NamedType> with
+        member this.Current = this.Current
+        member this.Current = this.Current :> obj
+        member this.MoveNext() = this.MoveNext()
+        member this.Reset() = this.inner.Reset()
+        member _.Dispose() = ()
+
+[<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
+type GenericConstraintSet (inner: ImmutableHashSet<NamedType>) =
+    member _.Count = inner.Count
+    member _.GetEnumerator() = new GenericConstraintSetEnumerator(inner.GetEnumerator())
+    member _.Add constr = GenericConstraintSet(inner.Add constr)
+    member _.Contains constr = inner.Contains constr
+    member this.Equals(other: GenericConstraintSet) =
+        if this.Count = other.Count
+        then Equatable.sequences this other
+        else false
+
+    override this.GetHashCode() =
+        let mutable hcode = HashCode()
+        for constr in this do hcode.Add constr
+        hcode.ToHashCode()
+
+    override this.Equals obj =
+        match obj with
+        | :? GenericConstraintSet as other -> this.Equals(other = other)
+        | _ -> false
+
+    interface IReadOnlyCollection<NamedType> with
+        member this.Count = this.Count
+        member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
+        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
+
+    interface IEquatable<GenericConstraintSet> with member this.Equals other = this.Equals(other = other)
+
+[<RequireQualifiedAccess>]
+module GenericConstraintSet =
+    let empty = GenericConstraintSet ImmutableHashSet.Empty
+    let inline add constr (constraints: GenericConstraintSet) = constraints.Add constr
+    let inline contains constr (constraints: GenericConstraintSet) = constraints.Contains constr
+
+[<RequireQualifiedAccess>]
+module GenericParam =
+    let named name = GenericParam(name, GenericParamFlags.None, GenericConstraintSet.empty)
+
+[<IsReadOnly; Struct>]
+[<NoComparison; StructuralEquality>]
+type GenericParamList (parameters: ImmutableArray<GenericParam>) =
+    member _.Parameters = parameters
+
+[<RequireQualifiedAccess>]
+module GenericParamList =
+    let empty = GenericParamList ImmutableArray.Empty
+    let singleton parameter = GenericParamList(ImmutableArray.Create<GenericParam>(item = parameter))
+    let ofSeq parameters = GenericParamList(ImmutableArray.CreateRange parameters)
+
+[<IsReadOnly; Struct>]
 type GenericParamKind =
     | Invariant
     | Covariant
@@ -84,115 +182,52 @@ type GenericSpecialConstraint =
     | ReferenceTypeConstraint
     | NonNullableValueTypeConstraint
 
-[<NoComparison; CustomEquality>]
-type GenericParam =
-    { Name: Identifier
-      SpecialConstraint: GenericSpecialConstraint
-      RequiresDefaultConstructor: bool
-      Constraints: ImmutableArray<NamedType> } // TODO: Constraint list should be a set.
+// TODO: How to deal with duplicate generic parameter names for nested classes?
 
-    member this.Equals other = this.Name === other.Name
+[<Sealed>]
+type GenericParamType (owner: GenericType, name, flags: GenericParamFlags, i: uint16, constraints: GenericConstraintSet) =
+    inherit NamedType(ValueNone, ValueSome(owner :> NamedType), name)
 
-    override this.GetHashCode() = this.Name.GetHashCode()
+    member _.Sequence = i
+    member _.Flags = flags
+    member _.Constraints = constraints
+    member _.Owner = owner
 
-    override this.Equals(obj: obj) =
-        match obj with
-        | :? GenericParam as other -> this.Equals(other = other)
-        | _ -> false
+    member _.RequiresDefaultConstructor = Flags.set GenericParamFlags.DefaultConstructorConstraint flags
 
-    interface IEquatable<GenericParam> with member this.Equals other = this.Equals(other = other)
+    member _.Kind =
+        match flags &&& GenericParamFlags.VarianceMask with
+        | GenericParamFlags.Covariant -> Covariant
+        | GenericParamFlags.Contravariant -> Contravariant
+        | GenericParamFlags.None
+        | _ -> Invariant
 
-[<RequireQualifiedAccess>]
-module GenericParam =
-    let named name =
-        { Name = name
-          SpecialConstraint = NoSpecialConstriant
-          RequiresDefaultConstructor = false
-          Constraints = ImmutableArray.Empty }
+    member _.SpecialConstraint =
+        if Flags.set GenericParamFlags.ReferenceTypeConstraint flags
+        then ReferenceTypeConstraint
+        elif Flags.set GenericParamFlags.NotNullableValueTypeConstraint flags
+        then NonNullableValueTypeConstraint
+        else NoSpecialConstriant
 
-// TODO: Include whether or not the parameters are covariant or contravariant. (GenericParamKind)
-[<IsReadOnly>]
-[<NoComparison; NoEquality>]
-type GenericParamList (parameters: ImmutableArray<GenericParam>) = struct
-    member _.Parameters = parameters
-end
+    override _.Equals obj = base.Equals obj
+    override _.GetHashCode() = HashCode.Combine(owner, i)
 
-[<RequireQualifiedAccess>]
-module GenericParamList =
-    let empty = GenericParamList ImmutableArray.Empty
-
-    let inline tryOfCollection capacity move current add finish =
-        let mutable lookup = HybridHashSet<GenericParam> capacity
-        let mutable duplicate: GenericParam voption = ValueNone
-
-        while duplicate.IsNone && move() do
-            let current = current()
-            if lookup.Add current
-            then add current
-            else duplicate <- ValueSome current
-
-        match duplicate with
-        | ValueNone -> GenericParamList(finish()) |> Ok
-        | ValueSome duplicate' -> Error duplicate'
-
-    let tryOfSeq (parameters: seq<_>) =
-        let builder = ImmutableArray.CreateBuilder()
-        let mutable enumerator: IEnumerator<_> = parameters.GetEnumerator()
-        tryOfCollection
-            0
-            (fun() -> enumerator.MoveNext())
-            (fun() -> enumerator.Current)
-            (fun gparam -> builder.Add gparam)
-            (fun() ->
-                if builder.Count = builder.Capacity
-                then builder.MoveToImmutable()
-                else builder.ToImmutable())
-
-    let tryOfArray parameters =
-        match parameters with
-        | null
-        | [||] -> Ok empty
-        | _ ->
-            let mutable parameters', i = Array.zeroCreate parameters.Length, -1
-            tryOfCollection
-                parameters.Length
-                (fun() ->
-                    i <- i + 1
-                    i < parameters.Length)
-                (fun() -> parameters.[i])
-                (fun gparam -> parameters'.[i] <- gparam)
-                (fun() -> Unsafe.As &parameters')
-
-    let tryOfBlock (parameters: ImmutableArray<_>) =
-        if parameters.IsDefaultOrEmpty
-        then Ok empty
-        else
-            let mutable enumerator = parameters.GetEnumerator()
-            tryOfCollection
-                parameters.Length
-                (fun() -> enumerator.MoveNext())
-                (fun() -> enumerator.Current)
-                ignore
-                (fun() -> parameters)
-
-    let inline duplicateGenericParam (duplicate: GenericParam) =
-        invalidArg
-            "parameters"
-            (sprintf "A generic parameter with the same name \"%O\" already exists in the generic parameter list" duplicate.Name)
-
-    let ofSeq parameters =
-        match tryOfSeq parameters with
-        | Ok parameters' -> parameters'
-        | Error dup -> duplicateGenericParam dup
+    interface IComparable<GenericParamType> with member this.CompareTo other = compare this.Sequence other.Sequence
+    interface IEquatable<GenericParamType> with
+        member this.Equals other = this.Owner === (other.Owner :> NamedType) && this.Sequence = other.Sequence
 
 [<AutoOpen>]
 module GenericParamListPatterns =
     let inline (|GenericParamList|) (parameters: GenericParamList) = parameters.Parameters
 
 [<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
 type ModifierType (required: bool, modifier: NamedType) =
     member _.Required = required
     member _.Modifier = modifier
+
+    interface IEquatable<ModifierType> with
+        member this.Equals other = this.Required = other.Required && this.Modifier === other.Modifier
 
 [<RequireQualifiedAccess>]
 module ModifierType =
@@ -256,14 +291,22 @@ type SZArrayType (element: NamedType) =
     inherit ArrayType(element, ArrayShape.ofVector, element.TypeName + "[]")
 
 [<AbstractClass>]
-type GenericType =
-    inherit NamedType
+type GenericType (definition: NamedType, genericParameterList) =
+    inherit NamedType(definition.TypeNamespace, definition.EnclosingType, definition.TypeName)
 
-    val GenericParameters: GenericParamList
+    member _.GenericParameters: ImmutableArray<GenericParamType> = genericParameterList
+    member _.Definition = definition
 
-    new (ns, parent, tname, gparams) =
-        { inherit NamedType(ns, parent, tname)
-          GenericParameters = gparams }
+[<Sealed>]
+type GenericType<'Definition when 'Definition :> NamedType and 'Definition : not struct>
+    (
+        definition: 'Definition,
+        genericParameterList: ImmutableArray<GenericParamType>
+    )
+    =
+    inherit GenericType(definition, genericParameterList)
+
+    member _.Definition = Unsafe.As<'Definition> base.Definition
 
 [<RequireQualifiedAccess>]
 [<NoComparison; StructuralEquality>]
@@ -280,8 +323,8 @@ module TypeReferenceParent =
         | TypeReferenceParent.Assembly _ -> ValueNone
         | TypeReferenceParent.Type(NamedType t) -> ValueSome t
 
-type ReferencedType (resolutionScope, typeNamespace, typeName, genericParameters) =
-    inherit GenericType(typeNamespace, TypeReferenceParent.toType resolutionScope, typeName, genericParameters)
+type ReferencedType (resolutionScope, typeNamespace, typeName) =
+    inherit NamedType(typeNamespace, TypeReferenceParent.toType resolutionScope, typeName)
 
     member _.ResolutionScope = resolutionScope
 
@@ -318,13 +361,13 @@ module TypeVisibility =
     let NestedFamilyOrAssembly parent = TypeVisibility(TypeDefFlags.NestedFamOrAssem, ValueSome parent)
 
 type DefinedType =
-    inherit GenericType
+    inherit NamedType
 
     val Flags: TypeDefFlags
     val Extends: ClassExtends
 
-    new (flags, extends, typeNamespace, enclosing, typeName, genericParameters) =
-        { inherit GenericType(typeNamespace, Convert.unsafeValueOption<DefinedType, _> enclosing, typeName, genericParameters)
+    new (flags, extends, typeNamespace, enclosing, typeName) =
+        { inherit NamedType(typeNamespace, Convert.unsafeValueOption<DefinedType, _> enclosing, typeName)
           Flags = flags
           Extends = extends }
 
@@ -339,40 +382,40 @@ module DefinedType =
         then IsInterface
         else NotInterface
 
-type InstantiatedTypeArgumentsEnumerator = struct
-    val mutable internal Index: int32
-    val internal Parameters: ImmutableArray<GenericParam>
-    val internal Instantiator: int32 -> GenericParam -> NamedType
+[<Struct>]
+type InstantiatedTypeArgumentsEnumerator =
+    val mutable index: int32
+    val parameters: ImmutableArray<GenericParamType>
+    val instantiator: GenericParamType -> NamedType
 
     new (parameters, instantiator) =
-        { Index = -1
-          Parameters = parameters
-          Instantiator = instantiator }
+        { index = -1
+          parameters = parameters
+          instantiator = instantiator }
 
     member this.Current =
-        if this.Index < 0 then enumeratorNotStarted()
-        elif this.Index >= this.Parameters.Length then enumeratorReachedEnd()
-        else this.Instantiator this.Index this.Parameters.[this.Index]
+        if this.index < 0 then enumeratorNotStarted()
+        elif this.index >= this.parameters.Length then enumeratorReachedEnd()
+        else this.instantiator this.parameters.[this.index]
 
     member this.MoveNext() =
-        if this.Index < this.Parameters.Length then
-            this.Index <- this.Index + 1
-        this.Index < this.Parameters.Length
+        if this.index < this.parameters.Length then
+            this.index <- this.index + 1
+        this.index < this.parameters.Length
 
     interface IEnumerator<NamedType> with
         member this.Current = this.Current
         member this.Current = this.Current :> obj
-        member this.Reset() = this.Index <- -1
+        member this.Reset() = this.index <- -1
         member this.MoveNext() = this.MoveNext()
         member _.Dispose() = ()
-end
 
 [<IsReadOnly>]
 [<NoComparison; CustomEquality>]
-type InstantiatedTypeArguments (gparams: ImmutableArray<GenericParam>, instantiator: int32 -> GenericParam -> NamedType) = struct
+type InstantiatedTypeArguments (gparams: ImmutableArray<GenericParamType>, instantiator: GenericParamType -> NamedType) = struct
     member _.Count = gparams.Length
 
-    member _.Item with get index = instantiator index gparams.[index]
+    member _.Item with get index = instantiator gparams.[index]
 
     member _.GetEnumerator() = new InstantiatedTypeArgumentsEnumerator(gparams, instantiator)
 
@@ -406,19 +449,17 @@ module GenericType =
 
 [<RequireQualifiedAccess>]
 module ClassExtends =
-    let inline (|Null|Defined|Referenced|DefinedGeneric|ReferencedGeneric|) (extends: ClassExtends) =
+    let inline (|Null|Defined|Referenced|Generic|) (extends: ClassExtends) =
         match extends.Extends with
         | ValueNone -> Null
         | ValueSome(:? ReferencedType as tref) -> Referenced tref
         | ValueSome(:? DefinedType as tdef) -> Defined tdef
-        | ValueSome(:? InstantiatedType<ReferencedType> as tref) -> ReferencedGeneric tref
-        | ValueSome tdef -> DefinedGeneric(tdef :?> InstantiatedType<DefinedType>)
+        | ValueSome inst -> Generic(inst :?> GenericTypeInstantiation)
 
     let Null = ClassExtends ValueNone
     let Defined (NamedType extends: DefinedType) = ClassExtends(ValueSome extends)
-    let DefinedGeneric (NamedType extends: InstantiatedType<DefinedType>) = ClassExtends(ValueSome extends)
     let Referenced (NamedType extends: ReferencedType) = ClassExtends(ValueSome extends)
-    let ReferencedGeneric (NamedType extends: InstantiatedType<ReferencedType>) = ClassExtends(ValueSome extends)
+    let Generic (NamedType extends: InstantiatedType<#GenericType>) = ClassExtends(ValueSome extends)
 
 [<AutoOpen>]
 module ModuleType =
@@ -428,8 +469,7 @@ module ModuleType =
             ClassExtends.Null, // According to ECMA-335, the module class "does not have a base type" (II.10.8).
             ValueNone,
             ValueNone,
-            Identifier.ofStr "<Module>",
-            GenericParamList.empty
+            Identifier.ofStr "<Module>"
         )
 
 [<RequireQualifiedAccess>]
@@ -525,8 +565,7 @@ type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : 
         extends: ClassExtends,
         typeNamespace: Identifier voption,
         enclosingClass: DefinedType voption,
-        typeName: Identifier,
-        genericParameters: GenericParamList
+        typeName: Identifier
     )
     =
     inherit DefinedType (
@@ -534,52 +573,59 @@ type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : 
         extends,
         typeNamespace,
         enclosingClass,
-        typeName,
-        genericParameters
+        typeName
     )
 
 type DefinedType with
-    static member ConcreteClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
-        TypeDefinition<TypeKinds.ConcreteClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+    static member ConcreteClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName) =
+        TypeDefinition<TypeKinds.ConcreteClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName)
 
-    static member AbstractClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
-        TypeDefinition<TypeKinds.AbstractClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+    static member AbstractClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName) =
+        TypeDefinition<TypeKinds.AbstractClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName)
 
-    static member SealedClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
-        TypeDefinition<TypeKinds.SealedClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+    static member SealedClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName) =
+        TypeDefinition<TypeKinds.SealedClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName)
 
-    static member StaticClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
-        TypeDefinition<TypeKinds.StaticClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+    static member StaticClass(visibility, flags, extends, typeNamespace, enclosingClass, typeName) =
+        TypeDefinition<TypeKinds.StaticClass>(visibility, flags, extends, typeNamespace, enclosingClass, typeName)
 
-    static member Interface(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
-        TypeDefinition<TypeKinds.Interface>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+    static member Interface(visibility, flags, extends, typeNamespace, enclosingClass, typeName) =
+        TypeDefinition<TypeKinds.Interface>(visibility, flags, extends, typeNamespace, enclosingClass, typeName)
 
-    static member ValueType(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters) =
-        TypeDefinition<TypeKinds.ValueType>(visibility, flags, extends, typeNamespace, enclosingClass, typeName, genericParameters)
+    static member ValueType(visibility, flags, extends, typeNamespace, enclosingClass, typeName) =
+        TypeDefinition<TypeKinds.ValueType>(visibility, flags, extends, typeNamespace, enclosingClass, typeName)
 
 [<Sealed>]
 type TypeReference<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>>
     (
         parent: TypeReferenceParent,
         typeNamespace: Identifier voption,
-        typeName: Identifier,
-        genericParameters: GenericParamList
+        typeName: Identifier
     )
     =
-    inherit ReferencedType(parent, typeNamespace, typeName, genericParameters)
+    inherit ReferencedType(parent, typeNamespace, typeName)
 
 type ReferencedType with
-    static member ConcreteClass(resolutionScope, typeNamespace, typeName, genericParameters) =
-        TypeReference<TypeKinds.ConcreteClass>(resolutionScope, typeNamespace, typeName, genericParameters)
+    static member ConcreteClass(resolutionScope, typeNamespace, typeName) =
+        TypeReference<TypeKinds.ConcreteClass>(resolutionScope, typeNamespace, typeName)
 
 
 
 
-    static member SealedClass(resolutionScope, typeNamespace, typeName, genericParameters) =
-        TypeReference<TypeKinds.SealedClass>(resolutionScope, typeNamespace, typeName, genericParameters)
+    static member SealedClass(resolutionScope, typeNamespace, typeName) =
+        TypeReference<TypeKinds.SealedClass>(resolutionScope, typeNamespace, typeName)
 
-    static member StaticClass(resolutionScope, typeNamespace, typeName, genericParameters) =
-        TypeReference<TypeKinds.StaticClass>(resolutionScope, typeNamespace, typeName, genericParameters)
+    static member StaticClass(resolutionScope, typeNamespace, typeName) =
+        TypeReference<TypeKinds.StaticClass>(resolutionScope, typeNamespace, typeName)
+
+type GenericType with
+    static member Defined
+        (
+            definition: 'Definition when 'Definition :> DefinedType and 'Definition : not struct,
+            genericParameterList: ImmutableArray<_>
+        )
+        =
+        GenericType<'Definition>(definition, genericParameterList)
 
 [<IsReadOnly; Struct>]
 type LocalVariableType =

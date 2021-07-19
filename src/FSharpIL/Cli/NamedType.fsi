@@ -1,6 +1,7 @@
 ﻿namespace FSharpIL.Cli
 
 open System
+open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
@@ -31,6 +32,55 @@ module NamedTypePatterns =
 module NamedType =
     val toElemType: NamedType -> FSharpIL.Metadata.Blobs.ElemType voption
 
+[<Struct>]
+[<NoComparison; NoEquality>]
+type GenericConstraintSetEnumerator =
+    val mutable private inner: ImmutableHashSet<NamedType>.Enumerator
+
+    member Current: NamedType
+    member MoveNext: unit -> bool
+
+    interface IEnumerator<NamedType>
+
+[<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
+type GenericConstraintSet =
+    member Add: constr: NamedType -> GenericConstraintSet
+    member Count: int32
+    member Contains: constr: NamedType -> bool
+    member GetEnumerator: unit -> GenericConstraintSetEnumerator
+    member Equals: other: GenericConstraintSet -> bool
+
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
+
+    interface IEquatable<GenericConstraintSet>
+    interface IEnumerable<NamedType>
+    interface IReadOnlyCollection<NamedType>
+
+[<RequireQualifiedAccess>]
+module GenericConstraintSet =
+    val empty : GenericConstraintSet
+    val inline add : constr: NamedType -> constraints: GenericConstraintSet -> GenericConstraintSet
+    val inline contains : constr: NamedType -> constraints: GenericConstraintSet -> bool
+
+[<IsReadOnly; Struct>]
+[<NoComparison; CustomEquality>]
+type GenericParam =
+    val Name: Identifier
+    val Flags: GenericParamFlags
+    val Constraints: GenericConstraintSet
+
+    new: name: Identifier * flags: GenericParamFlags * constraints: GenericConstraintSet -> GenericParam
+
+    member Equals: other: GenericParam -> bool
+
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
+
+    interface IEquatable<GenericParam>
+
+[<IsReadOnly; Struct>]
 type GenericParamKind =
     | Invariant
     | Covariant
@@ -42,35 +92,37 @@ type GenericSpecialConstraint =
     | ReferenceTypeConstraint
     | NonNullableValueTypeConstraint
 
-[<NoComparison; CustomEquality>]
-type GenericParam = // TODO: Make this inherit NamedType
-    { Name: Identifier
-      SpecialConstraint: GenericSpecialConstraint
-      RequiresDefaultConstructor: bool
-      Constraints: ImmutableArray<NamedType> }
+[<Sealed>]
+type GenericParamType = class
+    inherit NamedType
 
-    member Equals: other: GenericParam -> bool
+    member Sequence: uint16
+    member Flags: GenericParamFlags
+    member Constraints: GenericConstraintSet
+    member Kind: GenericParamKind
+    member SpecialConstraint: GenericSpecialConstraint
+    member RequiresDefaultConstructor: bool
 
-    override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
-    interface IEquatable<GenericParam>
+    interface IComparable<GenericParamType>
+    interface IEquatable<GenericParamType>
+end
 
 [<RequireQualifiedAccess>]
 module GenericParam =
     val named : Identifier -> GenericParam
 
 [<IsReadOnly; Struct>]
-[<NoComparison; NoEquality>]
-type GenericParamList = // TODO: Make this type lazy.
+[<NoComparison; StructuralEquality>]
+type GenericParamList =
     member Parameters: ImmutableArray<GenericParam>
+    interface IEquatable<GenericParamList>
 
 [<RequireQualifiedAccess>]
 module GenericParamList =
     val empty : GenericParamList
-    val tryOfSeq : seq<GenericParam> -> Result<GenericParamList, GenericParam>
-    val tryOfArray : GenericParam[] -> Result<GenericParamList, GenericParam>
-    val tryOfBlock : ImmutableArray<GenericParam> -> Result<GenericParamList, GenericParam>
+    val singleton : parameter: GenericParam -> GenericParamList
     /// <summary>Creates a generic parameter list from the sequence of generic parameters.</summary>
     /// <exception cref="ArgumentException">The sequence of generic <paramref name="parameters"/> contains a duplicate.</exception>
     val ofSeq : parameters: seq<GenericParam> -> GenericParamList
@@ -80,12 +132,14 @@ module GenericParamListPatterns =
     val inline (|GenericParamList|): GenericParamList -> ImmutableArray<GenericParam>
 
 [<IsReadOnly; Struct>]
-[<NoComparison; StructuralEquality>]
+[<NoComparison; CustomEquality>]
 type ModifierType =
     member Required: bool
     member Modifier: NamedType
 
     new: required: bool * modifier: NamedType -> ModifierType
+
+    interface IEquatable<ModifierType>
 
 [<RequireQualifiedAccess>]
 module ModifierType =
@@ -152,7 +206,20 @@ type GenericType =
     inherit NamedType
 
     /// Gets the generic parameters of this type.
-    val GenericParameters: GenericParamList
+    member GenericParameters: ImmutableArray<GenericParamType>
+
+    member Definition: NamedType
+
+[<Sealed>]
+type GenericType<'Definition when 'Definition :> NamedType> = class
+    inherit GenericType
+
+    member Definition: 'Definition
+end
+
+type GenericParamType with
+    /// Gets the type that owns this generic parameter.
+    member Owner: GenericType
 
 [<RequireQualifiedAccess>]
 [<NoComparison; StructuralEquality>]
@@ -163,7 +230,7 @@ type TypeReferenceParent =
     //| Module of ModuleReference
 
 and ReferencedType =
-    inherit GenericType
+    inherit NamedType
 
     //val Flags: TypeDefFlags voption
 
@@ -172,8 +239,7 @@ and ReferencedType =
     new:
         resolutionScope: TypeReferenceParent *
         typeNamespace: Identifier voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> ReferencedType
+        typeName: Identifier -> ReferencedType
 
 [<IsReadOnly; Struct>]
 [<NoComparison; StructuralEquality>]
@@ -192,7 +258,7 @@ type TypeVisibility =
     member EnclosingClass: DefinedType voption
 
 and DefinedType =
-    inherit GenericType
+    inherit NamedType
 
     val Flags: TypeDefFlags
     val Extends: ClassExtends
@@ -202,8 +268,7 @@ and DefinedType =
         extends: ClassExtends *
         typeNamespace: Identifier voption *
         enclosing: DefinedType voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> DefinedType
+        typeName: Identifier -> DefinedType
 
     member Visibility: TypeVisibility
     /// Gets the type that contains this nested type (II.22.32).
@@ -307,8 +372,7 @@ type DefinedType with
         extends: ClassExtends *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.ConcreteClass>
+        typeName: Identifier -> TypeDefinition<TypeKinds.ConcreteClass>
 
     static member AbstractClass:
         visibility: TypeVisibility *
@@ -316,8 +380,7 @@ type DefinedType with
         extends: ClassExtends *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.AbstractClass>
+        typeName: Identifier -> TypeDefinition<TypeKinds.AbstractClass>
 
     static member SealedClass:
         visibility: TypeVisibility *
@@ -325,8 +388,7 @@ type DefinedType with
         extends: ClassExtends *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.SealedClass>
+        typeName: Identifier -> TypeDefinition<TypeKinds.SealedClass>
 
     static member StaticClass:
         visibility: TypeVisibility *
@@ -334,8 +396,7 @@ type DefinedType with
         extends: ClassExtends *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.StaticClass>
+        typeName: Identifier -> TypeDefinition<TypeKinds.StaticClass>
 
     static member Interface:
         visibility: TypeVisibility *
@@ -343,8 +404,7 @@ type DefinedType with
         extends: ClassExtends *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.Interface>
+        typeName: Identifier -> TypeDefinition<TypeKinds.Interface>
 
     static member ValueType:
         visibility: TypeVisibility *
@@ -352,8 +412,7 @@ type DefinedType with
         extends: ClassExtends *
         typeNamespace: Identifier voption *
         enclosingClass: DefinedType voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> TypeDefinition<TypeKinds.ValueType>
+        typeName: Identifier -> TypeDefinition<TypeKinds.ValueType>
 
     //static member Delegate
     //static member Enum
@@ -367,8 +426,7 @@ type ReferencedType with
     static member ConcreteClass:
         resolutionScope: TypeReferenceParent *
         typeNamespace: Identifier voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> TypeReference<TypeKinds.ConcreteClass>
+        typeName: Identifier -> TypeReference<TypeKinds.ConcreteClass>
 
 
 
@@ -376,21 +434,19 @@ type ReferencedType with
     static member SealedClass:
         resolutionScope: TypeReferenceParent *
         typeNamespace: Identifier voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> TypeReference<TypeKinds.SealedClass>
+        typeName: Identifier -> TypeReference<TypeKinds.SealedClass>
 
     static member StaticClass:
         resolutionScope: TypeReferenceParent *
         typeNamespace: Identifier voption *
-        typeName: Identifier *
-        genericParameters: GenericParamList -> TypeReference<TypeKinds.StaticClass>
+        typeName: Identifier -> TypeReference<TypeKinds.StaticClass>
 
 [<Struct>]
 [<NoComparison; NoEquality>]
 type InstantiatedTypeArgumentsEnumerator =
-    val mutable internal Index: int32
-    val internal Parameters: ImmutableArray<GenericParam>
-    val internal Instantiator: int32 -> GenericParam -> NamedType
+    val mutable private index: int32
+    val private parameters: ImmutableArray<GenericParamType>
+    val private instantiator: GenericParamType -> NamedType
 
     /// <exception cref="T:System.InvalidOperationException">
     /// Thrown when the enumerator was not started or when the end of the parameter list has been reached.
@@ -413,34 +469,48 @@ type InstantiatedTypeArguments =
     override GetHashCode: unit -> int32
 
     interface IEquatable<InstantiatedTypeArguments>
-    interface System.Collections.Generic.IReadOnlyList<NamedType>
+    interface IEnumerable<NamedType>
+    interface IReadOnlyCollection<NamedType>
+    interface IReadOnlyList<NamedType>
 
-// TODO: Make common subclass GenericTypeInstantiation
-
-[<Sealed>]
-type InstantiatedType<'Inst when 'Inst :> GenericType> = class
+[<AbstractClass>]
+type GenericTypeInstantiation = class
     inherit NamedType
 
+    member Instantiated: GenericType
     member Arguments: InstantiatedTypeArguments
+end
+
+[<Sealed>]
+type InstantiatedType<'Inst when 'Inst :> GenericType and 'Inst : not struct> = class
+    inherit GenericTypeInstantiation
+
     member Instantiated: 'Inst
 end
 
+type GenericType with
+    static member Defined<'Definition
+        when 'Definition :> DefinedType
+        and 'Definition : not struct> :
+        definition: 'Definition *
+        genericParamList: ImmutableArray<GenericParamType> -> GenericType<'Definition>
+
 [<RequireQualifiedAccess>]
 module GenericType =
-    val instantiate : gtype: 'Inst -> instantiator: (int32 -> GenericParam -> NamedType) -> InstantiatedType<'Inst>
+    val instantiate : gtype: 'Inst -> instantiator: (GenericParamType -> NamedType) -> InstantiatedType<'Inst>
+
     val inline (|Instantiation|) : gtype: InstantiatedType<'Inst> -> struct('Inst * InstantiatedTypeArguments)
 
 [<RequireQualifiedAccess>]
 module ClassExtends =
-    val inline (|Null|Defined|Referenced|DefinedGeneric|ReferencedGeneric|):
+    val inline (|Null|Defined|Referenced|Generic|):
         ClassExtends ->
-        Choice<unit, DefinedType, ReferencedType, InstantiatedType<DefinedType>, InstantiatedType<ReferencedType>>
+        Choice<unit, DefinedType, ReferencedType, GenericTypeInstantiation>
 
     val Null: ClassExtends
     val Defined: extends: DefinedType -> ClassExtends
-    val DefinedGeneric: extends: InstantiatedType<DefinedType> -> ClassExtends
     val Referenced: extends: ReferencedType -> ClassExtends
-    val ReferencedGeneric: extends: InstantiatedType<ReferencedType> -> ClassExtends
+    val Generic: extends: InstantiatedType<#GenericType> -> ClassExtends
 
 /// Describes the type of a local variable (II.23.2.6).
 [<IsReadOnly; Struct>]

@@ -151,6 +151,7 @@ type DefinedTypeMembers (owner: DefinedType, warnings: ValidationWarningsBuilder
     member this.FieldCount = this.Field.Count
     member this.MethodCount = this.Method.Count
 
+    // TODO: Add a memberref for members of generic types (II.9.8).
     member this.AddDefinedMethod(method, body: DefinedMethodBody voption) =
         // TODO: Check that owner is the correct kind of type to own this kind of method.
         if this.Method.Add method then
@@ -332,13 +333,12 @@ type ModuleBuilderSerializer
         | :? ReferencedType as tref -> EncodedType.Class(typeRefEncoded tref)
         | :? SZArrayType as arr -> EncodedType.SZArray(getEncodedType arr.ElementType)
         | :? ArrayType as arr -> EncodedType.Array(getEncodedType arr.ElementType, arr.Shape)
-        | :? InstantiatedType<DefinedType> as inst ->
-            if inst.Arguments.Count > 0 then
-                let mutable arguments = Array.zeroCreate<EncodedType> inst.Arguments.Count
-                for i = 0 to arguments.Length - 1 do arguments.[i] <- getEncodedType inst.Arguments.[i]
-                GenericInst.Class(typeDefEncoded inst.Instantiated, failwith "bad") |> EncodedType.GenericInst
-            else getEncodedType inst.Instantiated
-        // :? InstantiatedType<ReferencedType>
+        //| :? InstantiatedType<DefinedType> as inst ->
+        //    if inst.Arguments.Count > 0 then
+        //        let mutable arguments = Array.zeroCreate<EncodedType> inst.Arguments.Count
+        //        for i = 0 to arguments.Length - 1 do arguments.[i] <- getEncodedType inst.Arguments.[i]
+        //        GenericInst.Class(typeDefEncoded inst.Instantiated, failwith "bad") |> EncodedType.GenericInst
+        //    else getEncodedType inst.Instantiated
         | :? ModifiedType as modf when modf.Modifiers.Length > 0 ->
             EncodedType.Modified(getCustomModifiers modf.Modifiers, getEncodedType modf.Modified)
         | :? ModifiedType as modf -> getEncodedType modf.Modified
@@ -616,6 +616,12 @@ type ModuleBuilderSerializer
         builder
 
 [<IsReadOnly; Struct>]
+type DefinedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> =
+    val Members: ReferencedTypeMembers
+
+    new (members) = { Members = members }
+
+[<IsReadOnly; Struct>]
 type ReferencedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> =
     val Members: ReferencedTypeMembers
 
@@ -625,6 +631,11 @@ type ReferencedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> =
         match this.Members.ReferenceMethod method with
         | Ok target -> Ok(MethodCallTarget<TypeReference<'Kind>, 'Method>(Unsafe.As target.Owner, method))
         | Error err -> Error err
+
+[<IsReadOnly; Struct>]
+type DefinedGenericMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> = struct
+    val Members: DefinedTypeMembers<'Kind>
+end
 
 [<AbstractClass; Sealed>]
 type TypeMemberExtensions = // TODO: For these extension methods, call internal version that skips some validation.
@@ -656,6 +667,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
     let assemblyRefs = HashSet<ReferencedAssembly>(defaultArg assemblyRefCapacity 8)
     let definedTypes = Dictionary<DefinedType, DefinedTypeMembers>(defaultArg typeDefCapacity 16)
     let referencedTypes = Dictionary<ReferencedType, ReferencedTypeMembers>(defaultArg typeRefCapacity 32)
+
     let genericParameterLists = Dictionary<obj, GenericParamList> 16 // TODO: Make a GenericParamOwner struct.
     let entryPointToken = ref Unchecked.defaultof<EntryPoint>
 
@@ -713,7 +725,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             // TODO: Check that extends and nestedclass are already contained in the Module.
             let members = defineMembersFor tdef
             definedTypes.[tdef] <- members
-            genericParameterLists.[tdef] <- tdef.GenericParameters
+            //genericParameterLists.[tdef] <- tdef.GenericParameters
             Ok members
 
     member this.DefineType definition =
