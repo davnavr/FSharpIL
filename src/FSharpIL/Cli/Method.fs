@@ -44,43 +44,25 @@ module MethodName =
 [<AutoOpen>]
 module MethodNamePatterns = let (|MethodName|) name = MethodName.toIdentifier name
 
-[<IsReadOnly>]
-type MethodReturnType = struct
-    val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
-    val CustomModifiers: ImmutableArray<ModifierType>
-    val Type: CliType voption
-
-    new (tag, modifiers, argType) = { Tag = tag; CustomModifiers = modifiers; Type = argType }
-
-    member inline this.IsVoid = this.Tag = FSharpIL.Metadata.Signatures.ReturnTypeTag.Void
-end
+[<RequireQualifiedAccess>]
+type ReturnType =
+    | T of CliType
+    | ByRef of modifiers: ImmutableArray<ModifierType> * CliType
+    | TypedByRef of modifiers: ImmutableArray<ModifierType>
+    | Void of modifiers: ImmutableArray<ModifierType>
 
 [<RequireQualifiedAccess>]
 module MethodReturnType =
-    open FSharpIL.Metadata.Signatures
-
-    let inline (|Type|ByRef|TypedByRef|Void|) (returnType: MethodReturnType) =
-        match returnType.Tag with
-        | ReturnTypeTag.Type -> Type returnType.Type.Value
-        | ReturnTypeTag.ByRef -> ByRef(struct(returnType.CustomModifiers, returnType.Type.Value))
-        | ReturnTypeTag.Void -> Void returnType.CustomModifiers
-        | ReturnTypeTag.TypedByRef
-        | _ -> TypedByRef returnType.CustomModifiers
-
-    let Type returnType = MethodReturnType(ReturnTypeTag.Type, ImmutableArray.Empty, ValueSome returnType)
-    let ByRef(modifiers, returnType) = MethodReturnType(ReturnTypeTag.ByRef, modifiers, ValueSome returnType)
-    let TypedByRef modifiers = MethodReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
-    let TypedByRef' = TypedByRef ImmutableArray.Empty
-    let Void modifiers = MethodReturnType(ReturnTypeTag.Void, modifiers, ValueNone)
-    let Void' = Void ImmutableArray.Empty
+    let TypedByRef' = ReturnType.TypedByRef ImmutableArray.Empty
+    let Void' = ReturnType.Void ImmutableArray.Empty
 
 [<AbstractClass>]
 type Method =
     val HasThis: FSharpIL.Metadata.Signatures.MethodThis
     val CallingConvention: FSharpIL.Metadata.Signatures.CallingConventions
     val Name: Identifier
-    val ReturnType: MethodReturnType
-    val ParameterTypes: ImmutableArray<MethodParameterType>
+    val ReturnType: ReturnType
+    val ParameterTypes: ImmutableArray<ParameterType>
 
     new (mthis, cconv, name, rtype, ptypes) =
         { HasThis = mthis
@@ -110,7 +92,7 @@ type Method =
 [<AutoOpen>]
 module MethodHelpers =
     type IParameterIterator<'State> = interface
-        abstract Update: int32 * 'State * inref<MethodParameterType> -> unit
+        abstract Update: int32 * 'State * inref<ParameterType> -> unit
     end
 
     type EmptyParameterIterator = struct
@@ -127,7 +109,7 @@ module MethodHelpers =
 
     let checkMethodSig<'Iter, 'State when 'Iter :> IParameterIterator<'State> and 'Iter : struct>
         (state: 'State)
-        (parameterTypes: ImmutableArray<MethodParameterType>)
+        (parameterTypes: ImmutableArray<ParameterType>)
         =
         let mutable gcount = 0u
         for i = 0 to parameterTypes.Length - 1 do
@@ -278,12 +260,12 @@ type EntryPointKind =
 
 [<RequireQualifiedAccess>]
 module EntryPointKind =
-    let exitCodeType = MethodReturnType.Type(CliType.Primitive PrimitiveType.I4)
+    let exitCodeType = ReturnType.T(CliType.Primitive PrimitiveType.I4)
         
     let argsParameterTypes = // string[]
         CliType.Primitive PrimitiveType.String
         |> CliType.SZArray
-        |> MethodParameterType.Type
+        |> ParameterType.T
         |> ImmutableArray.Create
 
     let ExitWithArgs argsParamName = { ReturnExitCode = true; ArgumentsName = Some argsParamName }

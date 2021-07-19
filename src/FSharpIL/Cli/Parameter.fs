@@ -4,7 +4,6 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
 [<IsReadOnly; Struct>]
@@ -14,19 +13,12 @@ type ParameterKind =
     | InRef
     | OutRef
 
-[<IsReadOnly>]
-type MethodParameterType = struct // TODO: Avoid code duplication with FSharpIL.Metadata.Signatures.ParamItem and MethodReturnType
-    val Tag: ParamItemTag
-    val CustomModifiers: ImmutableArray<ModifierType>
-    val private argType: CliType
-
-    internal new (tag, modifiers, argType) = { Tag = tag; CustomModifiers = modifiers; argType = argType }
-
-    member this.Type =
-        if this.argType <> Unchecked.defaultof<_>
-        then ValueSome this.argType
-        else ValueNone
-end
+[<RequireQualifiedAccess>]
+[<NoComparison; StructuralEquality>]
+type ParameterType =
+    | T of CliType
+    | ByRef of modifiers: ImmutableArray<ModifierType> * CliType
+    | TypedByRef of modifiers: ImmutableArray<ModifierType>
 
 [<IsReadOnly; Struct>]
 type Parameter =
@@ -35,20 +27,10 @@ type Parameter =
       ParamName: Identifier voption } // TODO: Have field that allows setting of Optional flag.
 
 [<RequireQualifiedAccess>]
-module MethodParameterType =
-    let inline (|Type|ByRef|TypedByRef|) (ptype: MethodParameterType) =
-        match ptype.Tag with
-        | ParamItemTag.Param -> Type(ptype.Type.Value)
-        | ParamItemTag.ByRef -> ByRef(struct(ptype.CustomModifiers, ptype.Type.Value))
-        | ParamItemTag.TypedByRef
-        | _ -> TypedByRef
+module ParameterType =
+    let TypedByRef' = ParameterType.TypedByRef ImmutableArray.Empty
 
-    let Type argType = MethodParameterType(ParamItemTag.Param, ImmutableArray.Empty, argType)
-    let ByRef(modifiers, argType) = MethodParameterType(ParamItemTag.ByRef, modifiers, argType)
-    let TypedByRef modifiers = MethodParameterType(ParamItemTag.TypedByRef, modifiers, Unchecked.defaultof<CliType>)
-    let TypedByRef' = TypedByRef ImmutableArray.Empty
-
-type ParameterList = int32 -> MethodParameterType -> Parameter
+type ParameterList = int32 -> ParameterType -> Parameter
 
 [<RequireQualifiedAccess>]
 module Parameter =
