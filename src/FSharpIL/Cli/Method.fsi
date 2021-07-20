@@ -63,6 +63,13 @@ type Method =
     val ReturnType: ReturnType
     val ParameterTypes: ImmutableArray<ParameterType>
 
+    /// <summary>Gets a value indicating whether or not the method has a return value.</summary>
+    /// <returns>
+    /// <see langword="true"/> if the method has a return value, or <see langword="false"/> if the method returns
+    /// <see langword="void"/>.
+    /// </returns>
+    member HasReturnValue : bool
+
     abstract Equals: other: Method -> bool
     default Equals: other: Method -> bool
 

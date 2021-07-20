@@ -14,6 +14,8 @@ open FSharpIL.Utilities
 open FSharpIL.Utilities.Compare
 open FSharpIL.Utilities.Collections.CollectionFail
 
+#nowarn "0060" // Override implementations in augmentations are now deprecated.
+
 [<IsReadOnly; Struct>]
 type PrimitiveType (encoded: EncodedType) =
     member _.Encoded = encoded
@@ -48,17 +50,19 @@ type GenericSpecialConstraint =
     | ReferenceTypeConstraint
     | NonNullableValueTypeConstraint
 
+type [<Interface>] IGenericType<'This> = inherit IEquatable<'This>
+
 type CliType =
     | Primitive of PrimitiveType
     | SZArray of CliType
-    | Array of shape: ArrayShape * etype: CliType
+    | Array of CliType * shape: FSharpIL.Metadata.Signatures.ArrayShape
     | Modified of modified: ImmutableArray<ModifierType> * CliType
     | Class of NamedType
     | ValueType of NamedType
-    | DefinedTypeVar of GenericParamType<DefinedType>
-    | ReferencedTypeVar of GenericParamType<ReferencedType>
+    | DefinedTypeVar of GenericParamType<TypeDefinition>
+    | ReferencedTypeVar of GenericParamType<TypeReference>
 
-and [<Struct>] ClassExtends (extends: CliType voption) =
+and [<Struct>] ClassExtends (extends: TypeTok voption) =
     member _.Extends = extends
     member _.IsNull = extends.IsNone
 
@@ -75,7 +79,7 @@ and [<NoComparison; CustomEquality>] TypeReference =
 
     override this.GetHashCode() = HashCode.Combine(this.ResolutionScope, this.TypeNamespace, this.TypeName)
 
-    interface IEquatable<TypeReference> with
+    interface IGenericType<TypeReference> with
         member this.Equals other =
             this.TypeName === other.TypeName &&
             Equatable.voption this.TypeNamespace other.TypeNamespace &&
@@ -95,6 +99,11 @@ and [<NoComparison; CustomEquality>] ReferencedType =
     | Generic of GenericType<TypeReference>
 
     interface IEquatable<ReferencedType> with member this.Equals other = NamedTypeComparers.CompareReferenced this other
+
+    override this.Equals obj =
+        match obj with
+        | :? ReferencedType as other -> this === other
+        | _ -> false
 
 and [<NoComparison; CustomEquality>] DefinedType =
     | Definition of TypeDefinition
@@ -117,7 +126,7 @@ and [<NoComparison; CustomEquality>] TypeDefinition =
 
     override this.GetHashCode() = HashCode.Combine(this.EnclosingClass, this.TypeNamespace, this.TypeName)
 
-    interface IEquatable<TypeDefinition> with
+    interface IGenericType<TypeDefinition> with
         member this.Equals other =
             this.TypeName === other.TypeName &&
             Equatable.voption this.TypeNamespace other.TypeNamespace &&
@@ -128,20 +137,20 @@ and [<NoComparison; CustomEquality>] TypeDefinition =
         | :? TypeDefinition as other -> this === other
         | _ -> false
 
-and [<Struct>] ModifierType (required: bool, modifier: CliType) =
+and [<Struct>] TypeTok =
+    | Named of NamedType
+    | Specified of spec: CliType
+
+and [<Struct>] ModifierType (required: bool, modifier: TypeTok) =
     member _.Required = required
     member _.Modifier = modifier
-
-and [<Struct; NoComparison; CustomEquality>] GenericParamOwner (a: obj) = // TODO: Move this to a different file.
-    interface IEquatable<GenericParamOwner> with
-        member _.Equals other = failwith "bad"
 
 and [<Struct>] GenericParam =
     val Name: Identifier
     val Flags: GenericParamFlags
     val Constraints: ImmutableArray<CliType>
 
-and [<Sealed>] GenericParamType<'Owner when 'Owner :> IEquatable<'Owner>>
+and [<Sealed>] GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>>
     (
         owner: 'Owner,
         i: uint16,
@@ -181,7 +190,7 @@ and [<Sealed>] GenericParamType<'Owner when 'Owner :> IEquatable<'Owner>>
 
     override _.GetHashCode() = HashCode.Combine(owner, i)
 
-and [<Struct>] GenericParamListIndexer<'Owner when 'Owner :> IEquatable<'Owner>>
+and [<Struct>] GenericParamListIndexer<'Owner when 'Owner :> IGenericType<'Owner>>
     (
         initializer: int32 -> GenericParamType<'Owner>,
         parameters: GenericParamType<'Owner>[]
@@ -202,7 +211,7 @@ and [<Struct>] GenericParamListIndexer<'Owner when 'Owner :> IEquatable<'Owner>>
             initialized
         else existing
 
-and [<Struct>] GenericParamListEnumerator<'Owner when 'Owner :> IEquatable<'Owner>> =
+and [<Struct>] GenericParamListEnumerator<'Owner when 'Owner :> IGenericType<'Owner>> =
     val mutable private i: int32
     val private indexer: GenericParamListIndexer<'Owner>
 
@@ -226,7 +235,7 @@ and [<Struct>] GenericParamListEnumerator<'Owner when 'Owner :> IEquatable<'Owne
 
     interface IEnumerator<GenericParamType<'Owner>> with member this.Current = this.Current
 
-and [<Struct; NoComparison; CustomEquality>] GenericParamList<'Owner when 'Owner :> IEquatable<'Owner>> private
+and [<Struct; NoComparison; CustomEquality>] GenericParamList<'Owner when 'Owner :> IGenericType<'Owner>> private
     (
         initializer: int32 -> GenericParamType<'Owner>,
         parameters: GenericParamType<'Owner>[]
@@ -239,6 +248,11 @@ and [<Struct; NoComparison; CustomEquality>] GenericParamList<'Owner when 'Owner
 
     new (initializer, count) = GenericParamList(initializer, Array.zeroCreate count)
 
+    override this.GetHashCode() =
+        let mutable hcode = HashCode()
+        for parameter in this do hcode.Add parameter
+        hcode.ToHashCode()
+
     interface IReadOnlyList<GenericParamType<'Owner>> with
         member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator
         member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator<_>
@@ -248,7 +262,12 @@ and [<Struct; NoComparison; CustomEquality>] GenericParamList<'Owner when 'Owner
     interface IEquatable<GenericParamList<'Owner>> with
         member this.Equals other = this.Count = other.Count && Equatable.sequences this other
 
-and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IEquatable<'Type>>
+    override this.Equals obj =
+        match obj with
+        | :? GenericParamList<'Owner> as other -> this === other
+        | _ -> false
+
+and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IGenericType<'Type>>
     (
         tdef: 'Type,
         parameters: ImmutableArray<GenericParam>
@@ -282,6 +301,12 @@ type GenericParam with
         { Name = name; Flags = flags; Constraints = constraints }
 
 let inline (|GenericType|) (gtype: GenericType<'Type>) = struct(gtype.Type, gtype.Parameters)
+
+type ReferencedType with
+    override this.GetHashCode() =
+        match this with
+        | ReferencedType.Reference tref
+        | ReferencedType.Generic(GenericType(tref, _)) -> tref.GetHashCode()
 
 do NamedTypeComparers.CompareDefined <- fun x y ->
     match x, y with
@@ -325,7 +350,7 @@ type NamedType with
 [<RequireQualifiedAccess>]
 module ClassExtends =
     let Null = ClassExtends ValueNone
-    let Class (extends: NamedType) = ClassExtends(ValueSome(CliType.Class extends))
+    let Named (extends: NamedType) = ClassExtends(ValueSome(TypeTok.Named extends))
 
 [<RequireQualifiedAccess>]
 module TypeKinds =
@@ -494,11 +519,77 @@ type TypeReference with
     static member StaticClass(resolutionScope, typeNamespace, typeName) =
         TypeReference<TypeKinds.StaticClass>(resolutionScope, typeNamespace, typeName)
 
-[<AutoOpen>]
+module CliType =
+    let rec toElemType =
+        function
+        | CliType.Primitive prim -> EncodedType.toElemType prim.Encoded
+        | CliType.SZArray e -> toElemType e
+        | _ -> ValueNone
+
+[<AbstractClass; Sealed>]
+type GenericType =
+    static member Defined (definition: TypeDefinition) parameters = GenericType(definition, parameters)
+    static member Referenced (reference: TypeReference) parameters = GenericType(reference, parameters)
+
+[<RequireQualifiedAccess>]
+type internal NamedTypeCache =
+    private
+        { defined: Dictionary<DefinedType, NamedType>
+          referenced: Dictionary<ReferencedType, NamedType> }
+
+[<RequireQualifiedAccess>]
+type LocalType =
+    | T of modifiers: ImmutableArray<ModifierType> * pinned: bool * CliType
+    | ByRef of modifiers: ImmutableArray<ModifierType> * pinned: bool * CliType
+    | TypedByRef of modifiers: ImmutableArray<ModifierType>
+
+    member this.CustomModifiers =
+        match this with
+        | T(modifiers, _, _)
+        | ByRef(modifiers, _, _)
+        | TypedByRef modifiers -> modifiers
+
+    member this.IsPinned =
+        match this with
+        | T(_, pinned, _)
+        | ByRef(_, pinned, _) -> pinned
+        | TypedByRef _ -> false
+
+module LocalType =
+    let TypedByRef' = LocalType.TypedByRef ImmutableArray.Empty
+
 module ModuleType =
-    let ModuleType =
+    let Definition =
         { TypeDefinition.Flags = Unchecked.defaultof<TypeDefFlags>
           Extends = ClassExtends.Null // According to ECMA-335, the module class "does not have a base type" (II.10.8).
           EnclosingClass = ValueNone
           TypeNamespace = ValueNone
           TypeName = Identifier.ofStr "<Module>" }
+
+    let Definition' = DefinedType.Definition Definition
+
+    let Named = NamedType.DefinedType Definition'
+
+module NamedTypeCache =
+    let empty definedTypeCapacity referencedTypeCapacity =
+        { NamedTypeCache.defined = Dictionary(capacity = definedTypeCapacity)
+          NamedTypeCache.referenced = Dictionary(capacity = referencedTypeCapacity) }
+
+    let addDefined defined { NamedTypeCache.defined = cache } =
+        if Object.ReferenceEquals(defined, ModuleType.Definition')
+        then ModuleType.Named
+        else
+            match cache.TryGetValue defined with
+            | true, existing -> existing
+            | false, _ ->
+                let named = NamedType.DefinedType defined
+                cache.[defined] <- named
+                named
+
+    let addReferenced referenced { NamedTypeCache.referenced = cache } =
+        match cache.TryGetValue referenced with
+        | true, existing -> existing
+        | false, _ ->
+            let named = NamedType.ReferencedType referenced
+            cache.[referenced] <- named
+            named

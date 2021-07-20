@@ -6,15 +6,17 @@ open FSharpIL.Metadata
 open FSharpIL.Metadata.Blobs
 open FSharpIL.Metadata.Signatures
 
-[<RequireQualifiedAccess>]
+[<System.Runtime.CompilerServices.IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type CustomAttributeCtor =
-    | Ref of MethodCallTarget<TypeReference, MethodReference<MethodKinds.ObjectConstructor>>
-    | Def of MethodCallTarget<TypeDefinition, MethodDefinition<MethodKinds.ObjectConstructor>>
-    //| Spec of TypeSpecification * 
+    val Constructor: MethodTok
 
-    static member Referenced :
-        target: MethodCallTarget<TypeReference<'Kind>, MethodReference<MethodKinds.ObjectConstructor>> ->
-            CustomAttributeCtor when 'Kind :> TypeKinds.IHasConstructor
+    interface System.IEquatable<CustomAttributeCtor>
+
+[<RequireQualifiedAccess>]
+module CustomAttributeCtor =
+    type Constructor = MethodReference<MethodKinds.ObjectConstructor>
+
+    val Referenced : target: MethodTok<'Kind, Constructor> -> CustomAttributeCtor when 'Kind :> TypeKinds.IHasConstructor
 
 type FixedArgSource = int32 -> Identifier voption -> ElemType -> Result<FixedArg, IValidationError voption>
 

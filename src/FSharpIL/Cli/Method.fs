@@ -52,7 +52,7 @@ type ReturnType =
     | Void of modifiers: ImmutableArray<ModifierType>
 
 [<RequireQualifiedAccess>]
-module MethodReturnType =
+module ReturnType =
     let TypedByRef' = ReturnType.TypedByRef ImmutableArray.Empty
     let Void' = ReturnType.Void ImmutableArray.Empty
 
@@ -70,6 +70,13 @@ type Method =
           Name = name
           ReturnType = rtype
           ParameterTypes = ptypes }
+
+    member this.HasReturnValue =
+        match this.ReturnType with
+        | ReturnType.Void _ -> false
+        | ReturnType.T _
+        | ReturnType.ByRef(_, _)
+        | ReturnType.TypedByRef _ -> true
 
     abstract Equals: other: Method -> bool
     default this.Equals(other: Method) =
@@ -273,7 +280,7 @@ module EntryPointKind =
     let ExitNoArgs = { ReturnExitCode = true; ArgumentsName = None }
     let VoidNoArgs = { ReturnExitCode = false; ArgumentsName = None }
 
-    let inline returnType kind = if kind.ReturnExitCode then exitCodeType else MethodReturnType.Void'
+    let inline returnType kind = if kind.ReturnExitCode then exitCodeType else ReturnType.Void'
 
     let parameterTypes kind =
         match kind with
@@ -320,7 +327,7 @@ type DefinedMethod with
         new MethodDefinition<MethodKinds.ObjectConstructor> (
             visibility,
             flags,
-            MethodReturnType.Void',
+            ReturnType.Void',
             MethodName MethodName.ctor,
             parameterTypes,
             parameterList
@@ -343,7 +350,7 @@ module ConstructorHelpers =
         new MethodDefinition<MethodKinds.ClassConstructor> (
             MemberVisibility.Private,
             MethodAttributes(),
-            MethodReturnType.Void',
+            ReturnType.Void',
             MethodName MethodName.cctor,
             ImmutableArray.Empty,
             Unchecked.defaultof<_>
@@ -424,7 +431,7 @@ type ReferencedMethod with
     static member Constructor(visibility, parameterTypes) =
         new MethodReference<MethodKinds.ObjectConstructor> (
             visibility,
-            MethodReturnType.Void',
+            ReturnType.Void',
             MethodName MethodName.ctor,
             parameterTypes
         )

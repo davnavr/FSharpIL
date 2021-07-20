@@ -29,32 +29,28 @@ module Unsafe =
 
     val inline writeStringToken: stream: byref<MethodBodyBuilder> -> string -> MetadataTokenSource -> unit
 
-    val inline writeMethodToken:
-        stream: byref<MethodBodyBuilder> ->
-        method: MethodCallTarget<#NamedType, #Method> ->
-        MetadataTokenSource ->
-        unit
+    val inline writeMethodToken: stream: byref<MethodBodyBuilder> -> method: MethodTok -> MetadataTokenSource -> unit
 
-    val inline writeFieldToken:
-        stream: byref<MethodBodyBuilder> ->
-        field: FieldArg<#NamedType, #Field> ->
-        MetadataTokenSource ->
-        unit
+    val inline writeFieldToken: stream: byref<MethodBodyBuilder> -> field: FieldTok -> MetadataTokenSource -> unit
 
-    val inline writeTypeToken: stream: byref<MethodBodyBuilder> -> NamedType -> MetadataTokenSource -> unit
+    val inline writeTypeToken: stream: byref<MethodBodyBuilder> -> TypeTok -> MetadataTokenSource -> unit
 
     val inline writeFieldInstruction:
         stream: byref<MethodBodyBuilder> ->
         opcode: Opcode ->
         pushesFieldValue: bool ->
-        field: FieldArg<#NamedType, #Field> ->
+        field: FieldTok ->
         MetadataTokenSource ->
         unit
 
+    /// <summary>
+    /// Writes an instruction that takes a metadata token pointing to the <c>TypeDef</c>, <c>TypeRef</c>, or <c>TypeSpec</c>
+    /// table, and increments the estimated <c>MaxStack</c> value.
+    /// </summary>
     val inline writeTypeInstruction:
         stream: byref<MethodBodyBuilder> ->
         opcode: Opcode ->
-        NamedType ->
+        TypeTok ->
         MetadataTokenSource ->
         unit
 
@@ -136,7 +132,7 @@ val inline pop: stream: byref<MethodBodyBuilder> -> unit
 
 
 /// (0x28) Writes an instruction that calls the specified method (III.3.19).
-val call: stream: byref<MethodBodyBuilder> -> method: MethodCallTarget<#NamedType, #Method> -> MetadataTokenSource -> unit
+val call: stream: byref<MethodBodyBuilder> -> method: MethodTok -> MetadataTokenSource -> unit
 
 
 
@@ -146,7 +142,7 @@ val inline ret: stream: byref<MethodBodyBuilder> -> unit
 
 
 /// <summary>(0x6F) Writes an instruction that calls a method associated with an object (III.4.2).</summary>
-val callvirt: stream: byref<MethodBodyBuilder> -> method: MethodCallTarget<#NamedType, #Method> -> MetadataTokenSource -> unit
+val callvirt: stream: byref<MethodBodyBuilder> -> method: MethodTok -> MetadataTokenSource -> unit // TODO: Take a non-static method here.
 
 
 
@@ -160,30 +156,30 @@ val inline ldstr: stream: byref<MethodBodyBuilder> -> string -> MetadataTokenSou
 /// (0x7B) Writes an instruction that pops a member reference off of the stack and pushes the value of an instance field onto the
 /// stack (III.4.10).
 // TODO: Instead take a FieldDefinition<FieldKinds.Instance> or FieldReference<FieldKinds.Instance>
-val inline ldfld: stream: byref<MethodBodyBuilder> -> FieldArg -> MetadataTokenSource -> unit
+val inline ldfld: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit
 
 /// (0x7C) Writes an instruction that pops a member reference off of the stack and pushes an unmanaged pointer to an instance
 /// field onto the stack (III.4.11).
-val inline ldflda: stream: byref<MethodBodyBuilder> -> FieldArg -> MetadataTokenSource -> unit
+val inline ldflda: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit
 
 /// (0x7D) Writes an instruction that pops a member reference and a value off of the stack, storing the value into an instance
 /// field (III.4.28).
-val inline stfld: stream: byref<MethodBodyBuilder> -> FieldArg -> MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
+val inline stfld: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
 
 /// (0x7E) Writes an instruction that loads the value of a static field onto the stack (III.4.14).
-val inline ldsfld: stream: byref<MethodBodyBuilder> -> FieldArg -> MetadataTokenSource -> unit
+val inline ldsfld: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit
 
 /// (0x7F) Writes an instruction that pushes an unmanaged pointer to a static field onto the stack (III.4.15).
-val inline ldsflda: stream: byref<MethodBodyBuilder> -> FieldArg -> MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
+val inline ldsflda: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
 
 /// (0x80) Writes an instruction that pops a value off of the stack and stores it into a static field (III.4.30).
-val inline stsfld: stream: byref<MethodBodyBuilder> -> FieldArg -> MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
+val inline stsfld: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
 
 
 
 /// (0x8D) Writes an instruction that pops an integer length off of the stack and creates "a zero-based, one-dimensional array"
 /// of the specified type (III.4.20).
-val inline newarr: stream: byref<MethodBodyBuilder> -> etype: FSharpIL.Cli.NamedType -> MetadataTokenSource -> unit
+val inline newarr: stream: byref<MethodBodyBuilder> -> etype: TypeTok -> MetadataTokenSource -> unit
 
 
 

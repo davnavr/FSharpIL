@@ -6,43 +6,47 @@ open FSharpIL.Cli
 open FSharpIL.Metadata
 
 [<Sealed>]
-type CoreAssemblyMembers (octor: MethodCallTarget<_, _>, tfmctor: MethodCallTarget<_, _>) =
+type CoreAssemblyMembers (octor: MethodTok<_, _>, tfmctor: MethodTok<_, _>) =
     member _.ObjectConstructor = octor
     member _.TargetFrameworkConstructor = tfmctor
 
 [<Sealed>]
 type CoreAssemblyReference (assembly: ReferencedAssembly) =
     static let netCoreLib = FileName.ofStr "System.Private.CoreLib"
+    static let system = ValueSome(Identifier.ofStr "System")
 
-    let referenceSystemType name =
-        ReferencedType.ConcreteClass (
+    let object =
+        TypeReference.ConcreteClass (
             TypeReferenceParent.Assembly assembly,
-            ValueSome(Identifier.ofStr "System"),
-            Identifier.ofStr name,
-            GenericParamList.empty
+            system,
+            Identifier.ofStr "Object"
         )
 
-    let object = referenceSystemType "Object"
     let tfmattr =
-        ReferencedType.SealedClass (
+        TypeReference.SealedClass (
             TypeReferenceParent.Assembly assembly,
             ValueSome(Identifier.ofStr "System.Runtime.Versioning"),
-            Identifier.ofStr "TargetFrameworkAttribute",
-            GenericParamList.empty
+            Identifier.ofStr "TargetFrameworkAttribute"
         )
 
     let octor = ReferencedMethod.Constructor(ExternalVisibility.Public, ImmutableArray.Empty)
     let tfmctor =
         ReferencedMethod.Constructor (
             ExternalVisibility.Public,
-            ImmutableArray.Create(MethodParameterType.Type PrimitiveType.String)
+            ImmutableArray.Create(ParameterType.T (CliType.Primitive PrimitiveType.String))
         )
+
+    let referenceSystemType name =
+        { TypeReference.ResolutionScope = TypeReferenceParent.Assembly assembly
+          Flags = ValueNone
+          TypeNamespace = system
+          TypeName = Identifier.ofStr name }
 
     member _.Reference = assembly
     member _.Object = object
-    member val ValueType = referenceSystemType "ValueType" :> TypeReference
-    member val Delegate = referenceSystemType "Delegate" :> TypeReference
-    member val Enum = referenceSystemType "Enum" :> TypeReference
+    member val ValueType = referenceSystemType "ValueType"
+    member val Delegate = referenceSystemType "Delegate"
+    member val Enum = referenceSystemType "Enum"
     member _.TargetFrameworkAttribute = tfmattr
 
     member this.AddReferencesTo(builder: CliModuleBuilder) =
@@ -50,9 +54,9 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
 
         validated {
             let! object' = builder.ReferenceType object
-            let! _ = builder.ReferenceType this.ValueType
-            let! _ = builder.ReferenceType this.Delegate
-            let! _ = builder.ReferenceType this.Enum
+            let! _ = builder.ReferenceType(ReferencedType.Reference this.ValueType)
+            let! _ = builder.ReferenceType(ReferencedType.Reference this.Delegate)
+            let! _ = builder.ReferenceType(ReferencedType.Reference this.Enum)
             let! tfmattr' = builder.ReferenceType tfmattr
 
             let! octor' = object'.ReferenceMethod octor

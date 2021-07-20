@@ -1,7 +1,6 @@
 ﻿namespace FSharpIL.Cli
 
 open System
-open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables

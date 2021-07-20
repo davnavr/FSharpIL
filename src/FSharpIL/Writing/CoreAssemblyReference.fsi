@@ -8,13 +8,14 @@ type CoreAssemblyMembers =
     /// <summary>
     /// The constructor for <see cref="T:System.Object"/>, called in the constructor of all directly derived types.
     /// </summary>
-    member ObjectConstructor: MethodCallTarget<TypeReference<TypeKinds.ConcreteClass>, MethodReference<MethodKinds.ObjectConstructor>>
+    member ObjectConstructor: MethodTok<TypeReference<TypeKinds.ConcreteClass>, MethodReference<MethodKinds.ObjectConstructor>>
 
     /// <summary>
     /// The constructor of the <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/> type, which accepts a string
     /// containing the name of the target framework and its version.
     /// </summary>
-    member TargetFrameworkConstructor: MethodCallTarget<TypeReference<TypeKinds.SealedClass>, MethodReference<MethodKinds.ObjectConstructor>>
+    member TargetFrameworkConstructor:
+        MethodTok<TypeReference<TypeKinds.SealedClass>, MethodReference<MethodKinds.ObjectConstructor>>
 
 /// <summary>Represents the assembly containing core types such as <see cref="T:System.Object"/>.</summary>
 [<Sealed>]

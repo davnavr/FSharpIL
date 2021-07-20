@@ -210,11 +210,11 @@ let paramOrRetType (chunk: byref<ChunkedMemory>) =
 
 let retType (chunk: byref<ChunkedMemory>) =
     match paramOrRetType &chunk with
-    | [], Ok(Type t') -> Ok(ReturnType.Type t')
-    | modifiers, Ok(Type t') -> Ok(ReturnType.Type(EncodedType.Modified(modifiers, t')))
-    | modifiers, Ok(ByRef t') -> Ok(ReturnType.ByRef(modifiers, t'))
-    | modifiers, Ok TypedByRef -> Ok(ReturnType.TypedByRef modifiers)
-    | modifiers, Error(InvalidElementType ElementType.Void) -> Ok(ReturnType.Void modifiers)
+    | [], Ok(Type t') -> Ok(RetTypeItem.Type t')
+    | modifiers, Ok(Type t') -> Ok(RetTypeItem.Type(EncodedType.Modified(modifiers, t')))
+    | modifiers, Ok(ByRef t') -> Ok(RetTypeItem.ByRef(modifiers, t'))
+    | modifiers, Ok TypedByRef -> Ok(RetTypeItem.TypedByRef modifiers)
+    | modifiers, Error(InvalidElementType ElementType.Void) -> Ok(RetTypeItem.Void modifiers)
     | _, Error err -> Error err
 
 let rec param (chunk: byref<ChunkedMemory>) (parameters: ImmutableArray<ParamItem>.Builder) =

@@ -49,14 +49,14 @@ module Unsafe =
     let inline writeStringToken (stream: byref<_>) (str: string) (tokens: MetadataTokenSource) =
         writeStringOffset &stream (tokens.GetUserString str)
 
-    let inline writeMethodToken (stream: byref<_>) (method: MethodCallTarget<_, _>) (tokens: MetadataTokenSource) =
+    let inline writeMethodToken (stream: byref<_>) method (tokens: MetadataTokenSource) =
         writeMetadataToken &stream ((tokens.GetMethodToken method).Token)
 
-    let inline writeFieldToken (stream: byref<_>) (field: FieldArg<_, _>) (tokens: MetadataTokenSource) =
+    let inline writeFieldToken (stream: byref<_>) field (tokens: MetadataTokenSource) =
         writeMetadataToken &stream ((tokens.GetFieldToken field).Token)
 
-    let inline writeTypeToken (stream: byref<_>) t (tokens: MetadataTokenSource) =
-        writeMetadataToken &stream ((tokens.GetTypeToken t).Token)
+    let inline writeTypeToken (stream: byref<_>) type' (tokens: MetadataTokenSource) =
+        writeMetadataToken &stream ((tokens.GetTypeToken type').Token)
 
     let inline writeFieldInstruction (stream: byref<_>) opcode pushesFieldValue field tokens =
         writeRawOpcode &stream opcode
@@ -100,7 +100,7 @@ module Call =
         if hasRetValue then incrMaxStack &stream
 
     let instr' (stream: byref<_>) opcode method (tokens: MetadataTokenSource) =
-        instr &stream opcode (tokens.GetMethodToken method) (not method.Method.ReturnType.IsVoid)
+        instr &stream opcode (tokens.GetMethodToken method) method.Member.HasReturnValue
 
     let call (stream: byref<_>) method hasRetValue = instr &stream Opcode.Call method hasRetValue
     let callvirt (stream: byref<_>) method hasRetValue = instr &stream Opcode.Callvirt method hasRetValue
@@ -123,34 +123,34 @@ let call (stream: byref<_>) method tokens = Call.instr' &stream Opcode.Call meth
 
 //let calli ({ TableIndex = index }: TableIndex<StandaloneSigRow>)
 
-let inline ret (wr: byref<_>) = writeRawOpcode &wr Opcode.Ret
+let inline ret (stream: byref<_>) = writeRawOpcode &stream Opcode.Ret
 
 let callvirt (stream: byref<_>) method tokens = Call.instr' &stream Opcode.Callvirt method tokens
 
 let inline ldstr (stream: byref<_>) str tokens = Ldstr.ofString &stream str tokens
 
-let inline ldfld (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Ldfld true field tokens
-let inline ldflda (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Ldflda true field tokens
-let inline stfld (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Stfld false field tokens
-let inline ldsfld (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Ldsfld true field tokens
-let inline ldsflda (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Ldsflda true field tokens
-let inline stsfld (stream: byref<_>) (field: FieldArg) tokens = writeFieldInstruction &stream Opcode.Stfld false field tokens
+let inline ldfld (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Ldfld true field tokens
+let inline ldflda (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Ldflda true field tokens
+let inline stfld (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Stfld false field tokens
+let inline ldsfld (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Ldsfld true field tokens
+let inline ldsflda (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Ldsflda true field tokens
+let inline stsfld (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Stfld false field tokens
 
 let inline newarr (stream: byref<_>) etype typeTokenSource =
     writeTypeInstruction &stream Opcode.Newarr etype typeTokenSource
     incrMaxStack &stream
 
-let inline ldarg (wr: byref<_>) (num: uint16) =
-    writeRawOpcode &wr Opcode.Ldarg
-    (getInstructionStream &wr).WriteLE num
-    incrMaxStack &wr
+let inline ldarg (stream: byref<_>) (num: uint16) =
+    writeRawOpcode &stream Opcode.Ldarg
+    (getInstructionStream &stream).WriteLE num
+    incrMaxStack &stream
 
 module Shortened =
-    let ldarg (wr: byref<_>) num =
+    let ldarg (stream: byref<_>) num =
         match num with
-        | 0us -> ldarg_0 &wr
-        | 1us -> ldarg_1 &wr
-        | 2us -> ldarg_2 &wr
-        | 3us -> ldarg_3 &wr
-        | _ when num <= 0xFFus -> ldarg_s &wr (uint8 num)
-        | _ -> ldarg &wr num
+        | 0us -> ldarg_0 &stream
+        | 1us -> ldarg_1 &stream
+        | 2us -> ldarg_2 &stream
+        | 3us -> ldarg_3 &stream
+        | _ when num <= 0xFFus -> ldarg_s &stream (uint8 num)
+        | _ -> ldarg &stream num

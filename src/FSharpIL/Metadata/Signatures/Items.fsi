@@ -188,7 +188,7 @@ type ParamItem =
 *)
 
 /// <summary>Represents a <c>Param</c> item used in method signatures (II.23.2.10).</summary>
-and [<IsReadOnly; Struct>] ParamItem = // TODO: Rename to Param
+and [<IsReadOnly; Struct>] ParamItem =
     val Tag: ParamItemTag
     val internal Modifiers: CustomMod list
     val ParamType: EncodedType voption // TODO: Consider using Unchecked.defaultof<EncodedType> instead of ValueNone to save 4 bytes.
@@ -206,7 +206,7 @@ and [<IsReadOnly; Struct>] ParamItem = // TODO: Rename to Param
 
     interface IEquatable<ParamItem>
 
-and ReturnTypeTag =
+and RetTypeTag =
     | Type = 0uy
     | ByRef = 1uy
     | TypedByRef = 2uy
@@ -214,7 +214,7 @@ and ReturnTypeTag =
 
 (*
 [<RequireQualifiedAccess>]
-type ReturnType =
+type RetType =
     | Type of ParamType: EncodedType
     | ByRef of CustomModifiers: CustomModifiers * ParamType: EncodedType
     | TypedByRef of CustomModifiers: CustomModifiers
@@ -222,12 +222,12 @@ type ReturnType =
 *)
 
 /// <summary>Represents a <c>RetType</c> item used in method signatures (II.23.2.11).</summary>
-and [<IsReadOnly; Struct>] ReturnType = // TODO: Rename to RetType
-    val Tag: ReturnTypeTag
+and [<IsReadOnly; Struct>] RetTypeItem =
+    val Tag: RetTypeTag
     val internal Modifiers: CustomMod list
     val ReturnType: EncodedType voption // TODO: Consider using Unchecked.defaultof<EncodedType> instead of ValueNone to save 4 bytes.
 
-    internal new: tag: ReturnTypeTag * modifiers: CustomMod list * returnType: EncodedType voption -> ReturnType
+    internal new: tag: RetTypeTag * modifiers: CustomMod list * returnType: EncodedType voption -> RetTypeItem
 
     member inline IsVoid: bool
     member inline IsByRef: bool
@@ -243,7 +243,7 @@ and [<IsReadOnly; Struct>] ReturnType = // TODO: Rename to RetType
 and [<IsReadOnly; Struct>] MethodDefSig =
     { HasThis: MethodThis
       CallingConvention: CallingConventions
-      ReturnType: ReturnType
+      ReturnType: RetTypeItem
       Parameters: ImmutableArray<ParamItem> }
 
 /// <summary>Represents a <c>MethodRefSig</c>, which captures "the call site signature for a method" (II.23.2.2).</summary>
@@ -253,7 +253,7 @@ and [<IsReadOnly; Struct>] MethodRefSig =
 
     member HasThis: MethodThis
     member CallingConvention: CallingConventions
-    member ReturnType: ReturnType
+    member ReturnType: RetTypeItem
     member Parameters: ImmutableArray<ParamItem>
 
 /// <summary>
@@ -289,41 +289,41 @@ module ParamItem =
     val TypedByRef' : ParamItem
 
 [<RequireQualifiedAccess>]
-module ReturnType =
+module RetTypeItem =
     val inline (|Type|ByRef|TypedByRef|Void|) :
-        returnType: ReturnType -> Choice<EncodedType, struct(CustomMod list * EncodedType), CustomMod list, CustomMod list>
+        returnType: RetTypeItem -> Choice<EncodedType, struct(CustomMod list * EncodedType), CustomMod list, CustomMod list>
 
-    val Type : returnType: EncodedType -> ReturnType
+    val Type : returnType: EncodedType -> RetTypeItem
 
-    val ByRef : modifiers: CustomMod list * toType: EncodedType -> ReturnType
+    val ByRef : modifiers: CustomMod list * toType: EncodedType -> RetTypeItem
 
-    val ByRef' : toType: EncodedType -> ReturnType
+    val ByRef' : toType: EncodedType -> RetTypeItem
 
     /// <summary>The <see cref="T:System.TypedReference"/> type, as a return type.</summary>
-    val TypedByRef : modifiers: CustomMod list -> ReturnType
+    val TypedByRef : modifiers: CustomMod list -> RetTypeItem
 
     /// <summary>The <see cref="T:System.TypedReference"/> type, as a return type with no custom modifiers.</summary>
-    val TypedByRef' : ReturnType
+    val TypedByRef' : RetTypeItem
 
-    val Void : modifiers: CustomMod list -> ReturnType
+    val Void : modifiers: CustomMod list -> RetTypeItem
 
-    val Void' : ReturnType
+    val Void' : RetTypeItem
 
 [<RequireQualifiedAccess>]
 module MethodRefSig =
     val ofMethodDefSig : signature: MethodDefSig -> MethodRefSig
 
-    val inline Default : hasThis: MethodThis * returnType: ReturnType * parameters: ImmutableArray<ParamItem> -> MethodRefSig
+    val inline Default : hasThis: MethodThis * returnType: RetTypeItem * parameters: ImmutableArray<ParamItem> -> MethodRefSig
 
     val inline Generic :
         hasThis: MethodThis *
-        returnType: ReturnType *
+        returnType: RetTypeItem *
         genParamCount: uint32 *
         parameters: ImmutableArray<ParamItem> -> MethodRefSig
 
     val VarArg :
         hasThis: MethodThis *
-        returnType: ReturnType *
+        returnType: RetTypeItem *
         parameters: ImmutableArray<ParamItem> *
         varArgParams: ImmutableArray<ParamItem> -> MethodRefSig
 

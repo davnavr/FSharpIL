@@ -143,15 +143,15 @@ and genericInst (inst: GenericInst) (wr: byref<ChunkedMemoryBuilder>) =
     compressedUnsigned inst.GenericArguments.Count &wr // GenArgCount
     for arg in inst.GenericArguments do etype arg &wr
 
-and retType (item: inref<ReturnType>) (wr: byref<ChunkedMemoryBuilder>) =
+and retType (item: inref<RetTypeItem>) (wr: byref<ChunkedMemoryBuilder>) =
     // Writes the custom modifiers before the VOID, BYREF, or TYPEDBYREF bytes.
-    if item.Tag <> ReturnTypeTag.Type then customModList item.Modifiers &wr
+    if item.Tag <> RetTypeTag.Type then customModList item.Modifiers &wr
 
     match item.Tag with
-    | ReturnTypeTag.Void -> elem ElementType.Void &wr
-    | ReturnTypeTag.ByRef -> elem ElementType.ByRef &wr
-    | ReturnTypeTag.TypedByRef -> elem ElementType.TypedByRef &wr
-    | ReturnTypeTag.Type
+    | RetTypeTag.Void -> elem ElementType.Void &wr
+    | RetTypeTag.ByRef -> elem ElementType.ByRef &wr
+    | RetTypeTag.TypedByRef -> elem ElementType.TypedByRef &wr
+    | RetTypeTag.Type
     | _ -> ()
 
     match item.ReturnType with

@@ -47,9 +47,9 @@ type MethodBodyBuilder =
 type MetadataTokenSource internal () =
     abstract GetUserString: string -> UserStringOffset
     abstract GetUserString: inref<ReadOnlyMemory<char>> -> UserStringOffset
-    abstract GetMethodToken: method: MethodCallTarget<#NamedType, #Method> -> MethodMetadataToken
-    abstract GetFieldToken: field: FieldArg<#NamedType, #Field> -> FieldMetadataToken
-    abstract GetTypeToken: NamedType -> TypeMetadataToken
+    abstract GetMethodToken: method: MethodTok -> MethodMetadataToken
+    abstract GetFieldToken: field: FieldTok  -> FieldMetadataToken
+    abstract GetTypeToken: TypeTok -> TypeMetadataToken
 
 /// Represents the destination that a branch instruction would jump to.
 [<IsReadOnly; IsByRefLike>]

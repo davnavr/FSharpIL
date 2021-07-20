@@ -18,7 +18,7 @@ type PrimitiveType =
 
 [<RequireQualifiedAccess>]
 module PrimitiveType =
-    val Boolean : PrimitiveType
+    val Boolean : PrimitiveType // TODO: Make this CLI type.
     val Char : PrimitiveType
     val I1 : PrimitiveType
     val U1 : PrimitiveType
@@ -51,8 +51,11 @@ type GenericSpecialConstraint =
 
     interface IEquatable<GenericSpecialConstraint>
 
+/// Marker interface used to indicate that type references and type definitions can own generic parameters.
+type [<Interface>] IGenericType<'This> = inherit IEquatable<'This>
+
 [<Sealed>]
-type GenericParamType<'Owner when 'Owner :> IEquatable<'Owner>> =
+type GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>> =
     member Sequence: uint16
     member Flags: GenericParamFlags
     member Name: Identifier
@@ -66,10 +69,10 @@ type GenericParamType<'Owner when 'Owner :> IEquatable<'Owner>> =
 
     interface IEquatable<GenericParamType<'Owner>>
 
-and [<IsReadOnly; NoComparison; NoEquality>] private GenericParamListIndexer<'Owner when 'Owner :> IEquatable<'Owner>> =
+and [<IsReadOnly; NoComparison; NoEquality>] private GenericParamListIndexer<'Owner when 'Owner :> IGenericType<'Owner>> =
     struct end
 
-and [<Struct; NoComparison; NoEquality>] GenericParamListEnumerator<'Owner when 'Owner :> IEquatable<'Owner>> =
+and [<Struct; NoComparison; NoEquality>] GenericParamListEnumerator<'Owner when 'Owner :> IGenericType<'Owner>> =
     val mutable private i: int32
     val private indexer: GenericParamListIndexer<'Owner>
 
@@ -78,7 +81,7 @@ and [<Struct; NoComparison; NoEquality>] GenericParamListEnumerator<'Owner when 
 
     interface IEnumerator<GenericParamType<'Owner>>
 
-and [<IsReadOnly; Struct; NoComparison; CustomEquality>] GenericParamList<'Owner when 'Owner :> IEquatable<'Owner>> =
+and [<IsReadOnly; Struct; NoComparison; CustomEquality>] GenericParamList<'Owner when 'Owner :> IGenericType<'Owner>> =
     member Count : int32
     /// <summary>Gets the generic parameter at the specified index.</summary>
     /// <param name="index">The index of the generic parameter to retrieve.</param>
@@ -96,7 +99,7 @@ and [<IsReadOnly; Struct; NoComparison; CustomEquality>] GenericParamList<'Owner
     interface IReadOnlyList<GenericParamType<'Owner>>
     interface IEquatable<GenericParamList<'Owner>>
 
-and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IEquatable<'Type>> =
+and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IGenericType<'Type>> =
     member Type: 'Type
     member Parameters: GenericParamList<'Type>
 
@@ -110,7 +113,7 @@ type TypeReferenceParent =
 
     interface IEquatable<TypeReferenceParent>
 
-/// Represents a type defined outside of the current module.
+/// Describes the location of a type defined outside of the current module (II.7.3).
 and [<NoComparison; CustomEquality>] TypeReference =
     { Flags: TypeDefFlags voption
       ResolutionScope: TypeReferenceParent
@@ -118,7 +121,9 @@ and [<NoComparison; CustomEquality>] TypeReference =
       TypeName: Identifier }
 
     interface IEquatable<TypeReference>
+    interface IGenericType<TypeReference>
 
+/// Represents a type defined outside of the current module (II.7.3).
 and [<RequireQualifiedAccess; NoComparison; CustomEquality>] ReferencedType =
     | Reference of TypeReference
     | Generic of GenericType<TypeReference>
@@ -134,26 +139,29 @@ type CliType =
     | Primitive of PrimitiveType
     /// A single-dimensional array with a lower bound of zero, also known as a vector (I.8.9.1 and II.14.1).
     | SZArray of CliType
-    | Array of shape: FSharpIL.Metadata.Signatures.ArrayShape * etype: CliType
+    | Array of CliType * shape: FSharpIL.Metadata.Signatures.ArrayShape
     /// Represents a type that is modified by custom modifiers (II.7.1.1).
     | Modified of modified: ImmutableArray<ModifierType> * CliType
     /// A user-defined reference type.
     | Class of NamedType
+    /// A user-defined value type.
     | ValueType of NamedType
     //| Pointer of UnmanagedPointerType
-    | DefinedTypeVar of GenericParamType<DefinedType>
-    | ReferencedTypeVar of GenericParamType<ReferencedType>
+    | DefinedTypeVar of GenericParamType<TypeDefinition>
+    | ReferencedTypeVar of GenericParamType<TypeReference>
     // TODO: Allow using of GenericParamType<SomeMethod>
     //| DefinedMethodVar
 
     interface IEquatable<CliType>
 
+/// Represents a type defined in a module or assembly (II.7.3).
 and [<RequireQualifiedAccess; NoComparison; CustomEquality>] DefinedType =
     | Definition of TypeDefinition
     | Generic of GenericType<TypeDefinition>
 
     interface IEquatable<DefinedType>
 
+/// Represents a type defined in a module or assembly (II.7.3).
 and [<NoComparison; CustomEquality>] NamedType =
     /// Represents a type defined in the current module.
     | DefinedType of DefinedType
@@ -164,6 +172,7 @@ and [<NoComparison; CustomEquality>] NamedType =
 
 and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] ClassExtends = interface IEquatable<ClassExtends>
 
+/// Describes the characteristics of a type defined in the current module (II.10).
 and [<NoComparison; CustomEquality>] TypeDefinition =
     { Flags: TypeDefFlags
       Extends: ClassExtends
@@ -176,10 +185,11 @@ and [<NoComparison; CustomEquality>] TypeDefinition =
     override GetHashCode: unit -> int32
 
     interface IEquatable<TypeDefinition>
+    interface IGenericType<TypeDefinition>
 
 and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] ModifierType = interface IEquatable<ModifierType>
 
-type GenericParamType<'Owner when 'Owner :> IEquatable<'Owner>> with
+type GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>> with
     /// TODO: Don't forget to skip duplicate while writing generic constraints. (Maybe just make an error when the CliModuleBuilder first gets a hold of a duplicate)
     member Constraints: ImmutableArray<CliType> // TODO: Instead, make custom colelction type w/ a ctor function that explicitly says it will ignore attributes.
     member Owner: 'Owner
@@ -191,11 +201,19 @@ type GenericParamType<'Owner when 'Owner :> IEquatable<'Owner>> with
         name: Identifier *
         constraints: ImmutableArray<CliType> -> GenericParamType<'Owner>
 
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess>]
+type TypeTok =
+    | Named of NamedType
+    | Specified of spec: CliType
+
+    interface IEquatable<TypeTok>
+
 type ModifierType with
     member Required: bool
-    member Modifier: CliType
+    member Modifier: TypeTok
 
-    new: required: bool * modifier: CliType -> ModifierType
+    new: required: bool * modifier: TypeTok -> ModifierType
 
 type NamedType with
     member TypeName: Identifier
@@ -207,7 +225,7 @@ type TypeVisibility =
     member Flag: TypeDefFlags
     member EnclosingClass: DefinedType voption
 
-    internal new: flags: TypeDefFlags * parent: DefinedType voption -> TypeVisibility
+    internal new: flag: TypeDefFlags * parent: DefinedType voption -> TypeVisibility
 
     interface IEquatable<TypeVisibility>
 
@@ -227,13 +245,13 @@ type TypeDefinition with
     member IsNested: bool
 
 type ClassExtends with
-    member Extends: CliType voption
+    member Extends: TypeTok voption
     member IsNull: bool
 
 [<RequireQualifiedAccess>]
 module ClassExtends =
     val Null: ClassExtends
-    val Class: extends: NamedType -> ClassExtends
+    val Named: extends: NamedType -> ClassExtends
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type GenericParam =
@@ -249,9 +267,6 @@ type GenericParam =
         special: GenericSpecialConstraint *
         requiresDefaultConstructor: bool *
         constraints: ImmutableArray<CliType> -> GenericParam
-
-type GenericType<'Type when 'Type : not struct and 'Type :> IEquatable<'Type>> with
-    new: 'Type * parameters: ImmutableArray<GenericParam> -> GenericType<'Type>
 
 [<RequireQualifiedAccess>]
 module TypeKinds =
@@ -311,9 +326,11 @@ module TypeKinds =
         interface TypeAttributes.ISerializableType
 
 [<IsReadOnly; Struct>]
-[<NoComparison; NoEquality>]
+[<NoComparison; CustomEquality>]
 type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
     member Definition: TypeDefinition
+
+    interface IEquatable<TypeDefinition<'Kind>>
 
 val inline (|TypeDefinition|): definition: TypeDefinition<'Kind> -> TypeDefinition
 
@@ -370,9 +387,11 @@ type TypeDefinition with
     //static member Enum
 
 [<IsReadOnly; Struct>]
-[<NoComparison; NoEquality>]
-type TypeReference<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> =
+[<NoComparison; CustomEquality>]
+type TypeReference<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
     member Reference: TypeReference
+
+    interface IEquatable<TypeReference<'Kind>>
 
 val inline (|TypeReference|): reference: TypeReference<'Kind> -> TypeReference
 
@@ -395,7 +414,53 @@ type TypeReference with
         typeNamespace: Identifier voption *
         typeName: Identifier -> TypeReference<TypeKinds.StaticClass>
 
-[<AutoOpen>]
+[<AbstractClass; Sealed>]
+type GenericType =
+    static member Defined: definition: TypeDefinition -> parameters: ImmutableArray<GenericParam> -> GenericType<TypeDefinition>
+    //static member Defined: definition: TypeDefinition<'Kind> -> parameters: ImmutableArray<GenericParam> -> GenericTypeDefinition<'Kind>
+    static member Referenced: reference: TypeReference -> parameters: ImmutableArray<GenericParam> -> GenericType<TypeReference>
+
+/// Describes the type of a local variable (II.23.2.6).
+[<NoComparison; StructuralEquality; RequireQualifiedAccess>]
+type LocalType =
+    | T of modifiers: ImmutableArray<ModifierType> * pinned: bool * CliType
+    | ByRef of modifiers: ImmutableArray<ModifierType> * pinned: bool * CliType
+    | TypedByRef of modifiers: ImmutableArray<ModifierType>
+
+    member CustomModifiers: ImmutableArray<ModifierType>
+
+    /// <summary>
+    /// Gets a value indicating whether the value pointed to by this local variable can move during garbage collection (II.23.2.9).
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/> if the value pointed to by this local variable cannot be moved during garbage collection;
+    /// otherwise <see langword="false"/>.
+    /// </returns>
+    member IsPinned: bool
+
+    interface IEquatable<LocalType>
+
+[<RequireQualifiedAccess>]
+module LocalType =
+    val TypedByRef' : LocalType
+
+[<RequireQualifiedAccess>]
+module CliType =
+    /// Attempts to convert the specified type to a type that can be used in the constructor of a custom attribute.
+    val toElemType: CliType -> FSharpIL.Metadata.Blobs.ElemType voption
+
+[<NoComparison; NoEquality>]
+type internal NamedTypeCache
+
+[<RequireQualifiedAccess>]
+module internal NamedTypeCache =
+    val empty: definedTypeCapacity: int32 -> referencedTypeCapacity: int32 -> NamedTypeCache
+    val addDefined: defined: DefinedType -> cache: NamedTypeCache -> NamedType
+    val addReferenced: referenced: ReferencedType -> cache: NamedTypeCache -> NamedType
+
+[<RequireQualifiedAccess>]
 module internal ModuleType =
     /// <summary>Represents the special <c>&lt;Module&gt;</c> class, which contains global fields and methods (II.10.8).</summary>
-    val ModuleType : TypeDefinition
+    val Definition : TypeDefinition
+    val Definition' : DefinedType
+    val Named : NamedType

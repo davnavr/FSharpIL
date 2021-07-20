@@ -96,23 +96,23 @@ module ParamItem =
     let TypedByRef modifiers = ParamItem(ParamItemTag.TypedByRef, modifiers, ValueNone)
     let TypedByRef' = TypedByRef List.empty
 
-type ReturnTypeTag =
+type RetTypeTag =
     | Type = 0uy
     | ByRef = 1uy
     | TypedByRef = 2uy
     | Void = 3uy
 
 [<IsReadOnly; Struct>]
-type ReturnType =
-    val Tag: ReturnTypeTag
+type RetTypeItem =
+    val Tag: RetTypeTag
     val Modifiers: CustomMod list
     val ReturnType: EncodedType voption
 
     new (tag, modifiers, returnType) = { Tag = tag; Modifiers = modifiers; ReturnType = returnType }
 
-    member inline this.IsTypedByRef = this.Tag = ReturnTypeTag.TypedByRef
-    member inline this.IsVoid = this.Tag = ReturnTypeTag.Void
-    member inline this.IsByRef = this.Tag = ReturnTypeTag.ByRef
+    member inline this.IsTypedByRef = this.Tag = RetTypeTag.TypedByRef
+    member inline this.IsVoid = this.Tag = RetTypeTag.Void
+    member inline this.IsByRef = this.Tag = RetTypeTag.ByRef
 
     member this.CustomModifiers =
         match this.Modifiers, this.ReturnType with
@@ -120,20 +120,20 @@ type ReturnType =
         | _ -> this.Modifiers
 
 [<RequireQualifiedAccess>]
-module ReturnType =
-    let inline (|Type|ByRef|TypedByRef|Void|) (returnType: ReturnType) =
+module RetTypeItem =
+    let inline (|Type|ByRef|TypedByRef|Void|) (returnType: RetTypeItem) =
         match returnType.Tag with
-        | ReturnTypeTag.ByRef -> ByRef(struct(returnType.CustomModifiers, returnType.ReturnType.Value))
-        | ReturnTypeTag.TypedByRef -> TypedByRef returnType.CustomModifiers
-        | ReturnTypeTag.Void -> Void returnType.CustomModifiers
-        | ReturnTypeTag.Type
+        | RetTypeTag.ByRef -> ByRef(struct(returnType.CustomModifiers, returnType.ReturnType.Value))
+        | RetTypeTag.TypedByRef -> TypedByRef returnType.CustomModifiers
+        | RetTypeTag.Void -> Void returnType.CustomModifiers
+        | RetTypeTag.Type
         | _ -> Type returnType.ReturnType.Value
 
-    let Type returnType = ReturnType(ReturnTypeTag.Type, List.empty, ValueSome returnType)
-    let ByRef(modifiers, toType) = ReturnType(ReturnTypeTag.ByRef, modifiers, ValueSome toType)
+    let Type returnType = RetTypeItem(RetTypeTag.Type, List.empty, ValueSome returnType)
+    let ByRef(modifiers, toType) = RetTypeItem(RetTypeTag.ByRef, modifiers, ValueSome toType)
     let ByRef' toType = ByRef(List.empty, toType)
-    let TypedByRef modifiers = ReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
-    let Void modifiers = ReturnType(ReturnTypeTag.Void, modifiers, ValueNone)
+    let TypedByRef modifiers = RetTypeItem(RetTypeTag.TypedByRef, modifiers, ValueNone)
+    let Void modifiers = RetTypeItem(RetTypeTag.Void, modifiers, ValueNone)
     let TypedByRef' = TypedByRef List.empty
     let Void' = Void List.empty
 
@@ -187,7 +187,7 @@ module CallingConventions =
 type MethodDefSig =
     { HasThis: MethodThis
       CallingConvention: CallingConventions
-      ReturnType: ReturnType
+      ReturnType: RetTypeItem
       Parameters: ImmutableArray<ParamItem> }
 
 [<IsReadOnly>]
