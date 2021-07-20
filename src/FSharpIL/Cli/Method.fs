@@ -267,13 +267,9 @@ type EntryPointKind =
 
 [<RequireQualifiedAccess>]
 module EntryPointKind =
-    let exitCodeType = ReturnType.T(CliType.Primitive PrimitiveType.I4)
-        
-    let argsParameterTypes = // string[]
-        CliType.Primitive PrimitiveType.String
-        |> CliType.SZArray
-        |> ParameterType.T
-        |> ImmutableArray.Create
+    let exitCodeType = ReturnType.T PrimitiveType.I4
+
+    let argsParameterTypes = ImmutableArray.Create(ParameterType.T(CliType.SZArray PrimitiveType.String)) // string[]
 
     let ExitWithArgs argsParamName = { ReturnExitCode = true; ArgumentsName = Some argsParamName }
     let VoidWithArgs argsParamName = { ReturnExitCode = false; ArgumentsName = Some argsParamName }

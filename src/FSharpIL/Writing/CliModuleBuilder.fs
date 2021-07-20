@@ -380,7 +380,7 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
             then { TableIndex = 0u }
             else lookup locals
 
-    do getEncodedType <-
+    do getEncodedType <- // TODO: Implement replacement of long form for primitives types.
         let lookup =
             createBlobLookup EqualityComparer.Default <| // TODO: Make a EncodedTypeCache class, and use it here.
                 function
@@ -476,7 +476,7 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
             referencedTypeLookup.[reference] <- i
             i
 
-    member private this.SerializeDefinedType(definition, members: DefinedTypeMembers) =
+    member private _.SerializeDefinedType(definition, members: DefinedTypeMembers) =
         match definedTypeLookup.TryGetValue definition, definition with
         | (true, i), _-> i
         | (false, _), DefinedType.Definition definition' ->
@@ -608,6 +608,12 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
         builder
 
 [<IsReadOnly; Struct>]
+type DefinedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
+    val Members: DefinedTypeMembers
+
+    new (members) = { Members = members }
+
+[<IsReadOnly; Struct>]
 type ReferencedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
     val Members: ReferencedTypeMembers
 
@@ -707,11 +713,19 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             return struct(createAttributeList(CustomAttribute.Owner.DefinedType definition), members)
         }
 
-    member this.DefineType(definition, attributes) =
+    member this.DefineType(definition: DefinedType, attributes) =
         validated {
             let! members = this.AddDefinedType definition
             CustomAttributeList.fromRef (CustomAttribute.Owner.DefinedType definition) info.CustomAttributes attributes
             return members
+        }
+
+    member this.DefineType(definition: TypeDefinition<'Kind>, attributes) =
+        validated {
+            let definition' = DefinedType.Definition definition.Definition
+            let! members = this.AddDefinedType definition'
+            CustomAttributeList.fromRef (CustomAttribute.Owner.DefinedType definition') info.CustomAttributes attributes
+            return DefinedTypeMembers<'Kind> members
         }
 
     member _.ReferenceType reference =

@@ -16,25 +16,6 @@ type PrimitiveType =
 
     interface IEquatable<PrimitiveType>
 
-[<RequireQualifiedAccess>]
-module PrimitiveType =
-    val Boolean : PrimitiveType // TODO: Make this CLI type.
-    val Char : PrimitiveType
-    val I1 : PrimitiveType
-    val U1 : PrimitiveType
-    val I2 : PrimitiveType
-    val U2 : PrimitiveType
-    val I4 : PrimitiveType
-    val U4 : PrimitiveType
-    val I8 : PrimitiveType
-    val U8 : PrimitiveType
-    val R4 : PrimitiveType
-    val R8 : PrimitiveType
-    val I : PrimitiveType
-    val U : PrimitiveType
-    val Object : PrimitiveType
-    val String : PrimitiveType
-
 [<IsReadOnly; Struct; NoComparison; CustomEquality>]
 type GenericParamKind =
     | Invariant
@@ -200,6 +181,25 @@ type GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>> with
         flags: GenericParamFlags *
         name: Identifier *
         constraints: ImmutableArray<CliType> -> GenericParamType<'Owner>
+
+[<RequireQualifiedAccess>]
+module PrimitiveType =
+    val Boolean : CliType
+    val Char : CliType
+    val I1 : CliType
+    val U1 : CliType
+    val I2 : CliType
+    val U2 : CliType
+    val I4 : CliType
+    val U4 : CliType
+    val I8 : CliType
+    val U8 : CliType
+    val R4 : CliType
+    val R8 : CliType
+    val I : CliType
+    val U : CliType
+    val Object : CliType
+    val String : CliType
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 [<RequireQualifiedAccess>]

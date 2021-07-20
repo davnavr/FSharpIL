@@ -16,7 +16,9 @@ type CustomAttributeCtor =
 module CustomAttributeCtor =
     type Constructor = MethodReference<MethodKinds.ObjectConstructor>
 
-    val Referenced : target: MethodTok<'Kind, Constructor> -> CustomAttributeCtor when 'Kind :> TypeKinds.IHasConstructor
+    val Referenced :
+        target: MethodTok<TypeReference<'Kind>, Constructor> ->
+        CustomAttributeCtor when 'Kind :> TypeKinds.IHasConstructor
 
 type FixedArgSource = int32 -> Identifier voption -> ElemType -> Result<FixedArg, IValidationError voption>
 

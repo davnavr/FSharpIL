@@ -66,14 +66,19 @@ let example() = // TODO: Make helper function to add reference to System.Private
         *)
         // type [<Sealed>] ArrayList<'T> = inherit System.Object
         let arrlist =
-            DefinedType.SealedClass (
+            let object' =
+                mscorlib.Object.Reference
+                |> ReferencedType.Reference
+                |> NamedType.ReferencedType
+                |> ClassExtends.Named
+
+            TypeDefinition.SealedClass (
                 visibility = TypeVisibility.Public,
                 flags = TypeAttributes.BeforeFieldInit,
                 typeNamespace = ValueSome namespace',
                 enclosingClass = ValueNone,
                 typeName = Identifier.ofStr "ArrayList`1",
-                extends = ClassExtends.Referenced mscorlib.Object,
-                genericParameters = GenericParamList.ofSeq [ GenericParam.named(Identifier.ofStr "T") ]
+                extends = object'
             )
 
         // val private items: 'T[]

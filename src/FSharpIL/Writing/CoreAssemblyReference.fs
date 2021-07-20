@@ -33,7 +33,7 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
     let tfmctor =
         ReferencedMethod.Constructor (
             ExternalVisibility.Public,
-            ImmutableArray.Create(ParameterType.T (CliType.Primitive PrimitiveType.String))
+            ImmutableArray.Create(ParameterType.T PrimitiveType.String)
         )
 
     let referenceSystemType name =

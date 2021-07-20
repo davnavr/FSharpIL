@@ -20,24 +20,6 @@ open FSharpIL.Utilities.Collections.CollectionFail
 type PrimitiveType (encoded: EncodedType) =
     member _.Encoded = encoded
 
-module PrimitiveType =
-    let Boolean = PrimitiveType EncodedType.Boolean
-    let Char = PrimitiveType EncodedType.Char
-    let I1 = PrimitiveType EncodedType.I1
-    let U1 = PrimitiveType EncodedType.U1
-    let I2 = PrimitiveType EncodedType.I2
-    let U2 = PrimitiveType EncodedType.U2
-    let I4 = PrimitiveType EncodedType.I4
-    let U4 = PrimitiveType EncodedType.U4
-    let I8 = PrimitiveType EncodedType.I8
-    let U8 = PrimitiveType EncodedType.U8
-    let R4 = PrimitiveType EncodedType.R4
-    let R8 = PrimitiveType EncodedType.R8
-    let I = PrimitiveType EncodedType.I
-    let U = PrimitiveType EncodedType.U
-    let Object = PrimitiveType EncodedType.Object
-    let String = PrimitiveType EncodedType.String
-
 [<IsReadOnly; Struct>]
 type GenericParamKind =
     | Invariant
@@ -278,6 +260,24 @@ and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IGenericTy
         GenericParamType<'Type>(tdef, uint16 i, parameter.Flags, parameter.Name, parameter.Constraints)
     member _.Type = tdef
     member val Parameters = GenericParamList<'Type>(initializer, parameters.Length)
+
+module PrimitiveType =
+    let Boolean = CliType.Primitive(PrimitiveType EncodedType.Boolean)
+    let Char = CliType.Primitive(PrimitiveType EncodedType.Char)
+    let I1 = CliType.Primitive(PrimitiveType EncodedType.I1)
+    let U1 = CliType.Primitive(PrimitiveType EncodedType.U1)
+    let I2 = CliType.Primitive(PrimitiveType EncodedType.I2)
+    let U2 = CliType.Primitive(PrimitiveType EncodedType.U2)
+    let I4 = CliType.Primitive(PrimitiveType EncodedType.I4)
+    let U4 = CliType.Primitive(PrimitiveType EncodedType.U4)
+    let I8 = CliType.Primitive(PrimitiveType EncodedType.I8)
+    let U8 = CliType.Primitive(PrimitiveType EncodedType.U8)
+    let R4 = CliType.Primitive(PrimitiveType EncodedType.R4)
+    let R8 = CliType.Primitive(PrimitiveType EncodedType.R8)
+    let I = CliType.Primitive(PrimitiveType EncodedType.I)
+    let U = CliType.Primitive(PrimitiveType EncodedType.U)
+    let Object = CliType.Primitive(PrimitiveType EncodedType.Object)
+    let String = CliType.Primitive(PrimitiveType EncodedType.String)
 
 type GenericParam with
     new (name, flags, constraints) = { Name = name; Flags = flags; Constraints = constraints }

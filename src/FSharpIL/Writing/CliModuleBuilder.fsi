@@ -60,9 +60,9 @@ type DefinedTypeMembers =
     member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool
 
-//[<IsReadOnly; Struct>]
-//type DefinedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
-//    val Members: DefinedTypeMembers
+[<IsReadOnly; Struct>]
+type DefinedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
+    val Members: DefinedTypeMembers
 
 [<Sealed>]
 type ReferencedTypeMembers =
@@ -159,15 +159,22 @@ type CliModuleBuilder =
     // TODO: For methods that add things that can also have custom attributes, figure out how to avoid allocating a CustomAttributeList if user doesn't want/need the CA list.
 
     member DefineType: definition: DefinedType -> ValidationResult<struct(CustomAttributeList * DefinedTypeMembers)>
-    member DefineType: definition: DefinedType * attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers>
+
+    member DefineType:
+        definition: DefinedType *
+        attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers>
 
     //member DefineType: DefinedType * attributes: outref<CustomAttributeList> -> ValidationResult<DefinedTypeMembers>
 
-    // TODO: For specific TypeDefinition kinds, return a struct that wraps DefinedTypeMembers and only allows addition of certain members.
-    //member DefineType: TypeDefinition<TypeKinds.StaticClass> -> ValidationResult<>
+    member DefineType:
+        definition: TypeDefinition<'Kind> *
+        attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers<'Kind>>
 
     member ReferenceType: reference: ReferencedType -> ValidationResult<ReferencedTypeMembers>
+
     member ReferenceType: reference: TypeReference<'Kind> -> ValidationResult<ReferencedTypeMembers<'Kind>>
+
+    // TODO: Add helper methods for making Extends instances, maybe even replace public constructors for ClassExtends.
 
     /// <summary>
     /// Attempts to add a <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/> to the current assembly.
