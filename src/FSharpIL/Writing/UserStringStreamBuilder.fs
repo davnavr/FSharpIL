@@ -44,10 +44,10 @@ module private UserStringHelpers =
 [<Struct>]
 type private UserStringSerializer =
     interface StringHelpers.IStringSerializer<UserStringEntry> with
-        /// Appends the length of the blob before the string
-        member _.WriteBefore(entry, wr) = BlobWriter.compressedUnsigned entry.TotalLength &wr
+        /// Appends the length of the blob before the string.
+        member _.WriteBefore(entry, wr) = if entry.String.Length > 0 then BlobWriter.compressedUnsigned entry.TotalLength &wr
         member _.GetChars entry = &entry.String
-        member _.WriteAfter(entry, wr) = if entry.Length > 0u then wr.Write entry.TerminalByte
+        member _.WriteAfter(entry, wr) = wr.Write entry.TerminalByte
 
 // <summary>Builds the <c>#US</c> metadata stream, containing length prefixed UTF-16 strings (II.24.2.4).</summary>
 [<Sealed>]

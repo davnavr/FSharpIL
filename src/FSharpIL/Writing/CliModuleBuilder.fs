@@ -575,13 +575,12 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                     let attribute = &attrs.ItemRef i
                     { Parent = parent
                       Type =
-                        match attribute.Constructor.Constructor.Owner with
-                        | _ -> failwith "bad"
-                        //match attribute.Constructor with
-                        //| CustomAttributeCtor.Ref call ->
-                        //    CustomAttributeType.MemberRef referencedMethodLookup.[MethodCallTarget.convert call]
-                        //| CustomAttributeCtor.Def call ->
-                        //    CustomAttributeType.MethodDef definedMethodLookup.[MethodCallTarget.convert call]
+                        let ctor = attribute.Constructor.Constructor
+                        match ctor.Owner with
+                        | TypeTok.Named(NamedType.DefinedType _) ->
+                            CustomAttributeType.MethodDef definedMethodLookup.[MethodTok.unsafeAs ctor]
+                        | TypeTok.Named(NamedType.ReferencedType _) ->
+                            CustomAttributeType.MemberRef referencedMethodLookup.[MethodTok.unsafeAs ctor]
                       Value = builder.Blob.Add &attribute.Signature }
                     |> builder.Tables.CustomAttribute.Add
                     |> ignore

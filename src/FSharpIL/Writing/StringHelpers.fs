@@ -42,11 +42,13 @@ let serializeStringHeap<'Serializer, 'String when 'Serializer :> IStringSerializ
         Unchecked.defaultof<'Serializer>.WriteBefore(&string, &wr)
 
         chars <- Unchecked.defaultof<'Serializer>.GetChars(&string).Span
-        let mutable charsUsed, bytesUsed, completed = 0, 0, false
 
-        while not completed || charsUsed > 0 do
-            encoder.Convert(chars, buffer, chars.IsEmpty, &charsUsed, &bytesUsed, completed = &completed)
-            wr.Write(buffer.Slice(0, bytesUsed))
-            chars <- chars.Slice charsUsed
+        if chars.Length > 0 then
+            let mutable charsUsed, bytesUsed, completed = 0, 0, false
+
+            while not completed || charsUsed > 0 do
+                encoder.Convert(chars, buffer, chars.IsEmpty, &charsUsed, &bytesUsed, completed = &completed)
+                wr.Write(buffer.Slice(0, bytesUsed))
+                chars <- chars.Slice charsUsed
 
         Unchecked.defaultof<'Serializer>.WriteAfter(&string, &wr)
