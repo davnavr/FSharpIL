@@ -219,12 +219,28 @@ type ReferencedTypeMembers (owner: ReferencedType, warnings: ValidationWarningsB
     member this.ContainsField field = this.Field.Contains field
     member this.ContainsMethod method = this.Method.Contains method
 
-[<Struct>]
-type MemberIndices =
-    { mutable FieldList: TableIndex<FieldRow>
-      mutable MethodList: TableIndex<MethodDefRow>
-      mutable EventList: TableIndex<EventRow>
-      mutable PropertyList: TableIndex<PropertyRow> }
+[<Sealed>]
+type MemberIndexCounter<'Row when 'Row :> ITableRow> () =
+    let mutable last, first = 0u, ValueNone
+
+    member _.Last
+        with get(): TableIndex<'Row> =
+            match first with
+            | ValueSome _ -> { TableIndex = last }
+            | ValueNone -> { TableIndex = last + 1u }
+        and set({ TableIndex = index }: TableIndex<'Row>) =
+            last <- index
+
+            match first with
+            | ValueNone -> first <- ValueSome last
+            | ValueSome _ -> ()
+
+    member _.First: TableIndex<'Row> =
+        match first with
+        | ValueSome i -> { TableIndex = i }
+        | ValueNone -> { TableIndex = last + 1u }
+
+    member _.Reset() = first <- ValueNone
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type GenericParamEntry =
@@ -425,14 +441,11 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
         | CliType.Primitive prim -> prim.Encoded
         | cached -> lookup cached
 
-    let mutable methodDefParams = TableIndex<ParamRow>.One
-
-    // TODO: Fix, a typedef with no members may mess up the member list (previous type has one member missing).
-    let mutable indices =
-        { FieldList = TableIndex.One
-          MethodList = TableIndex.One
-          EventList = TableIndex.One
-          PropertyList = TableIndex.One }
+    let parameterList = MemberIndexCounter<ParamRow>()
+    let fieldList = MemberIndexCounter<FieldRow>()
+    let methodList = MemberIndexCounter<MethodDefRow>()
+    //property
+    //event
 
     let metadataTokenSource =
         { new MetadataTokenSource() with
@@ -506,7 +519,6 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
             i
 
     member private _.SerializeDefinedType(definition, members: DefinedTypeMembers) =
-        // TODO: Fix, member index will be off if a class does not define any members, meaning the previous type will be missing some members.
         match definedTypeLookup.TryGetValue definition, definition with
         | (true, i), _-> i
         | (false, _), DefinedType.Definition definition'
@@ -517,7 +529,7 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                 | ValueSome(TypeTok.Specified tspec) -> TypeDefOrRef.Spec(getTypeSpec(getEncodedType tspec))
                 | ValueNone -> Unchecked.defaultof<TypeDefOrRef> // Null
 
-            let mutable fieldWasAdded = false
+            fieldList.Reset()
 
             for field in members.Field do
                 let i' =
@@ -526,31 +538,28 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                           Name = builder.Strings.Add field.Name
                           Signature = getFieldSig field }
 
-                if not fieldWasAdded then
-                    fieldWasAdded <- true
-                    indices.FieldList <- i'
-
+                fieldList.Last <- i'
                 definedFieldLookup.[FieldTok.ofTypeDef definition field info.NamedTypes] <- i'
 
-            let mutable methodWasAdded = false
+            methodList.Reset()
 
             for method in members.Method do
-                // TODO: If method list is empty, maybe increment methodDefParams by one, since method list of previous type will be reduced.
+                parameterList.Reset()
+
                 for i = 0 to method.Parameters.Length - 1 do
                     let param = &method.Parameters.ItemRef i
-                    let i' =
+                    parameterList.Last <-
                         builder.Tables.Param.Add
                             { Flags = Parameter.flags &param
                               Name = builder.Strings.Add param.ParamName
                               Sequence = Checked.uint16(i + 1) }
-                    if i = 0 then methodDefParams <- i'
 
                 let i =
                     { Rva =
                         match members.MethodBodyLookup.TryGetValue method with
                         | true, body' ->
                             let writer =
-                                DefinedMethodBodyWriter ( // TODO: How to prevent module from being modified while method bodies are being written?
+                                DefinedMethodBodyWriter (
                                     getLocalsSig,
                                     metadataTokenSource,
                                     body'
@@ -562,13 +571,10 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                       Flags = method.Flags
                       Name = builder.Strings.Add method.Name
                       Signature = getMethodSig method
-                      ParamList = methodDefParams }
+                      ParamList = parameterList.First }
                     |> builder.Tables.MethodDef.Add
 
-                if not methodWasAdded then
-                    methodWasAdded <- true
-                    indices.MethodList <- i
-
+                methodList.Last <- i
                 definedMethodLookup.[MethodTok.ofTypeDef definition method info.NamedTypes] <- i
 
             let i =
@@ -577,8 +583,8 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                       TypeName = builder.Strings.Add definition'.TypeName
                       TypeNamespace = builder.Strings.Add definition'.TypeNamespace
                       Extends = extends
-                      FieldList = indices.FieldList
-                      MethodList = indices.MethodList }
+                      FieldList = fieldList.First
+                      MethodList = methodList.First }
 
             definedTypeLookup.[definition] <- i
 
