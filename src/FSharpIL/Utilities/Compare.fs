@@ -10,6 +10,10 @@ open System.Collections.Immutable
 /// </summary>
 [<RequireQualifiedAccess>]
 module Equatable =
+    type [<Interface>] IReferenceComparer<'T when 'T : struct> =
+        abstract Equals: x: inref<'T> * y: inref<'T> -> bool
+        abstract GetHashCode: inref<'T> -> int32
+
     let inline equals<'X, 'Y when 'X :> IEquatable<'Y>> (x: 'X) (y: 'Y) = x.Equals(other = y)
 
     let inline sequences x y =
@@ -36,7 +40,7 @@ module Equatable =
             i <- i + 1
         eq
 
-    let inline blocks (x: ImmutableArray<'X>) (y: ImmutableArray<'Y>) = (x.IsDefaultOrEmpty && y.IsDefaultOrEmpty) || lists x y
+    let blocks (x: ImmutableArray<'X>) (y: ImmutableArray<'Y>) = (x.IsDefaultOrEmpty && y.IsDefaultOrEmpty) || lists x y
 
     let inline voption (x: 'X voption) (y: 'Y voption) =
         match x, y with
@@ -53,13 +57,13 @@ module Equatable =
                 let mutable hcode = HashCode()
 
                 if not obj.IsDefaultOrEmpty then
-                    for i = 0 to obj.Length - 1 do hcode.Add obj.[i] // NOTE: Hopefully this doesn't cause too much struct copying
+                    for i = 0 to obj.Length - 1 do hcode.Add obj.[i]
 
                 hcode.ToHashCode()
 
 // TODO: Fix equality implementations by making x be a generic parameter.
 /// <summary>Equality operator for objects implementing <see cref="T:System.IEquatable`1"/>.</summary>
-let inline (===) x y = Equatable.equals x y
+let inline (===) (x: 'X when 'X :> IEquatable<'Y>) (y: 'Y) = Equatable.equals x y
 
 /// <summary>
 /// Contains functions for comparing objects and collections containing objects that implement

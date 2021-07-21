@@ -167,6 +167,9 @@ and [<RequireQualifiedAccess; NoComparison; CustomEquality>] DefinedType =
     | Definition of TypeDefinition
     | Generic of GenericType<TypeDefinition>
 
+    override GetHashCode: unit -> int32
+    override Equals: obj -> bool
+
     interface IEquatable<DefinedType>
 
 /// Represents a type defined in a module or assembly (II.7.3).

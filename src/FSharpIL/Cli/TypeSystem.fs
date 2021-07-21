@@ -14,8 +14,6 @@ open FSharpIL.Utilities
 open FSharpIL.Utilities.Compare
 open FSharpIL.Utilities.Collections.CollectionFail
 
-#nowarn "0060" // Override implementations in augmentations are now deprecated.
-
 [<IsReadOnly; Struct>]
 type PrimitiveType (encoded: EncodedType) =
     member _.Encoded = encoded
@@ -45,6 +43,14 @@ type CliType =
     | GenericValueType of instantiated: GenericType * arguments: GenericArgumentList
     | TypeVar of GenericParamType<TypeDefinition>
 
+and [<AbstractClass; Sealed>] Comparers private () =
+    // TODO: Implemet hash functionality here so warning does't have to be suppressed.
+    static member val DefinedType = Unchecked.defaultof<IEqualityComparer<DefinedType>> with get, set
+    static member val ReferencedType = Unchecked.defaultof<IEqualityComparer<ReferencedType>> with get, set
+    static member val TypeReference = Unchecked.defaultof<IEqualityComparer<TypeReference>> with get, set
+    static member val GenericType = Unchecked.defaultof<Equatable.IReferenceComparer<GenericType>> with get, set
+    static member val GenericArgumentList = Unchecked.defaultof<Equatable.IReferenceComparer<GenericArgumentList>> with get, set
+
 and [<Struct; NoComparison; CustomEquality>] GenericArgumentList private
     (
         arguments: CliType[],
@@ -73,13 +79,12 @@ and [<Struct; NoComparison; CustomEquality>] GenericArgumentList private
         for i = 0 to arguments.Length - 1 do this.Initialize i |> ignore
         Convert.unsafeTo<_, ImmutableArray<CliType>> arguments
 
-    override this.GetHashCode() =
+    override this.GetHashCode() = // TODO: Create helper function for getting hashcodefor collections.
         let mutable code = HashCode()
         for i = 0 to arguments.Length - 1 do code.Add(this.Initialize i)
         code.ToHashCode()
 
-    interface IEquatable<GenericArgumentList> with
-        member this.Equals other = failwith "TODO: Fix equality" //Equatable.blocks (this.ToImmutableArray()) (other.ToImmutableArray())
+    interface IEquatable<GenericArgumentList> with member this.Equals other = Comparers.GenericArgumentList.Equals(&this, &other)
 
     override this.Equals obj =
         match obj with
@@ -103,28 +108,21 @@ and [<NoComparison; CustomEquality>] TypeReference =
 
     override this.GetHashCode() = HashCode.Combine(this.ResolutionScope, this.TypeNamespace, this.TypeName)
 
-    interface IGenericType<TypeReference> with
-        member this.Equals other =
-            this.TypeName === other.TypeName &&
-            Equatable.voption this.TypeNamespace other.TypeNamespace &&
-            this.ResolutionScope = other.ResolutionScope
+    interface IGenericType<TypeReference>
+    interface IEquatable<TypeReference> with member this.Equals other = Comparers.TypeReference.Equals(this, other)
 
     override this.Equals obj =
         match obj with
         | :? TypeReference as other -> this === other
         | _ -> false
 
-and [<AbstractClass; Sealed>] TypeComparers private () =
-    // TODO: Implemet hash functionality here so warning does't have to be suppressed.
-    static member val CompareDefined = Unchecked.defaultof<DefinedType -> DefinedType -> bool> with get, set
-    static member val CompareReferenced = Unchecked.defaultof<ReferencedType -> ReferencedType -> bool> with get, set
-    static member val CompareGeneric = Unchecked.defaultof<GenericType -> GenericType -> bool> with get, set
-
 and [<NoComparison; CustomEquality>] ReferencedType =
     | Reference of TypeReference
     | Generic of GenericType<TypeReference>
 
-    interface IEquatable<ReferencedType> with member this.Equals other = TypeComparers.CompareReferenced this other
+    override this.GetHashCode() = Comparers.ReferencedType.GetHashCode this
+
+    interface IEquatable<ReferencedType> with member this.Equals other = Comparers.ReferencedType.Equals(this, other)
 
     override this.Equals obj =
         match obj with
@@ -135,7 +133,14 @@ and [<NoComparison; CustomEquality>] DefinedType =
     | Definition of TypeDefinition
     | Generic of GenericType<TypeDefinition>
 
-    interface IEquatable<DefinedType> with member this.Equals other = TypeComparers.CompareDefined this other
+    override this.GetHashCode() = Comparers.DefinedType.GetHashCode this
+
+    interface IEquatable<DefinedType> with member this.Equals other = Comparers.DefinedType.Equals(this, other)
+
+    override this.Equals obj =
+        match obj with
+        | :? DefinedType as other -> this === other
+        | _ -> false
 
 and NamedType =
     | DefinedType of DefinedType
@@ -152,7 +157,8 @@ and [<NoComparison; CustomEquality>] TypeDefinition =
 
     override this.GetHashCode() = HashCode.Combine(this.EnclosingClass, this.TypeNamespace, this.TypeName)
 
-    interface IGenericType<TypeDefinition> with
+    interface IGenericType<TypeDefinition>
+    interface IEquatable<TypeDefinition> with
         member this.Equals other =
             this.TypeName === other.TypeName &&
             Equatable.voption this.TypeNamespace other.TypeNamespace &&
@@ -167,7 +173,9 @@ and [<Struct; NoComparison; CustomEquality>] GenericType =
     | Defined of definition: GenericType<TypeDefinition>
     | Referenced of reference: GenericType<TypeReference>
 
-    interface IEquatable<GenericType> with member this.Equals other = TypeComparers.CompareGeneric this other
+    override this.GetHashCode() = Comparers.GenericType.GetHashCode &this
+
+    interface IEquatable<GenericType> with member this.Equals other = Comparers.GenericType.Equals(&this, &other)
 
     override this.Equals obj =
         match obj with
@@ -361,38 +369,61 @@ type GenericParam with
 
 let inline (|GenericType|) (gtype: GenericType<'Type>) = struct(gtype.Type, gtype.ParameterTypes)
 
-type ReferencedType with
-    override this.GetHashCode() =
-        match this with
-        | ReferencedType.Reference tref
-        | ReferencedType.Generic(GenericType(tref, _)) -> tref.GetHashCode()
+do Comparers.ReferencedType <-
+    { new IEqualityComparer<ReferencedType> with
+        member _.Equals(x, y) =
+            match x, y with
+            | ReferencedType.Reference x', ReferencedType.Reference y'
+            | ReferencedType.Generic(GenericType(x', _)), ReferencedType.Reference y'
+            | ReferencedType.Reference x', ReferencedType.Generic(GenericType(y', _))
+            | ReferencedType.Generic(GenericType(x', _)), ReferencedType.Generic(GenericType(y', _))-> x' === y'
 
-type GenericType with
-    override this.GetHashCode() =
-        match this with
-        | Defined definition -> definition.Type.GetHashCode()
-        | Referenced reference -> reference.Type.GetHashCode()
+        member _.GetHashCode tref =
+            match tref with
+            | ReferencedType.Reference tref'
+            | ReferencedType.Generic(GenericType(tref', _)) -> tref'.GetHashCode() }
 
-do TypeComparers.CompareDefined <- fun x y ->
-    match x, y with
-    | DefinedType.Definition x', DefinedType.Definition y'
-    | DefinedType.Generic(GenericType(x', _)), DefinedType.Definition y'
-    | DefinedType.Definition x', DefinedType.Generic(GenericType(y', _))
-    | DefinedType.Generic(GenericType(x', _)), DefinedType.Generic(GenericType(y', _))-> x' === y'
+do Comparers.TypeReference <-
+    { new IEqualityComparer<TypeReference> with
+        member _.Equals(x, y) =
+            x.TypeName === y.TypeName &&
+            Equatable.voption x.TypeNamespace y.TypeNamespace &&
+            x.ResolutionScope === y.ResolutionScope
 
-do TypeComparers.CompareReferenced <- fun x y ->
-    match x, y with
-    | ReferencedType.Reference x', ReferencedType.Reference y'
-    | ReferencedType.Generic(GenericType(x', _)), ReferencedType.Reference y'
-    | ReferencedType.Reference x', ReferencedType.Generic(GenericType(y', _))
-    | ReferencedType.Generic(GenericType(x', _)), ReferencedType.Generic(GenericType(y', _))-> x' === y'
+        member _.GetHashCode _ = noImpl "Use override TypeReference.GetHashCode() instead" }
 
-do TypeComparers.CompareGeneric <- fun x y ->
-    match x, y with
-    | GenericType.Defined(GenericType(x', _)), GenericType.Defined(GenericType(y', _)) -> x' === y'
-    | GenericType.Referenced(GenericType(x', _)), GenericType.Referenced(GenericType(y', _)) -> x' === y'
-    | GenericType.Defined _, GenericType.Referenced _
-    | GenericType.Referenced _, GenericType.Defined _ -> false
+do Comparers.GenericType <-
+    { new Equatable.IReferenceComparer<GenericType> with
+        member _.Equals(x, y) =
+            match x, y with
+            | GenericType.Defined(GenericType(x', _)), GenericType.Defined(GenericType(y', _)) -> x' === y'
+            | GenericType.Referenced(GenericType(x', _)), GenericType.Referenced(GenericType(y', _)) -> x' === y'
+            | GenericType.Defined _, GenericType.Referenced _
+            | GenericType.Referenced _, GenericType.Defined _ -> false
+
+        member _.GetHashCode gtype =
+            match gtype with
+            | Defined definition -> definition.Type.GetHashCode()
+            | Referenced reference -> reference.Type.GetHashCode() }
+
+do Comparers.DefinedType <-
+    { new IEqualityComparer<DefinedType> with
+        member _.Equals(x, y) =
+            match x, y with
+            | DefinedType.Definition x', DefinedType.Definition y'
+            | DefinedType.Generic(GenericType(x', _)), DefinedType.Definition y'
+            | DefinedType.Definition x', DefinedType.Generic(GenericType(y', _))
+            | DefinedType.Generic(GenericType(x', _)), DefinedType.Generic(GenericType(y', _))-> x' === y'
+
+        member _.GetHashCode tdef =
+            match tdef with
+            | DefinedType.Definition tdef'
+            | DefinedType.Generic(GenericType(tdef', _)) -> tdef'.GetHashCode() }
+
+do Comparers.GenericArgumentList <-
+    { new Equatable.IReferenceComparer<GenericArgumentList> with
+        member _.Equals(x, y) = Equatable.blocks (x.ToImmutableArray()) (y.ToImmutableArray())
+        member _.GetHashCode _ = noImpl "Use override GenericArgumentList.GetHashCode() instead" }
 
 type NamedType with
     member this.TypeNamespace =
