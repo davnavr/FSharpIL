@@ -10,7 +10,7 @@ open FSharpIL.Cli
 [<RequireQualifiedAccess>]
 type ModuleUpdate =
     internal
-    | AddDefinedType of DefinedType
+    | AddDefinedType of TypeDefinition
     | Finish
 
 [<RequireQualifiedAccess>]
@@ -24,8 +24,8 @@ module ModuleUpdate =
 type ModuleBuilder<'State> =
     { Update: 'State -> ModuleUpdate // Update: 'State -> SomeDispatchThing -> SomeReturnType
       Warning: ('State -> IValidationWarning -> 'State) option
-      ReferenceType: 'State -> ReferencedType -> 'State
-      DefineType: 'State -> DefinedType -> 'State }
+      ReferenceType: 'State -> TypeReference -> 'State
+      DefineType: 'State -> TypeDefinition -> 'State }
 
 [<RequireQualifiedAccess>]
 module ModuleBuilder =

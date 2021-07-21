@@ -16,20 +16,16 @@ open FSharpIL.Utilities.Collections
 [<AbstractClass>]
 type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allow its usage in the FSharpIL.Cli namespace.
     val InitLocals: InitLocals
-    val LocalTypes: ImmutableArray<LocalVariableType>
+    val LocalTypes: ImmutableArray<LocalType>
 
-    new: localTypes: ImmutableArray<LocalVariableType> * initLocals: InitLocals -> DefinedMethodBody
-    new: localTypes: ImmutableArray<LocalVariableType> -> DefinedMethodBody
+    new: localTypes: ImmutableArray<LocalType> * initLocals: InitLocals -> DefinedMethodBody
+    new: localTypes: ImmutableArray<LocalType> -> DefinedMethodBody
     new: unit -> DefinedMethodBody
 
     abstract WriteInstructions: byref<MethodBodyBuilder> * MetadataTokenSource -> uint16
 
+[<NoComparison; NoEquality>]
 type EntryPoint
-
-[<RequireQualifiedAccess>]
-module EntryPoint =
-    //val (|None|Method|File|): EntryPoint -> Choice<_, _, _>
-    val (|None|Method|): EntryPoint -> Choice<unit, struct(DefinedType * EntryPointMethod)>
 
 [<IsReadOnly; Struct>]
 [<NoComparison; NoEquality>]
@@ -37,52 +33,60 @@ type CustomAttributeList =
     member Count: int32
     member Add: CustomAttribute -> IValidationError option
 
+/// Used to obtain a mutable list of custom attributes.
+type CustomAttributeBuilder = CustomAttributeList ref voption
+
 [<Sealed>]
 type DefinedTypeMembers =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
     [<DefaultValue>] val mutable internal Method: HybridHashSet<DefinedMethod>
     [<DefaultValue>] val mutable internal MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
 
+    member Owner: DefinedType
     member FieldCount: int32
     member MethodCount: int32
     //member PropertyCount: int32
     //member EventCount: int32
 
+    member DefineField:
+        field: DefinedField *
+        attributes: CustomAttributeBuilder -> ValidationResult<FieldTok<DefinedType, DefinedField>>
+
     member DefineMethod:
         method: DefinedMethod *
         body: DefinedMethodBody voption *
-        attributes: CustomAttributeList ref voption -> ValidationResult<MethodCallTarget<DefinedType, DefinedMethod>>
+        attributes: CustomAttributeBuilder -> ValidationResult<MethodTok<DefinedType, DefinedMethod>>
 
     member DefineEntryPoint:
         method: EntryPointMethod *
         body: DefinedMethodBody *
-        attributes: CustomAttributeList ref voption ->
-            ValidationResult<MethodCallTarget<DefinedType, MethodDefinition<MethodKinds.Static>>>
+        attributes: CustomAttributeBuilder -> ValidationResult<MethodTok<DefinedType, MethodDefinition<MethodKinds.Static>>>
 
     member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool
 
-//[<IsReadOnly; Struct>]
-//type DefinedTypeMembers<'Owner when 'Owner :> DefinedType> =
-//    val Members: DefinedTypeMembers
+[<IsReadOnly; Struct>]
+type DefinedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
+    val Members: DefinedTypeMembers
 
 [<Sealed>]
 type ReferencedTypeMembers =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<ReferencedField>
     [<DefaultValue>] val mutable internal Method: HybridHashSet<ReferencedMethod>
 
+    member Owner: ReferencedType
     member FieldCount: int32
     member MethodCount: int32
     //member PropertyCount: int32
     //member EventCount: int32
 
-    member ReferenceMethod: method: ReferencedMethod -> ValidationResult<MethodCallTarget<ReferencedType, ReferencedMethod>>
+    member ReferenceMethod: method: ReferencedMethod -> ValidationResult<MethodTok<ReferencedType, ReferencedMethod>>
 
     member ContainsField: field: ReferencedField -> bool
     member ContainsMethod: method: ReferencedMethod -> bool
 
 [<IsReadOnly; Struct>]
-type ReferencedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags>> =
+type ReferencedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
     val Members: ReferencedTypeMembers
 
 [<AbstractClass; Sealed; Extension>]
@@ -91,14 +95,14 @@ type TypeMemberExtensions =
     static member ReferenceMethod :
         members: ReferencedTypeMembers<'Kind> *
         method: MethodReference<MethodKinds.ObjectConstructor> ->
-            ValidationResult<MethodCallTarget<TypeReference<'Kind>, MethodReference<MethodKinds.ObjectConstructor>>>
+            ValidationResult<MethodTok<TypeReference<'Kind>, MethodReference<MethodKinds.ObjectConstructor>>>
             when 'Kind :> TypeKinds.IHasConstructor
 
     [<Extension>]
     static member ReferenceMethod :
         members: ReferencedTypeMembers<'Kind> *
         method: MethodReference<MethodKinds.Static> ->
-            ValidationResult<MethodCallTarget<TypeReference<'Kind>, MethodReference<MethodKinds.Static>>>
+            ValidationResult<MethodTok<TypeReference<'Kind>, MethodReference<MethodKinds.Static>>>
             when 'Kind :> TypeAttributes.IHasStaticMethods
 
     //static member DefineEntryPoint
@@ -106,6 +110,29 @@ type TypeMemberExtensions =
 /// Builds a CLI metadata module (I.9).
 [<Sealed>]
 type CliModuleBuilder =
+    /// <summary>Creates a new CLI metadata module.</summary>
+    /// <param name="name">The name of the module.</param>
+    /// <param name="mvid">
+    /// Used to uniquely identify the module, can be generated by any algorithim that generates new GUIDs or can be based off of
+    /// the contents of the module for deterministic outputs.
+    /// </param>
+    /// <param name="cliMetadataHeader">
+    /// Specifies the version of the runtime the module can run on and if the module can only run on a 32-bit machine, defaults to
+    /// the latest runtime version if omitted.
+    /// </param>
+    /// <param name="cliMetadataRoot">
+    /// Specifies which implementation of the Common Language Runtime the module is intended to be run on, defaults to the latest
+    /// Microsoft-specific implementation if omitted.
+    /// </param>
+    /// <param name="assembly">
+    /// Defines an assembly manifest, if omitted then the resulting Portable Executable file is not an assembly.
+    /// </param>
+    /// <param name="warnings">
+    /// A collection to which warning objects are added to, if omitted any <c>WARNING</c> checks are ignored.
+    /// </param>
+    /// <param name="typeDefCapacity">The initial number of type definitions that the module can contain.</param>
+    /// <param name="typeRefCapacity">The initial number of type references that the module can contain.</param>
+    /// <param name="assemblyRefCapacity">The initial number of assembly references that the module can contain.</param>
     new :
         name: Identifier *
         ?mvid: Guid *
@@ -136,17 +163,31 @@ type CliModuleBuilder =
 
     // TODO: For methods that add things that can also have custom attributes, figure out how to avoid allocating a CustomAttributeList if user doesn't want/need the CA list.
 
-    // TODO: Expose constructors for types in Cli namespace.
     member DefineType: definition: DefinedType -> ValidationResult<struct(CustomAttributeList * DefinedTypeMembers)>
-    member DefineType: definition: DefinedType * attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers>
+
+    member DefineType:
+        definition: DefinedType *
+        attributes: CustomAttributeBuilder -> ValidationResult<DefinedTypeMembers>
 
     //member DefineType: DefinedType * attributes: outref<CustomAttributeList> -> ValidationResult<DefinedTypeMembers>
 
-    // TODO: For specific TypeDefinition kinds, return a struct that wraps DefinedTypeMembers and only allows addition of certain members.
-    //member DefineType: TypeDefinition<TypeKinds.StaticClass> -> ValidationResult<>
+    member DefineType:
+        definition: TypeDefinition<'Kind> *
+        attributes: CustomAttributeBuilder -> ValidationResult<DefinedTypeMembers<'Kind>>
+
+    member DefineGenericType:
+        definition: GenericType<TypeDefinition> *
+        attributes: CustomAttributeBuilder -> ValidationResult<DefinedTypeMembers>
+
+    member DefineGenericType:
+        definition: GenericType.Definition<'Kind> *
+        attributes: CustomAttributeBuilder -> ValidationResult<DefinedTypeMembers<'Kind>>
 
     member ReferenceType: reference: ReferencedType -> ValidationResult<ReferencedTypeMembers>
+
     member ReferenceType: reference: TypeReference<'Kind> -> ValidationResult<ReferencedTypeMembers<'Kind>>
+
+    // TODO: Add helper methods for making Extends instances, maybe even replace public constructors for ClassExtends.
 
     /// <summary>
     /// Attempts to add a <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/> to the current assembly.

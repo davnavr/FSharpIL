@@ -68,29 +68,26 @@ let example() =
         (* Add references to types defined in referenced assemblies *)
         let object =
             // type Object
-            ReferencedType.ConcreteClass (
+            TypeReference.ConcreteClass (
                 resolutionScope = TypeReferenceParent.Assembly mscorlib,
                 typeNamespace = system,
-                typeName = Identifier.ofStr "Object",
-                genericParameters = GenericParamList.empty
+                typeName = Identifier.ofStr "Object"
             )
 
         let tfmattr =
             // [<Sealed>] type TargetFrameworkAttribute
-            ReferencedType.SealedClass (
+            TypeReference.SealedClass (
                 resolutionScope = TypeReferenceParent.Assembly mscorlib,
                 typeNamespace = ValueSome(Identifier.ofStr "System.Runtime.Versioning"),
-                typeName = Identifier.ofStr "TargetFrameworkAttribute",
-                genericParameters = GenericParamList.empty
+                typeName = Identifier.ofStr "TargetFrameworkAttribute"
             )
 
         let console =
             // [<AbstractClass; Sealed>] type Console
-            ReferencedType.StaticClass (
+            TypeReference.StaticClass (
                 resolutionScope = TypeReferenceParent.Assembly consolelib,
                 typeNamespace = system,
-                typeName = Identifier.ofStr "Console",
-                genericParameters = GenericParamList.empty
+                typeName = Identifier.ofStr "Console"
             )
 
         let! _ = builder.ReferenceType object
@@ -103,7 +100,7 @@ let example() =
         let tfmctor =
             ReferencedMethod.Constructor (
                 visibility = ExternalVisibility.Public,
-                parameterTypes = ImmutableArray.Create(MethodParameterType.Type PrimitiveType.String)
+                parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.String)
             )
 
         let! tfmctor' = tfmattr'.ReferenceMethod tfmctor
@@ -112,23 +109,28 @@ let example() =
         let! writeln =
             ReferencedMethod.Static (
                 visibility = ExternalVisibility.Public,
-                returnType = MethodReturnType.Void',
+                returnType = ReturnType.Void',
                 name = MethodName.ofStr "WriteLine",
-                parameterTypes = ImmutableArray.Create(MethodParameterType.Type PrimitiveType.String)
+                parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.String)
             )
             |> console'.ReferenceMethod
 
         (* Create the class that will contain the entrypoint method *)
-        // [<AbstractClass; Sealed>] type public Program
+        // [<AbstractClass; Sealed>] type public Program = inherit System.Object
         let program =
-            DefinedType.StaticClass (
+            let object' =
+                object.Reference
+                |> ReferencedType.Reference
+                |> NamedType.ReferencedType
+                |> ClassExtends.Named
+
+            TypeDefinition.StaticClass (
                 visibility = TypeVisibility.Public,
                 flags = TypeAttributes.None,
                 typeNamespace = ValueSome(Identifier.ofStr "HelloWorld"),
                 enclosingClass = ValueNone,
                 typeName = Identifier.ofStr "Program",
-                extends = ClassExtends.Referenced object,
-                genericParameters = GenericParamList.empty
+                extends = object'
             )
 
         let! members = builder.DefineType(program, ValueNone)
@@ -148,10 +150,10 @@ let example() =
                     override _.WriteInstructions(wr, tokens) =
                         // System.Console.WriteLine "Hello World!"
                         ldstr &wr "Hello World!" tokens
-                        call &wr writeln tokens
+                        call &wr writeln.Token tokens
                         ret &wr
                         wr.EstimatedMaxStack }
-            members.DefineEntryPoint(main, body, attributes = ValueNone)
+            members.Members.DefineEntryPoint(main, body, attributes = ValueNone)
 
         (* Sets the target framework of the assembly, this is so the CoreCLR and tools such as ILSpy can recognize it *)
         // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]

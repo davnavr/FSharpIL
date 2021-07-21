@@ -44,43 +44,25 @@ module MethodName =
 [<AutoOpen>]
 module MethodNamePatterns = let (|MethodName|) name = MethodName.toIdentifier name
 
-[<IsReadOnly>]
-type MethodReturnType = struct
-    val Tag: FSharpIL.Metadata.Signatures.ReturnTypeTag
-    val CustomModifiers: ImmutableArray<ModifierType>
-    val Type: NamedType voption
-
-    new (tag, modifiers, argType) = { Tag = tag; CustomModifiers = modifiers; Type = argType }
-
-    member inline this.IsVoid = this.Tag = FSharpIL.Metadata.Signatures.ReturnTypeTag.Void
-end
+[<RequireQualifiedAccess>]
+type ReturnType =
+    | T of CliType
+    | ByRef of modifiers: ImmutableArray<ModifierType> * CliType
+    | TypedByRef of modifiers: ImmutableArray<ModifierType>
+    | Void of modifiers: ImmutableArray<ModifierType>
 
 [<RequireQualifiedAccess>]
-module MethodReturnType =
-    open FSharpIL.Metadata.Signatures
-
-    let inline (|Type|ByRef|TypedByRef|Void|) (returnType: MethodReturnType) =
-        match returnType.Tag with
-        | ReturnTypeTag.Type -> Type returnType.Type.Value
-        | ReturnTypeTag.ByRef -> ByRef(struct(returnType.CustomModifiers, returnType.Type.Value))
-        | ReturnTypeTag.Void -> Void returnType.CustomModifiers
-        | ReturnTypeTag.TypedByRef
-        | _ -> TypedByRef returnType.CustomModifiers
-
-    let Type returnType = MethodReturnType(ReturnTypeTag.Type, ImmutableArray.Empty, ValueSome returnType)
-    let ByRef(modifiers, returnType) = MethodReturnType(ReturnTypeTag.ByRef, modifiers, ValueSome returnType)
-    let TypedByRef modifiers = MethodReturnType(ReturnTypeTag.TypedByRef, modifiers, ValueNone)
-    let TypedByRef' = TypedByRef ImmutableArray.Empty
-    let Void modifiers = MethodReturnType(ReturnTypeTag.Void, modifiers, ValueNone)
-    let Void' = Void ImmutableArray.Empty
+module ReturnType =
+    let TypedByRef' = ReturnType.TypedByRef ImmutableArray.Empty
+    let Void' = ReturnType.Void ImmutableArray.Empty
 
 [<AbstractClass>]
 type Method =
     val HasThis: FSharpIL.Metadata.Signatures.MethodThis
     val CallingConvention: FSharpIL.Metadata.Signatures.CallingConventions
     val Name: Identifier
-    val ReturnType: MethodReturnType
-    val ParameterTypes: ImmutableArray<MethodParameterType>
+    val ReturnType: ReturnType
+    val ParameterTypes: ImmutableArray<ParameterType>
 
     new (mthis, cconv, name, rtype, ptypes) =
         { HasThis = mthis
@@ -88,6 +70,13 @@ type Method =
           Name = name
           ReturnType = rtype
           ParameterTypes = ptypes }
+
+    member this.HasReturnValue =
+        match this.ReturnType with
+        | ReturnType.Void _ -> false
+        | ReturnType.T _
+        | ReturnType.ByRef(_, _)
+        | ReturnType.TypedByRef _ -> true
 
     abstract Equals: other: Method -> bool
     default this.Equals(other: Method) =
@@ -110,7 +99,7 @@ type Method =
 [<AutoOpen>]
 module MethodHelpers =
     type IParameterIterator<'State> = interface
-        abstract Update: int32 * 'State * inref<MethodParameterType> -> unit
+        abstract Update: int32 * 'State * inref<ParameterType> -> unit
     end
 
     type EmptyParameterIterator = struct
@@ -127,7 +116,7 @@ module MethodHelpers =
 
     let checkMethodSig<'Iter, 'State when 'Iter :> IParameterIterator<'State> and 'Iter : struct>
         (state: 'State)
-        (parameterTypes: ImmutableArray<MethodParameterType>)
+        (parameterTypes: ImmutableArray<ParameterType>)
         =
         let mutable gcount = 0u
         for i = 0 to parameterTypes.Length - 1 do
@@ -278,15 +267,16 @@ type EntryPointKind =
 
 [<RequireQualifiedAccess>]
 module EntryPointKind =
-    let exitCodeType = MethodReturnType.Type PrimitiveType.I4
-    let argsParameterTypes = ImmutableArray.Create(MethodParameterType.Type(SZArrayType PrimitiveType.String))
+    let exitCodeType = ReturnType.T PrimitiveType.I4
+
+    let argsParameterTypes = ImmutableArray.Create(ParameterType.T(CliType.SZArray PrimitiveType.String)) // string[]
 
     let ExitWithArgs argsParamName = { ReturnExitCode = true; ArgumentsName = Some argsParamName }
     let VoidWithArgs argsParamName = { ReturnExitCode = false; ArgumentsName = Some argsParamName }
     let ExitNoArgs = { ReturnExitCode = true; ArgumentsName = None }
     let VoidNoArgs = { ReturnExitCode = false; ArgumentsName = None }
 
-    let inline returnType kind = if kind.ReturnExitCode then exitCodeType else MethodReturnType.Void'
+    let inline returnType kind = if kind.ReturnExitCode then exitCodeType else ReturnType.Void'
 
     let parameterTypes kind =
         match kind with
@@ -333,7 +323,7 @@ type DefinedMethod with
         new MethodDefinition<MethodKinds.ObjectConstructor> (
             visibility,
             flags,
-            MethodReturnType.Void',
+            ReturnType.Void',
             MethodName MethodName.ctor,
             parameterTypes,
             parameterList
@@ -356,7 +346,7 @@ module ConstructorHelpers =
         new MethodDefinition<MethodKinds.ClassConstructor> (
             MemberVisibility.Private,
             MethodAttributes(),
-            MethodReturnType.Void',
+            ReturnType.Void',
             MethodName MethodName.cctor,
             ImmutableArray.Empty,
             Unchecked.defaultof<_>
@@ -437,7 +427,7 @@ type ReferencedMethod with
     static member Constructor(visibility, parameterTypes) =
         new MethodReference<MethodKinds.ObjectConstructor> (
             visibility,
-            MethodReturnType.Void',
+            ReturnType.Void',
             MethodName MethodName.ctor,
             parameterTypes
         )
@@ -452,23 +442,3 @@ module ReferencedMethod =
         | :? MethodReference<MethodKinds.Static> as method' -> Static method'
         | :? MethodReference<MethodKinds.Abstract> as method' -> Abstract method'
         | _ -> Constructor(method :?> MethodReference<MethodKinds.ObjectConstructor>)
-
-[<IsReadOnly; Struct>]
-[<NoComparison; StructuralEquality>]
-type MethodCallTarget<'Owner, 'Method when 'Owner :> NamedType and 'Method :> Method> (owner: 'Owner, method: 'Method) =
-    member _.Owner = owner
-    member _.Method = method
-
-type MethodCallTarget = MethodCallTarget<NamedType, Method>
-
-[<RequireQualifiedAccess>]
-module MethodCallTarget =
-    let inline (|Callee|) (target: MethodCallTarget<_, _>) = target.Method
-
-    let simplify (target: MethodCallTarget<_, _>) = MethodCallTarget(target.Owner, target.Method)
-
-    let inline convert (target: MethodCallTarget<_, 'Method1>) = MethodCallTarget<_, _>(target.Owner, Unsafe.As target.Method)
-
-[<AutoOpen>]
-module MethodCallTargetPatterns =
-    let inline (|MethodCallTarget|) (target: MethodCallTarget<_, _>) = struct(target.Owner, target.Method)

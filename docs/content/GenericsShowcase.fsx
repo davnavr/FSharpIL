@@ -17,11 +17,9 @@ types and members from other assemblies.
 
 ## Example
 *)
-open System
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
 open FSharpIL.Cli
@@ -60,24 +58,44 @@ let example() = // TODO: Make helper function to add reference to System.Private
     validated {
         let! mscorlib' = mscorlib.AddReferencesTo builder
 
-        (*
-            Generate a generic type definition.
-            C#, VB, and F# compilers append the number of generic parameters to the class name, following CLS rule 43 (I.10.7.2)
-        *)
+        (* Generates a generic type definition. *)
         // type [<Sealed>] ArrayList<'T> = inherit System.Object
         let arrlist =
-            DefinedType.SealedClass (
+            let object' =
+                mscorlib.Object.Reference
+                |> ReferencedType.Reference
+                |> NamedType.ReferencedType
+                |> ClassExtends.Named
+
+            let parameters = GenericParam(Identifier.ofStr "T") |> ImmutableArray.Create
+
+            (*
+                Notice how the name of the type at the IL level includes the number of generic parameters, following CLS rule 43
+                (I.10.7.2)
+            *)
+            TypeDefinition.SealedClass (
                 visibility = TypeVisibility.Public,
                 flags = TypeAttributes.BeforeFieldInit,
                 typeNamespace = ValueSome namespace',
                 enclosingClass = ValueNone,
                 typeName = Identifier.ofStr "ArrayList`1",
-                extends = ClassExtends.Referenced mscorlib.Object,
-                genericParameters = GenericParamList.ofSeq [ GenericParam.named(Identifier.ofStr "T") ]
+                extends = object'
             )
+            |> GenericType.definedKind parameters
+
+        let! members = builder.DefineGenericType(arrlist, attributes = ValueNone)
 
         // val private items: 'T[]
-        
+        let! items =
+            let definition =
+                DefinedField.Static (
+                    MemberVisibility.Private,
+                    flags = FieldAttributes.InitOnly,
+                    name = Identifier.ofStr "items",
+                    signature = CliType.TypeVar arrlist.Parameters.[0]
+                )
+
+            members.Members.DefineField(definition, attributes = ValueNone)
 
         // new: capacity: int32 -> ArrayList<'T>
 

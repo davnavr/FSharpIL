@@ -11,12 +11,12 @@ open FSharpIL.Utilities.Compare
 [<AbstractClass>]
 type Field =
     val Name: Identifier
-    val Type: NamedType
+    val Type: CliType
 
     new (name, fieldType) = { Name = name; Type = fieldType }
 
     abstract Equals: other: Field -> bool
-    default this.Equals(other: Field) = this.Name === other.Name && this.Type.Equals(other = other.Type)
+    default this.Equals(other: Field) = this.Name === other.Name && this.Type === other.Type
 
     override this.Equals(obj: obj) =
         match obj with
@@ -70,13 +70,25 @@ module FieldKinds =
 
 [<Sealed>]
 type FieldDefinition<'Kind when 'Kind :> IAttributeTag<FieldFlags> and 'Kind : struct>
-    (visibility, flags: FieldAttributes<'Kind>, name, signature)
+    (
+        visibility,
+        flags: FieldAttributes<'Kind>,
+        name,
+        signature
+    )
     =
     inherit DefinedField (
         Unchecked.defaultof<'Kind>.RequiredFlags ||| MemberVisibility.ofField visibility ||| flags.Flags,
         name,
         signature
     )
+
+type DefinedField with
+    static member Instance(visibility, flags, name, signature) =
+        FieldDefinition<FieldKinds.Instance>(visibility, flags, name, signature)
+
+    static member Static(visibility, flags, name, signature) =
+        FieldDefinition<FieldKinds.Static>(visibility, flags, name, signature)
 
 [<AbstractClass>]
 type ReferencedField =
@@ -120,15 +132,3 @@ module DefinedField =
         | :? FieldDefinition<FieldKinds.Static> as sfield -> Static sfield
         | :? LiteralFieldDefinition as lfield -> Literal lfield
         | _ -> WithRva(field :?> RvaFieldDefinition)
-
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
-[<NoComparison; StructuralEquality>]
-type FieldArg<'Owner, 'Field when 'Owner :> NamedType and 'Field :> Field> (owner: 'Owner, field: 'Field) =
-    member _.Owner = owner
-    member _.Field = field
-
-type FieldArg = FieldArg<NamedType, Field>
-
-[<AutoOpen>]
-module FieldArgPatterns =
-    let inline (|FieldArg|) (field: FieldArg<_, _>) = struct(field.Owner, field.Field)

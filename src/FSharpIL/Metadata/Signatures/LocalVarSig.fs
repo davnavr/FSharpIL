@@ -44,15 +44,15 @@ module LocalVariable =
     /// <summary>A constraint list containing the currently only kind of constraint, <c>PINNED</c> (II.23.2.9).</summary>
     let pinned = [ Constraint.Pinned ]
 
-    let inline (|Local|ByRef|TypedByRef|) (local: LocalVariable) =
+    let inline (|Type|ByRef|TypedByRef|) (local: LocalVariable) =
         let inline info() = struct(local.CustomMod, local.Constraints, local.Type.Value)
         match local.Tag with
         | LocalVariableTag.TypedByRef -> TypedByRef
         | LocalVariableTag.ByRef -> ByRef(info())
         | LocalVariableTag.Type
-        | _ -> Local(info())
+        | _ -> Type(info())
 
-    let Local(modifiers, constraints, localType) =
+    let Type(modifiers, constraints, localType) =
         LocalVariable(modifiers, constraints, LocalVariableTag.Type, ValueSome localType)
 
     let ByRef(modifiers, constraints, localType) =

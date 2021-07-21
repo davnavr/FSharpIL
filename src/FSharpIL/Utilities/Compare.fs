@@ -14,7 +14,7 @@ module Equatable =
 
     let inline sequences x y =
         let mutable xenumerator = (^Sequence : (member GetEnumerator: unit -> ^Enumerator) x)
-        let mutable yenumerator = (^Sequence : (member GetEnumerator: unit -> ^Enumerator) x)
+        let mutable yenumerator = (^Sequence : (member GetEnumerator: unit -> ^Enumerator) y)
         let mutable eq, cont = true, true
         while eq && cont do
             let mutable xmoved = (^Enumerator : (member MoveNext: unit -> bool) xenumerator)
