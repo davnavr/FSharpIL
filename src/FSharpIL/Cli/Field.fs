@@ -8,7 +8,6 @@ open FSharpIL.Metadata.Tables
 
 open FSharpIL.Utilities.Compare
 
-[<AbstractClass>]
 type Field =
     val Name: Identifier
     val Type: CliType

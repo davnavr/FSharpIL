@@ -129,9 +129,9 @@ type CliType =
     /// A user-defined value type.
     | ValueType of NamedType
     /// A generic instantiation of a user-defined reference type.
-    | GenericClass of instantiated: GenericType * arguments: GenericArgumentList // TODO: How to prevent any random GenericArgumentList from being used?
+    | GenericClass of GenericTypeInstantiation
     /// A generic instantiation of a user-defined value type.
-    | GenericValueType of instantiated: GenericType * arguments: GenericArgumentList
+    | GenericValueType of GenericTypeInstantiation
     //| Pointer of UnmanagedPointerType
     | TypeVar of GenericParamType<TypeDefinition>
     // TODO: Allow using of GenericParamType<SomeMethod>
@@ -156,6 +156,15 @@ and [<IsReadOnly; Struct; NoComparison; CustomEquality>] GenericArgumentList =
 
     interface IEquatable<GenericArgumentList>
     //interface IReadOnlyList<CliType>
+
+and [<Sealed>] GenericTypeInstantiation =
+    val Instantiated: GenericType
+    val Arguments: GenericArgumentList
+
+    override GetHashCode: unit -> int32
+    override Equals: obj -> bool
+
+    interface IEquatable<GenericTypeInstantiation>
 
 and [<IsReadOnly; Struct; NoComparison; NoEquality>] GenericParam =
     val Name: Identifier
@@ -215,6 +224,7 @@ and [<IsReadOnly; Struct; NoComparison; StructuralEquality; RequireQualifiedAcce
 
     interface IEquatable<TypeTok>
 
+[<Sealed>]
 type GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>> with
     /// TODO: Don't forget to skip duplicate while writing generic constraints. (Maybe just make an error when the CliModuleBuilder first gets a hold of a duplicate)
     member Constraints: ImmutableArray<TypeTok> // TODO: Instead, make custom collection type w/ a ctor function that explicitly says it will ignore attributes.
@@ -306,18 +316,6 @@ type GenericParam with
 
 type GenericType<'Type when 'Type : not struct and 'Type :> IGenericType<'Type>> with
     member internal Parameters: ImmutableArray<GenericParam>
-
-[<RequireQualifiedAccess>]
-module GenericArgumentList =
-    type Initializer = ImmutableArray<GenericParam> -> int32 -> CliType
-
-    val internal (|Empty|) : arguments: GenericArgumentList -> bool
-
-    val ofTypeParameters : definition: GenericType<TypeDefinition> -> GenericArgumentList
-
-    val forType : definition: GenericType<TypeDefinition> -> initializer: Initializer -> GenericArgumentList
-
-    //val forMethod : definition: -> initializer: Initializer -> GenericArgumentList
 
 [<RequireQualifiedAccess>]
 module TypeKinds =
@@ -480,6 +478,9 @@ module GenericType =
     val definedKind: parameters: ImmutableArray<GenericParam> -> definition: TypeDefinition<'Kind> -> Definition<'Kind>
     val referenced: parameters: ImmutableArray<GenericParam> -> reference: TypeReference -> GenericType<TypeReference>
 
+    // TODO: Remove GenericArgumentList module and move alias here
+    //val instantiate: instantiated: GenericType -> arguments: ArgumentInitializer -> GenericTypeInstantiation
+
 /// Describes the type of a local variable (II.23.2.6).
 [<NoComparison; StructuralEquality; RequireQualifiedAccess>]
 type LocalType =
@@ -508,6 +509,23 @@ module LocalType =
 module CliType =
     /// Attempts to convert the specified type to a type that can be used in the constructor of a custom attribute.
     val toElemType: CliType -> FSharpIL.Metadata.Blobs.ElemType voption
+
+[<RequireQualifiedAccess>]
+module GenericArgumentList =
+    type Initializer = ImmutableArray<GenericParam> -> int32 -> CliType
+
+[<RequireQualifiedAccess>]
+module GenericTypeInstantiation =
+    // [<System.Obsolete("Use GenericType.instantiate instead")>]
+    val forTypeDefinition:
+        instantiated: GenericType<TypeDefinition> ->
+        arguments: (GenericArgumentList.Initializer -> GenericArgumentList.Initializer) ->
+        GenericTypeInstantiation
+
+    val forTypeReference:
+        instantiated: GenericType<TypeReference> ->
+        arguments: GenericArgumentList.Initializer ->
+        GenericTypeInstantiation
 
 [<NoComparison; NoEquality>]
 type internal NamedTypeCache

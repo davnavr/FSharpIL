@@ -27,8 +27,7 @@ type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allo
 [<NoComparison; NoEquality>]
 type EntryPoint
 
-[<IsReadOnly; Struct>]
-[<NoComparison; NoEquality>]
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
 type CustomAttributeList =
     member Count: int32
     member Add: CustomAttribute -> IValidationError option
@@ -65,7 +64,7 @@ type DefinedTypeMembers =
     member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool
 
-[<IsReadOnly; Struct>]
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
 type DefinedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
     val Members: DefinedTypeMembers
 
@@ -85,7 +84,7 @@ type ReferencedTypeMembers =
     member ContainsField: field: ReferencedField -> bool
     member ContainsMethod: method: ReferencedMethod -> bool
 
-[<IsReadOnly; Struct>]
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
 type ReferencedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
     val Members: ReferencedTypeMembers
 
@@ -195,6 +194,11 @@ type CliModuleBuilder =
     member ReferenceType: reference: ReferencedType -> ValidationResult<ReferencedTypeMembers>
 
     member ReferenceType: reference: TypeReference<'Kind> -> ValidationResult<ReferencedTypeMembers<'Kind>>
+
+    member GenericInstantiation:
+        isValueType: bool * // TODO: Use union type for this.
+        field: FieldTok *
+        typeGenericParameters: GenericArgumentList.Initializer -> FieldTok
 
     // TODO: Add helper methods for making Extends instances, maybe even replace public constructors for ClassExtends.
 

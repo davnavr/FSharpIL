@@ -39,8 +39,8 @@ type CliType =
     | Modified of modified: ImmutableArray<ModifierType> * CliType
     | Class of NamedType
     | ValueType of NamedType
-    | GenericClass of instantiated: GenericType * arguments: GenericArgumentList
-    | GenericValueType of instantiated: GenericType * arguments: GenericArgumentList
+    | GenericClass of GenericTypeInstantiation
+    | GenericValueType of GenericTypeInstantiation
     | TypeVar of GenericParamType<TypeDefinition>
 
 and [<AbstractClass; Sealed>] Comparers private () =
@@ -89,6 +89,22 @@ and [<Struct; NoComparison; CustomEquality>] GenericArgumentList private
     override this.Equals obj =
         match obj with
         | :? GenericArgumentList as other -> this === other
+        | _ -> false
+
+and [<Sealed>] GenericTypeInstantiation =
+    val Instantiated: GenericType
+    val Arguments: GenericArgumentList
+
+    new (instantiated, arguments) = { Instantiated = instantiated; Arguments = arguments }
+
+    override this.GetHashCode() = HashCode.Combine(this.Instantiated, this.Arguments)
+
+    interface IEquatable<GenericTypeInstantiation> with
+        member this.Equals other = this.Instantiated === other.Instantiated && this.Arguments === other.Arguments
+
+    override this.Equals obj =
+        match obj with
+        | :? GenericTypeInstantiation as other -> this === other
         | _ -> false
 
 and [<Struct>] ClassExtends (extends: TypeTok voption) =
@@ -646,13 +662,14 @@ module GenericType =
 module GenericArgumentList =
     type Initializer = ImmutableArray<GenericParam> -> int32 -> CliType
 
-    let (|Empty|) (arguments: GenericArgumentList) = arguments.Count = 0
+module GenericTypeInstantiation =
+    // TODO: Avoid creating initializer for TypeVar unless it is needed, maybe provide a version of this function that accepts only a GenericArgumentList.Initializer like forTypeReference?
+    let forTypeDefinition (instantiated: GenericType<TypeDefinition>) (arguments: GenericArgumentList.Initializer -> _) =
+        let arguments' = arguments (fun _ i -> CliType.TypeVar instantiated.ParameterTypes.[i])
+        GenericTypeInstantiation(GenericType.Defined instantiated, GenericArgumentList(instantiated.Parameters, arguments'))
 
-    let forType (definition: GenericType<TypeDefinition>) initializer =
-        GenericArgumentList(definition.Parameters, initializer)
-
-    let ofTypeParameters (definition: GenericType<TypeDefinition>) =
-        forType definition (fun _ i -> CliType.TypeVar definition.ParameterTypes.[i])
+    let forTypeReference (instantiated: GenericType<TypeReference>) arguments =
+        GenericTypeInstantiation(GenericType.Referenced instantiated, GenericArgumentList(instantiated.Parameters, arguments))
 
 [<RequireQualifiedAccess>]
 type internal NamedTypeCache =

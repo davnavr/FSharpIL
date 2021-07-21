@@ -275,6 +275,7 @@ type ModuleBuilderInfo =
       AssemblyReferences: HashSet<ReferencedAssembly>
       DefinedTypes: Dictionary<DefinedType, DefinedTypeMembers>
       ReferencedTypes: Dictionary<ReferencedType, ReferencedTypeMembers>
+      FieldReferences: ImmutableArray<FieldTok>.Builder // TODO: Rename to TypeSpecFields or something else.
       EntryPoint: EntryPoint ref }
 
 type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into the Serialize method.
@@ -315,6 +316,8 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
     let definedTypeLookup = Dictionary<DefinedType, _> info.DefinedTypes.Count
     let definedFieldLookup = Dictionary<FieldTok<DefinedType, DefinedField>, _>()
     let definedMethodLookup = Dictionary<MethodTok<DefinedType, DefinedMethod>, _>()
+
+    let miscFieldLookup = Dictionary<FieldTok, _>()
 
     let genericParamLookup = ImmutableSortedDictionary.CreateBuilder<TypeOrMethodDef, ImmutableArray<GenericParam>>()
 
@@ -425,15 +428,26 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
             else lookup locals
 
     do getEncodedType <- // TODO: Implement replacement of long form for primitive types.
+        let getGenericInst isValueType (inst: GenericTypeInstantiation) =
+            let arguments = &inst.Arguments
+            let mutable arguments' = Array.zeroCreate<EncodedType> arguments.Count
+
+            for i = 0 to arguments'.Length - 1 do arguments'.[i] <- getEncodedType arguments.[i]
+
+            { IsValueType = isValueType
+              GenericInst.GenericType =
+                match inst.Instantiated with
+                | GenericType.Defined definition -> typeDefEncoded(DefinedType.Generic definition)
+                | GenericType.Referenced reference -> typeRefEncoded(ReferencedType.Generic reference)
+              GenericArguments = { GenericArgList.GenArgs = Unsafe.As &arguments' } }
+
         let lookup =
             createBlobLookup EqualityComparer.Default <| // TODO: Make a EncodedTypeCache class, and use it here.
                 function
                 | CliType.Class tdef -> EncodedType.Class(typeDefOrRef tdef)
                 | CliType.ValueType tdef -> EncodedType.ValueType(typeDefOrRef tdef)
-                | CliType.GenericClass(tdef, gargs) ->
-                    
-                    failwith "bad"
-
+                | CliType.GenericClass inst -> EncodedType.GenericInst(getGenericInst false inst)
+                | CliType.GenericValueType inst -> EncodedType.GenericInst(getGenericInst true inst)
                 | CliType.SZArray elem -> EncodedType.SZArray(getEncodedType elem)
                 | CliType.Modified(modifiers, elem) when modifiers.IsDefaultOrEmpty -> getEncodedType elem
                 | CliType.Modified(modifiers, elem) -> EncodedType.Modified(getCustomModifiers modifiers, getEncodedType elem)
@@ -462,6 +476,13 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                     FieldMetadataToken.Def definedFieldLookup.[FieldTok.unsafeAs field]
                 | TypeTok.Named(NamedType.ReferencedType _) ->
                     FieldMetadataToken.Ref referencedFieldLookup.[FieldTok.unsafeAs field]
+                | TypeTok.Specified _ ->
+                    // TODO: Fix! stack overflow occurs since type has not been finished adding because the method is trying to get the field and cannot get the field because the type has not been added yet
+                    // TODO: This is a mess, field ref might not even belong to a type or field in the Module
+                    match miscFieldLookup.TryGetValue field with
+                    | true, existing -> existing
+                    | false, _ -> serializer.AddMiscField &field // NOTE: This results in some fields being added twice.
+                    |> FieldMetadataToken.Ref
 
             member _.GetMethodToken method =
                 match method.Owner with
@@ -471,6 +492,23 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                     MethodMetadataToken.Ref referencedMethodLookup.[MethodTok.unsafeAs method]
 
             member _.GetTypeToken t = TypeMetadataToken.ofCodedIndex(typeDefOrRefOrSpec t) }
+
+    member private _.AddMiscField(field: inref<FieldTok>) =
+        let i =
+            builder.Tables.MemberRef.Add
+                { Class =
+                    match field.Owner with
+                    | TypeTok.Named named ->
+                        sprintf
+                            "Unexpected type definition or reference %O, only type specifications should be the parents of \
+                            these fields"
+                            named
+                        |> invalidOp
+                    | TypeTok.Specified tspec -> MemberRefParent.TypeSpec(getTypeSpec(getEncodedType tspec))
+                  Name = builder.Strings.Add field.Member.Name
+                  Signature = { MemberRefSig = (getFieldSig field.Member).FieldSig } }
+        miscFieldLookup.[field] <- i
+        i
 
     member private _.SerializeAssemblyReferences() =
         for assem in info.AssemblyReferences do
@@ -484,6 +522,10 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                       Name = builder.Strings.Add assem.Name
                       Culture = builder.Strings.Add assem.Culture
                       HashValue = builder.Blob.Add assem.HashValue }
+
+    // TODO: Prevent weird infinite loop thing, when the parent of the field ref is searched for, it notices that it (obviously) hasn't added the parent TypeDef yet, causing the search for the FieldToken used in the method body to occur before the MemberRef table even has anything in it yet.
+    member private this.SerializeGenericMembers() =
+        for i = 0 to info.FieldReferences.Count - 1 do this.AddMiscField(&info.FieldReferences.ItemRef i)
 
     member private this.SerializeReferencedType(reference: ReferencedType) =
         let members = info.ReferencedTypes.[reference]
@@ -661,6 +703,8 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
     member this.Serialize() =
         this.SerializeAssemblyReferences()
 
+        this.SerializeGenericMembers()
+
         for tref in info.ReferencedTypes.Keys do this.SerializeReferencedType tref |> ignore
 
         this.SerializeDefinedType(ModuleType.Definition', info.GlobalMembers) |> ignore
@@ -674,6 +718,7 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
             | EntryPointMethod call -> EntryPointToken.MethodDef definedMethodLookup.[MethodTok.unsafeAs call.Token]
 
         this.SerializeGenericParameters()
+
         this.SerializeCustomAttributes()
 
         builder
@@ -748,6 +793,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
           AssemblyReferences = HashSet<ReferencedAssembly>(defaultArg assemblyRefCapacity 8)
           DefinedTypes = Dictionary typeDefCapacity'
           ReferencedTypes = Dictionary typeRefCapacity'
+          FieldReferences = ImmutableArray.CreateBuilder()
           EntryPoint = ref Unchecked.defaultof<EntryPoint> }
 
     let createAttributeList owner = CustomAttributeList(owner, info.CustomAttributes)
@@ -837,6 +883,26 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             let! members = this.ReferenceType(ReferencedType.Reference reference.Reference)
             return ReferencedTypeMembers<'Kind> members
         }
+
+    // TODO: Implement lookup for MemberRefs created from fields and methods of generic types.
+
+    member this.GenericInstantiation(isValueType, field: FieldTok, typeGenericParameters) = // TODO: For type defs, how to allow usage of initializer for TypeVar
+        let inline create inst =
+            let field' =
+                FieldTok.create
+                    (TypeTok.Specified(if isValueType then CliType.GenericValueType inst else CliType.GenericClass inst))
+                    (Field(field.Member.Name, field.Member.Type)) // TODO: Make a special subclass for these kinds of fields.
+            info.FieldReferences.Add field'
+            field'
+        // TODO: Check that owner of field is accounted for, and that the type actually contains the field.
+        match field.Owner with
+        | TypeTok.Named(NamedType.DefinedType(DefinedType.Definition _))
+        | TypeTok.Named(NamedType.ReferencedType(ReferencedType.Reference _)) -> field
+        | TypeTok.Named(NamedType.DefinedType(DefinedType.Generic definition)) ->
+            GenericTypeInstantiation.forTypeDefinition definition (fun _ -> typeGenericParameters) |> create // TODO: User will probably have access to GenericParameters anyway, so remove defualt initializer for TypeVar
+        | TypeTok.Named(NamedType.ReferencedType(ReferencedType.Generic reference)) ->
+            GenericTypeInstantiation.forTypeReference reference typeGenericParameters |> create
+        | TypeTok.Specified tspec -> failwith "TODO: Handle usage of TypeSpec when generating MemberRef to a field of a generic type"
 
     member this.SetTargetFramework(tfm, ctor: CustomAttributeCtor) =
         match this.AssemblyCustomAttributes with

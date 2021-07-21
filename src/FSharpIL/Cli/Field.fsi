@@ -5,10 +5,12 @@ open System
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-[<AbstractClass>]
+[<Class>]
 type Field =
     val Name: Identifier
     val Type: CliType
+
+    internal new: name: Identifier * fieldType: CliType -> Field
 
     abstract Equals: other: Field -> bool
     default Equals: other: Field -> bool

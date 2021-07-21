@@ -45,8 +45,12 @@ let inline (|FieldTok|) (field: FieldTok<_, _>) = struct(field.Token.Owner, fiel
 
 [<RequireQualifiedAccess>]
 module FieldTok =
+    let create owner field = FieldTok(owner, field)
+
     let unsafeAs token = FieldTok<'Owner, 'Field> token
+
     let ofTypeDef owner field cache =
         FieldTok<DefinedType, 'Field>(TypeTok.Named(NamedTypeCache.addDefined owner cache), field)
+
     let ofTypeRef owner field cache =
         FieldTok<ReferencedType, 'Field>(TypeTok.Named(NamedTypeCache.addReferenced owner cache), field)

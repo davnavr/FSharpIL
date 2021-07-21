@@ -83,6 +83,8 @@ let example() = // TODO: Make helper function to add reference to System.Private
             )
             |> GenericType.definedKind parameters
 
+        let t = CliType.TypeVar arrlist.Parameters.[0]
+
         let! members = builder.DefineGenericType(arrlist, attributes = ValueNone)
 
         // val private items: 'T[]
@@ -97,6 +99,8 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
             members.Members.DefineField(definition, attributes = ValueNone)
 
+        let items' = builder.GenericInstantiation(false, items.Token, fun _ _ -> t)
+
         // val mutable index: int32
         let! index =
             let definition =
@@ -108,6 +112,8 @@ let example() = // TODO: Make helper function to add reference to System.Private
                 )
 
             members.Members.DefineField(definition, attributes = ValueNone)
+
+        let index' = builder.GenericInstantiation(false, items.Token, fun _ _ -> t)
 
         // public new: capacity: int32 -> ArrayList<'T>
         let! ctor =
@@ -126,18 +132,18 @@ let example() = // TODO: Make helper function to add reference to System.Private
                         ldarg_0 &wr
                         callvirt &wr mscorlib'.ObjectConstructor.Token tokens
 
-                        // TODO: Use MemberRef to the members.
+                        // TODO: Figure out how to allow creation of generic instantiations in method body generator.
 
                         // inner = Microsoft.FSharp.Primitives.Basics.Array.zeroCreateUnchecked capacity
                         ldarg_0 &wr
                         ldarg_1 &wr // capacity
-                        newarr &wr (CliType.TypeVar arrlist.Parameters.[0] |> TypeTok.Specified) tokens
-                        stfld &wr items.Token tokens
+                        newarr &wr (TypeTok.Specified t) tokens
+                        stfld &wr items' tokens
 
                         // index = 0
                         ldarg_0 &wr
                         ldc_i4_0 &wr
-                        stfld &wr index.Token tokens
+                        stfld &wr index' tokens
 
                         ret &wr
                         wr.EstimatedMaxStack }

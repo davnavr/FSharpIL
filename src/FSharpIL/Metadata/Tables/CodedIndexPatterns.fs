@@ -29,8 +29,9 @@ module HasCustomAttribute =
 
 [<RequireQualifiedAccess>]
 module MemberRefParent =
+    let TypeDef({ TableIndex = index }: TableIndex<TypeDefRow>) = MemberRefParent(MemberRefParentTag.TypeDef, index)
     let TypeRef({ TableIndex = index }: TableIndex<TypeRefRow>) = MemberRefParent(MemberRefParentTag.TypeRef, index)
-
+    let TypeSpec({ TableIndex = index }: TableIndex<TypeSpecRow>) = MemberRefParent(MemberRefParentTag.TypeSpec, index)
 
 
 

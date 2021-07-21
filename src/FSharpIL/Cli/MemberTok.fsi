@@ -50,6 +50,8 @@ val inline internal (|FieldTok|) : field: FieldTok<'Owner, 'Field> -> struct(Typ
 
 [<RequireQualifiedAccess>]
 module FieldTok =
+    val internal create : owner: TypeTok -> field: Field -> FieldTok
+
     val internal unsafeAs : token: FieldTok -> FieldTok<'Owner, 'Method>
 
     val internal ofTypeDef : owner: DefinedType -> field: 'Field -> cache: NamedTypeCache -> FieldTok<DefinedType, 'Field>
