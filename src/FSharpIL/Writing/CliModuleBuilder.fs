@@ -887,7 +887,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
     // TODO: Implement lookup for MemberRefs created from fields and methods of generic types.
 
     member this.GenericInstantiation(isValueType, field: FieldTok, typeGenericParameters) = // TODO: For type defs, how to allow usage of initializer for TypeVar
-        let inline create inst =
+        let inline create instantiated =
+            let inst = GenericType.instantiate instantiated typeGenericParameters
             let field' =
                 FieldTok.create
                     (TypeTok.Specified(if isValueType then CliType.GenericValueType inst else CliType.GenericClass inst))
@@ -898,10 +899,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         match field.Owner with
         | TypeTok.Named(NamedType.DefinedType(DefinedType.Definition _))
         | TypeTok.Named(NamedType.ReferencedType(ReferencedType.Reference _)) -> field
-        | TypeTok.Named(NamedType.DefinedType(DefinedType.Generic definition)) ->
-            GenericTypeInstantiation.forTypeDefinition definition (fun _ -> typeGenericParameters) |> create // TODO: User will probably have access to GenericParameters anyway, so remove defualt initializer for TypeVar
-        | TypeTok.Named(NamedType.ReferencedType(ReferencedType.Generic reference)) ->
-            GenericTypeInstantiation.forTypeReference reference typeGenericParameters |> create
+        | TypeTok.Named(NamedType.DefinedType(DefinedType.Generic definition)) -> create(GenericType.Defined definition)
+        | TypeTok.Named(NamedType.ReferencedType(ReferencedType.Generic reference)) -> create(GenericType.Referenced reference)
         | TypeTok.Specified tspec -> failwith "TODO: Handle usage of TypeSpec when generating MemberRef to a field of a generic type"
 
     member this.SetTargetFramework(tfm, ctor: CustomAttributeCtor) =

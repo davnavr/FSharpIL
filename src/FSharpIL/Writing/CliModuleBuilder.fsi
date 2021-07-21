@@ -198,7 +198,7 @@ type CliModuleBuilder =
     member GenericInstantiation:
         isValueType: bool * // TODO: Use union type for this.
         field: FieldTok *
-        typeGenericParameters: GenericArgumentList.Initializer -> FieldTok
+        typeGenericParameters: GenericType.ArgumentInitializer -> FieldTok
 
     // TODO: Add helper methods for making Extends instances, maybe even replace public constructors for ClassExtends.
 

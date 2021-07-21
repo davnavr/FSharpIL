@@ -653,23 +653,20 @@ module GenericType =
         member _.Definition = definition
         member _.Parameters = definition.ParameterTypes
 
+    type ArgumentInitializer = ImmutableArray<GenericParam> -> int32 -> CliType
+
     let defined parameters (definition: TypeDefinition) = GenericType(definition, parameters)
 
     let definedKind parameters (definition: TypeDefinition<'Kind>) = Definition<'Kind>(defined parameters definition.Definition)
 
     let referenced parameters (reference: TypeReference) = GenericType(reference, parameters)
 
-module GenericArgumentList =
-    type Initializer = ImmutableArray<GenericParam> -> int32 -> CliType
-
-module GenericTypeInstantiation =
-    // TODO: Avoid creating initializer for TypeVar unless it is needed, maybe provide a version of this function that accepts only a GenericArgumentList.Initializer like forTypeReference?
-    let forTypeDefinition (instantiated: GenericType<TypeDefinition>) (arguments: GenericArgumentList.Initializer -> _) =
-        let arguments' = arguments (fun _ i -> CliType.TypeVar instantiated.ParameterTypes.[i])
-        GenericTypeInstantiation(GenericType.Defined instantiated, GenericArgumentList(instantiated.Parameters, arguments'))
-
-    let forTypeReference (instantiated: GenericType<TypeReference>) arguments =
-        GenericTypeInstantiation(GenericType.Referenced instantiated, GenericArgumentList(instantiated.Parameters, arguments))
+    let instantiate instantiated arguments =
+        let parameters =
+            match instantiated with
+            | GenericType.Defined definition -> definition.Parameters
+            | GenericType.Referenced referenced -> referenced.Parameters
+        GenericTypeInstantiation(instantiated, GenericArgumentList(parameters, arguments))
 
 [<RequireQualifiedAccess>]
 type internal NamedTypeCache =
