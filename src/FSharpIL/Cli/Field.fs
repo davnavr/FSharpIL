@@ -70,13 +70,25 @@ module FieldKinds =
 
 [<Sealed>]
 type FieldDefinition<'Kind when 'Kind :> IAttributeTag<FieldFlags> and 'Kind : struct>
-    (visibility, flags: FieldAttributes<'Kind>, name, signature)
+    (
+        visibility,
+        flags: FieldAttributes<'Kind>,
+        name,
+        signature
+    )
     =
     inherit DefinedField (
         Unchecked.defaultof<'Kind>.RequiredFlags ||| MemberVisibility.ofField visibility ||| flags.Flags,
         name,
         signature
     )
+
+type DefinedField with
+    static member Instance(visibility, flags, name, signature) =
+        FieldDefinition<FieldKinds.Instance>(visibility, flags, name, signature)
+
+    static member Static(visibility, flags, name, signature) =
+        FieldDefinition<FieldKinds.Static>(visibility, flags, name, signature)
 
 [<AbstractClass>]
 type ReferencedField =

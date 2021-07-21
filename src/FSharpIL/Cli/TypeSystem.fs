@@ -41,8 +41,7 @@ type CliType =
     | Modified of modified: ImmutableArray<ModifierType> * CliType
     | Class of NamedType
     | ValueType of NamedType
-    | DefinedTypeVar of GenericParamType<TypeDefinition>
-    | ReferencedTypeVar of GenericParamType<TypeReference>
+    | TypeVar of GenericParamType<TypeDefinition>
 
 and [<Struct>] ClassExtends (extends: TypeTok voption) =
     member _.Extends = extends
@@ -130,7 +129,7 @@ and [<Struct>] ModifierType (required: bool, modifier: TypeTok) =
 and [<Struct>] GenericParam =
     val Name: Identifier
     val Flags: GenericParamFlags
-    val Constraints: ImmutableArray<CliType>
+    val Constraints: ImmutableArray<TypeTok>
 
 and [<Sealed>] GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>>
     (
@@ -138,10 +137,10 @@ and [<Sealed>] GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>>
         i: uint16,
         flags: GenericParamFlags,
         name: Identifier,
-        constraints: ImmutableArray<CliType>
+        constraints: ImmutableArray<TypeTok>
     )
     =
-    member _.Sequence = i
+    member _.Number = i
     member _.Flags = flags
     member _.Name = name
     member _.Constraints = constraints
@@ -163,7 +162,7 @@ and [<Sealed>] GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>>
         then NonNullableValueTypeConstraint
         else NoSpecialConstriant
 
-    interface IEquatable<GenericParamType<'Owner>> with member _.Equals other = owner === other.Owner && i = other.Sequence
+    interface IEquatable<GenericParamType<'Owner>> with member _.Equals other = owner === other.Owner && i = other.Number
 
     override this.Equals obj =
         match obj with
@@ -259,7 +258,8 @@ and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IGenericTy
         let parameter = parameters.[i]
         GenericParamType<'Type>(tdef, uint16 i, parameter.Flags, parameter.Name, parameter.Constraints)
     member _.Type = tdef
-    member val Parameters = GenericParamList<'Type>(initializer, parameters.Length)
+    member _.Parameters = parameters
+    member val ParameterTypes = GenericParamList<'Type>(initializer, parameters.Length)
 
 module PrimitiveType =
     let Boolean = CliType.Primitive(PrimitiveType EncodedType.Boolean)
@@ -300,7 +300,9 @@ type GenericParam with
 
         { Name = name; Flags = flags; Constraints = constraints }
 
-let inline (|GenericType|) (gtype: GenericType<'Type>) = struct(gtype.Type, gtype.Parameters)
+    new (name) = { Name = name; Flags = GenericParamFlags.None; Constraints = ImmutableArray.Empty }
+
+let inline (|GenericType|) (gtype: GenericType<'Type>) = struct(gtype.Type, gtype.ParameterTypes)
 
 type ReferencedType with
     override this.GetHashCode() =
@@ -526,10 +528,19 @@ module CliType =
         | CliType.SZArray e -> toElemType e
         | _ -> ValueNone
 
-[<AbstractClass; Sealed>]
-type GenericType =
-    static member Defined (definition: TypeDefinition) parameters = GenericType(definition, parameters)
-    static member Referenced (reference: TypeReference) parameters = GenericType(reference, parameters)
+let inline (|GenericParamIndex|) (parameter: GenericParamType<_>) = parameter.Number
+
+module GenericType =
+    [<Struct>]
+    type Definition<'Kind when 'Kind : struct and 'Kind :> TypeAttributes.Tag> (definition: GenericType<TypeDefinition>) =
+        member _.Definition = definition
+        member _.Parameters = definition.ParameterTypes
+
+    let defined parameters (definition: TypeDefinition) = GenericType(definition, parameters)
+
+    let definedKind parameters (definition: TypeDefinition<'Kind>) = Definition<'Kind>(defined parameters definition.Definition)
+
+    let referenced parameters (reference: TypeReference) = GenericType(reference, parameters)
 
 [<RequireQualifiedAccess>]
 type internal NamedTypeCache =

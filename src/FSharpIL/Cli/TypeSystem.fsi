@@ -37,7 +37,7 @@ type [<Interface>] IGenericType<'This> = inherit IEquatable<'This>
 
 [<Sealed>]
 type GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>> =
-    member Sequence: uint16
+    member Number: uint16
     member Flags: GenericParamFlags
     member Name: Identifier
 
@@ -82,7 +82,7 @@ and [<IsReadOnly; Struct; NoComparison; CustomEquality>] GenericParamList<'Owner
 
 and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IGenericType<'Type>> =
     member Type: 'Type
-    member Parameters: GenericParamList<'Type>
+    member ParameterTypes: GenericParamList<'Type>
 
 val inline (|GenericType|) : GenericType<'Type> -> struct('Type * GenericParamList<'Type>)
 
@@ -128,10 +128,9 @@ type CliType =
     /// A user-defined value type.
     | ValueType of NamedType
     //| Pointer of UnmanagedPointerType
-    | DefinedTypeVar of GenericParamType<TypeDefinition>
-    | ReferencedTypeVar of GenericParamType<TypeReference>
+    | TypeVar of GenericParamType<TypeDefinition>
     // TODO: Allow using of GenericParamType<SomeMethod>
-    //| DefinedMethodVar
+    //| MethodTypeVar
 
     interface IEquatable<CliType>
 
@@ -170,9 +169,17 @@ and [<NoComparison; CustomEquality>] TypeDefinition =
 
 and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] ModifierType = interface IEquatable<ModifierType>
 
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess>]
+type TypeTok =
+    | Named of NamedType
+    | Specified of spec: CliType
+
+    interface IEquatable<TypeTok>
+
 type GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>> with
     /// TODO: Don't forget to skip duplicate while writing generic constraints. (Maybe just make an error when the CliModuleBuilder first gets a hold of a duplicate)
-    member Constraints: ImmutableArray<CliType> // TODO: Instead, make custom colelction type w/ a ctor function that explicitly says it will ignore attributes.
+    member Constraints: ImmutableArray<TypeTok> // TODO: Instead, make custom collection type w/ a ctor function that explicitly says it will ignore attributes.
     member Owner: 'Owner
 
     internal new:
@@ -180,7 +187,9 @@ type GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>> with
         i: uint16 *
         flags: GenericParamFlags *
         name: Identifier *
-        constraints: ImmutableArray<CliType> -> GenericParamType<'Owner>
+        constraints: ImmutableArray<TypeTok> -> GenericParamType<'Owner>
+
+val inline (|GenericParamIndex|) : parameter: GenericParamType<'Owner> -> uint16
 
 [<RequireQualifiedAccess>]
 module PrimitiveType =
@@ -200,14 +209,6 @@ module PrimitiveType =
     val U : CliType
     val Object : CliType
     val String : CliType
-
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-[<RequireQualifiedAccess>]
-type TypeTok =
-    | Named of NamedType
-    | Specified of spec: CliType
-
-    interface IEquatable<TypeTok>
 
 type ModifierType with
     member Required: bool
@@ -257,16 +258,21 @@ module ClassExtends =
 type GenericParam =
     val Name: Identifier
     val Flags: GenericParamFlags
-    val Constraints: ImmutableArray<CliType>
+    val Constraints: ImmutableArray<TypeTok>
 
-    internal new: name: Identifier * flags: GenericParamFlags * constraints: ImmutableArray<CliType> -> GenericParam
+    internal new: name: Identifier * flags: GenericParamFlags * constraints: ImmutableArray<TypeTok> -> GenericParam
 
     new:
         name: Identifier *
         kind: GenericParamKind *
         special: GenericSpecialConstraint *
         requiresDefaultConstructor: bool *
-        constraints: ImmutableArray<CliType> -> GenericParam
+        constraints: ImmutableArray<TypeTok> -> GenericParam
+
+    new: name: Identifier -> GenericParam
+
+type GenericType<'Type when 'Type : not struct and 'Type :> IGenericType<'Type>> with
+    member internal Parameters: ImmutableArray<GenericParam>
 
 [<RequireQualifiedAccess>]
 module TypeKinds =
@@ -414,11 +420,20 @@ type TypeReference with
         typeNamespace: Identifier voption *
         typeName: Identifier -> TypeReference<TypeKinds.StaticClass>
 
-[<AbstractClass; Sealed>]
-type GenericType =
-    static member Defined: definition: TypeDefinition -> parameters: ImmutableArray<GenericParam> -> GenericType<TypeDefinition>
-    //static member Defined: definition: TypeDefinition<'Kind> -> parameters: ImmutableArray<GenericParam> -> GenericTypeDefinition<'Kind>
-    static member Referenced: reference: TypeReference -> parameters: ImmutableArray<GenericParam> -> GenericType<TypeReference>
+/// Contains functions for defining and referencing generic types.
+[<RequireQualifiedAccess>]
+module GenericType =
+    [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+    type Definition<'Kind when 'Kind : struct and 'Kind :> TypeAttributes.Tag> =
+        member Definition: GenericType<TypeDefinition>
+        member Parameters: GenericParamList<TypeDefinition>
+
+        interface IEquatable<Definition<'Kind>>
+
+    val defined: parameters: ImmutableArray<GenericParam> -> definition: TypeDefinition -> GenericType<TypeDefinition>
+    // TODO: For certain kinds of generic types, don't allow certain variance kinds.
+    val definedKind: parameters: ImmutableArray<GenericParam> -> definition: TypeDefinition<'Kind> -> Definition<'Kind>
+    val referenced: parameters: ImmutableArray<GenericParam> -> reference: TypeReference -> GenericType<TypeReference>
 
 /// Describes the type of a local variable (II.23.2.6).
 [<NoComparison; StructuralEquality; RequireQualifiedAccess>]

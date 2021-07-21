@@ -50,9 +50,10 @@ module CustomAttribute =
         { Owner: obj }
         interface IEquatable<Owner> with member this.Equals other = this.Owner.Equals other.Owner
 
-        static member DefinedAssembly (assembly: DefinedAssembly) = { Owner = assembly }
-        static member DefinedType (tdef: DefinedType) = { Owner = tdef }
-        static member DefinedMethod (mdef: DefinedMethod) = { Owner = mdef }
+        static member DefinedAssembly(assembly: DefinedAssembly) = { Owner = assembly }
+        static member DefinedType(tdef: DefinedType) = { Owner = tdef }
+        static member DefinedField(field: Field) = { Owner = field }
+        static member DefinedMethod(method: DefinedMethod) = { Owner = method }
 
     let rec private createFixedArgsLoop
         (args: byref<FixedArg[]>)
@@ -135,6 +136,8 @@ module CustomAttributeList =
         | ValueSome attributes' -> attributes' := CustomAttributeList(owner, lookup)
         | ValueNone -> ()
 
+type CustomAttributeBuilder = CustomAttributeList ref voption
+
 [<Sealed>]
 type DefinedTypeMembers (owner: DefinedType, warnings: _ option, namedTypeCache, entryPointToken, attrs) =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
@@ -144,6 +147,20 @@ type DefinedTypeMembers (owner: DefinedType, warnings: _ option, namedTypeCache,
     member _.Owner = owner
     member this.FieldCount = this.Field.Count
     member this.MethodCount = this.Method.Count
+
+    member this.AddDefinedField field =
+        if this.Field.Add field
+        then Ok(FieldTok.ofTypeDef owner field namedTypeCache)
+        else ValidationResult.Error(noImpl "error for duplicate field")
+
+    member this.AddDefinedField(field: 'Field, attributes) =
+        validated {
+            let! token = this.AddDefinedField field
+            CustomAttributeList.fromRef (CustomAttribute.Owner.DefinedField field) attrs attributes
+            return token
+        }
+
+    member this.DefineField(field: DefinedField, attributes) = this.AddDefinedField(field, attributes)
 
     member this.AddDefinedMethod(method, body: DefinedMethodBody voption) = // TODO: Run writer for method body here just in case Module is modified in it.
         // TODO: Check that owner is the correct kind of type to own this kind of method.
@@ -201,6 +218,12 @@ type MemberIndices =
       mutable EventList: TableIndex<EventRow>
       mutable PropertyList: TableIndex<PropertyRow> }
 
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
+type GenericParamEntry =
+    { ParameterIndex: TableIndex<GenericParamRow>
+      Parameters: ImmutableArray<GenericParam>
+      ConstraintIndex: TableIndex<GenericParamConstraintRow> }
+
 [<IsReadOnly; Struct>]
 type DefinedMethodBodyWriter
     (
@@ -214,11 +237,6 @@ type DefinedMethodBodyWriter
             { InitLocals = body.InitLocals
               MaxStack = body.WriteInstructions(&builder, metadataTokenSource)
               LocalVariables = localVarSource body.LocalTypes }
-
-[<AutoOpen>]
-module Helpers =
-    type Dictionary<'Key, 'Value> with
-        member inline this.EnsureAdditionalCapacity additional = this.EnsureCapacity(this.Count + additional)
 
 [<NoComparison; NoEquality>]
 type ModuleBuilderInfo =
@@ -274,6 +292,8 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
     let definedFieldLookup = Dictionary<FieldTok<DefinedType, DefinedField>, _>()
     let definedMethodLookup = Dictionary<MethodTok<DefinedType, DefinedMethod>, _>()
 
+    let genericParamLookup = ImmutableSortedDictionary.CreateBuilder<TypeOrMethodDef, ImmutableArray<GenericParam>>()
+
     let createBlobLookup comparer writer =
         let lookup = Dictionary<'Blob, 'Offset>(comparer = comparer)
 
@@ -282,7 +302,7 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
             | true, existing -> existing
             | false, _ ->
                 let offset = writer blob
-                lookup.[blob] <- offset
+                lookup.Add(blob, offset)
                 offset
 
     let typeDefEncoded definition =
@@ -380,7 +400,7 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
             then { TableIndex = 0u }
             else lookup locals
 
-    do getEncodedType <- // TODO: Implement replacement of long form for primitives types.
+    do getEncodedType <- // TODO: Implement replacement of long form for primitive types.
         let lookup =
             createBlobLookup EqualityComparer.Default <| // TODO: Make a EncodedTypeCache class, and use it here.
                 function
@@ -390,7 +410,7 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                 | CliType.Modified(modifiers, elem) when modifiers.IsDefaultOrEmpty -> getEncodedType elem
                 | CliType.Modified(modifiers, elem) -> EncodedType.Modified(getCustomModifiers modifiers, getEncodedType elem)
                 | CliType.Array(elem, shape) -> EncodedType.Array(getEncodedType elem, shape)
-                // TODO: Write type parameters from types.
+                | CliType.TypeVar(GenericParamIndex i) -> EncodedType.Var(uint32 i)
                 | CliType.Primitive prim -> invalidOp(sprintf "Primitive types \"%A\" should not be cached" prim)
 
         function // Ensures that only non-primitive types are cached.
@@ -444,7 +464,8 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
         let members = info.ReferencedTypes.[reference]
         match referencedTypeLookup.TryGetValue reference, reference with
         | (true, i), _ -> i
-        | (false, _), ReferencedType.Reference reference' ->
+        | (false, _), ReferencedType.Reference reference'
+        | (false, _), ReferencedType.Generic(GenericType(reference', _)) ->
             let rscope =
                 match reference'.ResolutionScope with
                 | TypeReferenceParent.Assembly assem -> ResolutionScope.AssemblyRef assemblyReferenceLookup.[assem]
@@ -479,7 +500,8 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
     member private _.SerializeDefinedType(definition, members: DefinedTypeMembers) =
         match definedTypeLookup.TryGetValue definition, definition with
         | (true, i), _-> i
-        | (false, _), DefinedType.Definition definition' ->
+        | (false, _), DefinedType.Definition definition'
+        | (false, _), DefinedType.Generic(GenericType(definition', _)) ->
             let extends =
                 match definition'.Extends.Extends with
                 | ValueSome(TypeTok.Named tnamed) -> TypeDefOrRefEncoded.toCodedIndex(typeDefOrRef tnamed)
@@ -550,7 +572,37 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                       MethodList = indices.MethodList }
 
             definedTypeLookup.[definition] <- i
+
+            match definition with
+            | DefinedType.Generic generic -> genericParamLookup.Add(TypeOrMethodDef.Type i, generic.Parameters)
+            | _ -> ()
+
             i
+
+    member private _.SerializeGenericParameters() =
+        for KeyValue(owner, parameters) in genericParamLookup do
+            for i = 0 to parameters.Length - 1 do
+                let parameter = &parameters.ItemRef i
+
+                let parami =
+                    builder.Tables.GenericParam.Add
+                        { Number = uint16 i
+                          Flags = parameter.Flags
+                          Owner = owner
+                          Name = builder.Strings.Add parameter.Name }
+
+                for constr in parameter.Constraints do
+                    // Should be TypeDef or Ref or Spec
+                    { Owner = parami
+                      Constraint = typeDefOrRefOrSpec constr }
+                    |> builder.Tables.GenericParamConstraint.Add
+                    |> ignore
+
+        if builder.Tables.GenericParam.Count > 0 then
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.GenericParam
+
+        if builder.Tables.GenericParamConstraint.Count > 0 then
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.GenericParamConstraint
 
     member private _.SerializeCustomAttributes() =
         if info.CustomAttributes.OwnerCount > 0 then
@@ -594,6 +646,7 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
 
         this.SerializeDefinedType(ModuleType.Definition', info.GlobalMembers) |> ignore
 
+        // TODO: Sort TypeDef table such that enclosing classes "precede the definition of all classes it encloses" (II.22)
         for KeyValue(tdef, members) in info.DefinedTypes do this.SerializeDefinedType(tdef, members) |> ignore
 
         builder.EntryPointToken <-
@@ -601,7 +654,7 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
             | NoEntryPoint -> EntryPointToken.Null
             | EntryPointMethod call -> EntryPointToken.MethodDef definedMethodLookup.[MethodTok.unsafeAs call.Token]
 
-        //this.SerializeGenericParameters()
+        this.SerializeGenericParameters()
         this.SerializeCustomAttributes()
 
         builder
@@ -724,6 +777,15 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             let definition' = DefinedType.Definition definition.Definition
             let! members = this.AddDefinedType definition'
             CustomAttributeList.fromRef (CustomAttribute.Owner.DefinedType definition') info.CustomAttributes attributes
+            return DefinedTypeMembers<'Kind> members
+        }
+
+    // TODO: Error if a generic parameter constraint references System.Void
+    member this.DefineGenericType(definition, attributes) = this.DefineType(DefinedType.Generic definition, attributes)
+
+    member this.DefineGenericType(definition: GenericType.Definition<'Kind>, attributes) =
+        validated {
+            let! members = this.DefineGenericType(definition.Definition, attributes)
             return DefinedTypeMembers<'Kind> members
         }
 

@@ -53,6 +53,22 @@ module FieldKinds =
 type FieldDefinition<'Kind when 'Kind :> IAttributeTag<FieldFlags> and 'Kind : struct> =
     inherit DefinedField
 
+type DefinedField with
+    static member Instance:
+        visibility: MemberVisibility *
+        flags: FieldAttributes<FieldKinds.Instance> *
+        name: Identifier *
+        signature: CliType -> FieldDefinition<FieldKinds.Instance>
+
+    static member Static:
+        visibility: MemberVisibility *
+        flags: FieldAttributes<FieldKinds.Static> *
+        name: Identifier *
+        signature: CliType -> FieldDefinition<FieldKinds.Static>
+
+    //static member Literal // TODO: How to enforce correct field type?
+    //static member Rva
+
 [<AbstractClass>]
 type ReferencedField =
     inherit Field

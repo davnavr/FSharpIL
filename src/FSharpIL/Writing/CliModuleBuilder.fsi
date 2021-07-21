@@ -33,6 +33,9 @@ type CustomAttributeList =
     member Count: int32
     member Add: CustomAttribute -> IValidationError option
 
+/// Used to obtain a mutable list of custom attributes.
+type CustomAttributeBuilder = CustomAttributeList ref voption
+
 [<Sealed>]
 type DefinedTypeMembers =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
@@ -45,17 +48,19 @@ type DefinedTypeMembers =
     //member PropertyCount: int32
     //member EventCount: int32
 
+    member DefineField:
+        field: DefinedField *
+        attributes: CustomAttributeBuilder -> ValidationResult<FieldTok<DefinedType, DefinedField>>
+
     member DefineMethod:
         method: DefinedMethod *
         body: DefinedMethodBody voption *
-        attributes: CustomAttributeList ref voption ->
-            ValidationResult<MethodTok<DefinedType, DefinedMethod>>
+        attributes: CustomAttributeBuilder -> ValidationResult<MethodTok<DefinedType, DefinedMethod>>
 
     member DefineEntryPoint:
         method: EntryPointMethod *
         body: DefinedMethodBody *
-        attributes: CustomAttributeList ref voption ->
-            ValidationResult<MethodTok<DefinedType, MethodDefinition<MethodKinds.Static>>>
+        attributes: CustomAttributeBuilder -> ValidationResult<MethodTok<DefinedType, MethodDefinition<MethodKinds.Static>>>
 
     member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool
@@ -162,13 +167,21 @@ type CliModuleBuilder =
 
     member DefineType:
         definition: DefinedType *
-        attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers>
+        attributes: CustomAttributeBuilder -> ValidationResult<DefinedTypeMembers>
 
     //member DefineType: DefinedType * attributes: outref<CustomAttributeList> -> ValidationResult<DefinedTypeMembers>
 
     member DefineType:
         definition: TypeDefinition<'Kind> *
-        attributes: CustomAttributeList ref voption -> ValidationResult<DefinedTypeMembers<'Kind>>
+        attributes: CustomAttributeBuilder -> ValidationResult<DefinedTypeMembers<'Kind>>
+
+    member DefineGenericType:
+        definition: GenericType<TypeDefinition> *
+        attributes: CustomAttributeBuilder -> ValidationResult<DefinedTypeMembers>
+
+    member DefineGenericType:
+        definition: GenericType.Definition<'Kind> *
+        attributes: CustomAttributeBuilder -> ValidationResult<DefinedTypeMembers<'Kind>>
 
     member ReferenceType: reference: ReferencedType -> ValidationResult<ReferencedTypeMembers>
 
