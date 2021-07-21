@@ -163,7 +163,7 @@ type DefinedTypeMembers (owner: DefinedType, warnings: _ option, namedTypeCache,
 
     member this.DefineField(field: DefinedField, attributes) = this.AddDefinedField(field, attributes)
 
-    member this.AddDefinedMethod(method, body: DefinedMethodBody voption) = // TODO: Run writer for method body here just in case Module is modified in it.
+    member private this.AddDefinedMethod(method, body: DefinedMethodBody voption) = // TODO: Run writer for method body here just in case Module is modified in it.
         // TODO: Check that owner is the correct kind of type to own this kind of method.
         if this.Method.Add method then
             match body with
@@ -680,6 +680,11 @@ type DefinedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kin
 
     new (members) = { Members = members }
 
+    member inline this.DefineMethod(method: 'Method, body, attributes)  =
+        match this.Members.AddDefinedMethod(method, body, attributes) with
+        | Ok token -> ValidationResult<MethodTok<TypeDefinition<'Kind>, 'Method>>.Ok(MethodTok.unsafeAs token.Token)
+        | Error err -> Error err
+
 [<IsReadOnly; Struct>]
 type ReferencedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
     val Members: ReferencedTypeMembers
@@ -693,11 +698,21 @@ type ReferencedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and '
 
 [<AbstractClass; Sealed>]
 type TypeMemberExtensions = // TODO: For these extension methods, call internal version that skips some validation.
-    static member ReferenceMethod(members: ReferencedTypeMembers<'Kind> when 'Kind :> TypeKinds.IHasConstructor, method) =
+    static member ReferenceMethod(members: ReferencedTypeMembers<'Kind> when 'Kind :> TypeAttributes.IHasStaticMethods, method) =
         members.ReferenceMethod<MethodReference<MethodKinds.ObjectConstructor>> method
 
     static member ReferenceMethod(members: ReferencedTypeMembers<'Kind> when 'Kind :> TypeAttributes.IHasStaticMethods, method) =
         members.ReferenceMethod<MethodReference<MethodKinds.Static>> method
+
+    static member DefineMethod
+        (
+            members: DefinedTypeMembers<'Kind> when 'Kind :> TypeKinds.IHasConstructor,
+            method,
+            body,
+            attributes
+        )
+        =
+        members.DefineMethod<MethodDefinition<MethodKinds.ObjectConstructor>>(method, ValueSome body, attributes)
 
     //static member DefineEntryPoint(members: ReferenceTypeMembers<'Kind> 
 

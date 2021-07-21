@@ -96,7 +96,7 @@ type TypeMemberExtensions =
         members: ReferencedTypeMembers<'Kind> *
         method: MethodReference<MethodKinds.ObjectConstructor> ->
             ValidationResult<MethodTok<TypeReference<'Kind>, MethodReference<MethodKinds.ObjectConstructor>>>
-            when 'Kind :> TypeKinds.IHasConstructor
+            when 'Kind :> TypeAttributes.IHasStaticMethods
 
     [<Extension>]
     static member ReferenceMethod :
@@ -104,6 +104,15 @@ type TypeMemberExtensions =
         method: MethodReference<MethodKinds.Static> ->
             ValidationResult<MethodTok<TypeReference<'Kind>, MethodReference<MethodKinds.Static>>>
             when 'Kind :> TypeAttributes.IHasStaticMethods
+
+    [<Extension>]
+    static member DefineMethod :
+        members: DefinedTypeMembers<'Kind> *
+        method: MethodDefinition<MethodKinds.ObjectConstructor> *
+        body: DefinedMethodBody * // TODO: Define helper class for emitting call to base constructor before running rest of ctor code.
+        attributes: CustomAttributeBuilder ->
+            ValidationResult<MethodTok<TypeDefinition<'Kind>, MethodDefinition<MethodKinds.ObjectConstructor>>>
+            when 'Kind :> TypeKinds.IHasConstructor
 
     //static member DefineEntryPoint
 

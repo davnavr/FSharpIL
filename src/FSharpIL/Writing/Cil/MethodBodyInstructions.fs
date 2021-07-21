@@ -117,6 +117,21 @@ let inline ldarg_s (stream: byref<_>) (num: uint8) =
     (getInstructionStream &stream).Write num
     incrMaxStack &stream
 
+let inline ldc_i4_m1 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_m1
+let inline ldc_i4_0 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_0
+let inline ldc_i4_1 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_1
+let inline ldc_i4_2 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_2
+let inline ldc_i4_3 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_3
+let inline ldc_i4_4 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_4
+let inline ldc_i4_5 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_5
+let inline ldc_i4_6 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_6
+let inline ldc_i4_7 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_7
+let inline ldc_i4_8 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_8
+
+let inline ldc_i4_s (stream: byref<_>) (number: int8) =
+    writePushingOpcode &stream Opcode.Ldc_i4_s
+    (getInstructionStream &stream).Write(byte number)
+
 let inline pop (stream: byref<_>) = writeRawOpcode &stream Opcode.Pop
 
 let call (stream: byref<_>) method tokens = Call.instr' &stream Opcode.Call method tokens
@@ -136,8 +151,8 @@ let inline ldsfld (stream: byref<_>) (field: _) tokens = writeFieldInstruction &
 let inline ldsflda (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Ldsflda true field tokens
 let inline stsfld (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Stfld false field tokens
 
-let inline newarr (stream: byref<_>) etype typeTokenSource =
-    writeTypeInstruction &stream Opcode.Newarr etype typeTokenSource
+let inline newarr (stream: byref<_>) etype tokens =
+    writeTypeInstruction &stream Opcode.Newarr etype tokens
     incrMaxStack &stream
 
 let inline ldarg (stream: byref<_>) (num: uint16) =
@@ -146,7 +161,8 @@ let inline ldarg (stream: byref<_>) (num: uint16) =
     incrMaxStack &stream
 
 module Shortened =
-    let ldarg (stream: byref<_>) num =
+    // TODO: Use EnumOfValue to get an offset to add to the Opcode for some instructions, if it doesn't cause boxing.
+    let inline ldarg (stream: byref<_>) num =
         match num with
         | 0us -> ldarg_0 &stream
         | 1us -> ldarg_1 &stream

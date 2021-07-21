@@ -27,20 +27,20 @@ module Unsafe =
 
     val writeBranchInstruction: short: Opcode -> long: Opcode -> stream: byref<MethodBodyBuilder> -> byref<BranchTarget>
 
-    val inline writeStringToken: stream: byref<MethodBodyBuilder> -> string -> MetadataTokenSource -> unit
+    val inline writeStringToken: stream: byref<MethodBodyBuilder> -> string -> tokens: MetadataTokenSource -> unit
 
-    val inline writeMethodToken: stream: byref<MethodBodyBuilder> -> method: MethodTok -> MetadataTokenSource -> unit
+    val inline writeMethodToken: stream: byref<MethodBodyBuilder> -> method: MethodTok -> tokens: MetadataTokenSource -> unit
 
-    val inline writeFieldToken: stream: byref<MethodBodyBuilder> -> field: FieldTok -> MetadataTokenSource -> unit
+    val inline writeFieldToken: stream: byref<MethodBodyBuilder> -> field: FieldTok -> tokens: MetadataTokenSource -> unit
 
-    val inline writeTypeToken: stream: byref<MethodBodyBuilder> -> TypeTok -> MetadataTokenSource -> unit
+    val inline writeTypeToken: stream: byref<MethodBodyBuilder> -> TypeTok -> tokens: MetadataTokenSource -> unit
 
     val inline writeFieldInstruction:
         stream: byref<MethodBodyBuilder> ->
         opcode: Opcode ->
         pushesFieldValue: bool ->
         field: FieldTok ->
-        MetadataTokenSource ->
+        tokens: MetadataTokenSource ->
         unit
 
     /// <summary>
@@ -51,7 +51,7 @@ module Unsafe =
         stream: byref<MethodBodyBuilder> ->
         opcode: Opcode ->
         TypeTok ->
-        MetadataTokenSource ->
+        tokens: MetadataTokenSource ->
         unit
 
 [<RequireQualifiedAccess>]
@@ -71,9 +71,13 @@ module Ldstr =
     /// (0x72) Writes an instruction that loads a literal string at the specified offset from the <c>#US</c> heap (III.4.16).
     val inline ofOffset: stream: byref<MethodBodyBuilder> -> offset: UserStringOffset -> unit
 
-    val inline ofString: stream: byref<MethodBodyBuilder> -> string -> MetadataTokenSource -> unit
+    val inline ofString: stream: byref<MethodBodyBuilder> -> string -> tokens: MetadataTokenSource -> unit
 
-    val inline ofMemory: stream: byref<MethodBodyBuilder> -> inref<System.ReadOnlyMemory<char>> -> MetadataTokenSource -> unit
+    val inline ofMemory:
+        stream: byref<MethodBodyBuilder> ->
+        inref<System.ReadOnlyMemory<char>> ->
+        tokens: MetadataTokenSource ->
+        unit
 
 /// Contains functions for generating instructions that call methods specified by a metadata token.
 module Call =
@@ -126,13 +130,72 @@ val inline ldarg_s: stream: byref<MethodBodyBuilder> -> num: uint8 -> unit
 
 
 
+/// <summary>
+/// (0x15) Writes the short form of an instruction that pushes the integer <c>-1</c> onto the stack as an <c>int32</c>
+/// (III.3.40).
+/// </summary>
+val inline ldc_i4_m1: stream: byref<MethodBodyBuilder> -> unit
+
+/// <summary>
+/// (0x16) Writes the short form of an instruction that pushes the integer <c>0</c> onto the stack as an <c>int32</c> (III.3.40).
+/// </summary>
+val inline ldc_i4_0: stream: byref<MethodBodyBuilder> -> unit
+
+/// <summary>
+/// (0x17) Writes the short form of an instruction that pushes the integer <c>1</c> onto the stack as an <c>int32</c> (III.3.40).
+/// </summary>
+val inline ldc_i4_1: stream: byref<MethodBodyBuilder> -> unit
+
+/// <summary>
+/// (0x18) Writes the short form of an instruction that pushes the integer <c>2</c> onto the stack as an <c>int32</c> (III.3.40).
+/// </summary>
+val inline ldc_i4_2: stream: byref<MethodBodyBuilder> -> unit
+
+/// <summary>
+/// (0x19) Writes the short form of an instruction that pushes the integer <c>3</c> onto the stack as an <c>int32</c> (III.3.40).
+/// </summary>
+val inline ldc_i4_3: stream: byref<MethodBodyBuilder> -> unit
+
+/// <summary>
+/// (0x1A) Writes the short form of an instruction that pushes the integer <c>4</c> onto the stack as an <c>int32</c> (III.3.40).
+/// </summary>
+val inline ldc_i4_4: stream: byref<MethodBodyBuilder> -> unit
+
+/// <summary>
+/// (0x1B) Writes the short form of an instruction that pushes the integer <c>5</c> onto the stack as an <c>int32</c> (III.3.40).
+/// </summary>
+val inline ldc_i4_5: stream: byref<MethodBodyBuilder> -> unit
+
+/// <summary>
+/// (0x1C) Writes the short form of an instruction that pushes the integer <c>6</c> onto the stack as an <c>int32</c> (III.3.40).
+/// </summary>
+val inline ldc_i4_6: stream: byref<MethodBodyBuilder> -> unit
+
+/// <summary>
+/// (0x1D) Writes the short form of an instruction that pushes the integer <c>7</c> onto the stack as an <c>int32</c> (III.3.40).
+/// </summary>
+val inline ldc_i4_7: stream: byref<MethodBodyBuilder> -> unit
+
+/// <summary>
+/// (0x1E) Writes the short form of an instruction that pushes the integer <c>8</c> onto the stack as an <c>int32</c> (III.3.40).
+/// </summary>
+val inline ldc_i4_8: stream: byref<MethodBodyBuilder> -> unit
+
+/// <summary>
+/// (0x1F) Writes the short form of an instruction that pushes the signed byte constant <paramref name="number"/> onto the stack
+/// as an <c>int32</c> (III.3.40).
+/// </summary>
+val inline ldc_i4_s: stream: byref<MethodBodyBuilder> -> number: int8 -> unit
+
+
+
 /// (0x26) Writes an instruction that pops the value at the top of the stack (III.3.54).
 val inline pop: stream: byref<MethodBodyBuilder> -> unit
 
 
 
 /// (0x28) Writes an instruction that calls the specified method (III.3.19).
-val call: stream: byref<MethodBodyBuilder> -> method: MethodTok -> MetadataTokenSource -> unit
+val call: stream: byref<MethodBodyBuilder> -> method: MethodTok -> tokens: MetadataTokenSource -> unit
 
 
 
@@ -142,44 +205,46 @@ val inline ret: stream: byref<MethodBodyBuilder> -> unit
 
 
 /// <summary>(0x6F) Writes an instruction that calls a method associated with an object (III.4.2).</summary>
-val callvirt: stream: byref<MethodBodyBuilder> -> method: MethodTok -> MetadataTokenSource -> unit // TODO: Take a non-static method here.
+val callvirt: stream: byref<MethodBodyBuilder> -> method: MethodTok -> tokens: MetadataTokenSource -> unit // TODO: Take a non-static method here.
 
 
 
 /// <summary>
 /// (0x72) Writes an instruction that pushes a string literal onto the stack (III.4.16).
 /// </summary>
-val inline ldstr: stream: byref<MethodBodyBuilder> -> string -> MetadataTokenSource -> unit
+val inline ldstr: stream: byref<MethodBodyBuilder> -> string -> tokens: MetadataTokenSource -> unit
 
 
 
 /// (0x7B) Writes an instruction that pops a member reference off of the stack and pushes the value of an instance field onto the
 /// stack (III.4.10).
 // TODO: Instead take a FieldDefinition<FieldKinds.Instance> or FieldReference<FieldKinds.Instance>
-val inline ldfld: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit
+val inline ldfld: stream: byref<MethodBodyBuilder> -> FieldTok -> tokens: MetadataTokenSource -> unit
 
 /// (0x7C) Writes an instruction that pops a member reference off of the stack and pushes an unmanaged pointer to an instance
 /// field onto the stack (III.4.11).
-val inline ldflda: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit
+val inline ldflda: stream: byref<MethodBodyBuilder> -> FieldTok -> tokens: MetadataTokenSource -> unit
 
 /// (0x7D) Writes an instruction that pops a member reference and a value off of the stack, storing the value into an instance
 /// field (III.4.28).
-val inline stfld: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
+val inline stfld: stream: byref<MethodBodyBuilder> -> FieldTok -> tokens: MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
 
 /// (0x7E) Writes an instruction that loads the value of a static field onto the stack (III.4.14).
-val inline ldsfld: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit
+val inline ldsfld: stream: byref<MethodBodyBuilder> -> FieldTok -> tokens: MetadataTokenSource -> unit
 
 /// (0x7F) Writes an instruction that pushes an unmanaged pointer to a static field onto the stack (III.4.15).
-val inline ldsflda: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
+val inline ldsflda: stream: byref<MethodBodyBuilder> -> FieldTok -> tokens: MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
 
 /// (0x80) Writes an instruction that pops a value off of the stack and stores it into a static field (III.4.30).
-val inline stsfld: stream: byref<MethodBodyBuilder> -> FieldTok -> MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
+val inline stsfld: stream: byref<MethodBodyBuilder> -> FieldTok -> tokens: MetadataTokenSource -> unit // TODO: How to accept both DefinedField and ReferencedField that are static only?
 
 
 
-/// (0x8D) Writes an instruction that pops an integer length off of the stack and creates "a zero-based, one-dimensional array"
-/// of the specified type (III.4.20).
-val inline newarr: stream: byref<MethodBodyBuilder> -> etype: TypeTok -> MetadataTokenSource -> unit
+/// <summary>
+/// (0x8D) Writes an instruction that pops a native or 32-bit integer length off of the stack and creates "a zero-based,
+/// one-dimensional array" of the specified type (III.4.20).
+/// </summary>
+val inline newarr: stream: byref<MethodBodyBuilder> -> etype: TypeTok -> tokens: MetadataTokenSource -> unit
 
 
 
@@ -195,4 +260,4 @@ module Shortened =
     /// (0x02 to 0x05, 0x0E, 0xFE 0x09) Writes the shortest form of an instruction that loads an argument onto the stack
     /// (III.3.38).
     /// </summary>
-    val ldarg: stream: byref<MethodBodyBuilder> -> num: uint16 -> unit
+    val inline ldarg: stream: byref<MethodBodyBuilder> -> num: uint16 -> unit

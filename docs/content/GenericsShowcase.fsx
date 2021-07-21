@@ -59,7 +59,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
         let! mscorlib' = mscorlib.AddReferencesTo builder
 
         (* Generates a generic type definition. *)
-        // type [<Sealed>] ArrayList<'T> = inherit System.Object
+        // type public [<Sealed>] ArrayList<'T> = inherit System.Object
         let arrlist =
             let object' =
                 mscorlib.Object.Reference
@@ -97,9 +97,54 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
             members.Members.DefineField(definition, attributes = ValueNone)
 
-        // new: capacity: int32 -> ArrayList<'T>
+        // val mutable index: int32
+        let! index =
+            let definition =
+                DefinedField.Instance (
+                    MemberVisibility.Private,
+                    flags = FieldAttributes.None,
+                    name = Identifier.ofStr "index",
+                    signature = PrimitiveType.I4
+                )
 
-        // static member Main: unit -> unit
+            members.Members.DefineField(definition, attributes = ValueNone)
+
+        // public new: capacity: int32 -> ArrayList<'T>
+        let! ctor =
+            let definition =
+                DefinedMethod.Constructor (
+                    MemberVisibility.Public,
+                    flags = MethodAttributes.None,
+                    parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.I4),
+                    parameterList = fun _ _ -> Identifier.ofStr "capacity" |> Parameter.named
+                )
+
+            let body =
+                { new DefinedMethodBody() with
+                    override _.WriteInstructions(wr, tokens) =
+                        // inherit System.Object()
+                        ldarg_0 &wr
+                        callvirt &wr mscorlib'.ObjectConstructor.Token tokens
+
+                        // TODO: Use MemberRef to the members.
+
+                        // inner = Microsoft.FSharp.Primitives.Basics.Array.zeroCreateUnchecked capacity
+                        ldarg_0 &wr
+                        ldarg_1 &wr // capacity
+                        newarr &wr (CliType.TypeVar arrlist.Parameters.[0] |> TypeTok.Specified) tokens
+                        stfld &wr items.Token tokens
+
+                        // index = 0
+                        ldarg_0 &wr
+                        ldc_i4_0 &wr
+                        stfld &wr index.Token tokens
+
+                        ret &wr
+                        wr.EstimatedMaxStack }
+
+            members.DefineMethod(definition, body, attributes = ValueNone)
+
+        // static member public Main: unit -> unit
         let! _ =
             let main =
                 DefinedMethod.EntryPoint (
@@ -108,11 +153,13 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     MethodName.ofStr "Main",
                     EntryPointKind.VoidNoArgs
                 )
+
             let body =
                 { new DefinedMethodBody() with
                     override _.WriteInstructions(wr, tokens) =
                         ret &wr
                         wr.EstimatedMaxStack }
+
             builder.GlobalMembers.DefineEntryPoint(main, body, attributes = ValueNone)
 
         do! // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
