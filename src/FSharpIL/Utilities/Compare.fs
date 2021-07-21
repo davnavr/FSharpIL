@@ -57,6 +57,7 @@ module Equatable =
 
                 hcode.ToHashCode()
 
+// TODO: Fix equality implementations by making x be a generic parameter.
 /// <summary>Equality operator for objects implementing <see cref="T:System.IEquatable`1"/>.</summary>
 let inline (===) x y = Equatable.equals x y
 

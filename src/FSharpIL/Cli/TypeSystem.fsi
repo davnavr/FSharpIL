@@ -53,6 +53,7 @@ type GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>> =
 and [<IsReadOnly; NoComparison; NoEquality>] private GenericParamListIndexer<'Owner when 'Owner :> IGenericType<'Owner>> =
     struct end
 
+// TODO: Replace enumerator for generic parameters which just using a for loop.
 and [<Struct; NoComparison; NoEquality>] GenericParamListEnumerator<'Owner when 'Owner :> IGenericType<'Owner>> =
     val mutable private i: int32
     val private indexer: GenericParamListIndexer<'Owner>
@@ -127,12 +128,39 @@ type CliType =
     | Class of NamedType
     /// A user-defined value type.
     | ValueType of NamedType
+    /// A generic instantiation of a user-defined reference type.
+    | GenericClass of instantiated: GenericType * arguments: GenericArgumentList // TODO: How to prevent any random GenericArgumentList from being used?
+    /// A generic instantiation of a user-defined value type.
+    | GenericValueType of instantiated: GenericType * arguments: GenericArgumentList
     //| Pointer of UnmanagedPointerType
     | TypeVar of GenericParamType<TypeDefinition>
     // TODO: Allow using of GenericParamType<SomeMethod>
     //| MethodTypeVar
 
     interface IEquatable<CliType>
+
+/// Represents the generic arguments of a generic type instantiation.
+and [<IsReadOnly; Struct; NoComparison; CustomEquality>] GenericArgumentList =
+    member Count: int32
+    /// <summary>Gets the generic argument at the specified index.</summary>
+    /// <param name="index">The index of the generic argument to retrieve.</param>
+    /// <exception cref="T:System.ArgumentOutOfRangeException">
+    /// Thrown when the <paramref name="index"/> is negative or exceeds the index of the last generic argument in the list.
+    /// </exception>
+    member Item: index: int32 -> CliType with get
+
+    member ToImmutableArray: unit -> ImmutableArray<CliType>
+
+    override GetHashCode: unit -> int32
+    override Equals: obj -> bool
+
+    interface IEquatable<GenericArgumentList>
+    //interface IReadOnlyList<CliType>
+
+and [<IsReadOnly; Struct; NoComparison; NoEquality>] GenericParam =
+    val Name: Identifier
+    val Flags: GenericParamFlags
+    val Constraints: ImmutableArray<TypeTok>
 
 /// Represents a type defined in a module or assembly (II.7.3).
 and [<RequireQualifiedAccess; NoComparison; CustomEquality>] DefinedType =
@@ -149,6 +177,15 @@ and [<NoComparison; CustomEquality>] NamedType =
     | ReferencedType of ReferencedType
 
     interface IEquatable<NamedType>
+
+and [<IsReadOnly; Struct; NoComparison; CustomEquality; RequireQualifiedAccess>] GenericType =
+    | Defined of definition: GenericType<TypeDefinition>
+    | Referenced of reference: GenericType<TypeReference>
+
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
+
+    interface IEquatable<GenericType>
 
 and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] ClassExtends = interface IEquatable<ClassExtends>
 
@@ -169,9 +206,7 @@ and [<NoComparison; CustomEquality>] TypeDefinition =
 
 and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] ModifierType = interface IEquatable<ModifierType>
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
-[<RequireQualifiedAccess>]
-type TypeTok =
+and [<IsReadOnly; Struct; NoComparison; StructuralEquality; RequireQualifiedAccess>] TypeTok =
     | Named of NamedType
     | Specified of spec: CliType
 
@@ -254,14 +289,7 @@ module ClassExtends =
     val Null: ClassExtends
     val Named: extends: NamedType -> ClassExtends
 
-[<IsReadOnly; Struct; NoComparison; NoEquality>]
-type GenericParam =
-    val Name: Identifier
-    val Flags: GenericParamFlags
-    val Constraints: ImmutableArray<TypeTok>
-
-    internal new: name: Identifier * flags: GenericParamFlags * constraints: ImmutableArray<TypeTok> -> GenericParam
-
+type GenericParam with
     new:
         name: Identifier *
         kind: GenericParamKind *
@@ -271,8 +299,22 @@ type GenericParam =
 
     new: name: Identifier -> GenericParam
 
+    internal new: name: Identifier * flags: GenericParamFlags * constraints: ImmutableArray<TypeTok> -> GenericParam
+
 type GenericType<'Type when 'Type : not struct and 'Type :> IGenericType<'Type>> with
     member internal Parameters: ImmutableArray<GenericParam>
+
+[<RequireQualifiedAccess>]
+module GenericArgumentList =
+    type Initializer = ImmutableArray<GenericParam> -> int32 -> CliType
+
+    val internal (|Empty|) : arguments: GenericArgumentList -> bool
+
+    val ofTypeParameters : definition: GenericType<TypeDefinition> -> GenericArgumentList
+
+    val forType : definition: GenericType<TypeDefinition> -> initializer: Initializer -> GenericArgumentList
+
+    //val forMethod : definition: -> initializer: Initializer -> GenericArgumentList
 
 [<RequireQualifiedAccess>]
 module TypeKinds =

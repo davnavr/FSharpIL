@@ -41,7 +41,50 @@ type CliType =
     | Modified of modified: ImmutableArray<ModifierType> * CliType
     | Class of NamedType
     | ValueType of NamedType
+    | GenericClass of instantiated: GenericType * arguments: GenericArgumentList
+    | GenericValueType of instantiated: GenericType * arguments: GenericArgumentList
     | TypeVar of GenericParamType<TypeDefinition>
+
+and [<Struct; NoComparison; CustomEquality>] GenericArgumentList private
+    (
+        arguments: CliType[],
+        parameters: ImmutableArray<GenericParam>,
+        initializer: ImmutableArray<GenericParam> -> int32 -> CliType
+    )
+    =
+    member _.Count = arguments.Length
+
+    new (parameters: ImmutableArray<_>, initializer) =
+        GenericArgumentList(Array.zeroCreate parameters.Length, parameters, initializer)
+
+    member private _.Initialize index =
+        let existing = arguments.[index]
+        if Object.ReferenceEquals(existing, null) then // TODO: Avoid code duplication with GenericParamList
+            let arg = initializer parameters index
+            arguments.[index] <- arg
+            arg
+        else existing
+
+    member this.Item with get index =
+        if index < 0 || index >= arguments.Length then argOutOfRange (nameof index) index "Invalid generic argument index"
+        this.Initialize index
+
+    member this.ToImmutableArray() =
+        for i = 0 to arguments.Length - 1 do this.Initialize i |> ignore
+        Convert.unsafeTo<_, ImmutableArray<CliType>> arguments
+
+    override this.GetHashCode() =
+        let mutable code = HashCode()
+        for i = 0 to arguments.Length - 1 do code.Add(this.Initialize i)
+        code.ToHashCode()
+
+    interface IEquatable<GenericArgumentList> with
+        member this.Equals other = failwith "TODO: Fix equality" //Equatable.blocks (this.ToImmutableArray()) (other.ToImmutableArray())
+
+    override this.Equals obj =
+        match obj with
+        | :? GenericArgumentList as other -> this === other
+        | _ -> false
 
 and [<Struct>] ClassExtends (extends: TypeTok voption) =
     member _.Extends = extends
@@ -71,15 +114,17 @@ and [<NoComparison; CustomEquality>] TypeReference =
         | :? TypeReference as other -> this === other
         | _ -> false
 
-and [<AbstractClass; Sealed>] NamedTypeComparers private () =
+and [<AbstractClass; Sealed>] TypeComparers private () =
+    // TODO: Implemet hash functionality here so warning does't have to be suppressed.
     static member val CompareDefined = Unchecked.defaultof<DefinedType -> DefinedType -> bool> with get, set
     static member val CompareReferenced = Unchecked.defaultof<ReferencedType -> ReferencedType -> bool> with get, set
+    static member val CompareGeneric = Unchecked.defaultof<GenericType -> GenericType -> bool> with get, set
 
 and [<NoComparison; CustomEquality>] ReferencedType =
     | Reference of TypeReference
     | Generic of GenericType<TypeReference>
 
-    interface IEquatable<ReferencedType> with member this.Equals other = NamedTypeComparers.CompareReferenced this other
+    interface IEquatable<ReferencedType> with member this.Equals other = TypeComparers.CompareReferenced this other
 
     override this.Equals obj =
         match obj with
@@ -90,7 +135,7 @@ and [<NoComparison; CustomEquality>] DefinedType =
     | Definition of TypeDefinition
     | Generic of GenericType<TypeDefinition>
 
-    interface IEquatable<DefinedType> with member this.Equals other = NamedTypeComparers.CompareDefined this other
+    interface IEquatable<DefinedType> with member this.Equals other = TypeComparers.CompareDefined this other
 
 and NamedType =
     | DefinedType of DefinedType
@@ -116,6 +161,17 @@ and [<NoComparison; CustomEquality>] TypeDefinition =
     override this.Equals obj =
         match obj with
         | :? TypeDefinition as other -> this === other
+        | _ -> false
+
+and [<Struct; NoComparison; CustomEquality>] GenericType =
+    | Defined of definition: GenericType<TypeDefinition>
+    | Referenced of reference: GenericType<TypeReference>
+
+    interface IEquatable<GenericType> with member this.Equals other = TypeComparers.CompareGeneric this other
+
+    override this.Equals obj =
+        match obj with
+        | :? GenericType as other -> this === other
         | _ -> false
 
 and [<Struct>] TypeTok =
@@ -230,9 +286,9 @@ and [<Struct; NoComparison; CustomEquality>] GenericParamList<'Owner when 'Owner
     new (initializer, count) = GenericParamList(initializer, Array.zeroCreate count)
 
     override this.GetHashCode() =
-        let mutable hcode = HashCode()
-        for parameter in this do hcode.Add parameter
-        hcode.ToHashCode()
+        let mutable code = HashCode()
+        for parameter in this do code.Add parameter
+        code.ToHashCode()
 
     interface IReadOnlyList<GenericParamType<'Owner>> with
         member this.GetEnumerator() = this.GetEnumerator() :> IEnumerator
@@ -257,6 +313,7 @@ and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IGenericTy
     let initializer i =
         let parameter = parameters.[i]
         GenericParamType<'Type>(tdef, uint16 i, parameter.Flags, parameter.Name, parameter.Constraints)
+
     member _.Type = tdef
     member _.Parameters = parameters
     member val ParameterTypes = GenericParamList<'Type>(initializer, parameters.Length)
@@ -310,19 +367,32 @@ type ReferencedType with
         | ReferencedType.Reference tref
         | ReferencedType.Generic(GenericType(tref, _)) -> tref.GetHashCode()
 
-do NamedTypeComparers.CompareDefined <- fun x y ->
+type GenericType with
+    override this.GetHashCode() =
+        match this with
+        | Defined definition -> definition.Type.GetHashCode()
+        | Referenced reference -> reference.Type.GetHashCode()
+
+do TypeComparers.CompareDefined <- fun x y ->
     match x, y with
     | DefinedType.Definition x', DefinedType.Definition y'
     | DefinedType.Generic(GenericType(x', _)), DefinedType.Definition y'
     | DefinedType.Definition x', DefinedType.Generic(GenericType(y', _))
     | DefinedType.Generic(GenericType(x', _)), DefinedType.Generic(GenericType(y', _))-> x' === y'
 
-do NamedTypeComparers.CompareReferenced <- fun x y ->
+do TypeComparers.CompareReferenced <- fun x y ->
     match x, y with
     | ReferencedType.Reference x', ReferencedType.Reference y'
     | ReferencedType.Generic(GenericType(x', _)), ReferencedType.Reference y'
     | ReferencedType.Reference x', ReferencedType.Generic(GenericType(y', _))
     | ReferencedType.Generic(GenericType(x', _)), ReferencedType.Generic(GenericType(y', _))-> x' === y'
+
+do TypeComparers.CompareGeneric <- fun x y ->
+    match x, y with
+    | GenericType.Defined(GenericType(x', _)), GenericType.Defined(GenericType(y', _)) -> x' === y'
+    | GenericType.Referenced(GenericType(x', _)), GenericType.Referenced(GenericType(y', _)) -> x' === y'
+    | GenericType.Defined _, GenericType.Referenced _
+    | GenericType.Referenced _, GenericType.Defined _ -> false
 
 type NamedType with
     member this.TypeNamespace =
@@ -541,6 +611,17 @@ module GenericType =
     let definedKind parameters (definition: TypeDefinition<'Kind>) = Definition<'Kind>(defined parameters definition.Definition)
 
     let referenced parameters (reference: TypeReference) = GenericType(reference, parameters)
+
+module GenericArgumentList =
+    type Initializer = ImmutableArray<GenericParam> -> int32 -> CliType
+
+    let (|Empty|) (arguments: GenericArgumentList) = arguments.Count = 0
+
+    let forType (definition: GenericType<TypeDefinition>) initializer =
+        GenericArgumentList(definition.Parameters, initializer)
+
+    let ofTypeParameters (definition: GenericType<TypeDefinition>) =
+        forType definition (fun _ i -> CliType.TypeVar definition.ParameterTypes.[i])
 
 [<RequireQualifiedAccess>]
 type internal NamedTypeCache =

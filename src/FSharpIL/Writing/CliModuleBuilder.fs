@@ -430,6 +430,10 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
                 function
                 | CliType.Class tdef -> EncodedType.Class(typeDefOrRef tdef)
                 | CliType.ValueType tdef -> EncodedType.ValueType(typeDefOrRef tdef)
+                | CliType.GenericClass(tdef, gargs) ->
+                    
+                    failwith "bad"
+
                 | CliType.SZArray elem -> EncodedType.SZArray(getEncodedType elem)
                 | CliType.Modified(modifiers, elem) when modifiers.IsDefaultOrEmpty -> getEncodedType elem
                 | CliType.Modified(modifiers, elem) -> EncodedType.Modified(getCustomModifiers modifiers, getEncodedType elem)
