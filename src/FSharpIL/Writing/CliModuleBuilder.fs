@@ -12,6 +12,7 @@ open FSharpIL.Metadata.Cil
 open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
+open FSharpIL.Writing.BuildErrors
 open FSharpIL.Writing.Cil
 
 open FSharpIL.Utilities
@@ -183,6 +184,13 @@ type DefinedTypeMembers (owner: DefinedType, warnings: _ option, namedTypeCache,
 
     member this.DefineEntryPoint(method: EntryPointMethod, body, attributes) =
         validated {
+            match owner with
+            | DefinedType.Generic _ ->
+                return! ValidationResult.failure
+                    { GenericTypeCannotHaveEntryPoint.Owner = owner
+                      GenericTypeCannotHaveEntryPoint.Method = method }
+            | DefinedType.Definition _ -> ()
+
             let! target = this.AddDefinedMethod(method.Method, ValueSome body, attributes)
             entryPointToken := EntryPoint.EntryPointMethod target
             return target
@@ -498,6 +506,7 @@ type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into 
             i
 
     member private _.SerializeDefinedType(definition, members: DefinedTypeMembers) =
+        // TODO: Fix, member index will be off if a class does not define any members, meaning the previous type will be missing some members.
         match definedTypeLookup.TryGetValue definition, definition with
         | (true, i), _-> i
         | (false, _), DefinedType.Definition definition'

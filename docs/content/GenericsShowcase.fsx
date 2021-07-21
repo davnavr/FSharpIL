@@ -88,7 +88,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
         // val private items: 'T[]
         let! items =
             let definition =
-                DefinedField.Static (
+                DefinedField.Instance (
                     MemberVisibility.Private,
                     flags = FieldAttributes.InitOnly,
                     name = Identifier.ofStr "items",

@@ -99,6 +99,7 @@
     <Compile Include="Writing\RowSerializers.fs" />
     <Compile Include="Writing\MetadataTablesBuilder.fs" />
     <Compile Include="Writing\CliMetadataBuilder.fs" />
+    <Compile Include="Writing\BuildErrors.fs" />
     <Compile Include="Writing\CliModuleBuilder.fsi" />
     <Compile Include="Writing\CliModuleBuilder.fs" />
     <Compile Include="Writing\BuildCli.fsi" />
