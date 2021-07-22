@@ -211,4 +211,4 @@ type CliModuleBuilder =
     /// </returns>
     member SetTargetFramework: tfm: string * ctor: CustomAttributeCtor -> IValidationError option
 
-    member internal Serialize: unit -> CliMetadataBuilder
+    member internal CreateMetadata: unit -> CliMetadataBuilder

@@ -442,21 +442,21 @@ do Comparers.GenericArgumentList <-
         member _.GetHashCode _ = noImpl "Use override GenericArgumentList.GetHashCode() instead" }
 
 type NamedType with
-    member this.TypeNamespace =
+    member inline this.TypeNamespace =
         match this with
         | DefinedType(DefinedType.Definition { TypeNamespace = ns })
         | DefinedType(DefinedType.Generic(GenericType({ TypeNamespace = ns }, _)))
         | ReferencedType(ReferencedType.Reference { TypeNamespace = ns })
         | ReferencedType(ReferencedType.Generic (GenericType({ TypeNamespace = ns }, _))) -> ns
 
-    member this.TypeName =
+    member inline this.TypeName =
         match this with
         | DefinedType(DefinedType.Definition { TypeName = name })
         | DefinedType(DefinedType.Generic(GenericType({ TypeName = name }, _)))
         | ReferencedType(ReferencedType.Reference { TypeName = name })
         | ReferencedType(ReferencedType.Generic(GenericType({ TypeName = name }, _))) -> name
 
-    member this.EnclosingType =
+    member inline this.EnclosingType =
         match this with
         | DefinedType(DefinedType.Definition { EnclosingClass = ValueSome parent })
         | DefinedType(DefinedType.Generic(GenericType({ EnclosingClass = ValueSome parent }, _))) ->
@@ -465,6 +465,12 @@ type NamedType with
         | ReferencedType(ReferencedType.Generic(GenericType({ ResolutionScope = TypeReferenceParent.Type parent }, _))) ->
             ValueSome(ReferencedType parent)
         | _ -> ValueNone
+
+type DefinedType with
+    member inline this.EnclosingClass =
+        match this with
+        | DefinedType.Definition { EnclosingClass = parent }
+        | DefinedType.Generic(GenericType({ EnclosingClass = parent }, _)) -> parent
 
 [<RequireQualifiedAccess>]
 module ClassExtends =

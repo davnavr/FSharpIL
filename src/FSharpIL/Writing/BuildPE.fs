@@ -135,7 +135,7 @@ let ofMetadataBuilder flags builder =
         DefaultHeaders.optionalHeader
         (ImmutableArray.Create text)
 
-let ofModuleBuilder flags (builder: CliModuleBuilder) = builder.Serialize() |> ofMetadataBuilder flags
+let ofModuleBuilder flags (builder: CliModuleBuilder) = builder.CreateMetadata() |> ofMetadataBuilder flags
 
 let ofModule flags header root name mvid builder state =
     validated {

@@ -19,15 +19,22 @@ type RowTableBuilder<'Row, 'Serializer
     )
     =
     let rows = ImmutableArray.CreateBuilder<'Row>()
+
     member _.Table = table
-    member _.Count = rows.Count
-    member _.Item with get ({ TableIndex = i }: TableIndex<'Row>) = &rows.ItemRef(int32(i - 1u))
     member this.IsEmpty = this.Count = 0
+    member _.Count = rows.Count
+
+    /// Gets or sets the row at the specified index into the metadata table.
+    member _.Item
+        with get ({ TableIndex = i }: TableIndex<'Row>) = &rows.ItemRef(int32(i - 1u))
+        and set ({ TableIndex = i }: TableIndex<'Row>) (row: inref<'Row>) = rows.[int32(i - 1u)] <- row
+
     /// Adds the row at the specified address to the metadata table.
     member this.Add(row: inref<'Row>): TableIndex<'Row> =
         if this.IsEmpty then valid := !valid ||| table
         rows.Add row
         { TableIndex = uint32 this.Count }
+
      /// Adds the specified row to the metadata table.
     member this.Add(row: 'Row) = this.Add &row
 

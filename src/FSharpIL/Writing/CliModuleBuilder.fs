@@ -274,454 +274,11 @@ type ModuleBuilderInfo =
       mutable Assembly: DefinedAssembly option
       AssemblyReferences: HashSet<ReferencedAssembly>
       DefinedTypes: Dictionary<DefinedType, DefinedTypeMembers>
+      NestedTypes: Dictionary<DefinedType, List<DefinedType>>
+      NonNestedTypes: List<DefinedType>
       ReferencedTypes: Dictionary<ReferencedType, ReferencedTypeMembers>
       FieldReferences: ImmutableArray<FieldTok>.Builder // TODO: Rename to TypeSpecFields or something else.
       EntryPoint: EntryPoint ref }
-
-type ModuleBuilderSerializer (info) as serializer = // TODO: Move this all into the Serialize method.
-    let builder =
-        CliMetadataBuilder (
-            info.Header,
-            info.Root,
-            FSharpIL.Writing.Cil.MethodBodyList(),
-            (fun str guid _ -> ModuleRow.create (str.Add info.Name) (guid.Add info.Mvid)),
-            StringsStreamBuilder 512,
-            UserStringStreamBuilder 1,
-            GuidStreamBuilder 1,
-            BlobStreamBuilder 256
-        )
-
-    let assemblyDefIndex =
-        match info.Assembly with
-        | Some assem ->
-            { HashAlgId = AssemblyHashAlgorithm.SHA1 // TODO: Set the HashAlgId properly
-              MajorVersion = assem.Version.Major
-              MinorVersion = assem.Version.Minor
-              BuildNumber = assem.Version.Build
-              RevisionNumber = assem.Version.Revision
-              Flags = if assem.PublicKey.IsDefaultOrEmpty then AssemblyFlags.None else AssemblyFlags.PublicKey // TODO: Allow setting of other assembly flags
-              PublicKey = builder.Blob.Add assem.PublicKey
-              Name = builder.Strings.Add assem.Name
-              Culture = builder.Strings.Add assem.Culture }
-            |> builder.Tables.Assembly.Add
-            |> ValueSome
-        | None -> ValueNone
-
-    let assemblyReferenceLookup = Dictionary<ReferencedAssembly, TableIndex<AssemblyRefRow>> info.AssemblyReferences.Count
-
-    let referencedTypeLookup = Dictionary<ReferencedType, _> info.ReferencedTypes.Count
-    let referencedFieldLookup = Dictionary<FieldTok<ReferencedType, ReferencedField>, _>()
-    let referencedMethodLookup = Dictionary<MethodTok<ReferencedType, ReferencedMethod>, _>()
-
-    let definedTypeLookup = Dictionary<DefinedType, _> info.DefinedTypes.Count
-    let definedFieldLookup = Dictionary<FieldTok<DefinedType, DefinedField>, _>()
-    let definedMethodLookup = Dictionary<MethodTok<DefinedType, DefinedMethod>, _>()
-
-    let miscFieldLookup = Dictionary<FieldTok, _>()
-
-    let genericParamLookup = ImmutableSortedDictionary.CreateBuilder<TypeOrMethodDef, ImmutableArray<GenericParam>>()
-
-    let createBlobLookup comparer writer =
-        let lookup = Dictionary<'Blob, 'Offset>(comparer = comparer)
-
-        fun blob ->
-            match lookup.TryGetValue blob with
-            | true, existing -> existing
-            | false, _ ->
-                let offset = writer blob
-                lookup.Add(blob, offset)
-                offset
-
-    let typeDefEncoded definition =
-        TypeDefOrRefEncoded.Def(serializer.SerializeDefinedType(definition, info.DefinedTypes.[definition]))
-
-    let typeRefEncoded reference =
-        TypeDefOrRefEncoded.Ref(serializer.SerializeReferencedType reference)
-
-    let typeDefOrRef = // TODO: How to deal with generic types that are missing their type parameters?
-        function
-        | NamedType.DefinedType tdef -> typeDefEncoded tdef
-        | NamedType.ReferencedType tref -> typeRefEncoded tref
-
-    let mutable getEncodedType = Unchecked.defaultof<CliType -> EncodedType>
-
-    let rec typeDefOrRefOrSpec =
-        function
-        | TypeTok.Named tdef -> TypeDefOrRefEncoded.toCodedIndex(typeDefOrRef tdef)
-        | TypeTok.Specified tspec -> TypeDefOrRef.Spec(getTypeSpec(getEncodedType tspec))
-
-    and getCustomModifiers (modifiers: ImmutableArray<ModifierType>) =
-        let rec inner i modifiers' =
-            if i >= 0 then
-                let modf' = modifiers.[i]
-                inner
-                    (i - 1)
-                    ({ CustomMod.Required = modf'.Required; ModifierType = typeDefOrRefOrSpec modf'.Modifier } :: modifiers')
-            else modifiers'
-        inner (modifiers.Length - 1) List.empty
-
-    and getTypeSpec =
-        createBlobLookup EqualityComparer.Default <| fun (tspec: EncodedType) ->
-            builder.Tables.TypeSpec.Add { TypeSpec = builder.Blob.Add tspec }
-
-    let getParameterTypes (parameters: ImmutableArray<ParameterType>) =
-        if parameters.IsDefaultOrEmpty
-        then ImmutableArray<ParamItem>.Empty
-        else
-            let mutable parameters' = Array.zeroCreate<ParamItem> parameters.Length
-
-            for i = 0 to parameters'.Length - 1 do
-                parameters'.[i] <-
-                    match parameters.[i] with
-                    | ParameterType.T ptype ->
-                        ParamItem.Type(getEncodedType ptype)
-                    | ParameterType.ByRef(modifiers, ptype) ->
-                        ParamItem.ByRef(getCustomModifiers modifiers, getEncodedType ptype)
-                    | ParameterType.TypedByRef modifiers ->
-                        ParamItem.TypedByRef(getCustomModifiers modifiers)
-
-            Unsafe.As &parameters'
-
-    let getMethodSig =
-        createBlobLookup Method.signatureComparer <| fun (method: Method) ->
-            let signature =
-                { HasThis = method.HasThis
-                  CallingConvention = method.CallingConvention
-                  ReturnType =
-                    match method.ReturnType with
-                    | ReturnType.T ret -> RetTypeItem.Type(getEncodedType ret)
-                    | ReturnType.Void modifiers -> RetTypeItem.Void(getCustomModifiers modifiers)
-                    | ReturnType.ByRef(modifiers, ret) -> RetTypeItem.ByRef(getCustomModifiers modifiers, getEncodedType ret)
-                    | ReturnType.TypedByRef modifiers -> RetTypeItem.TypedByRef(getCustomModifiers modifiers)
-                  Parameters = getParameterTypes method.ParameterTypes }
-            builder.Blob.Add &signature
-
-    let getFieldSig =
-        createBlobLookup Field.signatureComparer <| fun (field: Field) ->
-            let signature = { FieldType = getEncodedType field.Type }
-            builder.Blob.Add &signature
-
-    let getLocalsSig =
-        let inline constraints pinned =
-            if pinned then LocalVariable.pinned else List.empty
-
-        let lookup =
-            createBlobLookup Equatable.BlockComparer <| fun (locals: ImmutableArray<LocalType>) ->
-                let mutable locals' = Array.zeroCreate<LocalVariable> locals.Length
-
-                for i = 0 to locals'.Length - 1 do
-                    locals'.[i] <-
-                        match locals.[i] with
-                        | LocalType.T(modifiers, pinned, ltype) ->
-                            LocalVariable.Type(getCustomModifiers modifiers, constraints pinned, getEncodedType ltype)
-                        | LocalType.ByRef(modifiers, pinned, ltype) ->
-                            LocalVariable.ByRef(getCustomModifiers modifiers, constraints pinned, getEncodedType ltype)
-                        | LocalType.TypedByRef modifiers ->
-                            LocalVariable.TypedByRef(getCustomModifiers modifiers)
-
-                failwith "TODO: Add locals to blob stream": TableIndex<StandaloneSigRow>
-                //builder.Blob.Add(Unsafe.As &locals')
-
-        fun (locals: ImmutableArray<_>) ->
-            if locals.IsDefaultOrEmpty
-            then { TableIndex = 0u }
-            else lookup locals
-
-    do getEncodedType <- // TODO: Implement replacement of long form for primitive types.
-        let getGenericInst isValueType (inst: GenericTypeInstantiation) =
-            let arguments = &inst.Arguments
-            let mutable arguments' = Array.zeroCreate<EncodedType> arguments.Count
-
-            for i = 0 to arguments'.Length - 1 do arguments'.[i] <- getEncodedType arguments.[i]
-
-            { IsValueType = isValueType
-              GenericInst.GenericType =
-                match inst.Instantiated with
-                | GenericType.Defined definition -> typeDefEncoded(DefinedType.Generic definition)
-                | GenericType.Referenced reference -> typeRefEncoded(ReferencedType.Generic reference)
-              GenericArguments = { GenericArgList.GenArgs = Unsafe.As &arguments' } }
-
-        let lookup =
-            createBlobLookup EqualityComparer.Default <| // TODO: Make a EncodedTypeCache class, and use it here.
-                function
-                | CliType.Class tdef -> EncodedType.Class(typeDefOrRef tdef)
-                | CliType.ValueType tdef -> EncodedType.ValueType(typeDefOrRef tdef)
-                | CliType.GenericClass inst -> EncodedType.GenericInst(getGenericInst false inst)
-                | CliType.GenericValueType inst -> EncodedType.GenericInst(getGenericInst true inst)
-                | CliType.SZArray elem -> EncodedType.SZArray(getEncodedType elem)
-                | CliType.Modified(modifiers, elem) when modifiers.IsDefaultOrEmpty -> getEncodedType elem
-                | CliType.Modified(modifiers, elem) -> EncodedType.Modified(getCustomModifiers modifiers, getEncodedType elem)
-                | CliType.Array(elem, shape) -> EncodedType.Array(getEncodedType elem, shape)
-                | CliType.TypeVar(GenericParamIndex i) -> EncodedType.Var(uint32 i)
-                | CliType.Primitive prim -> invalidOp(sprintf "Primitive types \"%A\" should not be cached" prim)
-
-        function // Ensures that only non-primitive types are cached.
-        | CliType.Primitive prim -> prim.Encoded
-        | cached -> lookup cached
-
-    let parameterList = MemberIndexCounter<ParamRow>()
-    let fieldList = MemberIndexCounter<FieldRow>()
-    let methodList = MemberIndexCounter<MethodDefRow>()
-    //property
-    //event
-
-    let metadataTokenSource =
-        { new MetadataTokenSource() with
-            member _.GetUserString(str: string) = builder.UserString.AddFolded str
-            member _.GetUserString(str: inref<ReadOnlyMemory<char>>) = builder.UserString.AddFolded str
-
-            member _.GetFieldToken field =
-                match field.Owner with
-                | TypeTok.Named(NamedType.DefinedType _) ->
-                    FieldMetadataToken.Def definedFieldLookup.[FieldTok.unsafeAs field]
-                | TypeTok.Named(NamedType.ReferencedType _) ->
-                    FieldMetadataToken.Ref referencedFieldLookup.[FieldTok.unsafeAs field]
-                | TypeTok.Specified _ ->
-                    // TODO: Fix! stack overflow occurs since type has not been finished adding because the method is trying to get the field and cannot get the field because the type has not been added yet
-                    // TODO: This is a mess, field ref might not even belong to a type or field in the Module
-                    match miscFieldLookup.TryGetValue field with
-                    | true, existing -> existing
-                    | false, _ -> serializer.AddMiscField &field // NOTE: This results in some fields being added twice.
-                    |> FieldMetadataToken.Ref
-
-            member _.GetMethodToken method =
-                match method.Owner with
-                | TypeTok.Named(NamedType.DefinedType _) ->
-                    MethodMetadataToken.Def definedMethodLookup.[MethodTok.unsafeAs method]
-                | TypeTok.Named(NamedType.ReferencedType _) ->
-                    MethodMetadataToken.Ref referencedMethodLookup.[MethodTok.unsafeAs method]
-
-            member _.GetTypeToken t = TypeMetadataToken.ofCodedIndex(typeDefOrRefOrSpec t) }
-
-    member private _.AddMiscField(field: inref<FieldTok>) =
-        let i =
-            builder.Tables.MemberRef.Add
-                { Class =
-                    match field.Owner with
-                    | TypeTok.Named named ->
-                        sprintf
-                            "Unexpected type definition or reference %O, only type specifications should be the parents of \
-                            these fields"
-                            named
-                        |> invalidOp
-                    | TypeTok.Specified tspec -> MemberRefParent.TypeSpec(getTypeSpec(getEncodedType tspec))
-                  Name = builder.Strings.Add field.Member.Name
-                  Signature = { MemberRefSig = (getFieldSig field.Member).FieldSig } }
-        miscFieldLookup.[field] <- i
-        i
-
-    member private _.SerializeAssemblyReferences() =
-        for assem in info.AssemblyReferences do
-            assemblyReferenceLookup.[assem] <-
-                builder.Tables.AssemblyRef.Add
-                    { MajorVersion = assem.Version.Major
-                      MinorVersion = assem.Version.Minor
-                      BuildNumber = assem.Version.Build
-                      RevisionNumber = assem.Version.Revision
-                      PublicKeyOrToken = builder.Blob.Add assem.PublicKeyOrToken
-                      Name = builder.Strings.Add assem.Name
-                      Culture = builder.Strings.Add assem.Culture
-                      HashValue = builder.Blob.Add assem.HashValue }
-
-    // TODO: Prevent weird infinite loop thing, when the parent of the field ref is searched for, it notices that it (obviously) hasn't added the parent TypeDef yet, causing the search for the FieldToken used in the method body to occur before the MemberRef table even has anything in it yet.
-    member private this.SerializeGenericMembers() =
-        for i = 0 to info.FieldReferences.Count - 1 do this.AddMiscField(&info.FieldReferences.ItemRef i)
-
-    member private this.SerializeReferencedType(reference: ReferencedType) =
-        let members = info.ReferencedTypes.[reference]
-        match referencedTypeLookup.TryGetValue reference, reference with
-        | (true, i), _ -> i
-        | (false, _), ReferencedType.Reference reference'
-        | (false, _), ReferencedType.Generic(GenericType(reference', _)) ->
-            let rscope =
-                match reference'.ResolutionScope with
-                | TypeReferenceParent.Assembly assem -> ResolutionScope.AssemblyRef assemblyReferenceLookup.[assem]
-                | TypeReferenceParent.Type parent ->
-                    ResolutionScope.TypeRef(this.SerializeReferencedType parent)
-
-            let i =
-                builder.Tables.TypeRef.Add
-                    { ResolutionScope = rscope
-                      TypeName = builder.Strings.Add reference'.TypeName
-                      TypeNamespace = builder.Strings.Add reference'.TypeNamespace }
-
-            for field in members.Field do
-                referencedFieldLookup.[FieldTok.ofTypeRef reference field info.NamedTypes] <-
-                    builder.Tables.MemberRef.Add
-                        { Class = MemberRefParent.TypeRef i
-                          Name = builder.Strings.Add field.Name
-                          Signature = { MemberRefSig = getFieldSig(field).FieldSig } }
-
-            for method in members.Method do
-                referencedMethodLookup.[MethodTok.ofTypeRef reference method info.NamedTypes] <-
-                    builder.Tables.MemberRef.Add
-                        { Class = MemberRefParent.TypeRef i
-                          Name = builder.Strings.Add method.Name
-                          Signature =
-                            // TODO: Use separate lookup if method reference signature has any VarArgs.
-                            { MemberRefSig = getMethodSig(method).MethodDefSig } }
-
-            referencedTypeLookup.[reference] <- i
-            i
-
-    member private _.SerializeDefinedType(definition, members: DefinedTypeMembers) =
-        match definedTypeLookup.TryGetValue definition, definition with
-        | (true, i), _-> i
-        | (false, _), DefinedType.Definition definition'
-        | (false, _), DefinedType.Generic(GenericType(definition', _)) ->
-            let extends =
-                match definition'.Extends.Extends with
-                | ValueSome(TypeTok.Named tnamed) -> TypeDefOrRefEncoded.toCodedIndex(typeDefOrRef tnamed)
-                | ValueSome(TypeTok.Specified tspec) -> TypeDefOrRef.Spec(getTypeSpec(getEncodedType tspec))
-                | ValueNone -> Unchecked.defaultof<TypeDefOrRef> // Null
-
-            fieldList.Reset()
-
-            for field in members.Field do
-                let i' =
-                    builder.Tables.Field.Add
-                        { Flags = field.Flags
-                          Name = builder.Strings.Add field.Name
-                          Signature = getFieldSig field }
-
-                fieldList.Last <- i'
-                definedFieldLookup.[FieldTok.ofTypeDef definition field info.NamedTypes] <- i'
-
-            methodList.Reset()
-
-            for method in members.Method do
-                parameterList.Reset()
-
-                for i = 0 to method.Parameters.Length - 1 do
-                    let param = &method.Parameters.ItemRef i
-                    parameterList.Last <-
-                        builder.Tables.Param.Add
-                            { Flags = Parameter.flags &param
-                              Name = builder.Strings.Add param.ParamName
-                              Sequence = Checked.uint16(i + 1) }
-
-                let i =
-                    { Rva =
-                        match members.MethodBodyLookup.TryGetValue method with
-                        | true, body' ->
-                            let writer =
-                                DefinedMethodBodyWriter (
-                                    getLocalsSig,
-                                    metadataTokenSource,
-                                    body'
-                                )
-
-                            builder.MethodBodies.Add &writer
-                        | false, _ -> MethodBodyLocation 0u
-                      ImplFlags = method.ImplFlags
-                      Flags = method.Flags
-                      Name = builder.Strings.Add method.Name
-                      Signature = getMethodSig method
-                      ParamList = parameterList.First }
-                    |> builder.Tables.MethodDef.Add
-
-                methodList.Last <- i
-                definedMethodLookup.[MethodTok.ofTypeDef definition method info.NamedTypes] <- i
-
-            let i =
-                builder.Tables.TypeDef.Add
-                    { Flags = definition'.Flags
-                      TypeName = builder.Strings.Add definition'.TypeName
-                      TypeNamespace = builder.Strings.Add definition'.TypeNamespace
-                      Extends = extends
-                      FieldList = fieldList.First
-                      MethodList = methodList.First }
-
-            definedTypeLookup.[definition] <- i
-
-            match definition with
-            | DefinedType.Generic generic -> genericParamLookup.Add(TypeOrMethodDef.Type i, generic.Parameters)
-            | _ -> ()
-
-            i
-
-    member private _.SerializeGenericParameters() =
-        for KeyValue(owner, parameters) in genericParamLookup do
-            for i = 0 to parameters.Length - 1 do
-                let parameter = &parameters.ItemRef i
-
-                let parami =
-                    builder.Tables.GenericParam.Add
-                        { Number = uint16 i
-                          Flags = parameter.Flags
-                          Owner = owner
-                          Name = builder.Strings.Add parameter.Name }
-
-                for constr in parameter.Constraints do
-                    // Should be TypeDef or Ref or Spec
-                    { Owner = parami
-                      Constraint = typeDefOrRefOrSpec constr }
-                    |> builder.Tables.GenericParamConstraint.Add
-                    |> ignore
-
-        if builder.Tables.GenericParam.Count > 0 then
-            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.GenericParam
-
-        if builder.Tables.GenericParamConstraint.Count > 0 then
-            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.GenericParamConstraint
-
-    member private _.SerializeCustomAttributes() =
-        if info.CustomAttributes.OwnerCount > 0 then
-            let lookup = SortedList<HasCustomAttribute, _> info.CustomAttributes.OwnerCount
-
-            for KeyValue({ CustomAttribute.Owner = parent }, attrs) in info.CustomAttributes do
-                let index =
-                    if Object.ReferenceEquals(parent, ModuleType.Definition') then
-                        HasCustomAttribute.Module
-                    elif info.Assembly.IsSome && Object.ReferenceEquals(parent, info.Assembly.Value) then
-                        HasCustomAttribute.Assembly assemblyDefIndex.Value
-                    else
-                        match parent with
-                        | _ ->
-                            parent.GetType().Name
-                            |> sprintf "Unsupported custom attribute parent type %s"
-                            |> invalidOp
-                lookup.[index] <- attrs
-
-            for KeyValue(parent, attrs: ImmutableArray<CustomAttribute.Constructed>.Builder) in lookup do
-                for i = 0 to attrs.Count - 1 do
-                    let attribute = &attrs.ItemRef i
-                    { Parent = parent
-                      Type =
-                        let ctor = attribute.Constructor.Constructor
-                        match ctor.Owner with
-                        | TypeTok.Named(NamedType.DefinedType _) ->
-                            CustomAttributeType.MethodDef definedMethodLookup.[MethodTok.unsafeAs ctor]
-                        | TypeTok.Named(NamedType.ReferencedType _) ->
-                            CustomAttributeType.MemberRef referencedMethodLookup.[MethodTok.unsafeAs ctor]
-                      Value = builder.Blob.Add &attribute.Signature }
-                    |> builder.Tables.CustomAttribute.Add
-                    |> ignore
-
-            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.CustomAttribute
-
-    member this.Serialize() =
-        this.SerializeAssemblyReferences()
-
-        this.SerializeGenericMembers()
-
-        for tref in info.ReferencedTypes.Keys do this.SerializeReferencedType tref |> ignore
-
-        this.SerializeDefinedType(ModuleType.Definition', info.GlobalMembers) |> ignore
-
-        // TODO: Sort TypeDef table such that enclosing classes "precede the definition of all classes it encloses" (II.22)
-        for KeyValue(tdef, members) in info.DefinedTypes do this.SerializeDefinedType(tdef, members) |> ignore
-
-        builder.EntryPointToken <-
-            match !info.EntryPoint with
-            | NoEntryPoint -> EntryPointToken.Null
-            | EntryPointMethod call -> EntryPointToken.MethodDef definedMethodLookup.[MethodTok.unsafeAs call.Token]
-
-        this.SerializeGenericParameters()
-
-        this.SerializeCustomAttributes()
-
-        builder
 
 [<IsReadOnly; Struct>]
 type DefinedTypeMembers<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
@@ -792,6 +349,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
           Assembly = assembly
           AssemblyReferences = HashSet<ReferencedAssembly>(defaultArg assemblyRefCapacity 8)
           DefinedTypes = Dictionary typeDefCapacity'
+          NestedTypes = Dictionary()
+          NonNestedTypes = List typeDefCapacity'
           ReferencedTypes = Dictionary typeRefCapacity'
           FieldReferences = ImmutableArray.CreateBuilder()
           EntryPoint = ref Unchecked.defaultof<EntryPoint> }
@@ -815,7 +374,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
     member _.Assembly = info.Assembly
     member _.AssemblyCustomAttributes = assemblyDefAttributes
 
-    member this.DefineAssembly(assembly: DefinedAssembly) =
+    member _.DefineAssembly(assembly: DefinedAssembly) =
         match info.Assembly with
         | Some existing -> ValidationResult.Error(failwith "TODO: Warning for duplicate assembly definition")
         | None ->
@@ -836,7 +395,20 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         | false, _ ->
             // TODO: Check that extends and nestedclass are already contained in the Module.
             let members = defineMembersFor tdef
-            info.DefinedTypes.[tdef] <- members
+            info.DefinedTypes.Add(tdef, members)
+
+            match tdef.EnclosingClass with
+            | ValueSome parent ->
+                let nested =
+                    match info.NestedTypes.TryGetValue parent with
+                    | true, existing -> existing
+                    | false, _ ->
+                        let nested' = List()
+                        info.NestedTypes.Add(parent, nested')
+                        nested'
+                nested.Add tdef
+            | ValueNone -> info.NonNestedTypes.Add tdef
+
             Ok members
 
     member this.DefineType definition =
@@ -875,7 +447,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         | false, _ ->
             // TODO: Check that the resolution scope is already accounted for.
             let members = ReferencedTypeMembers(reference, warnings, info.NamedTypes)
-            info.ReferencedTypes.[reference] <- members
+            info.ReferencedTypes.Add(reference, members)
             Ok members
 
     member this.ReferenceType(reference: TypeReference<'Kind>) =
@@ -886,7 +458,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
     // TODO: Implement lookup for MemberRefs created from fields and methods of generic types.
 
-    member this.GenericInstantiation(isValueType, field: FieldTok, typeGenericParameters) = // TODO: For type defs, how to allow usage of initializer for TypeVar
+    member _.GenericInstantiation(isValueType, field: FieldTok, typeGenericParameters) =
         let inline create instantiated =
             let inst = GenericType.instantiate instantiated typeGenericParameters
             let field' =
@@ -919,4 +491,486 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                   NamedArguments = ImmutableArray.Empty }
         | None -> Some(noImpl "TODO: Error for not assembly")
 
-    member _.Serialize() = ModuleBuilderSerializer(info).Serialize()
+    member _.CreateMetadata() =
+        let builder =
+            CliMetadataBuilder (
+                info.Header,
+                info.Root,
+                FSharpIL.Writing.Cil.MethodBodyList(),
+                (fun str guid _ -> ModuleRow.create (str.Add info.Name) (guid.Add info.Mvid)),
+                StringsStreamBuilder 512,
+                UserStringStreamBuilder 1,
+                GuidStreamBuilder 1,
+                BlobStreamBuilder 256
+            )
+
+        let assemblyDefIndex =
+            match info.Assembly with
+            | Some assem ->
+                { HashAlgId = AssemblyHashAlgorithm.SHA1 // TODO: Set the HashAlgId properly
+                  MajorVersion = assem.Version.Major
+                  MinorVersion = assem.Version.Minor
+                  BuildNumber = assem.Version.Build
+                  RevisionNumber = assem.Version.Revision
+                  Flags = if assem.PublicKey.IsDefaultOrEmpty then AssemblyFlags.None else AssemblyFlags.PublicKey // TODO: Allow setting of other assembly flags
+                  PublicKey = builder.Blob.Add assem.PublicKey
+                  Name = builder.Strings.Add assem.Name
+                  Culture = builder.Strings.Add assem.Culture }
+                |> builder.Tables.Assembly.Add
+                |> ValueSome
+            | None -> ValueNone
+
+        let assemblyReferenceLookup = Dictionary<ReferencedAssembly, _> info.AssemblyReferences.Count
+
+        let referencedTypeLookup = Dictionary<ReferencedType, _> info.ReferencedTypes.Count
+        let referencedFieldLookup = Dictionary<FieldTok<ReferencedType, ReferencedField>, _>()
+        let referencedMethodLookup = Dictionary<MethodTok<ReferencedType, ReferencedMethod>, _>()
+        
+        let serializedDefinedTypes = List<DefinedType>(info.DefinedTypes.Count + 1)
+        let definedTypeLookup = Dictionary<DefinedType, _> serializedDefinedTypes.Capacity
+        let definedFieldLookup = Dictionary<FieldTok<DefinedType, DefinedField>, _>()
+        let definedMethodLookup = Dictionary<MethodTok<DefinedType, DefinedMethod>, _>()
+
+        let miscFieldLookup = Dictionary<FieldTok, _>()
+
+        let genericParamLookup = ImmutableSortedDictionary.CreateBuilder<_, ImmutableArray<GenericParam>>()
+
+        let createBlobLookup comparer writer =
+            let lookup = Dictionary<'Blob, 'Offset>(comparer = comparer)
+        
+            fun blob ->
+                match lookup.TryGetValue blob with
+                | true, existing -> existing
+                | false, _ ->
+                    let offset = writer blob
+                    lookup.Add(blob, offset)
+                    offset
+
+        let mutable serializeDefinedType = Unchecked.defaultof<DefinedType -> TableIndex<_>>
+        let mutable serializeReferencedType = Unchecked.defaultof<ReferencedType -> TableIndex<_>>
+
+        let typeDefEncoded definition =
+            TypeDefOrRefEncoded.Def(serializeDefinedType definition)
+
+        let typeRefEncoded reference =
+            TypeDefOrRefEncoded.Ref(serializeReferencedType reference)
+
+        let typeDefOrRef = // TODO: How to deal with generic types that are missing their type parameters?
+            function
+            | NamedType.DefinedType tdef -> typeDefEncoded tdef
+            | NamedType.ReferencedType tref -> typeRefEncoded tref
+
+        let mutable getEncodedType = Unchecked.defaultof<CliType -> EncodedType>
+
+        let rec typeDefOrRefOrSpec =
+            function
+            | TypeTok.Named tdef -> TypeDefOrRefEncoded.toCodedIndex(typeDefOrRef tdef)
+            | TypeTok.Specified tspec -> TypeDefOrRef.Spec(getTypeSpec(getEncodedType tspec))
+
+        and getCustomModifiers (modifiers: ImmutableArray<ModifierType>) =
+            let rec inner i modifiers' =
+                if i >= 0 then
+                    let modf' = modifiers.[i]
+                    inner
+                        (i - 1)
+                        ({ CustomMod.Required = modf'.Required; ModifierType = typeDefOrRefOrSpec modf'.Modifier } :: modifiers')
+                else modifiers'
+            inner (modifiers.Length - 1) List.empty
+
+        and getTypeSpec =
+            createBlobLookup EqualityComparer.Default <| fun (tspec: EncodedType) ->
+                builder.Tables.TypeSpec.Add { TypeSpec = builder.Blob.Add tspec }
+
+        let getParameterTypes (parameters: ImmutableArray<ParameterType>) =
+            if parameters.IsDefaultOrEmpty
+            then ImmutableArray<ParamItem>.Empty
+            else
+                let mutable parameters' = Array.zeroCreate<ParamItem> parameters.Length
+
+                for i = 0 to parameters'.Length - 1 do
+                    parameters'.[i] <-
+                        match parameters.[i] with
+                        | ParameterType.T ptype ->
+                            ParamItem.Type(getEncodedType ptype)
+                        | ParameterType.ByRef(modifiers, ptype) ->
+                            ParamItem.ByRef(getCustomModifiers modifiers, getEncodedType ptype)
+                        | ParameterType.TypedByRef modifiers ->
+                            ParamItem.TypedByRef(getCustomModifiers modifiers)
+
+                Unsafe.As &parameters'
+
+        let getMethodSig =
+            createBlobLookup Method.signatureComparer <| fun (method: Method) ->
+                let signature =
+                    { HasThis = method.HasThis
+                      CallingConvention = method.CallingConvention
+                      ReturnType =
+                        match method.ReturnType with
+                        | ReturnType.T ret -> RetTypeItem.Type(getEncodedType ret)
+                        | ReturnType.Void modifiers -> RetTypeItem.Void(getCustomModifiers modifiers)
+                        | ReturnType.ByRef(modifiers, ret) -> RetTypeItem.ByRef(getCustomModifiers modifiers, getEncodedType ret)
+                        | ReturnType.TypedByRef modifiers -> RetTypeItem.TypedByRef(getCustomModifiers modifiers)
+                      Parameters = getParameterTypes method.ParameterTypes }
+                builder.Blob.Add &signature
+
+        let getFieldSig =
+            createBlobLookup Field.signatureComparer <| fun (field: Field) ->
+                let signature = { FieldType = getEncodedType field.Type }
+                builder.Blob.Add &signature
+
+        let getLocalsSig =
+            let inline constraints pinned =
+                if pinned then LocalVariable.pinned else List.empty
+
+            let lookup =
+                createBlobLookup Equatable.BlockComparer <| fun (locals: ImmutableArray<LocalType>) ->
+                    let mutable locals' = Array.zeroCreate<LocalVariable> locals.Length
+
+                    for i = 0 to locals'.Length - 1 do
+                        locals'.[i] <-
+                            match locals.[i] with
+                            | LocalType.T(modifiers, pinned, ltype) ->
+                                LocalVariable.Type(getCustomModifiers modifiers, constraints pinned, getEncodedType ltype)
+                            | LocalType.ByRef(modifiers, pinned, ltype) ->
+                                LocalVariable.ByRef(getCustomModifiers modifiers, constraints pinned, getEncodedType ltype)
+                            | LocalType.TypedByRef modifiers ->
+                                LocalVariable.TypedByRef(getCustomModifiers modifiers)
+
+                    failwith "TODO: Add locals to blob stream": TableIndex<StandaloneSigRow>
+                    //builder.Blob.Add(Unsafe.As &locals')
+
+            fun (locals: ImmutableArray<_>) ->
+                if locals.IsDefaultOrEmpty
+                then { TableIndex = 0u }
+                else lookup locals
+
+        serializeDefinedType <- fun definition ->
+            match definedTypeLookup.TryGetValue definition with
+            | true, existing -> existing
+            | false, _ ->
+                let definition' =
+                    match definition with
+                    | DefinedType.Definition tdef
+                    | DefinedType.Generic(GenericType(tdef, _)) -> tdef
+
+                let extends =
+                    match definition'.Extends.Extends with
+                    | ValueSome(TypeTok.Named tnamed) -> TypeDefOrRefEncoded.toCodedIndex(typeDefOrRef tnamed)
+                    | ValueSome(TypeTok.Specified tspec) -> TypeDefOrRef.Spec(getTypeSpec(getEncodedType tspec))
+                    | ValueNone -> Unchecked.defaultof<TypeDefOrRef> // Null
+
+                // The defined fields and methods are added later on in serialization to avoid infinite loops. If the members
+                // were added here instead, any MemberRef used in one of the methods would need to be resolved, but the type has
+                // not been added yet, so it attempts to add all of the members again, then sees that the same MemberRef has
+                // still not been resolved, looping forever.
+                let i =
+                    builder.Tables.TypeDef.Add
+                        { Flags = definition'.Flags
+                          TypeName = builder.Strings.Add definition'.TypeName
+                          TypeNamespace = builder.Strings.Add definition'.TypeNamespace
+                          Extends = extends
+                          FieldList = Unchecked.defaultof<TableIndex<_>>
+                          MethodList = Unchecked.defaultof<TableIndex<_>> }
+
+                definedTypeLookup.[definition] <- i
+                serializedDefinedTypes.Add definition
+
+                match definition with
+                | DefinedType.Generic generic -> genericParamLookup.Add(TypeOrMethodDef.Type i, generic.Parameters)
+                | _ -> ()
+
+                i
+
+        serializeReferencedType <- fun reference ->
+            match referencedTypeLookup.TryGetValue reference with
+            | true, existing -> existing
+            | false, _ ->
+                let members = info.ReferencedTypes.[reference]
+
+                let reference' =
+                    match reference with
+                    | ReferencedType.Reference tref
+                    | ReferencedType.Generic(GenericType(tref, _)) -> tref
+
+                let rscope =
+                    match reference'.ResolutionScope with
+                    | TypeReferenceParent.Assembly assem -> ResolutionScope.AssemblyRef assemblyReferenceLookup.[assem]
+                    | TypeReferenceParent.Type parent ->
+                        ResolutionScope.TypeRef(serializeReferencedType parent)
+
+                let i =
+                    builder.Tables.TypeRef.Add
+                        { ResolutionScope = rscope
+                          TypeName = builder.Strings.Add reference'.TypeName
+                          TypeNamespace = builder.Strings.Add reference'.TypeNamespace }
+
+                for field in members.Field do
+                    referencedFieldLookup.[FieldTok.ofTypeRef reference field info.NamedTypes] <-
+                        builder.Tables.MemberRef.Add
+                            { Class = MemberRefParent.TypeRef i
+                              Name = builder.Strings.Add field.Name
+                              Signature = { MemberRefSig = getFieldSig(field).FieldSig } }
+
+                for method in members.Method do
+                    referencedMethodLookup.[MethodTok.ofTypeRef reference method info.NamedTypes] <-
+                        builder.Tables.MemberRef.Add
+                            { Class = MemberRefParent.TypeRef i
+                              Name = builder.Strings.Add method.Name
+                              Signature =
+                                // TODO: Use separate lookup if method reference signature has any VarArgs.
+                                { MemberRefSig = getMethodSig(method).MethodDefSig } }
+
+                referencedTypeLookup.[reference] <- i
+                i
+
+        getEncodedType <- // TODO: Implement replacement of long form for primitive types.
+            let getGenericInst isValueType (inst: GenericTypeInstantiation) =
+                let arguments = &inst.Arguments
+                let mutable arguments' = Array.zeroCreate<EncodedType> arguments.Count
+
+                for i = 0 to arguments'.Length - 1 do arguments'.[i] <- getEncodedType arguments.[i]
+
+                { IsValueType = isValueType
+                  GenericInst.GenericType =
+                    match inst.Instantiated with
+                    | GenericType.Defined definition -> typeDefEncoded(DefinedType.Generic definition)
+                    | GenericType.Referenced reference -> typeRefEncoded(ReferencedType.Generic reference)
+                  GenericArguments = { GenericArgList.GenArgs = Unsafe.As &arguments' } }
+
+            let lookup =
+                createBlobLookup EqualityComparer.Default <| // TODO: Make a EncodedTypeCache class, and use it here.
+                    function
+                    | CliType.Class tdef -> EncodedType.Class(typeDefOrRef tdef)
+                    | CliType.ValueType tdef -> EncodedType.ValueType(typeDefOrRef tdef)
+                    | CliType.GenericClass inst -> EncodedType.GenericInst(getGenericInst false inst)
+                    | CliType.GenericValueType inst -> EncodedType.GenericInst(getGenericInst true inst)
+                    | CliType.SZArray elem -> EncodedType.SZArray(getEncodedType elem)
+                    | CliType.Modified(modifiers, elem) when modifiers.IsDefaultOrEmpty -> getEncodedType elem
+                    | CliType.Modified(modifiers, elem) -> EncodedType.Modified(getCustomModifiers modifiers, getEncodedType elem)
+                    | CliType.Array(elem, shape) -> EncodedType.Array(getEncodedType elem, shape)
+                    | CliType.TypeVar(GenericParamIndex i) -> EncodedType.Var(uint32 i)
+                    | CliType.Primitive prim -> invalidOp(sprintf "Primitive types \"%A\" should not be cached" prim)
+
+            function // Ensures that only non-primitive types are cached.
+            | CliType.Primitive prim -> prim.Encoded
+            | cached -> lookup cached
+
+        let serializeMiscField (field: FieldTok) =
+            match miscFieldLookup.TryGetValue field with
+            | true, existing -> existing
+            | false, _ ->
+                let i =
+                    builder.Tables.MemberRef.Add
+                        { Class =
+                            match field.Owner with
+                            | TypeTok.Named named ->
+                                sprintf
+                                    "Unexpected type definition or reference %O, only type specifications should be the parents of \
+                                    these fields"
+                                    named
+                                |> invalidOp
+                            | TypeTok.Specified tspec -> MemberRefParent.TypeSpec(getTypeSpec(getEncodedType tspec))
+                          Name = builder.Strings.Add field.Member.Name
+                          Signature = { MemberRefSig = (getFieldSig field.Member).FieldSig } }
+                miscFieldLookup.Add(field, i)
+                i
+
+        for assem in info.AssemblyReferences do
+            assemblyReferenceLookup.[assem] <-
+                builder.Tables.AssemblyRef.Add
+                    { MajorVersion = assem.Version.Major
+                      MinorVersion = assem.Version.Minor
+                      BuildNumber = assem.Version.Build
+                      RevisionNumber = assem.Version.Revision
+                      PublicKeyOrToken = builder.Blob.Add assem.PublicKeyOrToken
+                      Name = builder.Strings.Add assem.Name
+                      Culture = builder.Strings.Add assem.Culture
+                      HashValue = builder.Blob.Add assem.HashValue }
+
+        for tref in info.ReferencedTypes.Keys do serializeReferencedType tref |> ignore
+
+        serializeDefinedType ModuleType.Definition' |> ignore // Serialize the <Module> special class.
+        
+        match info.NestedTypes.TryGetValue ModuleType.Definition' with
+        | true, existing -> for child in existing do serializeDefinedType child |> ignore
+        | false, _ -> ()
+
+        // Enclosing classes "precede the definition of all classes it encloses" (II.22)
+        for KeyValue(parent, nested) in info.NestedTypes do
+            if Object.ReferenceEquals(parent, ModuleType.Definition') |> not then
+                serializeDefinedType parent |> ignore
+                for child in nested do serializeDefinedType child |> ignore
+
+        for tdef in info.NonNestedTypes do serializeDefinedType tdef |> ignore
+
+        let metadataTokenSource =
+            { new MetadataTokenSource() with
+                member _.GetUserString(str: string) = builder.UserString.AddFolded str
+                member _.GetUserString(str: inref<ReadOnlyMemory<char>>) = builder.UserString.AddFolded str
+
+                member _.GetFieldToken field =
+                    match field.Owner with
+                    | TypeTok.Named(NamedType.DefinedType _) ->
+                        FieldMetadataToken.Def definedFieldLookup.[FieldTok.unsafeAs field]
+                    | TypeTok.Named(NamedType.ReferencedType _) ->
+                        FieldMetadataToken.Ref referencedFieldLookup.[FieldTok.unsafeAs field]
+                    | TypeTok.Specified _ -> FieldMetadataToken.Ref miscFieldLookup.[field] // TODO: Fix, this might not work.
+
+                member _.GetMethodToken method =
+                    match method.Owner with
+                    | TypeTok.Named(NamedType.DefinedType _) ->
+                        MethodMetadataToken.Def definedMethodLookup.[MethodTok.unsafeAs method]
+                    | TypeTok.Named(NamedType.ReferencedType _) ->
+                        MethodMetadataToken.Ref referencedMethodLookup.[MethodTok.unsafeAs method]
+
+                member _.GetTypeToken t = TypeMetadataToken.ofCodedIndex(typeDefOrRefOrSpec t) }
+
+        let parameterList = MemberIndexCounter<ParamRow>()
+        let fieldList = MemberIndexCounter<FieldRow>()
+        let methodList = MemberIndexCounter<MethodDefRow>()
+        //property and event
+
+        let serializeDefinedMembers parent members =
+            let members' =
+                match members with
+                | ValueNone -> info.DefinedTypes.[parent]
+                | ValueSome members -> members
+
+            fieldList.Reset()
+
+            for field in members'.Field do
+                let i' =
+                    builder.Tables.Field.Add
+                        { Flags = field.Flags
+                          Name = builder.Strings.Add field.Name
+                          Signature = getFieldSig field }
+
+                fieldList.Last <- i'
+                definedFieldLookup.[FieldTok.ofTypeDef parent field info.NamedTypes] <- i'
+
+            methodList.Reset() // TODO: Consider having another loop to add method definitions further down.
+
+            for method in members'.Method do
+                parameterList.Reset()
+
+                for i = 0 to method.Parameters.Length - 1 do
+                    let param = &method.Parameters.ItemRef i
+                    parameterList.Last <-
+                        builder.Tables.Param.Add
+                            { Flags = Parameter.flags &param
+                              Name = builder.Strings.Add param.ParamName
+                              Sequence = Checked.uint16(i + 1) }
+
+                let mutable row =
+                    { Rva = Unchecked.defaultof<MethodBodyLocation>
+                      ImplFlags = method.ImplFlags
+                      Flags = method.Flags
+                      Name = builder.Strings.Add method.Name
+                      Signature = getMethodSig method
+                      ParamList = parameterList.First }
+
+                let i' = builder.Tables.MethodDef.Add &row
+
+                methodList.Last <- i'
+                definedMethodLookup.[MethodTok.ofTypeDef parent method info.NamedTypes] <- i'
+
+                let body =
+                    match members'.MethodBodyLookup.TryGetValue method with
+                    | true, body' ->
+                        let writer =
+                            DefinedMethodBodyWriter (
+                                getLocalsSig,
+                                metadataTokenSource,
+                                body'
+                            )
+
+                        builder.MethodBodies.Add &writer
+                    | false, _ -> MethodBodyLocation 0u
+
+                let row' =
+                    { row with
+                        Rva =
+                            match members'.MethodBodyLookup.TryGetValue method with
+                            | true, body' ->
+                                let writer = DefinedMethodBodyWriter(getLocalsSig, metadataTokenSource, body')
+                                builder.MethodBodies.Add &writer
+                            | false, _ -> MethodBodyLocation 0u }
+
+                builder.Tables.MethodDef.[i'] <- &row'
+
+            // event and property
+
+            let parenti = definedTypeLookup.[parent]
+            let parent' =
+                { builder.Tables.TypeDef.[parenti] with
+                    MethodList = methodList.First
+                    FieldList = fieldList.First }
+
+            builder.Tables.TypeDef.[parenti] <- &parent'
+
+        serializeDefinedMembers ModuleType.Definition' (ValueSome info.GlobalMembers)
+        for i = 1 to serializedDefinedTypes.Count - 1 do serializeDefinedMembers serializedDefinedTypes.[i] ValueNone
+
+        for KeyValue(owner, parameters) in genericParamLookup do
+            for i = 0 to parameters.Length - 1 do
+                let parameter = &parameters.ItemRef i
+
+                let parami =
+                    { Number = uint16 i
+                      Flags = parameter.Flags
+                      Owner = owner
+                      Name = builder.Strings.Add parameter.Name }
+                    |> builder.Tables.GenericParam.Add
+
+                for constr in parameter.Constraints do
+                    { Owner = parami
+                      Constraint = typeDefOrRefOrSpec constr }
+                    |> builder.Tables.GenericParamConstraint.Add
+                    |> ignore
+
+        if builder.Tables.GenericParam.Count > 0 then
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.GenericParam
+
+        if builder.Tables.GenericParamConstraint.Count > 0 then
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.GenericParamConstraint
+
+        if info.CustomAttributes.OwnerCount > 0 then
+            let lookup = SortedList<HasCustomAttribute, _> info.CustomAttributes.OwnerCount
+
+            for KeyValue({ CustomAttribute.Owner = parent }, attrs) in info.CustomAttributes do
+                let index =
+                    if Object.ReferenceEquals(parent, ModuleType.Definition') then
+                        HasCustomAttribute.Module
+                    elif info.Assembly.IsSome && Object.ReferenceEquals(parent, info.Assembly.Value) then
+                        HasCustomAttribute.Assembly assemblyDefIndex.Value
+                    else
+                        match parent with
+                        | _ ->
+                            parent.GetType().Name
+                            |> sprintf "Unsupported custom attribute parent type %s"
+                            |> invalidOp
+                lookup.[index] <- attrs
+
+            for KeyValue(parent, attrs: ImmutableArray<CustomAttribute.Constructed>.Builder) in lookup do
+                for i = 0 to attrs.Count - 1 do
+                    let attribute = &attrs.ItemRef i
+                    { Parent = parent
+                      Type =
+                        let ctor = attribute.Constructor.Constructor
+                        match ctor.Owner with
+                        | TypeTok.Named(NamedType.DefinedType _) ->
+                            CustomAttributeType.MethodDef definedMethodLookup.[MethodTok.unsafeAs ctor]
+                        | TypeTok.Named(NamedType.ReferencedType _) ->
+                            CustomAttributeType.MemberRef referencedMethodLookup.[MethodTok.unsafeAs ctor]
+                      Value = builder.Blob.Add &attribute.Signature }
+                    |> builder.Tables.CustomAttribute.Add
+                    |> ignore
+
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.CustomAttribute
+
+        builder.EntryPointToken <-
+            match !info.EntryPoint with
+            | NoEntryPoint -> EntryPointToken.Null
+            | EntryPointMethod call -> EntryPointToken.MethodDef definedMethodLookup.[MethodTok.unsafeAs call.Token]
+
+        builder

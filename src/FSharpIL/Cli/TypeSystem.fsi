@@ -265,9 +265,12 @@ type ModifierType with
     new: required: bool * modifier: TypeTok -> ModifierType
 
 type NamedType with
-    member TypeName: Identifier
-    member TypeNamespace: Identifier voption
-    member EnclosingType: NamedType voption
+    member inline TypeName: Identifier
+    member inline TypeNamespace: Identifier voption
+    member inline EnclosingType: NamedType voption
+
+type DefinedType with
+    member inline EnclosingClass: DefinedType voption
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type TypeVisibility =
