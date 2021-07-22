@@ -62,7 +62,7 @@ module Branch =
     val setTarget: branch: byref<BranchTarget> -> destination: Label -> unit
 
 /// <summary>
-/// Contains functions for generating the <c>ldstr</c> instruction, which loads a literal string from the <c>#US</c> heap
+/// Contains functions for generating the <c>ldstr</c> (0x72) instruction, which loads a literal string from the <c>#US</c> heap
 /// (III.4.16).
 /// </summary>
 /// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
@@ -92,6 +92,22 @@ module Call =
 
     /// <summary>(0x6F) Writes an instruction that calls the <paramref name="method"/> associated with an object (III.4.2).</summary>
     val callvirt: stream: byref<MethodBodyBuilder> -> method: MethodMetadataToken -> hasRetValue: bool -> unit
+
+/// <summary>
+/// Contains functions for generating the <c>newobj</c> (0x73) instruction, which "creates a new object or a new instance of a value
+/// type" (III.4.21).
+/// </summary>
+/// <remarks>For value types, the <c>initobj</c> is usually used instead.</remarks>
+module Newobj =
+    val ofToken : stream: byref<MethodBodyBuilder> -> ctor: MethodMetadataToken -> unit
+
+    val ofMethod : stream: byref<MethodBodyBuilder> -> ctor: MethodTok -> tokens: MetadataTokenSource -> unit
+
+    val ofDefinedMethod :
+        stream: byref<MethodBodyBuilder> ->
+        ctor: MethodTok<TypeDefinition<'Kind>, MethodDefinition<MethodKinds.ObjectConstructor>> ->
+        tokens: MetadataTokenSource ->
+        unit
 
 // TODO: Have module for versions of field instructions that take a FieldMetadataToken instead.
 

@@ -111,7 +111,16 @@ type TypeMemberExtensions =
         body: DefinedMethodBody * // TODO: Define helper class for emitting call to base constructor before running rest of ctor code.
         attributes: CustomAttributeBuilder ->
             ValidationResult<MethodTok<TypeDefinition<'Kind>, MethodDefinition<MethodKinds.ObjectConstructor>>>
-            when 'Kind :> TypeKinds.IHasConstructor
+            when 'Kind :> TypeKinds.IHasConstructors
+
+    [<Extension>]
+    static member DefineMethod :
+        members: DefinedTypeMembers<'Kind> *
+        method: MethodDefinition<MethodKinds.Instance> *
+        body: DefinedMethodBody *
+        attributes: CustomAttributeBuilder ->
+            ValidationResult<MethodTok<TypeDefinition<'Kind>, MethodDefinition<MethodKinds.Instance>>>
+            when 'Kind :> TypeKinds.IHasInstanceMethods
 
     //static member DefineEntryPoint
 
@@ -199,6 +208,11 @@ type CliModuleBuilder =
         isValueType: bool * // TODO: Use union type for this.
         field: FieldTok *
         typeGenericParameters: GenericType.ArgumentInitializer -> FieldTok
+
+    member GenericInstantiation: // TODO: Make overload that allows setting of generic parameters of the method.
+        isValueType: bool *
+        method: MethodTok *
+        typeGenericParameters: GenericType.ArgumentInitializer -> MethodTok
 
     // TODO: Add helper methods for making Extends instances, maybe even replace public constructors for ClassExtends.
 

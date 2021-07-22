@@ -94,7 +94,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     MemberVisibility.Private,
                     flags = FieldAttributes.InitOnly,
                     name = Identifier.ofStr "items",
-                    signature = CliType.TypeVar arrlist.Parameters.[0]
+                    signature = CliType.SZArray(CliType.TypeVar arrlist.Parameters.[0])
                 )
 
             members.Members.DefineField(definition, attributes = ValueNone)
@@ -113,7 +113,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
             members.Members.DefineField(definition, attributes = ValueNone)
 
-        let index' = builder.GenericInstantiation(false, items.Token, fun _ _ -> t)
+        let index' = builder.GenericInstantiation(false, index.Token, fun _ _ -> t)
 
         // public new: capacity: int32 -> ArrayList<'T>
         let! ctor =
@@ -150,6 +150,26 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
             members.DefineMethod(definition, body, attributes = ValueNone)
 
+        // member public Add: 'T -> unit
+        let! add =
+            let definition =
+                DefinedMethod.Instance (
+                    MemberVisibility.Public,
+                    flags = MethodAttributes.None,
+                    returnType = ReturnType.Void',
+                    name = MethodName.ofStr "Add",
+                    parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.I4),
+                    parameterList = fun _ _ -> Identifier.ofStr "capacity" |> Parameter.named
+                )
+
+            let body =
+                { new DefinedMethodBody() with
+                    override _.WriteInstructions(wr, tokens) =
+                        ret &wr
+                        wr.EstimatedMaxStack }
+
+            members.DefineMethod(definition, body, attributes = ValueNone)
+
         // static member public Main: unit -> unit
         let! _ =
             let main =
@@ -163,6 +183,10 @@ let example() = // TODO: Make helper function to add reference to System.Private
             let body =
                 { new DefinedMethodBody() with
                     override _.WriteInstructions(wr, tokens) =
+                        // TODO: Implement local variables first.
+
+                        pop &wr // TEMPORARY
+
                         ret &wr
                         wr.EstimatedMaxStack }
 

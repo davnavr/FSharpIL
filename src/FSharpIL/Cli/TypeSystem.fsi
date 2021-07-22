@@ -322,11 +322,15 @@ type GenericType<'Type when 'Type : not struct and 'Type :> IGenericType<'Type>>
 
 [<RequireQualifiedAccess>]
 module TypeKinds =
-    type IHasConstructor = interface end
+    /// Marker interface used to indicate that certain type definitions are allowed to have object constructors.
+    type IHasConstructors = interface end
+    /// Marker interface used to indicate that certain type definitions are allowed to have instance methods.
+    type IHasInstanceMethods = interface end
 
     type [<Struct>] ConcreteClass =
         interface IAttributeTag<TypeDefFlags>
-        interface IHasConstructor
+        interface IHasConstructors
+        interface IHasInstanceMethods
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
@@ -334,7 +338,8 @@ module TypeKinds =
 
     type [<Struct>] AbstractClass =
         interface IAttributeTag<TypeDefFlags>
-        interface IHasConstructor
+        interface IHasConstructors
+        interface IHasInstanceMethods
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
@@ -342,7 +347,8 @@ module TypeKinds =
 
     type [<Struct>] SealedClass =
         interface IAttributeTag<TypeDefFlags>
-        interface IHasConstructor
+        interface IHasConstructors
+        interface IHasInstanceMethods
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
@@ -350,7 +356,7 @@ module TypeKinds =
 
     type [<Struct>] StaticClass =
         interface IAttributeTag<TypeDefFlags>
-        interface IHasConstructor
+        interface IHasConstructors
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
@@ -358,7 +364,7 @@ module TypeKinds =
 
     type [<Struct>] Delegate =
         interface IAttributeTag<TypeDefFlags>
-        interface IHasConstructor
+        interface IHasConstructors
         interface TypeAttributes.ISerializableType
 
     type [<Struct>] Enum =
@@ -367,11 +373,13 @@ module TypeKinds =
 
     type [<Struct>] Interface =
         interface IAttributeTag<TypeDefFlags>
+        interface IHasInstanceMethods // Supports default interface methods.
         interface TypeAttributes.IHasStaticMethods
 
     type [<Struct>] ValueType =
         interface IAttributeTag<TypeDefFlags>
-        interface IHasConstructor
+        interface IHasConstructors
+        interface IHasInstanceMethods
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat

@@ -5,6 +5,7 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
 [<IsReadOnly; Struct>]
@@ -55,13 +56,20 @@ module ReturnType =
     val TypedByRef' : ReturnType
     val Void' : ReturnType
 
-[<AbstractClass>]
+[<Class>]
 type Method =
-    val HasThis: FSharpIL.Metadata.Signatures.MethodThis
-    val CallingConvention: FSharpIL.Metadata.Signatures.CallingConventions
+    val HasThis: MethodThis
+    val CallingConvention: CallingConventions
     val Name: Identifier
     val ReturnType: ReturnType
     val ParameterTypes: ImmutableArray<ParameterType>
+
+    internal new:
+        hasThis: MethodThis *
+        callingConvention: CallingConventions *
+        name: Identifier *
+        returnType: ReturnType *
+        parameterTypes: ImmutableArray<ParameterType> -> Method
 
     /// <summary>Gets a value indicating whether or not the method has a return value.</summary>
     /// <returns>
@@ -91,7 +99,7 @@ module Method =
 module MethodKinds =
     type IKind = interface
         inherit IAttributeTag<MethodDefFlags>
-        abstract MethodThis: FSharpIL.Metadata.Signatures.MethodThis
+        abstract MethodThis: MethodThis
     end
 
     type [<Struct>] Instance = interface IKind
@@ -112,7 +120,7 @@ type DefinedMethod =
     new:
         implFlags: MethodImplFlags *
         flags: MethodDefFlags *
-        methodThis: FSharpIL.Metadata.Signatures.MethodThis *
+        methodThis: MethodThis *
         returnType: ReturnType *
         name: MethodName *
         parameterTypes: ImmutableArray<ParameterType> *

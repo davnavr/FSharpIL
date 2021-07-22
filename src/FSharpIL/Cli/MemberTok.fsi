@@ -32,6 +32,8 @@ val inline internal (|MethodTok|) : method: MethodTok<'Owner, 'Method> -> struct
 
 [<RequireQualifiedAccess>]
 module MethodTok =
+    val internal create : owner: TypeTok -> method: Method -> MethodTok
+
     val internal unsafeAs : token: MethodTok -> MethodTok<'Owner, 'Method>
 
     val internal ofTypeDef :

@@ -35,9 +35,13 @@ let inline (|MethodTok|) (method: MethodTok<_, _>) = struct(method.Token.Owner, 
 
 [<RequireQualifiedAccess>]
 module MethodTok =
+    let create owner method = MethodTok(owner, method)
+
     let unsafeAs token = MethodTok<'Owner, 'Method> token
+
     let ofTypeDef owner method cache =
         MethodTok<DefinedType, 'Method>(TypeTok.Named(NamedTypeCache.addDefined owner cache), method)
+
     let ofTypeRef owner method cache =
         MethodTok<ReferencedType, 'Method>(TypeTok.Named(NamedTypeCache.addReferenced owner cache), method)
 

@@ -56,7 +56,6 @@ module ReturnType =
     let TypedByRef' = ReturnType.TypedByRef ImmutableArray.Empty
     let Void' = ReturnType.Void ImmutableArray.Empty
 
-[<AbstractClass>]
 type Method =
     val HasThis: FSharpIL.Metadata.Signatures.MethodThis
     val CallingConvention: FSharpIL.Metadata.Signatures.CallingConventions
@@ -64,12 +63,12 @@ type Method =
     val ReturnType: ReturnType
     val ParameterTypes: ImmutableArray<ParameterType>
 
-    new (mthis, cconv, name, rtype, ptypes) =
-        { HasThis = mthis
-          CallingConvention = cconv
+    new (hasThis, callingConvention, name, returnType, parameterTypes) =
+        { HasThis = hasThis
+          CallingConvention = callingConvention
           Name = name
-          ReturnType = rtype
-          ParameterTypes = ptypes }
+          ReturnType = returnType
+          ParameterTypes = parameterTypes }
 
     member this.HasReturnValue =
         match this.ReturnType with

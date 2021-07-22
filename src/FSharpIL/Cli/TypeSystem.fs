@@ -479,14 +479,16 @@ module ClassExtends =
 
 [<RequireQualifiedAccess>]
 module TypeKinds =
-    type IHasConstructor = interface end
+    type IHasConstructors = interface end
+    type IHasInstanceMethods = interface end
 
     type ConcreteClass = struct
         interface TypeAttributes.IHasStaticMethods
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
-        interface IHasConstructor
+        interface IHasConstructors
+        interface IHasInstanceMethods
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = Unchecked.defaultof<_>
     end
@@ -496,7 +498,8 @@ module TypeKinds =
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
-        interface IHasConstructor
+        interface IHasConstructors
+        interface IHasInstanceMethods
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Abstract
     end
@@ -506,7 +509,8 @@ module TypeKinds =
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
-        interface IHasConstructor
+        interface IHasConstructors
+        interface IHasInstanceMethods
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
     end
@@ -516,7 +520,7 @@ module TypeKinds =
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
-        interface IHasConstructor
+        interface IHasConstructors
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags
                 with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Abstract ||| TypeDefFlags.Sealed
@@ -524,7 +528,7 @@ module TypeKinds =
 
     type Delegate = struct
         interface TypeAttributes.ISerializableType
-        interface IHasConstructor
+        interface IHasConstructors
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
     end
@@ -537,6 +541,7 @@ module TypeKinds =
 
     type Interface = struct
         interface TypeAttributes.IHasStaticMethods
+        interface IHasInstanceMethods
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags
                 with [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
@@ -548,7 +553,8 @@ module TypeKinds =
         interface TypeAttributes.IHasLayout
         interface TypeAttributes.IHasStringFormat
         interface TypeAttributes.ISerializableType
-        interface IHasConstructor
+        interface IHasConstructors
+        interface IHasInstanceMethods
         interface IAttributeTag<TypeDefFlags> with
             member _.RequiredFlags with [<MethodImpl(MethodImplOptions.AggressiveInlining)>] get() = TypeDefFlags.Sealed
     end

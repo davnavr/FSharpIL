@@ -262,6 +262,9 @@ type DefinedMethodBodyWriter
               MaxStack = body.WriteInstructions(&builder, metadataTokenSource)
               LocalVariables = localVarSource body.LocalTypes }
 
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
+type TypeSpecMember<'Member when 'Member : not struct> = { Owner: CliType; Member: 'Member }
+
 [<NoComparison; NoEquality>]
 type ModuleBuilderInfo =
     { Header: CliHeader
@@ -277,7 +280,9 @@ type ModuleBuilderInfo =
       NestedTypes: Dictionary<DefinedType, List<DefinedType>>
       NonNestedTypes: List<DefinedType>
       ReferencedTypes: Dictionary<ReferencedType, ReferencedTypeMembers>
-      FieldReferences: ImmutableArray<FieldTok>.Builder // TODO: Rename to TypeSpecFields or something else.
+      FieldReferences: ImmutableArray<TypeSpecMember<Field>>.Builder // TODO: Rename to GenericTypeFields
+      MethodReferences: ImmutableArray<TypeSpecMember<Method>>.Builder // TODO: Rename to GenericTypeMethods
+      //MethodSpecifications: 
       EntryPoint: EntryPoint ref }
 
 [<IsReadOnly; Struct>]
@@ -312,13 +317,23 @@ type TypeMemberExtensions = // TODO: For these extension methods, call internal 
 
     static member DefineMethod
         (
-            members: DefinedTypeMembers<'Kind> when 'Kind :> TypeKinds.IHasConstructor,
+            members: DefinedTypeMembers<'Kind> when 'Kind :> TypeKinds.IHasConstructors,
             method,
             body,
             attributes
         )
         =
         members.DefineMethod<MethodDefinition<MethodKinds.ObjectConstructor>>(method, ValueSome body, attributes)
+
+    static member DefineMethod
+        (
+            members: DefinedTypeMembers<'Kind> when 'Kind :> TypeKinds.IHasInstanceMethods,
+            method,
+            body,
+            attributes
+        )
+        =
+        members.DefineMethod<MethodDefinition<MethodKinds.Instance>>(method, ValueSome body, attributes)
 
     //static member DefineEntryPoint(members: ReferenceTypeMembers<'Kind> 
 
@@ -353,6 +368,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
           NonNestedTypes = List typeDefCapacity'
           ReferencedTypes = Dictionary typeRefCapacity'
           FieldReferences = ImmutableArray.CreateBuilder()
+          MethodReferences = ImmutableArray.CreateBuilder()
           EntryPoint = ref Unchecked.defaultof<EntryPoint> }
 
     let createAttributeList owner = CustomAttributeList(owner, info.CustomAttributes)
@@ -461,11 +477,10 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
     member _.GenericInstantiation(isValueType, field: FieldTok, typeGenericParameters) =
         let inline create instantiated =
             let inst = GenericType.instantiate instantiated typeGenericParameters
-            let field' =
-                FieldTok.create
-                    (TypeTok.Specified(if isValueType then CliType.GenericValueType inst else CliType.GenericClass inst))
-                    (Field(field.Member.Name, field.Member.Type)) // TODO: Make a special subclass for these kinds of fields.
-            info.FieldReferences.Add field'
+            let owner = if isValueType then CliType.GenericValueType inst else CliType.GenericClass inst
+            let field' = FieldTok.create (TypeTok.Specified owner) (Field(field.Member.Name, field.Member.Type)) // TODO: Make a special subclass for these kinds of fields.
+
+            info.FieldReferences.Add { Owner = owner; Member = field'.Member }
             field'
         // TODO: Check that owner of field is accounted for, and that the type actually contains the field.
         match field.Owner with
@@ -474,6 +489,29 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         | TypeTok.Named(NamedType.DefinedType(DefinedType.Generic definition)) -> create(GenericType.Defined definition)
         | TypeTok.Named(NamedType.ReferencedType(ReferencedType.Generic reference)) -> create(GenericType.Referenced reference)
         | TypeTok.Specified tspec -> failwith "TODO: Handle usage of TypeSpec when generating MemberRef to a field of a generic type"
+
+    member _.GenericInstantiation(isValueType, method: MethodTok, typeGenericParameters) =
+        let inline create instantiated =
+            let inst = GenericType.instantiate instantiated typeGenericParameters
+            let owner = if isValueType then CliType.GenericValueType inst else CliType.GenericClass inst
+            let method' =
+                Method (
+                    method.Member.HasThis,
+                    method.Member.CallingConvention,
+                    method.Member.Name,
+                    method.Member.ReturnType,
+                    method.Member.ParameterTypes
+                )
+                |> MethodTok.create (TypeTok.Specified owner) // TODO: Make a special subclass for these kinds of methods.
+
+            info.MethodReferences.Add { Owner = owner; Member = method'.Member }
+            method'
+        match method.Owner with
+        | TypeTok.Named(NamedType.DefinedType(DefinedType.Definition _))
+        | TypeTok.Named(NamedType.ReferencedType(ReferencedType.Reference _)) -> method
+        | TypeTok.Named(NamedType.DefinedType(DefinedType.Generic definition)) -> create(GenericType.Defined definition)
+        | TypeTok.Named(NamedType.ReferencedType(ReferencedType.Generic reference)) -> create(GenericType.Referenced reference)
+        | TypeTok.Specified tspec -> failwith "TODO: Handle usage of TypeSpec when generating MemberRef to a method of a generic type"
 
     member this.SetTargetFramework(tfm, ctor: CustomAttributeCtor) =
         match this.AssemblyCustomAttributes with
@@ -532,6 +570,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         let definedMethodLookup = Dictionary<MethodTok<DefinedType, DefinedMethod>, _>()
 
         let miscFieldLookup = Dictionary<FieldTok, _>()
+        let miscMethodLookup = Dictionary<MethodTok, _>()
 
         let genericParamLookup = ImmutableSortedDictionary.CreateBuilder<_, ImmutableArray<GenericParam>>()
 
@@ -755,26 +794,6 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             | CliType.Primitive prim -> prim.Encoded
             | cached -> lookup cached
 
-        let serializeMiscField (field: FieldTok) =
-            match miscFieldLookup.TryGetValue field with
-            | true, existing -> existing
-            | false, _ ->
-                let i =
-                    builder.Tables.MemberRef.Add
-                        { Class =
-                            match field.Owner with
-                            | TypeTok.Specified tspec -> MemberRefParent.TypeSpec(getTypeSpec(getEncodedType tspec))
-                            | TypeTok.Named named ->
-                                sprintf
-                                    "Unexpected type definition or reference %O, only type specifications should be the parents \
-                                    of these fields"
-                                    named
-                                |> invalidOp
-                          Name = builder.Strings.Add field.Member.Name
-                          Signature = { MemberRefSig = (getFieldSig field.Member).FieldSig } }
-                miscFieldLookup.Add(field, i)
-                i
-
         for assem in info.AssemblyReferences do
             assemblyReferenceLookup.[assem] <-
                 builder.Tables.AssemblyRef.Add
@@ -822,6 +841,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                         MethodMetadataToken.Def definedMethodLookup.[MethodTok.unsafeAs method]
                     | TypeTok.Named(NamedType.ReferencedType _) ->
                         MethodMetadataToken.Ref referencedMethodLookup.[MethodTok.unsafeAs method]
+                    | TypeTok.Specified _ -> // TODO: Use a Ref or Spec depending on if the method itself has generic parameters.
+                        MethodMetadataToken.Ref miscMethodLookup.[method]
 
                 member _.GetTypeToken t = TypeMetadataToken.ofCodedIndex(typeDefOrRefOrSpec t) }
 
@@ -894,7 +915,29 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
         for i = 1 to serializedDefinedTypes.Count - 1 do serializeDefinedMembers serializedDefinedTypes.[i] ValueNone
 
-        for i = 0 to info.FieldReferences.Count - 1 do serializeMiscField(info.FieldReferences.ItemRef i) |> ignore
+        let miscMemberParent owner = getEncodedType owner |> getTypeSpec |> MemberRefParent.TypeSpec
+
+        for i = 0 to info.FieldReferences.Count - 1 do
+            let field = &info.FieldReferences.ItemRef i
+            let token = FieldTok.create (TypeTok.Specified field.Owner) field.Member
+            let i' =
+                { Class = miscMemberParent field.Owner
+                  Name = builder.Strings.Add field.Member.Name
+                  Signature = { MemberRefSig = (getFieldSig field.Member).FieldSig } }
+                |> builder.Tables.MemberRef.Add
+
+            miscFieldLookup.Add(token, i')
+
+        for i = 0 to info.MethodReferences.Count - 1 do
+            let method = &info.MethodReferences.ItemRef i
+            let token = MethodTok.create (TypeTok.Specified method.Owner) method.Member
+            let i' =
+                { Class = miscMemberParent method.Owner
+                  Name = builder.Strings.Add method.Member.Name
+                  Signature = { MemberRefSig = (getMethodSig method.Member).MethodDefSig } }
+                |> builder.Tables.MemberRef.Add
+
+            miscMethodLookup.Add(token, i')
 
         for struct(i, body) in definedMethodBodies do
             let writer = DefinedMethodBodyWriter(getLocalsSig, metadataTokenSource, body)
