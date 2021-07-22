@@ -763,13 +763,13 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                     builder.Tables.MemberRef.Add
                         { Class =
                             match field.Owner with
+                            | TypeTok.Specified tspec -> MemberRefParent.TypeSpec(getTypeSpec(getEncodedType tspec))
                             | TypeTok.Named named ->
                                 sprintf
-                                    "Unexpected type definition or reference %O, only type specifications should be the parents of \
-                                    these fields"
+                                    "Unexpected type definition or reference %O, only type specifications should be the parents \
+                                    of these fields"
                                     named
                                 |> invalidOp
-                            | TypeTok.Specified tspec -> MemberRefParent.TypeSpec(getTypeSpec(getEncodedType tspec))
                           Name = builder.Strings.Add field.Member.Name
                           Signature = { MemberRefSig = (getFieldSig field.Member).FieldSig } }
                 miscFieldLookup.Add(field, i)
@@ -790,7 +790,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         for tref in info.ReferencedTypes.Keys do serializeReferencedType tref |> ignore
 
         serializeDefinedType ModuleType.Definition' |> ignore // Serialize the <Module> special class.
-        
+
         match info.NestedTypes.TryGetValue ModuleType.Definition' with
         | true, existing -> for child in existing do serializeDefinedType child |> ignore
         | false, _ -> ()
@@ -814,7 +814,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                         FieldMetadataToken.Def definedFieldLookup.[FieldTok.unsafeAs field]
                     | TypeTok.Named(NamedType.ReferencedType _) ->
                         FieldMetadataToken.Ref referencedFieldLookup.[FieldTok.unsafeAs field]
-                    | TypeTok.Specified _ -> FieldMetadataToken.Ref miscFieldLookup.[field] // TODO: Fix, this might not work.
+                    | TypeTok.Specified _ -> FieldMetadataToken.Ref miscFieldLookup.[field]
 
                 member _.GetMethodToken method =
                     match method.Owner with
@@ -824,6 +824,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                         MethodMetadataToken.Ref referencedMethodLookup.[MethodTok.unsafeAs method]
 
                 member _.GetTypeToken t = TypeMetadataToken.ofCodedIndex(typeDefOrRefOrSpec t) }
+
+        let definedMethodBodies = List<struct(TableIndex<MethodDefRow> * _)>()
 
         let parameterList = MemberIndexCounter<ParamRow>()
         let fieldList = MemberIndexCounter<FieldRow>()
@@ -848,7 +850,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                 fieldList.Last <- i'
                 definedFieldLookup.[FieldTok.ofTypeDef parent field info.NamedTypes] <- i'
 
-            methodList.Reset() // TODO: Consider having another loop to add method definitions further down.
+            methodList.Reset()
 
             for method in members'.Method do
                 parameterList.Reset()
@@ -861,55 +863,42 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                               Name = builder.Strings.Add param.ParamName
                               Sequence = Checked.uint16(i + 1) }
 
-                let mutable row =
+                // Method bodies are written later to avoid bugs regarding members not being added to dictionaries yet.
+                let i' =
                     { Rva = Unchecked.defaultof<MethodBodyLocation>
                       ImplFlags = method.ImplFlags
                       Flags = method.Flags
                       Name = builder.Strings.Add method.Name
                       Signature = getMethodSig method
                       ParamList = parameterList.First }
-
-                let i' = builder.Tables.MethodDef.Add &row
+                    |> builder.Tables.MethodDef.Add
 
                 methodList.Last <- i'
                 definedMethodLookup.[MethodTok.ofTypeDef parent method info.NamedTypes] <- i'
 
-                let body =
-                    match members'.MethodBodyLookup.TryGetValue method with
-                    | true, body' ->
-                        let writer =
-                            DefinedMethodBodyWriter (
-                                getLocalsSig,
-                                metadataTokenSource,
-                                body'
-                            )
+                match members'.MethodBodyLookup.TryGetValue method with
+                | true, body -> definedMethodBodies.Add(struct(i', body))
+                | false, _ -> ()
 
-                        builder.MethodBodies.Add &writer
-                    | false, _ -> MethodBodyLocation 0u
+                // TODO: Add the methods generic parameters, if any.
 
-                let row' =
-                    { row with
-                        Rva =
-                            match members'.MethodBodyLookup.TryGetValue method with
-                            | true, body' ->
-                                let writer = DefinedMethodBodyWriter(getLocalsSig, metadataTokenSource, body')
-                                builder.MethodBodies.Add &writer
-                            | false, _ -> MethodBodyLocation 0u }
+            // TODO: event and property
 
-                builder.Tables.MethodDef.[i'] <- &row'
+            // Safe to manipulate TypeDef row here, as all type definitions have already been added.
+            let parent' = &Unsafe.AsRef &builder.Tables.TypeDef.[definedTypeLookup.[parent]]
 
-            // event and property
-
-            let parenti = definedTypeLookup.[parent]
-            let parent' =
-                { builder.Tables.TypeDef.[parenti] with
-                    MethodList = methodList.First
-                    FieldList = fieldList.First }
-
-            builder.Tables.TypeDef.[parenti] <- &parent'
+            Unsafe.AsRef &parent'.FieldList <- fieldList.First
+            Unsafe.AsRef &parent'.MethodList <- methodList.First
 
         serializeDefinedMembers ModuleType.Definition' (ValueSome info.GlobalMembers)
+
         for i = 1 to serializedDefinedTypes.Count - 1 do serializeDefinedMembers serializedDefinedTypes.[i] ValueNone
+
+        for i = 0 to info.FieldReferences.Count - 1 do serializeMiscField(info.FieldReferences.ItemRef i) |> ignore
+
+        for struct(i, body) in definedMethodBodies do
+            let writer = DefinedMethodBodyWriter(getLocalsSig, metadataTokenSource, body)
+            Unsafe.AsRef &builder.Tables.MethodDef.[i].Rva <- builder.MethodBodies.Add &writer
 
         for KeyValue(owner, parameters) in genericParamLookup do
             for i = 0 to parameters.Length - 1 do

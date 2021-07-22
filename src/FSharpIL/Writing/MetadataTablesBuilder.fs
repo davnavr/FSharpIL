@@ -25,9 +25,7 @@ type RowTableBuilder<'Row, 'Serializer
     member _.Count = rows.Count
 
     /// Gets or sets the row at the specified index into the metadata table.
-    member _.Item
-        with get ({ TableIndex = i }: TableIndex<'Row>) = &rows.ItemRef(int32(i - 1u))
-        and set ({ TableIndex = i }: TableIndex<'Row>) (row: inref<'Row>) = rows.[int32(i - 1u)] <- row
+    member _.Item with get ({ TableIndex = i }: TableIndex<'Row>) = &rows.ItemRef(int32(i - 1u))
 
     /// Adds the row at the specified address to the metadata table.
     member this.Add(row: inref<'Row>): TableIndex<'Row> =
