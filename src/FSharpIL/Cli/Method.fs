@@ -56,6 +56,7 @@ module ReturnType =
     let TypedByRef' = ReturnType.TypedByRef ImmutableArray.Empty
     let Void' = ReturnType.Void ImmutableArray.Empty
 
+[<Class>]
 type Method =
     val HasThis: FSharpIL.Metadata.Signatures.MethodThis
     val CallingConvention: FSharpIL.Metadata.Signatures.CallingConventions

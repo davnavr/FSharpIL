@@ -64,6 +64,7 @@ type Opcode =
     | Callvirt = 0x6Fus
 
     | Ldstr = 0x72us
+    | Newobj = 0x73us
 
     | Conv_r_un = 0x76us
 

@@ -115,7 +115,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
         let index' = builder.GenericInstantiation(false, index.Token, fun _ _ -> t)
 
-        // public new: capacity: int32 -> ArrayList<'T>
+        // public new: capacity: int32 -> GenericsShowcase.ArrayList<'T>
         let! ctor =
             let definition =
                 DefinedMethod.Constructor (
@@ -180,11 +180,15 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     EntryPointKind.VoidNoArgs
                 )
 
+            let ctor' = builder.GenericInstantiation(false, ctor.Token, fun _ _ -> PrimitiveType.String)
+
             let body =
                 { new DefinedMethodBody() with
                     override _.WriteInstructions(wr, tokens) =
                         // TODO: Implement local variables first.
-
+                        // new GenericsShowcase.ArrayList<string>(4)
+                        ldc_i4_4 &wr
+                        Newobj.ofMethod &wr ctor' tokens
                         pop &wr // TEMPORARY
 
                         ret &wr

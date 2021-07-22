@@ -61,24 +61,6 @@ module Branch =
     /// Sets the target of a branch instruction.
     val setTarget: branch: byref<BranchTarget> -> destination: Label -> unit
 
-/// <summary>
-/// Contains functions for generating the <c>ldstr</c> (0x72) instruction, which loads a literal string from the <c>#US</c> heap
-/// (III.4.16).
-/// </summary>
-/// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
-[<RequireQualifiedAccess>]
-module Ldstr =
-    /// (0x72) Writes an instruction that loads a literal string at the specified offset from the <c>#US</c> heap (III.4.16).
-    val inline ofOffset: stream: byref<MethodBodyBuilder> -> offset: UserStringOffset -> unit
-
-    val inline ofString: stream: byref<MethodBodyBuilder> -> string -> tokens: MetadataTokenSource -> unit
-
-    val inline ofMemory:
-        stream: byref<MethodBodyBuilder> ->
-        inref<System.ReadOnlyMemory<char>> ->
-        tokens: MetadataTokenSource ->
-        unit
-
 /// Contains functions for generating instructions that call methods specified by a metadata token.
 module Call =
     /// <summary>(0x28) Writes an instruction that calls the specified <paramref name="method"/> (III.3.19).</summary>
@@ -92,22 +74,6 @@ module Call =
 
     /// <summary>(0x6F) Writes an instruction that calls the <paramref name="method"/> associated with an object (III.4.2).</summary>
     val callvirt: stream: byref<MethodBodyBuilder> -> method: MethodMetadataToken -> hasRetValue: bool -> unit
-
-/// <summary>
-/// Contains functions for generating the <c>newobj</c> (0x73) instruction, which "creates a new object or a new instance of a value
-/// type" (III.4.21).
-/// </summary>
-/// <remarks>For value types, the <c>initobj</c> is usually used instead.</remarks>
-module Newobj =
-    val ofToken : stream: byref<MethodBodyBuilder> -> ctor: MethodMetadataToken -> unit
-
-    val ofMethod : stream: byref<MethodBodyBuilder> -> ctor: MethodTok -> tokens: MetadataTokenSource -> unit
-
-    val ofDefinedMethod :
-        stream: byref<MethodBodyBuilder> ->
-        ctor: MethodTok<TypeDefinition<'Kind>, MethodDefinition<MethodKinds.ObjectConstructor>> ->
-        tokens: MetadataTokenSource ->
-        unit
 
 // TODO: Have module for versions of field instructions that take a FieldMetadataToken instead.
 
@@ -229,6 +195,41 @@ val callvirt: stream: byref<MethodBodyBuilder> -> method: MethodTok -> tokens: M
 /// (0x72) Writes an instruction that pushes a string literal onto the stack (III.4.16).
 /// </summary>
 val inline ldstr: stream: byref<MethodBodyBuilder> -> string -> tokens: MetadataTokenSource -> unit
+
+/// <summary>
+/// Contains functions for generating the <c>ldstr</c> (0x72) instruction, which loads a literal string from the <c>#US</c> heap
+/// (III.4.16).
+/// </summary>
+/// <remarks>To load a <see langword="null"/> string, generate the <c>ldnull</c> opcode instead.</remarks>
+[<RequireQualifiedAccess>]
+module Ldstr =
+    /// (0x72) Writes an instruction that loads a literal string at the specified offset from the <c>#US</c> heap (III.4.16).
+    val inline ofOffset: stream: byref<MethodBodyBuilder> -> offset: UserStringOffset -> unit
+
+    val inline ofString: stream: byref<MethodBodyBuilder> -> string -> tokens: MetadataTokenSource -> unit
+
+    val inline ofMemory:
+        stream: byref<MethodBodyBuilder> ->
+        inref<System.ReadOnlyMemory<char>> ->
+        tokens: MetadataTokenSource ->
+        unit
+
+/// <summary>
+/// Contains functions for generating the <c>newobj</c> (0x73) instruction, which "creates a new object or a new instance of a
+/// value type" (III.4.21).
+/// </summary>
+/// <remarks>For value types, the <c>initobj</c> is usually used instead.</remarks>
+[<RequireQualifiedAccess>]
+module Newobj =
+    val inline ofToken : stream: byref<MethodBodyBuilder> -> ctor: MethodMetadataToken -> unit
+
+    val inline ofMethod : stream: byref<MethodBodyBuilder> -> ctor: MethodTok -> tokens: MetadataTokenSource -> unit
+
+    val inline ofDefinedMethod :
+        stream: byref<MethodBodyBuilder> ->
+        ctor: MethodTok<TypeDefinition<'Kind>, MethodDefinition<MethodKinds.ObjectConstructor>> ->
+        tokens: MetadataTokenSource ->
+        unit when 'Kind :> TypeKinds.IHasConstructors
 
 
 

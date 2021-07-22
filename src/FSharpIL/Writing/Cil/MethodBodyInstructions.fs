@@ -1,6 +1,4 @@
-﻿/// Contains functions used for writing CIL method bodies.
-[<AutoOpen>]
-module FSharpIL.Writing.Cil.MethodBodyInstructions
+﻿module FSharpIL.Writing.Cil.MethodBodyInstructions
 
 open FSharpIL
 open FSharpIL.Metadata
@@ -70,24 +68,6 @@ module Unsafe =
 
 open Unsafe
 
-[<RequireQualifiedAccess>]
-module Ldstr =
-    let inline ofOffset (stream: byref<_>) offset =
-        writeRawOpcode &stream Opcode.Ldstr
-        writeStringOffset &stream offset
-        incrMaxStack &stream
-
-    let inline ofString (stream: byref<_>) str tokens =
-        writeRawOpcode &stream Opcode.Ldstr
-        writeStringToken &stream str tokens
-        incrMaxStack &stream
-
-    let inline ofMemory (stream: byref<_>) (str: inref<System.ReadOnlyMemory<_>>) (tokens: MetadataTokenSource) =
-        writeRawOpcode &stream Opcode.Ldstr
-        writeStringOffset &stream (tokens.GetUserString &str)
-        incrMaxStack &stream
-
-[<RequireQualifiedAccess>]
 module Branch =
     let inline createLabel (stream: inref<_>) = Label &stream
     let setTarget (branch: byref<BranchTarget>) (destination: Label) =
@@ -142,7 +122,39 @@ let inline ret (stream: byref<_>) = writeRawOpcode &stream Opcode.Ret
 
 let callvirt (stream: byref<_>) method tokens = Call.instr' &stream Opcode.Callvirt method tokens
 
+module Ldstr =
+    let inline ofOffset (stream: byref<_>) offset =
+        writeRawOpcode &stream Opcode.Ldstr
+        writeStringOffset &stream offset
+        incrMaxStack &stream
+
+    let inline ofString (stream: byref<_>) str tokens =
+        writeRawOpcode &stream Opcode.Ldstr
+        writeStringToken &stream str tokens
+        incrMaxStack &stream
+
+    let inline ofMemory (stream: byref<_>) (str: inref<System.ReadOnlyMemory<_>>) (tokens: MetadataTokenSource) =
+        writeRawOpcode &stream Opcode.Ldstr
+        writeStringOffset &stream (tokens.GetUserString &str)
+        incrMaxStack &stream
+
 let inline ldstr (stream: byref<_>) str tokens = Ldstr.ofString &stream str tokens
+
+module Newobj =
+    let inline ofToken (stream: byref<_>) (ctor: MethodMetadataToken) =
+        writePushingOpcode &stream Opcode.Newobj
+        writeMetadataToken &stream ctor.Token
+
+    let inline ofMethod (stream: byref<_>) ctor (tokens: MetadataTokenSource) =
+        writePushingOpcode &stream Opcode.Newobj
+        writeMethodToken &stream ctor tokens
+
+    let inline ofDefinedMethod
+        (stream: byref<_>)
+        (ctor: MethodTok<TypeDefinition<'Kind>, MethodDefinition<MethodKinds.ObjectConstructor>> when 'Kind :> TypeKinds.IHasConstructors)
+        tokens
+        =
+        ofMethod &stream ctor.Token tokens
 
 let inline ldfld (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Ldfld true field tokens
 let inline ldflda (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Ldflda true field tokens
