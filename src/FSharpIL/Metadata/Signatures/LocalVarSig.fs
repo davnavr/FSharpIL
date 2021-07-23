@@ -44,6 +44,8 @@ module LocalVariable =
     /// <summary>A constraint list containing the currently only kind of constraint, <c>PINNED</c> (II.23.2.9).</summary>
     let pinned = [ Constraint.Pinned ]
 
+    let maxLocalCount = System.UInt16.MaxValue
+
     let inline (|Type|ByRef|TypedByRef|) (local: LocalVariable) =
         let inline info() = struct(local.CustomMod, local.Constraints, local.Type.Value)
         match local.Tag with
@@ -63,4 +65,4 @@ module LocalVariable =
 /// <summary>
 /// Represents a <c>LocalVarSig</c> item, which describes the types of all of the local variables of a method (II.23.2.6).
 /// </summary>
-type LocalVarSig = ImmutableArray<LocalVariable>
+type LocalVarSig = ImmutableArray<LocalVariable> // TODO: Prevent local variable array from having UInt16.MaxValue or greater items by making custom collection type.

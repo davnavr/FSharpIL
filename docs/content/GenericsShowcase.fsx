@@ -180,16 +180,30 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     EntryPointKind.VoidNoArgs
                 )
 
-            let ctor' = builder.GenericInstantiation(false, ctor.Token, fun _ _ -> PrimitiveType.String)
+            let istring _ _ = PrimitiveType.String
+
+            let locals =
+                [|
+                    // let strings: GenericsShowcase.ArrayList<string>
+                    GenericType.instantiate (GenericType.Defined arrlist.Definition) istring
+                    |> CliType.GenericClass
+                    |> CliType.toLocalType
+                |]
+                |> ImmutableArray.Create<LocalType>
+
+            let ctor' = builder.GenericInstantiation(false, ctor.Token, istring)
 
             let body =
-                { new DefinedMethodBody() with
+                { new DefinedMethodBody(locals) with
                     override _.WriteInstructions(wr, tokens) =
-                        // TODO: Implement local variables first.
-                        // new GenericsShowcase.ArrayList<string>(4)
+                        // let strings = new GenericsShowcase.ArrayList<string>(4)
                         ldc_i4_4 &wr
                         Newobj.ofMethod &wr ctor' tokens
-                        pop &wr // TEMPORARY
+                        stloc_0 &wr
+
+                        // strings.Add("Hello!")
+                        ldloc_0 &wr
+                        pop &wr
 
                         ret &wr
                         wr.EstimatedMaxStack }

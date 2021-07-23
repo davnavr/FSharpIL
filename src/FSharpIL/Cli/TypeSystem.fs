@@ -650,13 +650,6 @@ type TypeReference with
     static member StaticClass(resolutionScope, typeNamespace, typeName) =
         TypeReference<TypeKinds.StaticClass>(resolutionScope, typeNamespace, typeName)
 
-module CliType =
-    let rec toElemType =
-        function
-        | CliType.Primitive prim -> EncodedType.toElemType prim.Encoded
-        | CliType.SZArray e -> toElemType e
-        | _ -> ValueNone
-
 let inline (|GenericParamIndex|) (parameter: GenericParamType<_>) = parameter.Number
 
 module GenericType =
@@ -706,6 +699,15 @@ type LocalType =
 
 module LocalType =
     let TypedByRef' = LocalType.TypedByRef ImmutableArray.Empty
+
+module CliType =
+    let rec toElemType =
+        function
+        | CliType.Primitive prim -> EncodedType.toElemType prim.Encoded
+        | CliType.SZArray e -> toElemType e
+        | _ -> ValueNone
+
+    let inline toLocalType ltype = LocalType.T(ImmutableArray.Empty, false, ltype)
 
 module ModuleType =
     let Definition =

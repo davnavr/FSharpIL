@@ -26,14 +26,8 @@ module Unsafe =
         incrMaxStack &stream
 
     /// <summary>Writes a metadata token (III.1.9).</summary>
-    let writeMetadataToken (stream: byref<_>) (token: MetadataToken) =
-        let mutable wr = &stream.instructions
-        let index = token.Index
-        // For some reason, usage of |> here prevents writer from updating correctly.
-        wr.Write(uint8(index &&& 0xFFu))
-        wr.Write(uint8((index >>> 8) &&& 0xFFu))
-        wr.Write(uint8((index >>> 16) &&& 0xFFu))
-        wr.Write(uint8 token.Type)
+    let inline writeMetadataToken (stream: byref<_>) (token: MetadataToken) =
+        (getInstructionStream &stream).WriteLE(uint32 token)
 
     let writeStringOffset (stream: byref<_>) { UserStringOffset = offset } =
         writeMetadataToken &stream (MetadataToken(MetadataTokenType.UserStringHeap, offset))
@@ -91,11 +85,27 @@ let inline ldarg_0 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldarg_
 let inline ldarg_1 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldarg_1
 let inline ldarg_2 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldarg_2
 let inline ldarg_3 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldarg_3
+let inline ldloc_0 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldloc_0
+let inline ldloc_1 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldloc_1
+let inline ldloc_2 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldloc_2
+let inline ldloc_3 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldloc_3
+let inline stloc_0 (stream: byref<_>) = writeRawOpcode &stream Opcode.Stloc_0
+let inline stloc_1 (stream: byref<_>) = writeRawOpcode &stream Opcode.Stloc_1
+let inline stloc_2 (stream: byref<_>) = writeRawOpcode &stream Opcode.Stloc_2
+let inline stloc_3 (stream: byref<_>) = writeRawOpcode &stream Opcode.Stloc_3
 
 let inline ldarg_s (stream: byref<_>) (num: uint8) =
     writeRawOpcode &stream Opcode.Ldarg_s
     (getInstructionStream &stream).Write num
     incrMaxStack &stream
+
+let inline ldloc_s (stream: byref<_>) (index: uint8) =
+    writePushingOpcode &stream Opcode.Ldloc_s
+    (getInstructionStream &stream).Write index
+
+let inline stloc_s (stream: byref<_>) (index: uint8) =
+    writeRawOpcode &stream Opcode.Stloc_s
+    (getInstructionStream &stream).Write index
 
 let inline ldc_i4_m1 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_m1
 let inline ldc_i4_0 (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldc_i4_0
@@ -142,11 +152,11 @@ let inline ldstr (stream: byref<_>) str tokens = Ldstr.ofString &stream str toke
 
 module Newobj =
     let inline ofToken (stream: byref<_>) (ctor: MethodMetadataToken) =
-        writePushingOpcode &stream Opcode.Newobj
+        writeRawOpcode &stream Opcode.Newobj
         writeMetadataToken &stream ctor.Token
 
     let inline ofMethod (stream: byref<_>) ctor (tokens: MetadataTokenSource) =
-        writePushingOpcode &stream Opcode.Newobj
+        writeRawOpcode &stream Opcode.Newobj
         writeMethodToken &stream ctor tokens
 
     let inline ofDefinedMethod
@@ -163,22 +173,47 @@ let inline ldsfld (stream: byref<_>) (field: _) tokens = writeFieldInstruction &
 let inline ldsflda (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Ldsflda true field tokens
 let inline stsfld (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Stfld false field tokens
 
-let inline newarr (stream: byref<_>) etype tokens =
-    writeTypeInstruction &stream Opcode.Newarr etype tokens
-    incrMaxStack &stream
+let inline newarr (stream: byref<_>) etype tokens = writeTypeInstruction &stream Opcode.Newarr etype tokens
 
 let inline ldarg (stream: byref<_>) (num: uint16) =
-    writeRawOpcode &stream Opcode.Ldarg
+    writePushingOpcode &stream Opcode.Ldarg
     (getInstructionStream &stream).WriteLE num
-    incrMaxStack &stream
+
+let inline ldloc (stream: byref<_>) (index: LocalVarIndex) =
+    writePushingOpcode &stream Opcode.Ldloc
+    (getInstructionStream &stream).WriteLE(uint16 index)
+
+let inline stloc (stream: byref<_>) (index: LocalVarIndex) =
+    writeRawOpcode &stream Opcode.Stloc
+    (getInstructionStream &stream).WriteLE(uint16 index)
 
 module Shortened =
+    let maxShortLocalIndex = uint16 System.Byte.MaxValue
+
     // TODO: Use EnumOfValue to get an offset to add to the Opcode for some instructions, if it doesn't cause boxing.
-    let inline ldarg (stream: byref<_>) num =
+    let ldarg (stream: byref<_>) num =
         match num with
         | 0us -> ldarg_0 &stream
         | 1us -> ldarg_1 &stream
         | 2us -> ldarg_2 &stream
         | 3us -> ldarg_3 &stream
-        | _ when num <= 0xFFus -> ldarg_s &stream (uint8 num)
+        | _ when num <= maxShortLocalIndex -> ldarg_s &stream (uint8 num)
         | _ -> ldarg &stream num
+
+    let ldloc (stream: byref<_>) (index: LocalVarIndex) =
+        match uint16 index with
+        | 0us -> ldloc_0 &stream
+        | 1us -> ldloc_1 &stream
+        | 2us -> ldloc_2 &stream
+        | 3us -> ldloc_3 &stream
+        | index' when index' < maxShortLocalIndex -> ldloc_s &stream (uint8 index')
+        | _ -> ldloc &stream index
+
+    let stloc (stream: byref<_>) (index: LocalVarIndex) =
+        match uint16 index with
+        | 0us -> stloc_0 &stream
+        | 1us -> stloc_1 &stream
+        | 2us -> stloc_2 &stream
+        | 3us -> stloc_3 &stream
+        | index' when index' < maxShortLocalIndex -> stloc_s &stream (uint8 index')
+        | _ -> stloc &stream index

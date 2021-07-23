@@ -18,6 +18,9 @@ type Opcode =
     | Stloc_3 = 0xDus
     | Ldarg_s = 0xEus
 
+    | Ldloc_s = 0x11us
+
+    | Stloc_s = 0x13us
     | Ldnull = 0x14us
     | Ldc_i4_m1 = 0x15us
     | Ldc_i4_0 = 0x16us
@@ -128,6 +131,9 @@ type Opcode =
 
     | Ldarg = 0xFE_09us
 
+    | Ldloc = 0xFE_0Cus
+
+    | Stloc = 0xFE_0Eus
     | Localloc = 0xFE_0Fus
 
     | Endfilter = 0xFE_11us

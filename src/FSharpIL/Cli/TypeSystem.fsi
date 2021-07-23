@@ -522,6 +522,8 @@ module CliType =
     /// Attempts to convert the specified type to a type that can be used in the constructor of a custom attribute.
     val toElemType: CliType -> FSharpIL.Metadata.Blobs.ElemType voption
 
+    val inline toLocalType: CliType -> LocalType
+
 [<NoComparison; NoEquality>]
 type internal NamedTypeCache
 

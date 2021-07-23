@@ -24,27 +24,45 @@ end
 type ByteBlobWriter = delegate of byref<ChunkedMemoryBuilder> -> unit
 
 type private DelegateBlobWriter = struct
-    interface IBlobWriter<ByteBlobWriter> with member _.Write(wr, writer) = writer.Invoke &wr
+    interface IBlobWriter<ByteBlobWriter> with
+        [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+        member _.Write(wr, writer) = writer.Invoke &wr
 end
 
 type private FieldSigWriter = struct
-    interface IBlobWriter<FieldSig> with member _.Write(wr, signature) = BlobWriter.fieldSig &signature &wr
+    interface IBlobWriter<FieldSig> with
+        [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+        member _.Write(wr, signature) = BlobWriter.fieldSig &signature &wr
 end
 
 type private MethodDefSigWriter = struct
-    interface IBlobWriter<MethodDefSig> with member _.Write(wr, signature) = BlobWriter.methodDefSig &signature &wr
+    interface IBlobWriter<MethodDefSig> with
+        [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+        member _.Write(wr, signature) = BlobWriter.methodDefSig &signature &wr
 end
 
 type private MethodRefSigWriter = struct
-    interface IBlobWriter<MethodRefSig> with member _.Write(wr, signature) = BlobWriter.methodRefSig &signature &wr
+    interface IBlobWriter<MethodRefSig> with
+        [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+        member _.Write(wr, signature) = BlobWriter.methodRefSig &signature &wr
 end
 
 type private CustomAttribWriter = struct
-    interface IBlobWriter<CustomAttrib> with member _.Write(wr, attrib) = BlobWriter.customAttrib &attrib &wr
+    interface IBlobWriter<CustomAttrib> with
+        [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+        member _.Write(wr, attrib) = BlobWriter.customAttrib &attrib &wr
 end
 
 type private EncodedTypeWriter = struct
-    interface IBlobWriter<EncodedType> with member _.Write(wr, t) = BlobWriter.etype t &wr
+    interface IBlobWriter<EncodedType> with
+        [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+        member _.Write(wr, t) = BlobWriter.etype t &wr
+end
+
+type private LocalVarWriter = struct
+    interface IBlobWriter<LocalVarSig> with
+        [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+        member _.Write(wr, signature) = BlobWriter.localVarSig signature &wr
 end
 
 /// <summary>Builds the <c>#Blob</c> metadata heap (II.24.2.4).</summary>
@@ -114,6 +132,8 @@ type BlobStreamBuilder (capacity: int32) =
 
     // TODO: Allow adding of FieldSigs as MemberRefSigs
     member this.Add(signature: inref<_>) = { FieldSig = this.Add<FieldSigWriter, _> &signature }
+
+    member internal this.Add signature = this.Add<LocalVarWriter, _> &signature
 
     member internal this.Add signature = this.Add<EncodedTypeWriter, _> &signature
 

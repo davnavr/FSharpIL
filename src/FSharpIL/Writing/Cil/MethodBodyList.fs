@@ -4,6 +4,7 @@ open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
 open FSharpIL
+open FSharpIL.Metadata
 open FSharpIL.Metadata.Cil
 open FSharpIL.Metadata.Tables
 
@@ -70,7 +71,7 @@ type MethodBodyList internal () =
 
         let bodyi = bodies.Count
         bodies.Add { Header = header; Instructions = builder.instructions }
-        let body = &bodies.ItemRef bodyi
+        let body = &bodies.ItemRef bodyi // Possible struct copy since MethodBody is not immutable
 
         let methodHeaderSize = if MethodBody.flags &body = ILMethodFlags.TinyFormat then 1u else (MethodBody.FatFormatSize * 4u)
         offset <- offset + body.CodeSize + methodHeaderSize
@@ -81,10 +82,22 @@ type MethodBodyList internal () =
 
     member internal _.Serialize(wr: byref<ChunkedMemoryBuilder>) =
         for i = 0 to bodies.Count - 1 do
-            let body = &bodies.ItemRef i
+            let body = &bodies.ItemRef i // Possible struct copy since MethodBody is not immutable
             let flags = MethodBody.flags &body
             if flags = ILMethodFlags.TinyFormat then
                 wr.Write(uint8 flags ||| (Checked.uint8 body.CodeSize <<< 2))
             else
-                noImpl "TODO: Write fat format see https://github.com/davnavr/FSharpIL/blob/cd0141ba7c76a709bb9300234ae34aa2567eb1f9/src/FSharpIL/Writing/Cil/MethodBodyBuilder.fs#L161"
+                let mutable flags' = ILMethodFlags.FatFormat
+
+                match body.Header.InitLocals with
+                | InitLocals -> flags' <- flags' ||| ILMethodFlags.InitLocals
+                | SkipInitLocals -> ()
+
+                //if has extra data sections then flags' <- flags' ||| ILMethodFlags.MoreSects
+
+                wr.WriteLE(uint16 flags' ||| (uint16 MethodBody.FatFormatSize <<< 12)) // Flags & size
+                wr.WriteLE body.Header.MaxStack
+                wr.WriteLE body.CodeSize
+                wr.WriteLE(uint32(MetadataToken(MetadataTokenType.StandaloneSig, body.Header.LocalVariables.TableIndex)))
+                // TODO: Write extra data sections for fat method.
             wr.Write(body.Instructions.ToImmutable())

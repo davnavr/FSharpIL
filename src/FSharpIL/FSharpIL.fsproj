@@ -62,6 +62,7 @@
     <Compile Include="Metadata\Signatures\Items.fsi" />
     <Compile Include="Metadata\Signatures\Items.fs" />
     <Compile Include="Metadata\Signatures\LocalVarSig.fs" />
+    <Compile Include="Metadata\Cil\LocalVarIndex.fs" />
     <Compile Include="Metadata\Cil\MethodBody.fs" />
     <Compile Include="Metadata\Cil\Opcode.fs" />
     <Compile Include="Metadata\PublicKeyOrToken.fs" />

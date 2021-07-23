@@ -675,8 +675,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                             | LocalType.TypedByRef modifiers ->
                                 LocalVariable.TypedByRef(getCustomModifiers modifiers)
 
-                    failwith "TODO: Add locals to blob stream": TableIndex<StandaloneSigRow>
-                    //builder.Blob.Add(Unsafe.As &locals')
+                    builder.Tables.StandAloneSig.Add { StandAloneSig = builder.Blob.Add(Unsafe.As<_, LocalVarSig> &locals') }
 
             fun (locals: ImmutableArray<_>) ->
                 if locals.IsDefaultOrEmpty
