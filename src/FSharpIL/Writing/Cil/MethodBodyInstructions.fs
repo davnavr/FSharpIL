@@ -130,6 +130,8 @@ let call (stream: byref<_>) method tokens = Call.instr' &stream Opcode.Call meth
 
 let inline ret (stream: byref<_>) = writeRawOpcode &stream Opcode.Ret
 
+let inline conv_i4 (stream: byref<_>) = writeRawOpcode &stream Opcode.Conv_i4
+
 let callvirt (stream: byref<_>) method tokens = Call.instr' &stream Opcode.Callvirt method tokens
 
 module Ldstr =
@@ -174,6 +176,8 @@ let inline ldsflda (stream: byref<_>) (field: _) tokens = writeFieldInstruction 
 let inline stsfld (stream: byref<_>) (field: _) tokens = writeFieldInstruction &stream Opcode.Stfld false field tokens
 
 let inline newarr (stream: byref<_>) etype tokens = writeTypeInstruction &stream Opcode.Newarr etype tokens
+
+let inline ldlen (stream: byref<_>) = writePushingOpcode &stream Opcode.Ldlen
 
 let inline ldarg (stream: byref<_>) (num: uint16) =
     writePushingOpcode &stream Opcode.Ldarg

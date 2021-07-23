@@ -20,6 +20,7 @@ types and members from other assemblies.
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Cil
 open FSharpIL.Metadata.Tables
 
 open FSharpIL.Cli
@@ -150,7 +151,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
             members.DefineMethod(definition, body, attributes = ValueNone)
 
-        // member public Add: 'T -> unit
+        // member public Add: item: 'T -> unit
         let! add =
             let definition =
                 DefinedMethod.Instance (
@@ -158,13 +159,34 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     flags = MethodAttributes.None,
                     returnType = ReturnType.Void',
                     name = MethodName.ofStr "Add",
-                    parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.I4),
-                    parameterList = fun _ _ -> Identifier.ofStr "capacity" |> Parameter.named
+                    parameterTypes = ImmutableArray.Create(ParameterType.T t),
+                    parameterList = fun _ _ -> Identifier.ofStr "item" |> Parameter.named
                 )
 
+            let locals =
+                ImmutableArray.CreateRange [
+                    CliType.toLocalType PrimitiveType.I4 // let length: int32
+                ]
+
             let body =
-                { new DefinedMethodBody() with
+                { new DefinedMethodBody(locals, InitLocals) with
                     override _.WriteInstructions(wr, tokens) =
+                        // let mutable length = this.items.Length
+                        ldarg_0 &wr
+                        ldfld &wr items' tokens
+                        ldlen &wr
+                        conv_i4 &wr
+                        stloc_0 &wr
+
+                        // this.index < length
+                        ldarg_0 &wr
+                        ldfld &wr index' tokens
+                        ldloc_0 &wr
+
+                        pop &wr // TEMPORARY
+                        pop &wr // TEMPORARY
+                        // TODO: Do some fancy branching.
+
                         ret &wr
                         wr.EstimatedMaxStack }
 
@@ -183,18 +205,18 @@ let example() = // TODO: Make helper function to add reference to System.Private
             let istring _ _ = PrimitiveType.String
 
             let locals =
-                [|
+                ImmutableArray.CreateRange [
                     // let strings: GenericsShowcase.ArrayList<string>
                     GenericType.instantiate (GenericType.Defined arrlist.Definition) istring
                     |> CliType.GenericClass
                     |> CliType.toLocalType
-                |]
-                |> ImmutableArray.Create<LocalType>
+                ]
 
             let ctor' = builder.GenericInstantiation(false, ctor.Token, istring)
+            let add' = builder.GenericInstantiation(false, add.Token, istring)
 
             let body =
-                { new DefinedMethodBody(locals) with
+                { new DefinedMethodBody(locals, InitLocals) with
                     override _.WriteInstructions(wr, tokens) =
                         // let strings = new GenericsShowcase.ArrayList<string>(4)
                         ldc_i4_4 &wr
@@ -203,7 +225,13 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
                         // strings.Add("Hello!")
                         ldloc_0 &wr
-                        pop &wr
+                        ldstr &wr "Hello!" tokens
+                        call &wr add' tokens
+
+                        // strings.Add("How are you?")
+                        ldloc_0 &wr
+                        ldstr &wr "How are you?" tokens
+                        call &wr add' tokens
 
                         ret &wr
                         wr.EstimatedMaxStack }

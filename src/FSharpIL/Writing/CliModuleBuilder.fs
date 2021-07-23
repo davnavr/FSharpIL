@@ -993,6 +993,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                             CustomAttributeType.MethodDef definedMethodLookup.[MethodTok.unsafeAs ctor]
                         | TypeTok.Named(NamedType.ReferencedType _) ->
                             CustomAttributeType.MemberRef referencedMethodLookup.[MethodTok.unsafeAs ctor]
+                        | TypeTok.Specified _ -> // TODO: If CA constructor defines generic parameters, use MethodSpec instead.
+                            CustomAttributeType.MemberRef miscMethodLookup.[ctor]
                       Value = builder.Blob.Add &attribute.Signature }
                     |> builder.Tables.CustomAttribute.Add
                     |> ignore

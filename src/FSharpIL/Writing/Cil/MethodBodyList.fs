@@ -29,6 +29,7 @@ module internal MethodBody =
     let [<Literal>] MaxTinyMaxStack = 8us
     /// The size of the fat format header, as a count of 4-byte integers (II.25.4.3).
     let [<Literal>] FatFormatSize = 3u
+    let [<Literal>] FatMethodAlignment = 4u
 
     let flags (body: inref<MethodBody>) =
         let mutable flags = ILMethodFlags.None
@@ -60,7 +61,7 @@ type MethodBodyList internal () =
     let mutable offset = 0u
 
     member _.Add(source: inref<#IMethodBodySource>) =
-        let start = MethodBodyLocation offset
+        let start = offset
         let mutable builder =
             { branchTargetList = ImmutableArray.CreateBuilder()
               estimatedMaxStack = 0us
@@ -70,15 +71,16 @@ type MethodBodyList internal () =
         if builder.branchTargetList.Count > 0 then noImpl "TODO: How to write branch targets without rewriting method body a total of three times (initial write, rewrite here, and serialization)"
 
         let bodyi = bodies.Count
+
         bodies.Add { Header = header; Instructions = builder.instructions }
+
         let body = &bodies.ItemRef bodyi // Possible struct copy since MethodBody is not immutable
+        let isTinyMethod = MethodBody.flags &body = ILMethodFlags.TinyFormat
+        let methodHeaderSize = if isTinyMethod then 1u else (MethodBody.FatFormatSize * 4u)
+        let padding = if isTinyMethod then 0u else (Round.upTo 4u offset) - offset
 
-        let methodHeaderSize = if MethodBody.flags &body = ILMethodFlags.TinyFormat then 1u else (MethodBody.FatFormatSize * 4u)
-        offset <- offset + body.CodeSize + methodHeaderSize
-        start
-
-    /// Gets the number of method bodies.
-    member _.Count = bodies.Count
+        offset <- offset + body.CodeSize + methodHeaderSize + padding
+        MethodBodyLocation(start + padding)
 
     member internal _.Serialize(wr: byref<ChunkedMemoryBuilder>) =
         for i = 0 to bodies.Count - 1 do
@@ -95,6 +97,7 @@ type MethodBodyList internal () =
 
                 //if has extra data sections then flags' <- flags' ||| ILMethodFlags.MoreSects
 
+                wr.AlignTo(int32 MethodBody.FatMethodAlignment) // Padding
                 wr.WriteLE(uint16 flags' ||| (uint16 MethodBody.FatFormatSize <<< 12)) // Flags & size
                 wr.WriteLE body.Header.MaxStack
                 wr.WriteLE body.CodeSize

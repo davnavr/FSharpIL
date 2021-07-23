@@ -8,8 +8,7 @@ open FSharpIL.Metadata.Blobs
 open FSharpIL.Metadata.Tables
 
 /// <summary>Represents an index into the <c>TypeDef</c> or <c>TypeRef</c> table (II.23.2.8).</summary>
-[<IsReadOnly; Struct>]
-[<StructuralComparison; StructuralEquality>]
+[<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
 type TypeDefOrRefEncoded =
     val IsDefinition: bool
     val internal Index: uint32
@@ -28,8 +27,7 @@ module TypeDefOrRefEncoded =
     val toCodedIndex : index: TypeDefOrRefEncoded -> TypeDefOrRef
 
 /// Describes the lower bounds, lengths, and number of dimensions of an array (II.23.2.13).
-[<IsReadOnly; Struct>]
-[<NoComparison; CustomEquality>]
+[<IsReadOnly; Struct; NoComparison; CustomEquality>]
 type ArrayShape =
     { /// Specifies the number of dimensions in the array.
       Rank: uint32
@@ -42,8 +40,7 @@ type ArrayShape =
 
     interface IEquatable<ArrayShape>
 
-[<IsReadOnly; Struct>]
-[<NoComparison; StructuralEquality>]
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type MethodThis =
     member Tag: CallConvFlags
 
@@ -65,8 +62,7 @@ module MethodThis =
     val HasThis : MethodThis
     val ExplicitThis : MethodThis
 
-[<IsReadOnly; Struct>]
-[<NoComparison; StructuralEquality>]
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type CallingConventions =
     val Tag: CallConvFlags
     /// <summary>The number of generic parameters, stored in <c>GenParamCount</c> (II.23.2.1).</summary>
@@ -91,8 +87,7 @@ module CallingConventions =
     val Generic : count: uint32 -> CallingConventions
 
 /// <summary>Represents a <c>Type</c> (II.23.2.12).</summary>
-[<RequireQualifiedAccess>]
-[<NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
 type EncodedType =
     /// <summary>The <see cref="T:System.Boolean"/> type.</summary>
     | Boolean
@@ -154,7 +149,7 @@ and [<RequireQualifiedAccess; IsReadOnly; Struct; NoComparison; StructuralEquali
 
     interface IEquatable<Pointer>
 
-and [<IsReadOnly; Struct>] GenericArgList =
+and [<IsReadOnly; Struct>] GenericArgList = // TODO: GenericArgList should use CustomEquality and override GetHashCode
     internal { GenArgs: ImmutableArray<EncodedType> }
 
     member Count: uint32
@@ -188,7 +183,7 @@ type ParamItem =
 *)
 
 /// <summary>Represents a <c>Param</c> item used in method signatures (II.23.2.10).</summary>
-and [<IsReadOnly; Struct>] ParamItem =
+and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] ParamItem =
     val Tag: ParamItemTag
     val internal Modifiers: CustomMod list
     val ParamType: EncodedType voption // TODO: Consider using Unchecked.defaultof<EncodedType> instead of ValueNone to save 4 bytes.
@@ -222,7 +217,7 @@ type RetType =
 *)
 
 /// <summary>Represents a <c>RetType</c> item used in method signatures (II.23.2.11).</summary>
-and [<IsReadOnly; Struct>] RetTypeItem =
+and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] RetTypeItem =
     val Tag: RetTypeTag
     val internal Modifiers: CustomMod list
     val ReturnType: EncodedType voption // TODO: Consider using Unchecked.defaultof<EncodedType> instead of ValueNone to save 4 bytes.
@@ -238,6 +233,8 @@ and [<IsReadOnly; Struct>] RetTypeItem =
     /// defined before the type if the return type is a normal type.
     /// </summary>
     member CustomModifiers: CustomMod list
+
+    interface IEquatable<RetTypeItem>
 
 /// <summary>Represents a <c>MethodDefSig</c>, which captures the signature of a method or global function (II.23.2.1).</summary>
 and [<IsReadOnly; Struct>] MethodDefSig =
@@ -259,8 +256,11 @@ and [<IsReadOnly; Struct>] MethodRefSig =
 /// <summary>
 /// Represents a <c>FieldSig</c> item, which captures the definition of a field or global variable (II.23.2.4).
 /// </summary>
-[<IsReadOnly; Struct>]
-type FieldSig = { FieldType: EncodedType }
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type FieldSig =
+    { FieldType: EncodedType }
+
+    interface IEquatable<FieldSig>
 
 /// <summary>
 /// Represents a <c>PropertySig</c> item, which describes the return type and parameter types of a <c>get_</c> method.

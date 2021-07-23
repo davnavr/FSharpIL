@@ -1,4 +1,4 @@
-﻿namespace FSharpIL.Writing.Cil
+﻿namespace FSharpIL.Writing.Cil // TODO: Rename namespace to avoid conflicts with FSharpIL.Metadata.Cil. Rename FSharpIL.Metadata.Cil to FSharpIl.InstructionSet
 
 open System
 open System.Collections.Immutable

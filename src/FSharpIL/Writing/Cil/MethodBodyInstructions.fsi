@@ -15,7 +15,7 @@ module Unsafe =
     val incrMaxStack : stream: byref<MethodBodyBuilder> -> unit
 
     val writeRawOpcode : stream: byref<MethodBodyBuilder> -> opcode: Opcode -> unit
-    
+
     /// Writes an opcode that pushes a single item onto the stack.
     val inline writePushingOpcode : stream: byref<MethodBodyBuilder> -> opcode: Opcode -> unit
 
@@ -56,7 +56,7 @@ module Unsafe =
 
 [<RequireQualifiedAccess>]
 module Branch =
-    /// Creates a destination for a branch instruction. The branch instruction will jump to the last byte that was written.
+    /// Creates a destination for a branch instruction, control will jump to the next instruction after the label.
     val inline createLabel : stream: inref<MethodBodyBuilder> -> Label
     /// Sets the target of a branch instruction.
     val setTarget : branch: byref<BranchTarget> -> destination: Label -> unit
@@ -234,6 +234,14 @@ val inline ret : stream: byref<MethodBodyBuilder> -> unit
 
 
 
+/// <summary>
+/// (0x69) Writes an instruction that converts the value on top of the stack into an <c>int32</c> without an overflow check
+/// (III.3.27).
+/// </summary>
+val inline conv_i4 : stream: byref<MethodBodyBuilder> -> unit
+
+
+
 /// <summary>(0x6F) Writes an instruction that calls a method associated with an object (III.4.2).</summary>
 val callvirt : stream: byref<MethodBodyBuilder> -> method: MethodTok -> tokens: MetadataTokenSource -> unit // TODO: Take a non-static method here.
 
@@ -305,9 +313,13 @@ val inline stsfld : stream: byref<MethodBodyBuilder> -> FieldTok -> tokens: Meta
 
 
 
-/// (0x8D) Writes an instruction that pops a native or 32-bit integer length off of the stack and creates "a zero-based,
+/// (0x8D) Writes an instruction that pops a signed native or 32-bit integer <c>length</c> off of the stack and creates "a zero-based,
 /// one-dimensional array" of the specified type (III.4.20).
 val inline newarr : stream: byref<MethodBodyBuilder> -> etype: TypeTok -> tokens: MetadataTokenSource -> unit
+
+/// (0x8E) Writes an instruction that pops an object reference to an array off of the stack and pushes the length of the array
+/// onto the stack as an unsigned native integer (III.4.12).
+val inline ldlen : stream: byref<MethodBodyBuilder> -> unit
 
 
 
