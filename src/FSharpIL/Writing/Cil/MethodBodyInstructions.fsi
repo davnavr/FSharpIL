@@ -75,10 +75,6 @@ module Call =
     /// <summary>(0x6F) Writes an instruction that calls the <paramref name="method"/> associated with an object (III.4.2).</summary>
     val callvirt : stream: byref<MethodBodyBuilder> -> method: MethodMetadataToken -> hasRetValue: bool -> unit
 
-// TODO: Have module for versions of field instructions that take a FieldMetadataToken instead.
-
-// TODO: Have module for versions of instrucions like `newarr` that take a TypeMetadataToken instead.
-
 /// (0x00) Writes an instruction that does nothing (III.3.51).
 val inline nop : stream: byref<MethodBodyBuilder> -> unit
 

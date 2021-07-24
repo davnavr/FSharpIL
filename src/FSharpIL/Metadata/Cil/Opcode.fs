@@ -150,7 +150,7 @@ type Opcode =
     | Readonly_ = 0xFE_1Eus
 
 [<RequireQualifiedAccess>]
-module ParsedOpcode =
+module ParsedOpcode = // TODO: Module name should be Opcode.
     let private names = System.Collections.Generic.Dictionary<Opcode, string>()
     let name (opcode: Opcode) =
         match names.TryGetValue opcode with
@@ -159,3 +159,10 @@ module ParsedOpcode =
             let name = opcode.ToString().ToLowerInvariant().Replace('_', '.')
             names.[opcode] <- name
             name
+
+[<RequireQualifiedAccess>]
+module Opcode =
+    let size opcode =
+        if opcode < Opcode.Arglist
+        then 1u
+        else 2u

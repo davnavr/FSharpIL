@@ -88,6 +88,8 @@
     <Compile Include="Writing\Cil\MethodBodyInstructions.fsi" />
     <Compile Include="Writing\Cil\MethodBodyInstructions.fs" />
     <Compile Include="Writing\Cil\MethodBodyList.fs" />
+    <Compile Include="Writing\Cil.fsi" />
+    <Compile Include="Writing\Cil.fs" />
     <Compile Include="Writing\IStreamBuilder.fs" />
     <Compile Include="Writing\StringHelpers.fs" />
     <Compile Include="Writing\StringsStreamBuilder.fs" />
