@@ -125,8 +125,6 @@ val inline stloc_2 : stream: byref<MethodBodyBuilder> -> unit
 /// (III.3.63).
 val inline stloc_3 : stream: byref<MethodBodyBuilder> -> unit
 
-
-
 /// <summary>
 /// (0x0E) Writes the short form of an instruction that loads the specified argument onto the stack (III.3.38).
 /// </summary>
