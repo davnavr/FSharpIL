@@ -8,6 +8,7 @@ type TypeMetadataToken private (token: MetadataToken) = struct
     member _.Type = token.Type
     member _.Token = token
     override _.ToString() = token.ToString()
+    static member inline op_Implicit(token: TypeMetadataToken) = uint32 token.Token
 end
 
 [<RequireQualifiedAccess>]

@@ -11,6 +11,7 @@ open FSharpIL.Metadata.Tables
 
 open FSharpIL.Cli
 
+open FSharpIL
 open FSharpIL.Utilities
 
 [<Struct>]
@@ -114,13 +115,26 @@ type MethodBodyEntry =
       MaxStack: MaxStack
       CodeSize: uint32
       Instructions: ImmutableArray<Instruction>.Builder
-      LabelLookup: Dictionary<Label, uint32> voption }
+      LabelLookup: Dictionary<Label, uint32> }
+
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
+type BranchTargetOffset =
+    { Target: Label
+      Kind: BranchKind
+      Offset: ChunkedMemoryBuilder }
+
+type IMetadataTokenSource =
+    abstract GetUserString: inref<ReadOnlyMemory<char>> -> UserStringOffset
+    abstract GetMethodToken: method: MethodTok -> MethodMetadataToken
+    abstract GetFieldToken: field: FieldTok  -> FieldMetadataToken
+    abstract GetTypeToken: TypeTok -> TypeMetadataToken
 
 [<Sealed>]
-type MethodBodyStream () =
+type MethodBodyStream (metadataTokenSource: IMetadataTokenSource) =
     let bodies = Dictionary<MethodBody, MethodBodyEntry>()
 
-    member this.Add body = // TODO: Return a Result
+    // TODO: Store dictionary of method bodies in CliModuleBuilder, so DefineMethod can report errors with bodies.
+    member _.Add body = // TODO: Return a Result
         match bodies.TryGetValue body with
         | true, { MaxStack = maxStack; CodeSize = size } -> struct(maxStack, size)
         | false, _ ->
@@ -180,23 +194,85 @@ type MethodBodyStream () =
                   MaxStack = maxStack
                   CodeSize = size
                   Instructions = instructions
-                  LabelLookup = ValueOption.ofObj resolvedLabels }
+                  LabelLookup = resolvedLabels }
 
             bodies.Add(body, entry)
             struct(maxStack, size)
 
-    member _.WriteTo(section: byref<FSharpIL.ChunkedMemoryBuilder>(*, metadataTokenSource: IMetadataTokenSource*)) = // TODO: Have parameter for function/object that validates MethodBody.
+    member _.WriteTo(section: byref<ChunkedMemoryBuilder>) =
+        let branchTargetOffsets = ImmutableArray.CreateBuilder<BranchTargetOffset>()
+
         for KeyValue(body, entry) in bodies do
             noImpl "TODO: Write headers"
 
-            let diff = 0u // The difference between the actual offsets of the instructions from the start of the method and the recorded offsets.
-            noImpl "cannot serialize method bodies yet": unit
+            let start = section.Length
+            // Difference between the actual offsets of the instructions from the start of the method and the recorded offsets.
+            let mutable diff = 0u
 
-type IMetadataTokenSource =
-    abstract GetUserString: inref<ReadOnlyMemory<char>> -> UserStringOffset
-    abstract GetMethodToken: method: MethodTok -> MethodMetadataToken
-    abstract GetFieldToken: field: FieldTok  -> FieldMetadataToken
-    abstract GetTypeToken: FSharpIL.Cli.TypeSystem.TypeTok -> TypeMetadataToken
+            branchTargetOffsets.Clear()
+
+            if branchTargetOffsets.Capacity < entry.LabelLookup.Count then
+                branchTargetOffsets.Capacity <- entry.LabelLookup.Count
+
+            for i = 0 to entry.Instructions.Count - 1 do
+                let instruction = &entry.Instructions.ItemRef i
+
+                match Opcode.size instruction.Opcode with
+                | 1u -> section.Write(uint8 instruction.Opcode)
+                | 2u
+                | _ ->
+                    section.Write(uint8(instruction.Opcode >>> 8))
+                    section.Write(uint8(uint16 instruction.Opcode &&& 0xFFus))
+
+                let pos = section.Length - start
+
+                match instruction.Operand with
+                | Nothing -> ()
+                | Byte value -> section.Write value
+                | Short value -> section.WriteLE value
+                | Integer value -> section.WriteLE value
+                | RawToken token -> section.WriteLE(uint32 token)
+                | FieldToken token -> section.WriteLE(uint32(metadataTokenSource.GetFieldToken token))
+                | MethodToken token -> section.WriteLE(uint32(metadataTokenSource.GetMethodToken token))
+                | TypeToken token -> section.WriteLE(uint32(metadataTokenSource.GetTypeToken token))
+                | BranchTarget _ when isNull entry.LabelLookup ->
+                    invalidOp(sprintf "Cannot lookup branch target label at IL_%04X, no labels were defined" pos)
+                | BranchTarget(kind, label) ->
+                    let target = int64 pos - int64(entry.LabelLookup.[label] - diff)
+                    let offset = section
+
+                    match kind with
+                    | BranchKind.Shortened when target >= int64 SByte.MinValue || target <= int64 SByte.MaxValue ->
+                        section.Write(uint8 target)
+                        diff <- diff + 3u // 3 extra bytes removed since 4-byte offset shortened to 1-byte offset.
+                    | BranchKind.Shortened
+                    | BranchKind.Long ->
+                        section.WriteLE(uint64 target)
+
+                    if target > 0L then
+                        // Offset will need to be continuously updated until the writer writes its target instruction.
+                        branchTargetOffsets.Add { BranchTargetOffset.Offset = offset; Kind = kind; Target = label }
+
+                let mutable targeti = 0
+                while i < branchTargetOffsets.Count do
+                    let target = &branchTargetOffsets.ItemRef i
+                    let label = entry.LabelLookup.[target.Target]
+                    let target' = label - diff // TODO: Avoid code duplication with initial calculation of target.
+                    let pos = section.Length - start
+
+                    if pos >= label then
+                        let target'' = int64 pos - int64 target' // TODO: Avoid code duplication with initial calculation of target.
+                        let mutable offset = target.Offset
+
+                        // Some targets might suddenly be eligible to turn into 1-byte offsets, but it might be too much work to
+                        // shorten them.
+                        match target.Kind with
+                        | BranchKind.Shortened -> offset.Write(uint8(Checked.int8 target''))
+                        | BranchKind.Long -> offset.WriteLE(uint64 target'')
+
+                        targeti <- targeti + 1
+                    else
+                        branchTargetOffsets.RemoveAt 0 // TODO: Use some Queue<T> class to make removing branch targets that no longer need to be updated more efficient.
 
 module Instructions =
     module Instruction =

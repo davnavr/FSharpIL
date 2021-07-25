@@ -83,21 +83,21 @@ module MethodBody =
     [<Literal>] val internal FatMethodAlignment: uint32 = 4u
     [<Literal>] val internal MaxTinyStackCount: uint16 = 8us
 
-/// Represents the method bodies of the CLI metadata (II.25.4).
-[<Sealed>]
-type MethodBodyStream =
-    internal new: unit -> MethodBodyStream
-
-    member Add: body: MethodBody -> struct(MaxStack * uint32)
-
-    member internal WriteTo: section: byref<FSharpIL.ChunkedMemoryBuilder> -> unit
-
 [<Interface>]
 type IMetadataTokenSource =
     abstract GetUserString: inref<ReadOnlyMemory<char>> -> UserStringOffset
     abstract GetMethodToken: method: MethodTok -> MethodMetadataToken
     abstract GetFieldToken: field: FieldTok  -> FieldMetadataToken
     abstract GetTypeToken: FSharpIL.Cli.TypeSystem.TypeTok -> TypeMetadataToken
+
+/// Represents the method bodies of the CLI metadata (II.25.4).
+[<Sealed>]
+type MethodBodyStream =
+    internal new: metadataTokenSource: IMetadataTokenSource -> MethodBodyStream
+
+    member Add: body: MethodBody -> struct(MaxStack * uint32)
+
+    member internal WriteTo: section: byref<FSharpIL.ChunkedMemoryBuilder> -> unit
 
 [<AutoOpen>]
 module Instructions =
