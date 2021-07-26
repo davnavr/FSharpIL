@@ -298,12 +298,10 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
                 let struct (loopStartLabel, loopStart) =
                     InstructionBlock.ofList [
-                        // i < this.items.Length
+                        // i < this.index
                         ldloc_0
                         ldarg_0
-                        ldfld items'
-                        ldlen
-                        conv_i4
+                        ldfld index'
                         blt_s loopBodyLabel
                     ]
                     |> InstructionBlock.label
@@ -334,23 +332,33 @@ let example() = // TODO: Make helper function to add reference to System.Private
                 )
 
             let istring _ _ = PrimitiveType.String
+            let strlist = GenericType.instantiate (GenericType.Defined arrlist.Definition) istring
+            let istrlist _ _ = CliType.GenericClass strlist
 
             let locals =
-                // let strings: GenericsShowcase.ArrayList<string>
-                GenericType.instantiate (GenericType.Defined arrlist.Definition) istring
-                |> CliType.GenericClass
-                |> CliType.toLocalType
-                |> ImmutableArray.Create
+                ImmutableArray.CreateRange [
+                    // let strings: GenericsShowcase.ArrayList<string>
+                    CliType.GenericClass strlist |> CliType.toLocalType
 
+                    // let list2: GenericsShowcase.ArrayList<GenericsShowcase.ArrayList<string>>
+                    GenericType.instantiate (GenericType.Defined arrlist.Definition) istrlist
+                    |> CliType.GenericClass
+                    |> CliType.toLocalType
+                ]
+
+            (* Note that a generic instantiation of the type needs to be made its fields or methods can be used.
+               The field and method tokens for generic types are almost never used directly. *)
             let body = MethodBody.create InitLocals ValueNone (LocalVariables.Locals locals) [
                 InstructionBlock.ofList [
+                    // TODO: How to avoid confusion, caller might think a MemberRef is being generated without the "generic (uninstantiated) signature of the member" (II.9.8).
+                    let strinst (tok: MethodTok<_, _>) = builder.GenericInstantiation(false, tok.Token, istring)
                     // let strings = new GenericsShowcase.ArrayList<string>(4)
                     ldc_i4_4
-                    Newobj.ofMethod (builder.GenericInstantiation(false, ctor.Token, istring))
+                    Newobj.ofMethod (strinst ctor)
                     stloc_0
 
                     // strings.Add("Hello!")
-                    let add' = builder.GenericInstantiation(false, add.Token, istring)
+                    let add' = strinst add
                     ldloc_0
                     ldstr "Hello!"
                     call add'
@@ -362,7 +370,22 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
                     // strings.PrintItems()
                     ldloc_0
-                    call print.Token
+                    call (strinst print)
+
+                    let strlistinst (tok: MethodTok<_, _>) = builder.GenericInstantiation(false, tok.Token, istrlist)
+                    // let list2 = new GenericsShowcase.ArrayList<GenericsShowcase.ArrayList<string>>(1)
+                    ldc_i4_4
+                    Newobj.ofMethod (strlistinst ctor)
+                    stloc_1
+
+                    // list2.Add(strings)
+                    ldloc_1
+                    ldloc_0
+                    call (strlistinst add)
+
+                    // list2.PrintItems()
+                    ldloc_1
+                    call (strlistinst print)
 
                     ret
                 ]
@@ -396,6 +419,6 @@ let tests =
 
             fun() ->
                 let code = dotnet.ExitCode
-                test <@ code = 0 && out = [ "Hello!"; "How are you?" ] @>
+                test <@ code = 0 && out = [ "Hello!"; "How are you?"; "GenericsShowcase.ArrayList`1[System.String]" ] @>
     ]
 #endif

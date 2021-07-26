@@ -930,13 +930,16 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         for i = 0 to info.MethodReferences.Count - 1 do
             let method = &info.MethodReferences.ItemRef i
             let token = MethodTok.create (TypeTok.Specified method.Owner) method.Member
-            let i' =
-                { Class = miscMemberParent method.Owner
-                  Name = builder.Strings.Add method.Member.Name
-                  Signature = { MemberRefSig = (getMethodSig method.Member).MethodDefSig } }
-                |> builder.Tables.MemberRef.Add
-
-            miscMethodLookup.Add(token, i')
+            match miscMethodLookup.TryGetValue token with
+            | true, _ -> ()
+            | false, _ ->
+                let i' =
+                    { Class = miscMemberParent method.Owner
+                      Name = builder.Strings.Add method.Member.Name
+                      Signature = { MemberRefSig = (getMethodSig method.Member).MethodDefSig } }
+                    |> builder.Tables.MemberRef.Add
+                
+                miscMethodLookup.Add(token, i')
 
         // Safe to generate method bodies, since all referenced members should have been added.
         for i = 0 to definedMethodBodies.Count - 1 do
