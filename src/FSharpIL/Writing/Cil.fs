@@ -257,7 +257,7 @@ type MethodBodyStream () =
             struct(maxStack, size)
 
     member _.ToMemory(metadataTokenSource: IMetadataTokenSource) =
-        let wr = ChunkedMemoryBuilder 0x10
+        let mutable wr = ChunkedMemoryBuilder 0x10
         let locations = Dictionary bodies.Count
 
         for KeyValue(body, entry) in bodies do
@@ -266,7 +266,8 @@ type MethodBodyStream () =
             match entry.Kind with
             | Tiny ->
                 let flags = uint8 ILMethodFlags.TinyFormat ||| (Checked.uint8 entry.CodeSize <<< 2)
-                if flags &&& uint8 ILMethodFlags.FatFormat <> 0uy then invalidOp(sprintf "Invalid tiny method flags %A" flags)
+                if Flags.set (uint8 ILMethodFlags.FatFormat) flags then
+                    invalidOp(sprintf "Invalid tiny method flags 0x%02X" flags)
                 wr.Write flags
             | Fat ->
                 let mutable flags' = ILMethodFlags.FatFormat
