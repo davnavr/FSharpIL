@@ -60,3 +60,25 @@ module FieldTok =
 
     let ofTypeRef owner field cache =
         FieldTok<ReferencedType, 'Field>(TypeTok.Named(NamedTypeCache.addReferenced owner cache), field)
+
+type PropertyMethodTok = MethodTok<DefinedType, DefinedMethod>
+
+[<Struct>]
+type PropertyTok (owner: NamedType, property: Property) =
+    member _.Owner =
+        match owner with
+        | NamedType.DefinedType defined -> defined
+        | NamedType.ReferencedType _ -> invalidOp "Type references cannot own property definitions"
+
+    member _.Property = property
+
+    member inline private _.MethodToken method =
+        match method with
+        | ValueSome getter -> ValueSome(PropertyMethodTok(TypeTok.Named owner, getter))
+        | ValueNone -> ValueNone
+
+    member this.Getter = this.MethodToken property.Getter
+    member this.Setter = this.MethodToken property.Setter
+
+module PropertyTok =
+    let ofTypeDef owner property cache = PropertyTok(NamedTypeCache.addDefined owner cache, property)

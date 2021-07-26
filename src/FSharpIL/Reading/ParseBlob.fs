@@ -307,7 +307,7 @@ let propertySig (chunk: inref<ChunkedMemory>) =
 
             match compressedUnsigned &chunk with // ParamCount
             | Ok(_, pcount) ->
-                match etype &chunk with
+                match retType &chunk with
                 | Ok ptype ->
                     match paramList &chunk pcount with
                     | Ok parameters ->

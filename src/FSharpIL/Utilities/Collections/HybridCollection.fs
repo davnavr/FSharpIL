@@ -28,7 +28,7 @@ type internal HybridCollection<'Item, 'Inner, 'InnerEnumerator, 'Methods
     member this.IsEmpty = this.Count = 0
 
     member internal this.InitInner() =
-        if this.Count > 3 && isNull this.inner then
+        if this.Count >= 3 && isNull this.inner then
             this.inner <- Unchecked.defaultof<'Methods>.InitInner()
 
     member inline internal _.ItemsEqual(x, y) = Unchecked.defaultof<'Methods>.EqualityComparer.Equals(x, y)
@@ -96,7 +96,9 @@ module internal HybridCollection =
                 true
             | EnumeratorState.Third when this.hasInner ->
                 this.state <- EnumeratorState.Rest
-                true
+                let moved = this.inner.MoveNext()
+                if not moved then this.state <- EnumeratorState.ReachedEnd
+                moved
             | EnumeratorState.Third -> this.ReachedEnd()
             | EnumeratorState.Rest ->
                 let moved = this.inner.MoveNext()

@@ -67,3 +67,20 @@ module FieldTok =
         field: 'Field ->
         cache: NamedTypeCache ->
         FieldTok<ReferencedType, 'Field>
+
+type PropertyMethodTok = MethodTok<DefinedType, DefinedMethod>
+
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type PropertyTok =
+    member Owner: DefinedType
+    member Property: Property
+
+    member Getter: PropertyMethodTok voption
+    member Setter: PropertyMethodTok voption
+    //member Other: seq<PropertyMethodTok>
+
+    interface IEquatable<PropertyTok>
+
+[<RequireQualifiedAccess>]
+module PropertyTok =
+    val internal ofTypeDef : owner: DefinedType -> property: Property -> cache: NamedTypeCache -> PropertyTok

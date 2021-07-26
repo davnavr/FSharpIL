@@ -321,6 +321,33 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
             members.DefineMethod(definition, body, ValueNone)
 
+        // member public Count: int32 with get
+        let! count =
+            let getdef =
+                DefinedMethod.Instance (
+                    MemberVisibility.Public,
+                    flags = MethodAttributes.SpecialName,
+                    returnType = ReturnType.T PrimitiveType.I4,
+                    name = MethodName.ofStr "get_Count",
+                    parameterTypes = ImmutableArray.Empty,
+                    parameterList = Parameter.emptyList
+                )
+
+            let getbody = MethodBody.ofSeq [
+                // this.index
+                ldarg_0
+                ldfld index'
+                ret
+            ]
+
+            members.Members.DefineProperty (
+                name = Identifier.ofStr "Count",
+                getter = ValueSome(getdef :> DefinedMethod, ValueSome getbody, ValueNone),
+                setter = ValueNone,
+                other = List.empty,
+                attributes = ValueNone
+            )
+
         // static member public Main: unit -> unit
         let! _ =
             let main =

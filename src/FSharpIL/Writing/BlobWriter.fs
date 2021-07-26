@@ -203,7 +203,7 @@ let fieldSig (signature: inref<FieldSig>) (stream: byref<ChunkedMemoryBuilder>) 
 let propertySig (signature: inref<PropertySig>) (stream: byref<ChunkedMemoryBuilder>) =
     stream.Write(if signature.HasThis then 0x28uy else 0x8uy) // PROPERTY
     compressedUnsigned (uint32 signature.Parameters.Length) &stream // ParamCount
-    etype signature.PropertyType &stream
+    retType &signature.PropertyType &stream
     parameters signature.Parameters &stream
 
 let serString str (stream: byref<ChunkedMemoryBuilder>) =
@@ -281,6 +281,9 @@ let customAttrib (attrib: inref<_>) (stream: byref<ChunkedMemoryBuilder>) =
 let rec localConstraintList (constraints: Constraint list) (stream: byref<ChunkedMemoryBuilder>) =
     match constraints with
     | [] -> ()
+    | Constraint.Pinned :: constraints' ->
+        elem ElementType.Pinned &stream
+        localConstraintList constraints' &stream
 
 let localVarSig (signature: LocalVarSig) (stream: byref<ChunkedMemoryBuilder>) =
     if signature.IsDefaultOrEmpty then

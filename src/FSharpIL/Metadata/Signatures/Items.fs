@@ -233,7 +233,7 @@ module MethodRefSig =
 [<IsReadOnly; Struct>]
 type PropertySig =
     { HasThis: bool
-      PropertyType: EncodedType
+      PropertyType: RetTypeItem
       Parameters: ImmutableArray<ParamItem> }
 
 [<IsReadOnly; Struct>]

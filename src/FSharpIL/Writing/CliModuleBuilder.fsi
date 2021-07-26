@@ -23,6 +23,9 @@ type CustomAttributeList =
 /// Used to obtain a mutable list of custom attributes.
 type CustomAttributeBuilder = CustomAttributeList ref voption
 
+/// Used to generate a method for a property.
+type DefinedPropertyMethod = DefinedMethod * MethodBody voption * CustomAttributeBuilder
+
 [<Sealed>]
 type DefinedTypeMembers =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
@@ -32,7 +35,7 @@ type DefinedTypeMembers =
     member Owner: DefinedType
     member FieldCount: int32
     member MethodCount: int32
-    //member PropertyCount: int32
+    member PropertyCount: int32
     //member EventCount: int32
 
     member DefineField:
@@ -48,6 +51,13 @@ type DefinedTypeMembers =
         method: EntryPointMethod *
         body: MethodBody *
         attributes: CustomAttributeBuilder -> ValidationResult<MethodTok<DefinedType, MethodDefinition<MethodKinds.Static>>>
+
+    member DefineProperty:
+        name: Identifier *
+        getter: DefinedPropertyMethod voption *
+        setter: DefinedPropertyMethod voption *
+        other: DefinedPropertyMethod list *
+        attributes: CustomAttributeBuilder -> ValidationResult<PropertyTok>
 
     member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool

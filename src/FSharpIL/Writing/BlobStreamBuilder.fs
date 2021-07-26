@@ -47,6 +47,12 @@ type private MethodRefSigWriter = struct
         member _.Write(wr, signature) = BlobWriter.methodRefSig &signature &wr
 end
 
+type private PropertySigWriter = struct
+    interface IBlobWriter<PropertySig> with
+        [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
+        member _.Write(wr, signature) = BlobWriter.propertySig &signature &wr
+end
+
 type private CustomAttribWriter = struct
     interface IBlobWriter<CustomAttrib> with
         [<MethodImpl(MethodImplOptions.AggressiveInlining)>]
@@ -127,6 +133,8 @@ type BlobStreamBuilder (capacity: int32) =
     member this.Add(signature: inref<_>) = { MethodDefSig = this.Add<MethodDefSigWriter, _> &signature }
 
     member this.Add(signature: inref<_>) = { MemberRefSig = this.Add<MethodRefSigWriter, _> &signature }
+
+    member this.Add(signature: inref<_>) = { PropertySig = this.Add<PropertySigWriter, _> &signature }
 
     member this.Add(attrib: inref<_>) = { CustomAttrib = this.Add<CustomAttribWriter, _> &attrib }
 

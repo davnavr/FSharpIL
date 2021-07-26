@@ -42,6 +42,7 @@ module CustomAttribute =
         static member DefinedType(tdef: DefinedType) = { Owner = tdef }
         static member DefinedField(field: Field) = { Owner = field }
         static member DefinedMethod(method: DefinedMethod) = { Owner = method }
+        static member Property(property: Property) = { Owner = property }
 
     let rec private createFixedArgsLoop
         (args: byref<FixedArg[]>)
@@ -126,15 +127,19 @@ module CustomAttributeList =
 
 type CustomAttributeBuilder = CustomAttributeList ref voption
 
+type DefinedPropertyMethod = DefinedMethod * MethodBody voption * CustomAttributeBuilder
+
 [<Sealed>]
 type DefinedTypeMembers (owner: DefinedType, warnings: _ option, methodBodyCache: MethodBodyStream, namedTypeCache, entryPointToken, attrs) =
-    [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
+    [<DefaultValue>] val mutable Field: HybridHashSet<DefinedField>
     [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
-    [<DefaultValue>] val mutable internal MethodBodyLookup: LateInitDictionary<DefinedMethod, MethodBody>
+    [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, MethodBody>
+    [<DefaultValue>] val mutable Property: HybridHashSet<Property>
 
     member _.Owner = owner
     member this.FieldCount = this.Field.Count
     member this.MethodCount = this.Method.Count
+    member this.PropertyCount = this.Property.Count
 
     member this.AddDefinedField field =
         if this.Field.Add field
@@ -183,6 +188,41 @@ type DefinedTypeMembers (owner: DefinedType, warnings: _ option, methodBodyCache
             let! target = this.AddDefinedMethod(method.Method, ValueSome body, attributes)
             entryPointToken := EntryPoint.EntryPointMethod target
             return target
+        }
+
+    member private this.AddPropertyMethod(method: DefinedPropertyMethod voption) =
+        validated {
+            match method with
+            | ValueSome(method', body, attributes) ->
+                let! _ = this.DefineMethod(method', body, attributes)
+                return ValueSome method'
+            | ValueNone -> return ValueNone
+        }
+
+    // TODO: Check that type and signature of property is correct.
+    // TODO: Define overload that forces setting of SpecialName flags for all methods.
+    member this.DefineProperty(name, getter, setter, other: DefinedPropertyMethod list, attributes) =
+        // Should other method list be reversed, order might not really matter since almost no one will define extra property methods.
+        let rec addOtherMethods other methods =
+            match other with
+            | [] -> Ok methods
+            | (other', body, attributes) :: remaining ->
+                validated {
+                    let! _ = this.DefineMethod(other', body, attributes)
+                    return! addOtherMethods remaining (other' :: methods)
+                }
+
+        validated {
+            let! getter' = this.AddPropertyMethod getter
+            let! setter' = this.AddPropertyMethod setter
+            let! other' = addOtherMethods other []
+            let property = Property(name, getter', setter', other')
+
+            if this.Property.Add property then
+                CustomAttributeList.fromRef (CustomAttribute.Owner.Property property) attrs attributes
+                return PropertyTok.ofTypeDef owner property namedTypeCache
+            else
+                return! Error(noImpl "TODO: Error for duplicate property")
         }
 
     member this.ContainsField field = this.Field.Contains field
@@ -626,23 +666,33 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
                 Unsafe.As &parameters'
 
+        let inline getRetType rtype =
+            match rtype with
+            | ReturnType.T ret -> RetTypeItem.Type(getEncodedType ret)
+            | ReturnType.Void modifiers -> RetTypeItem.Void(getCustomModifiers modifiers)
+            | ReturnType.ByRef(modifiers, ret) -> RetTypeItem.ByRef(getCustomModifiers modifiers, getEncodedType ret)
+            | ReturnType.TypedByRef modifiers -> RetTypeItem.TypedByRef(getCustomModifiers modifiers)
+
         let getMethodSig =
             createBlobLookup Method.signatureComparer <| fun (method: Method) ->
                 let signature =
                     { HasThis = method.HasThis
                       CallingConvention = method.CallingConvention
-                      ReturnType =
-                        match method.ReturnType with
-                        | ReturnType.T ret -> RetTypeItem.Type(getEncodedType ret)
-                        | ReturnType.Void modifiers -> RetTypeItem.Void(getCustomModifiers modifiers)
-                        | ReturnType.ByRef(modifiers, ret) -> RetTypeItem.ByRef(getCustomModifiers modifiers, getEncodedType ret)
-                        | ReturnType.TypedByRef modifiers -> RetTypeItem.TypedByRef(getCustomModifiers modifiers)
+                      ReturnType = getRetType method.ReturnType
                       Parameters = getParameterTypes method.ParameterTypes }
                 builder.Blob.Add &signature
 
         let getFieldSig =
             createBlobLookup Field.signatureComparer <| fun (field: Field) ->
                 let signature = { FieldType = getEncodedType field.Type }
+                builder.Blob.Add &signature
+
+        let getPropertySig =
+            createBlobLookup Method.signatureComparer <| fun (getter: Method) ->
+                let signature =
+                     { PropertySig.HasThis = getter.HasThis.Tag = CallConvFlags.HasThis
+                       PropertyType = getRetType getter.ReturnType
+                       Parameters = getParameterTypes getter.ParameterTypes }
                 builder.Blob.Add &signature
 
         let getLocalsSig =
@@ -685,8 +735,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                     | ValueSome(TypeTok.Specified tspec) -> TypeDefOrRef.Spec(getTypeSpec(getEncodedType tspec))
                     | ValueNone -> Unchecked.defaultof<TypeDefOrRef> // Null
 
-                // The defined fields and methods are added later on in serialization to avoid infinite loops. If the members
-                // were added here instead, any MemberRef used in one of the methods would need to be resolved, but the type has
+                // The defined members are added later on in serialization to avoid infinite loops. If the members were added
+                // here instead, any MemberRef used in one of the methods would need to be resolved, but the type has
                 // not been added yet, so it attempts to add all of the members again, then sees that the same MemberRef has
                 // still not been resolved, looping forever.
                 let i =
@@ -835,77 +885,133 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                 member _.GetTypeToken t = TypeMetadataToken.ofCodedIndex(typeDefOrRefOrSpec t) }
 
         let definedMethodBodies = ImmutableArray.CreateBuilder info.MethodBodies.Count
+        let sortedMethodSemantics = SortedDictionary<HasSemantics, List<_>>()
 
-        let parameterList = MemberIndexCounter<ParamRow>()
-        let fieldList = MemberIndexCounter<FieldRow>()
-        let methodList = MemberIndexCounter<MethodDefRow>()
-        //property and event
+        /// Adds the fields, methods, events, and properties of a type definition.
+        let serializeDefinedMembers =
+            let parameterList = MemberIndexCounter<ParamRow>()
+            let fieldList = MemberIndexCounter<FieldRow>()
+            let methodList = MemberIndexCounter<MethodDefRow>()
+            //let event
+            let propertyList = MemberIndexCounter<PropertyRow>()
 
-        let serializeDefinedMembers parent members =
-            let members' =
-                match members with
-                | ValueNone -> info.DefinedTypes.[parent]
-                | ValueSome members -> members
+            fun parent members ->
+                let members' =
+                    match members with
+                    | ValueNone -> info.DefinedTypes.[parent]
+                    | ValueSome members -> members
 
-            fieldList.Reset()
+                fieldList.Reset()
 
-            for field in members'.Field do
-                let i' =
-                    builder.Tables.Field.Add
-                        { Flags = field.Flags
+                for field in members'.Field do
+                    let i' =
+                        { FieldRow.Flags = field.Flags
                           Name = builder.Strings.Add field.Name
                           Signature = getFieldSig field }
+                        |> builder.Tables.Field.Add
 
-                fieldList.Last <- i'
-                definedFieldLookup.[FieldTok.ofTypeDef parent field info.NamedTypes] <- i'
+                    fieldList.Last <- i'
+                    definedFieldLookup.[FieldTok.ofTypeDef parent field info.NamedTypes] <- i'
 
-            methodList.Reset()
+                methodList.Reset()
 
-            for method in members'.Method do
-                let token = MethodTok.ofTypeDef parent method info.NamedTypes
-                try
-                    parameterList.Reset()
+                let inline createMethodTok method = MethodTok.ofTypeDef parent method info.NamedTypes
 
-                    for i = 0 to method.Parameters.Length - 1 do
-                        let param = &method.Parameters.ItemRef i
-                        parameterList.Last <-
-                            builder.Tables.Param.Add
-                                { Flags = Parameter.flags &param
-                                  Name = builder.Strings.Add param.ParamName
-                                  Sequence = Checked.uint16(i + 1) }
+                for method in members'.Method do
+                    let token = createMethodTok method
+                    try
+                        parameterList.Reset()
 
-                    // Method bodies are written later to avoid bugs regarding members not being added to dictionaries yet.
+                        for i = 0 to method.Parameters.Length - 1 do
+                            let param = &method.Parameters.ItemRef i
+                            parameterList.Last <-
+                                builder.Tables.Param.Add
+                                    { ParamRow.Flags = Parameter.flags &param
+                                      Name = builder.Strings.Add param.ParamName
+                                      Sequence = Checked.uint16(i + 1) }
+
+                        // Method bodies are written later to avoid bugs regarding members not being added to dictionaries yet.
+                        let i' =
+                            { Rva = Unchecked.defaultof<_>
+                              ImplFlags = method.ImplFlags
+                              Flags = method.Flags
+                              MethodDefRow.Name = builder.Strings.Add method.Name
+                              Signature = getMethodSig method
+                              ParamList = parameterList.First }
+                            |> builder.Tables.MethodDef.Add
+
+                        methodList.Last <- i'
+                        definedMethodLookup.[token] <- i'
+
+                        match members'.MethodBodyLookup.TryGetValue method with
+                        | true, body -> definedMethodBodies.Add { Method = i'; Body = body }
+                        | false, _ -> ()
+
+                        // TODO: Add the methods generic parameters, if any.
+                    with
+                    | ex ->
+                        InvalidOperationException(sprintf "Unable to write method %O" token, ex) |> raise
+
+                let inline methodIndexOf method = definedMethodLookup.[createMethodTok method]
+
+                //eventList.Reset()
+
+                // TODO: event
+
+                propertyList.Reset()
+                let mutable addPropertyMap = false
+
+                for property in members'.Property do
+                    if not addPropertyMap then addPropertyMap <- true
+
                     let i' =
-                        { Rva = Unchecked.defaultof<_>
-                          ImplFlags = method.ImplFlags
-                          Flags = method.Flags
-                          Name = builder.Strings.Add method.Name
-                          Signature = getMethodSig method
-                          ParamList = parameterList.First }
-                        |> builder.Tables.MethodDef.Add
+                        { PropertyRow.Flags = property.Flags
+                          Name = builder.Strings.Add property.Name
+                          Type =
+                            match property.Getter with
+                            | ValueSome getter -> getPropertySig getter
+                            | ValueNone -> noImpl "TODO: Figure out what property signature to generate for property with no getter." }
+                        |> builder.Tables.Property.Add
 
-                    methodList.Last <- i'
-                    definedMethodLookup.[token] <- i'
+                    propertyList.Last <- i'
 
-                    match members'.MethodBodyLookup.TryGetValue method with
-                    | true, body -> definedMethodBodies.Add { Method = i'; Body = body }
-                    | false, _ -> ()
+                    match property with
+                    | PropertyMethods(ValueNone, ValueNone, []) -> ()
+                    | _ ->
+                        let methods =
+                            match property with
+                            | PropertyMethods(ValueSome _, ValueNone, [])
+                            | PropertyMethods(ValueNone, ValueSome _, []) -> 1
+                            | PropertyMethods(ValueSome _, ValueSome _, []) -> 2
+                            | _ -> 3
+                            |> List
 
-                    // TODO: Add the methods generic parameters, if any.
-                with
-                | ex ->
-                    InvalidOperationException(sprintf "Unable to write method %O" token, ex) |> raise
+                        let inline addPropertyMethod flag method = methods.Add(struct(flag, methodIndexOf method))
+                        
+                        let inline addGetOrSet flag method =
+                            match method with
+                            | ValueSome method' -> addPropertyMethod flag method'
+                            | ValueNone -> ()
 
-            // TODO: event and property
+                        addGetOrSet MethodSemanticsFlags.Getter property.Getter
+                        addGetOrSet MethodSemanticsFlags.Setter property.Setter
+                        for other in property.Other do addPropertyMethod MethodSemanticsFlags.Other other
 
-            // Safe to manipulate TypeDef row here, as all type definitions have already been added.
-            let parent' = &Unsafe.AsRef &builder.Tables.TypeDef.[definedTypeLookup.[parent]]
+                        sortedMethodSemantics.Add(HasSemantics.Property i', methods)
 
-            Unsafe.AsRef &parent'.FieldList <- fieldList.First
-            Unsafe.AsRef &parent'.MethodList <- methodList.First
+                if addPropertyMap then
+                    { PropertyMapRow.Parent = definedTypeLookup.[parent]
+                      PropertyList = propertyList.First }
+                    |> builder.Tables.PropertyMap.Add
+                    |> ignore
+
+                // Safe to manipulate TypeDef row here, as all type definitions have already been added.
+                let parent' = &Unsafe.AsRef &builder.Tables.TypeDef.[definedTypeLookup.[parent]]
+
+                Unsafe.AsRef &parent'.FieldList <- fieldList.First
+                Unsafe.AsRef &parent'.MethodList <- methodList.First
 
         serializeDefinedMembers ModuleType.Definition' (ValueSome info.GlobalMembers)
-
         for i = 1 to serializedDefinedTypes.Count - 1 do serializeDefinedMembers serializedDefinedTypes.[i] ValueNone
 
         let miscMemberParent owner = getEncodedType owner |> getTypeSpec |> MemberRefParent.TypeSpec
@@ -963,6 +1069,17 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                       Constraint = typeDefOrRefOrSpec constr }
                     |> builder.Tables.GenericParamConstraint.Add
                     |> ignore
+
+        if sortedMethodSemantics.Count > 0 then
+            for KeyValue(parent, methods) in sortedMethodSemantics do
+                for (flag, methodi) in methods do
+                    { MethodSemanticsRow.Semantics = flag
+                      Method = methodi
+                      Association = parent }
+                    |> builder.Tables.MethodSemantics.Add
+                    |> ignore
+
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.MethodSemantics
 
         if builder.Tables.GenericParam.Count > 0 then
             builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.GenericParam

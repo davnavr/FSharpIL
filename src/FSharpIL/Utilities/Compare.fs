@@ -10,6 +10,8 @@ open System.Collections.Immutable
 /// </summary>
 [<RequireQualifiedAccess>]
 module Equatable =
+    let inline withComparer (comparer: IEqualityComparer<'T>) x y = comparer.Equals(x, y)
+
     type [<Interface>] IReferenceComparer<'T when 'T : struct> =
         abstract Equals: x: inref<'T> * y: inref<'T> -> bool
         abstract GetHashCode: inref<'T> -> int32

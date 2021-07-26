@@ -10,7 +10,6 @@ open FSharpIL.Metadata.Cil
 open FSharpIL.Metadata.Tables
 
 open FSharpIL.Cli
-open FSharpIL.Cli.TypeSystem
 
 open FSharpIL
 open FSharpIL.Utilities

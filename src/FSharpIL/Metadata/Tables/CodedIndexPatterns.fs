@@ -33,6 +33,11 @@ module MemberRefParent =
     let TypeRef({ TableIndex = index }: TableIndex<TypeRefRow>) = MemberRefParent(MemberRefParentTag.TypeRef, index)
     let TypeSpec({ TableIndex = index }: TableIndex<TypeSpecRow>) = MemberRefParent(MemberRefParentTag.TypeSpec, index)
 
+[<RequireQualifiedAccess>]
+module HasSemantics =
+    let Property({ TableIndex = index }: TableIndex<PropertyRow>) = HasSemantics(HasSemanticsTag.Property, index)
+    let Event({ TableIndex = index }: TableIndex<EventRow>) = HasSemantics(HasSemanticsTag.Event, index)
+
 
 
 
