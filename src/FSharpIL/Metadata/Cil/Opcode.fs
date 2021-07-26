@@ -40,6 +40,7 @@ type Opcode =
     | Call = 0x28us
 
     | Ret = 0x2Aus
+    | Br_s = 0x2Bus
     
     | Bgt_s = 0x30us
 
@@ -86,8 +87,6 @@ type Opcode =
 
     | Stsfld = 0x80us
 
-    | Newarr = 0x8Dus
-
     | Conv_ovf_i1_un = 0x82us
     | Conv_ovf_i2_un = 0x83us
     | Conv_ovf_i4_un = 0x84us
@@ -98,9 +97,11 @@ type Opcode =
     | Conv_ovf_u8_un = 0x89us
     | Conv_ovf_i_un = 0x8Aus
     | Conv_ovf_u_un = 0x8Bus
-
+    | Box = 0x8Cus
+    | Newarr = 0x8Dus
     | Ldlen = 0x8Eus
 
+    | Ldelem = 0xA3us
     | Stelem = 0xA4us
 
     | Conv_ovf_i1 = 0xB3us

@@ -96,6 +96,8 @@ type InstructionOrLabel =
 
 module InstructionBlock =
     let ofList instructions = InstructionList instructions
+    let empty = ofList List.empty
+    let singleton instruction = ofList [ instruction ]
     let ofBlock instructions = InstructionBlock instructions
     let ofSeq instructions = InstructionSequence instructions
     let label next = let l = Label() in struct(l, Labelled(l, next))
@@ -104,6 +106,7 @@ module InstructionBlock =
     let rec toSeq block =
         let inline (|Instructions|) (instructions: #seq<_>) = instructions :> seq<_>
         match block with
+        | InstructionList [] -> Seq.empty
         | InstructionBlock(Instructions instructions)
         | InstructionList(Instructions instructions)
         | InstructionSequence instructions -> Seq.map InstructionOrLabel.Instruction instructions
@@ -415,6 +418,7 @@ module Instructions =
     let pop = pops1 Opcode.Pop
     let call method = methodTokenCall Opcode.Call method
     let ret = op Opcode.Ret
+    let br_s target = { op Opcode.Br_s with Operand = Operand.BranchTarget(BranchKind.Short, target) }
     let bgt_s target = brpops2 Opcode.Bgt_s BranchKind.Short target
     let blt_s target = brpops2 Opcode.Blt_s BranchKind.Short target
     let add = pops1 Opcode.Add
@@ -450,8 +454,10 @@ module Instructions =
     let ldsfld field = { pushes1 Opcode.Ldsfld with Operand = Operand.FieldToken field }
     let ldsflda field = { pushes1 Opcode.Ldsflda with Operand = Operand.FieldToken field }
     let stsfld field = { pops1 Opcode.Stsfld with Operand = Operand.FieldToken field }
+    let box t = { op Opcode.Box with Operand = Operand.TypeToken t }
     let newarr etype = { op Opcode.Newarr with Operand = Operand.TypeToken etype }
     let ldlen = op Opcode.Ldlen
+    let ldelem etype = { pops1 Opcode.Ldelem with Operand = Operand.TypeToken etype }
     let stelem etype = { pops3 Opcode.Stelem with Operand = Operand.TypeToken etype }
     let add_ovf = pops1 Opcode.Add_ovf
     let add_ovf_un = pops1 Opcode.Add_ovf_un

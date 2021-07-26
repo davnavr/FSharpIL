@@ -66,6 +66,9 @@ type InstructionBlock
 
 [<RequireQualifiedAccess>]
 module InstructionBlock =
+    val empty : InstructionBlock
+    val singleton : instruction: Instruction -> InstructionBlock
+
     val ofList : instructions: Instruction list -> InstructionBlock
     val ofBlock : instructions: System.Collections.Immutable.ImmutableArray<Instruction> -> InstructionBlock
     val ofSeq : instructions: seq<Instruction> -> InstructionBlock
@@ -313,6 +316,11 @@ module Instructions =
     /// (0x2A) Returns from the current method (III.3.56).
     val ret : Instruction
 
+    /// <summary>
+    /// (0x2B) Branches to the <paramref name="target"/> unconditionally, short form (III.3.15).
+    /// </summary>
+    val br_s : target: Label -> Instruction
+
 
 
     /// <summary>
@@ -410,6 +418,10 @@ module Instructions =
 
 
 
+    /// <summary>(0x8C) Pops a value off of the stack and pushes its boxed form onto the stack (III.4.1).</summary>
+    /// <param name="t">The type of the value to convert to its boxed form.</param>
+    val box : t: TypeTok -> Instruction
+
     /// <summary>
     /// (0x8D) Pops a signed native or 32-bit integer <c>length</c> off of the stack and creates "a zero-based, one-dimensional
     /// array" of the specified type (III.4.20).
@@ -421,8 +433,18 @@ module Instructions =
     val ldlen : Instruction
 
 
+    /// <summary>
+    /// (0xA3) Pops a reference to an array and an index into the array off of the stack, and pushes the value at the specified
+    /// index onto the stack (III.4.7).
+    /// </summary>
+    /// <param name="etype">The type of the elements of the array to load an element from.</param>
+    val ldelem : etype: TypeTok -> Instruction
 
-    /// (0xA4) Replaces an array element of a type specified by a token at the specified index (III.4.8).
+    /// <summary>
+    /// (0xA4) Pops a reference to an array, an index into the array, and the value to store off of the stack, replacing the
+    /// value at the specified index (III.4.8).
+    /// </summary>
+    /// <param name="etype">The type of the elements of the array to store a value into.</param>
     val stelem : etype: TypeTok -> Instruction
 
 

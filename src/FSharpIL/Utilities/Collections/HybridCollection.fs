@@ -91,11 +91,13 @@ module internal HybridCollection =
             | EnumeratorState.Second when Object.Equals(this.item2, Unchecked.defaultof<_>) -> this.ReachedEnd()
             | EnumeratorState.NotStarted
             | EnumeratorState.First
-            | EnumeratorState.Second
-            | EnumeratorState.Third ->
+            | EnumeratorState.Second ->
                 this.state <- this.state + EnumeratorState.First
                 true
-            | EnumeratorState.Rest when not this.hasInner -> this.ReachedEnd()
+            | EnumeratorState.Third when this.hasInner ->
+                this.state <- EnumeratorState.Rest
+                true
+            | EnumeratorState.Third -> this.ReachedEnd()
             | EnumeratorState.Rest ->
                 let moved = this.inner.MoveNext()
                 if not moved then this.state <- EnumeratorState.ReachedEnd

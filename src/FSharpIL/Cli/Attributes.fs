@@ -110,5 +110,9 @@ module FieldAttributes =
 [<RequireQualifiedAccess>]
 module MethodAttributes =
     type Tag = IAttributeTag<MethodDefFlags>
+
+    let SpecialName<'Tag when 'Tag :> Tag and 'Tag : struct> =
+        MethodAttributes<'Tag> MethodDefFlags.SpecialName
+
     let HideBySig<'Tag when 'Tag :> Tag and 'Tag : struct> =
         MethodAttributes<'Tag> MethodDefFlags.HideBySig

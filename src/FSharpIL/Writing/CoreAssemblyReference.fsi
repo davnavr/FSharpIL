@@ -1,4 +1,5 @@
 ﻿namespace FSharpIL.Writing
+// TODO: Make this file contain a module named CoreLib
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
