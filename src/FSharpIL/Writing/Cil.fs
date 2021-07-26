@@ -357,8 +357,13 @@ module Instructions =
         let simple opcode behavior = { Opcode = opcode; StackBehavior = behavior; Operand = Operand.Nothing }
         let inline op opcode = simple opcode (StackBehavior.PopOrPush 0y)
         let inline pushes1 opcode = simple opcode (StackBehavior.PopOrPush 1y)
-        let inline pops1 opcode = simple opcode (StackBehavior.PopOrPush -1y)
-        let inline pops2 opcode = simple opcode (StackBehavior.PopOrPush -2y)
+
+        let pop1 = StackBehavior.PopOrPush -1y
+        let pops1 opcode = simple opcode pop1
+        let pop2 = StackBehavior.PopOrPush -2y
+        let pops2 opcode = simple opcode pop2
+        let pop3 = StackBehavior.PopOrPush -3y
+        let pops3 opcode = simple opcode pop3
 
         let methodTokenCall opcode method =
             { Opcode = opcode
@@ -372,6 +377,8 @@ module Instructions =
             { Opcode = opcode
               StackBehavior = behavior
               Operand = Operand.BranchTarget(kind, target) }
+
+        let brpops2 opcode kind target = branching opcode pop2 kind target
 
     open Instruction
 
@@ -404,10 +411,13 @@ module Instructions =
     let ldc_i4_7 = pushes1 Opcode.Ldc_i4_7
     let ldc_i4_8 = pushes1 Opcode.Ldc_i4_8
     let ldc_i4_s (number: int8) = { pushes1 Opcode.Ldc_i4_s with Operand = Operand.Byte(uint8 number) }
+    let dup = pushes1 Opcode.Dup
     let pop = pops1 Opcode.Pop
     let call method = methodTokenCall Opcode.Call method
     let ret = op Opcode.Ret
-    let inline blt_s target = branching Opcode.Blt_s (StackBehavior.PopOrPush -2y) BranchKind.Short target
+    let bgt_s target = brpops2 Opcode.Bgt_s BranchKind.Short target
+    let blt_s target = brpops2 Opcode.Blt_s BranchKind.Short target
+    let add = pops1 Opcode.Add
     let conv_i4 = op Opcode.Conv_i4
     let callvirt method = methodTokenCall Opcode.Callvirt method
 
@@ -441,6 +451,7 @@ module Instructions =
     let stsfld field = { pops1 Opcode.Stsfld with Operand = Operand.FieldToken field }
     let newarr etype = { op Opcode.Newarr with Operand = Operand.TypeToken etype }
     let ldlen = op Opcode.Ldlen
+    let stelem etype = { pops3 Opcode.Stelem with Operand = Operand.TypeToken etype }
     let ldarg num = { pushes1 Opcode.Ldarg with Operand = Operand.Short num }
     let ldloc (LocalVarIndex i) = { pushes1 Opcode.Ldloc with Operand = Operand.Short i }
     let stloc (LocalVarIndex i) = { pops1 Opcode.Stloc with Operand = Operand.Short i }

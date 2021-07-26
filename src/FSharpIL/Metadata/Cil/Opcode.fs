@@ -40,6 +40,8 @@ type Opcode =
     | Call = 0x28us
 
     | Ret = 0x2Aus
+    
+    | Bgt_s = 0x30us
 
     | Blt_s = 0x32us
 
@@ -98,6 +100,8 @@ type Opcode =
     | Conv_ovf_u_un = 0x8Bus
 
     | Ldlen = 0x8Eus
+
+    | Stelem = 0xA4us
 
     | Conv_ovf_i1 = 0xB3us
     | Conv_ovf_u1 = 0xB4us

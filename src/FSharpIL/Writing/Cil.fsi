@@ -146,22 +146,29 @@ type MethodBodyStream =
 module Instructions =
     [<RequireQualifiedAccess>]
     module Instruction =
-        /// Creates an instruction that takes no arguments and pushes values to or pops values from the stack.
+        /// Creates an instruction that takes no operands and pushes values to or pops values from the stack.
         val simple : opcode: Opcode -> StackBehavior -> Instruction
 
-        /// Creates an instruction that takes no arguments and does not modify the stack.
+        /// Creates an instruction that takes no operands and does not modify the stack.
         val inline op : opcode: Opcode -> Instruction
 
-        /// Creates an instruction that takes no arguments and pushes one value onto the stack.
+        /// Creates an instruction that takes no operands and pushes one value onto the stack.
         val inline pushes1 : opcode: Opcode -> Instruction
 
-        /// Creates an instruction that takes no arguments and pops one value from the stack.
-        val inline pops1 : opcode: Opcode -> Instruction
+        /// Creates an instruction that takes no operands and pops one value from the stack.
+        val pops1 : opcode: Opcode -> Instruction
 
-        /// Creates an instruction that takes no arguments and pops two values from the stack.
-        val inline pops2 : opcode: Opcode -> Instruction
+        /// Creates an instruction that takes no operands and pops two values from the stack.
+        val pops2 : opcode: Opcode -> Instruction
+        
+        /// Creates an instruction that takes no operands and pops three values from the stack.
+        val pops3 : opcode: Opcode -> Instruction
 
+        /// Creates a branching instruction.
         val branching : opcode: Opcode -> StackBehavior -> BranchKind -> target: Label -> Instruction
+
+        /// Creates a branching instruction that pops two values from the stack.
+        val brpops2 : opcode: Opcode -> BranchKind -> target: Label -> Instruction
 
     /// (0x00) An instruction that does nothing (III.3.51).
     val nop : Instruction
@@ -290,6 +297,8 @@ module Instructions =
     val ldc_i4_s : number: int8 -> Instruction
 
 
+    /// (0x25) "Duplicates the value on the top of the stack" (III.3.33).
+    val dup : Instruction
 
     /// (0x26) Pops the value at the top of the stack (III.3.54).
     val pop : Instruction
@@ -307,9 +316,23 @@ module Instructions =
 
 
     /// <summary>
+    /// (0x30) Branches to the <paramref name="target"/> if <c>value1</c> is greater than <c>value2</c>, short form (III.3.8).
+    /// </summary>
+    val bgt_s : target: Label -> Instruction
+
+
+
+
+    /// <summary>
     /// (0x32) Branches to the <paramref name="target"/> if <c>value1</c> is less than <c>value2</c>, short form (III.3.12).
     /// </summary>
-    val inline blt_s : target: Label -> Instruction
+    val blt_s : target: Label -> Instruction
+
+
+
+    /// (0x58) Pops two values from the stack, adds them, and pushes the result onto the stack without an overflow check
+    /// (III.3.1).
+    val add : Instruction
 
 
 
@@ -388,6 +411,11 @@ module Instructions =
     /// (0x8E) Pops an object reference to an array off of the stack and pushes the length of the array onto the stack as an
     /// unsigned native integer (III.4.12).
     val ldlen : Instruction
+
+
+
+    /// (0xA4) Replaces an array element of a type specified by a token at the specified index (III.4.8).
+    val stelem : etype: TypeTok -> Instruction
 
 
 

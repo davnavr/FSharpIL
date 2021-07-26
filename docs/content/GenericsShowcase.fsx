@@ -165,8 +165,24 @@ let example() = // TODO: Make helper function to add reference to System.Private
                 ]
 
             let body = MethodBody.create InitLocals ValueNone (LocalVariables.Locals locals) [
-                let struct(skipArrayResize', skipArrayResize) =
+                let struct(addItemLabel, addItem) =
                     InstructionBlock.ofList [
+                        // this.items.[this.index] <- item
+                        ldarg_0
+                        ldfld items'
+                        ldarg_0
+                        ldfld index'
+                        ldarg_1
+                        stelem (TypeTok.Specified t)
+
+                        // this.index <- this.index + 1
+                        ldarg_0
+                        dup
+                        ldfld index'
+                        ldc_i4_1
+                        add
+                        stfld index'
+
                         ret
                     ]
                     |> InstructionBlock.label
@@ -179,18 +195,18 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     conv_i4
                     stloc_0
 
-                    // this.index < length
+                    // this.index > length
                     ldarg_0
                     ldfld index'
                     ldloc_0
-                    blt_s skipArrayResize'
+                    bgt_s addItemLabel
 
                     // TODO: Do some resize stuff here.
                     ldarg_0 // TEMPORARY
                     pop // TEMPORARY
                 ]
 
-                skipArrayResize
+                addItem
             ]
 
             members.DefineMethod(definition, body, attributes = ValueNone)
