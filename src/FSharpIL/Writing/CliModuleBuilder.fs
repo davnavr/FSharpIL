@@ -1016,12 +1016,6 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
         let miscMemberParent owner = getEncodedType owner |> getTypeSpec |> MemberRefParent.TypeSpec
 
-        (*
-        match members'.MethodBodyLookup.TryGetValue method with
-        | true, body -> (snd writeDefinedMethods.Value).[body]
-        | false, _ -> Unchecked.defaultof<_>
-        *)
-
         for i = 0 to info.FieldReferences.Count - 1 do
             let field = &info.FieldReferences.ItemRef i
             let token = FieldTok.create (TypeTok.Specified field.Owner) field.Member

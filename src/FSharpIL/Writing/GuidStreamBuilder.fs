@@ -2,19 +2,19 @@
 
 open System
 open System.Collections.Generic
-
-open FSharpIL.Utilities
-open FSharpIL.Utilities.Collections
+open System.Collections.Immutable
 
 open FSharpIL.Metadata
+
+open FSharpIL.Utilities
 
 /// <summary>Builds the <c>#GUID</c> metadata stream (II.24.2.5).</summary>
 [<Sealed>]
 type GuidStreamBuilder (capacity: int32) =
     static let empty = Guid.Empty
-    let guids = RefArrayList<Guid> capacity
+    let guids = ImmutableArray.CreateBuilder<Guid> capacity
     let lookup = Dictionary<Guid, GuidIndex> capacity
-    do guids.Add &empty |> ignore // First GUID is at index 1, so 0 is treated as null.
+    do guids.Add empty // First GUID is at index 1, so 0 is treated as null.
     do lookup.[Guid.Empty] <- GuidIndex.Zero
     member _.IsEmpty = guids.Count = 1
     /// Gets the number of GUIDs stored in this stream.
@@ -28,7 +28,7 @@ type GuidStreamBuilder (capacity: int32) =
         | false, _ ->
             let i = { GuidIndex = uint32 guids.Count }
             lookup.[guid] <- i
-            guids.Add &guid |> ignore
+            guids.Add guid
             i
 
     /// Generates a new GUID and adds it to the stream.
@@ -40,5 +40,5 @@ type GuidStreamBuilder (capacity: int32) =
         member this.Serialize(builder, _) =
             let mutable buffer = Span.stackalloc<byte> sizeof<Guid>
             for i = 1 to this.Count do
-                if not (guids.[i].TryWriteBytes buffer) then failwithf "Could not write GUID at index %i" i
+                if not (guids.ItemRef(i).TryWriteBytes buffer) then failwithf "Could not write GUID at index %i" i
                 builder.Write buffer

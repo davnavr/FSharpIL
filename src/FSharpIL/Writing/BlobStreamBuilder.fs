@@ -4,14 +4,12 @@ open System
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
-open FSharpIL.Utilities.Collections
-
 open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Blobs
 open FSharpIL.Metadata.Signatures
 
-[<IsReadOnly; Struct>]
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
 type internal BlobEntry =
     { Offset: BlobOffset; DataLength: uint32 }
 
@@ -75,10 +73,10 @@ end
 [<Sealed>]
 type BlobStreamBuilder (capacity: int32) =
     static let empty = Unchecked.defaultof<BlobEntry>
-    let entries = RefArrayList<BlobEntry> capacity
+    let entries = ImmutableArray.CreateBuilder<BlobEntry> capacity
     let mutable offset = 1u
     let mutable content = ChunkedMemoryBuilder capacity
-    do entries.Add &empty |> ignore
+    do entries.Add empty
 
     member _.IsEmpty = entries.Count = 1
     member _.EmptyBlob = empty.Offset
@@ -91,7 +89,7 @@ type BlobStreamBuilder (capacity: int32) =
         let entry = { Offset = { BlobOffset = offset }; DataLength = length }
 
         offset <- offset + entry.TotalLength
-        entries.Add &entry |> ignore
+        entries.Add entry
         entry.Offset
 
     // TODO: Add overload that accepts function pointer for adding byte blob when available.
@@ -151,7 +149,7 @@ type BlobStreamBuilder (capacity: int32) =
         member _.Serialize(wr, _) =
             let mutable offset', content' = 0u, content.ToImmutable() // NOTE: Maybe make an unsafe function that converts it to a ChunkedMemory without copying.
             for i = 0 to entries.Count - 1 do
-                let length = entries.[i].DataLength
+                let length = entries.ItemRef(i).DataLength
                 BlobWriter.compressedUnsigned length &wr
                 wr.Write(content'.Slice(0u, length))
                 content' <- content'.Slice length
