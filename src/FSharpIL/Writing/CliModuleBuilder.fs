@@ -313,6 +313,11 @@ type TypeMemberExtensions = // TODO: For these extension methods, call internal 
 
     //static member DefineEntryPoint(members: ReferenceTypeMembers<'Kind> 
 
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
+type DefinedMethodEntry =
+    { Method: TableIndex<MethodDefRow>
+      Body: MethodBody }
+
 [<Sealed>]
 type CliModuleBuilder // TODO: Consider making an immutable version of this class.
     (
@@ -829,6 +834,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
                 member _.GetTypeToken t = TypeMetadataToken.ofCodedIndex(typeDefOrRefOrSpec t) }
 
+        let definedMethodBodies = ImmutableArray.CreateBuilder info.MethodBodies.Count
+
         let parameterList = MemberIndexCounter<ParamRow>()
         let fieldList = MemberIndexCounter<FieldRow>()
         let methodList = MemberIndexCounter<MethodDefRow>()
@@ -855,32 +862,39 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             methodList.Reset()
 
             for method in members'.Method do
-                parameterList.Reset()
+                let token = MethodTok.ofTypeDef parent method info.NamedTypes
+                try
+                    parameterList.Reset()
 
-                for i = 0 to method.Parameters.Length - 1 do
-                    let param = &method.Parameters.ItemRef i
-                    parameterList.Last <-
-                        builder.Tables.Param.Add
-                            { Flags = Parameter.flags &param
-                              Name = builder.Strings.Add param.ParamName
-                              Sequence = Checked.uint16(i + 1) }
+                    for i = 0 to method.Parameters.Length - 1 do
+                        let param = &method.Parameters.ItemRef i
+                        parameterList.Last <-
+                            builder.Tables.Param.Add
+                                { Flags = Parameter.flags &param
+                                  Name = builder.Strings.Add param.ParamName
+                                  Sequence = Checked.uint16(i + 1) }
 
-                let i' =
-                    { Rva =
-                        match members'.MethodBodyLookup.TryGetValue method with
-                        | true, body -> (snd writeDefinedMethods.Value).[body]
-                        | false, _ -> Unchecked.defaultof<_>
-                      ImplFlags = method.ImplFlags
-                      Flags = method.Flags
-                      Name = builder.Strings.Add method.Name
-                      Signature = getMethodSig method
-                      ParamList = parameterList.First }
-                    |> builder.Tables.MethodDef.Add
+                    // Method bodies are written later to avoid bugs regarding members not being added to dictionaries yet.
+                    let i' =
+                        { Rva = Unchecked.defaultof<_>
+                          ImplFlags = method.ImplFlags
+                          Flags = method.Flags
+                          Name = builder.Strings.Add method.Name
+                          Signature = getMethodSig method
+                          ParamList = parameterList.First }
+                        |> builder.Tables.MethodDef.Add
 
-                methodList.Last <- i'
-                definedMethodLookup.[MethodTok.ofTypeDef parent method info.NamedTypes] <- i'
+                    methodList.Last <- i'
+                    definedMethodLookup.[token] <- i'
 
-                // TODO: Add the methods generic parameters, if any.
+                    match members'.MethodBodyLookup.TryGetValue method with
+                    | true, body -> definedMethodBodies.Add { Method = i'; Body = body }
+                    | false, _ -> ()
+
+                    // TODO: Add the methods generic parameters, if any.
+                with
+                | ex ->
+                    InvalidOperationException(sprintf "Unable to write method %O" token, ex) |> raise
 
             // TODO: event and property
 
@@ -895,6 +909,12 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         for i = 1 to serializedDefinedTypes.Count - 1 do serializeDefinedMembers serializedDefinedTypes.[i] ValueNone
 
         let miscMemberParent owner = getEncodedType owner |> getTypeSpec |> MemberRefParent.TypeSpec
+
+        (*
+        match members'.MethodBodyLookup.TryGetValue method with
+        | true, body -> (snd writeDefinedMethods.Value).[body]
+        | false, _ -> Unchecked.defaultof<_>
+        *)
 
         for i = 0 to info.FieldReferences.Count - 1 do
             let field = &info.FieldReferences.ItemRef i
@@ -917,6 +937,12 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                 |> builder.Tables.MemberRef.Add
 
             miscMethodLookup.Add(token, i')
+
+        // Safe to generate method bodies, since all referenced members should have been added.
+        for i = 0 to definedMethodBodies.Count - 1 do
+            let entry = &definedMethodBodies.ItemRef i
+            // Safe to manipulate MethodDef row here, since all methods have been added already.
+            Unsafe.AsRef &builder.Tables.MethodDef.[entry.Method].Rva <- (snd writeDefinedMethods.Value).[entry.Body]
 
         for KeyValue(owner, parameters) in genericParamLookup do
             for i = 0 to parameters.Length - 1 do

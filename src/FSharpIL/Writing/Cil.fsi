@@ -137,6 +137,8 @@ type MethodBodyStream =
     /// </exception>
     member Add: body: MethodBody -> struct(MaxStack * uint32)
 
+    member Count: int32
+
     member ToMemory:
         metadataTokenSource: IMetadataTokenSource -> FSharpIL.ChunkedMemory * IReadOnlyDictionary<MethodBody, MethodBodyLocation>
 

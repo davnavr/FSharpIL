@@ -187,6 +187,8 @@ let inline invalidMethodBody body reason = raise(InvalidCilException(body, reaso
 type MethodBodyStream () =
     let bodies = Dictionary<MethodBody, MethodBodyEntry>()
 
+    member _.Count = bodies.Count
+
     // TODO: Store dictionary of method bodies in CliModuleBuilder, so when DefineMethod is called, it can call this Add method.
     member _.Add body = // TODO: Define exception type for invalid IL.
         match bodies.TryGetValue body with
@@ -261,13 +263,14 @@ type MethodBodyStream () =
         let locations = Dictionary bodies.Count
 
         for KeyValue(body, entry) in bodies do
-            locations.Add(body, MethodBodyLocation wr.Length)
-
             match entry.Kind with
             | Tiny ->
                 let flags = uint8 ILMethodFlags.TinyFormat ||| (Checked.uint8 entry.CodeSize <<< 2)
+
                 if Flags.set (uint8 ILMethodFlags.FatFormat) flags then
                     invalidOp(sprintf "Invalid tiny method flags 0x%02X" flags)
+
+                locations.Add(body, MethodBodyLocation wr.Length)
                 wr.Write flags
             | Fat ->
                 let mutable flags' = ILMethodFlags.FatFormat
@@ -279,6 +282,7 @@ type MethodBodyStream () =
                 //if has extra data sections then flags' <- flags' ||| ILMethodFlags.MoreSects
 
                 wr.AlignTo(int32 MethodBody.FatMethodAlignment) // Padding
+                locations.Add(body, MethodBodyLocation wr.Length) // Ensures RVA points to the flags and size, not the padding.
                 wr.WriteLE(uint16 flags' ||| (uint16 MethodBody.FatFormatSize <<< 12)) // Flags & size
                 wr.WriteLE(uint16 entry.MaxStack)
                 wr.WriteLE entry.CodeSize
