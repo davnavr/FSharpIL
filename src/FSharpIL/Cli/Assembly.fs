@@ -19,6 +19,8 @@ type ReferencedAssembly = // TODO: Maybe rename these types to ReferencedAssembl
         | PublicKeyToken _ -> AssemblyFlags.None
         | PublicKey _ -> AssemblyFlags.PublicKey
 
+    override this.ToString() = this.Name.ToString()
+
 [<StructuralComparison; StructuralEquality>]
 type DefinedAssembly =
     { Version: AssemblyVersion

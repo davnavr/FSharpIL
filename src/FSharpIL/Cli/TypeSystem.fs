@@ -5,6 +5,7 @@ open System.Collections
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
+open System.Text
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Signatures
@@ -17,6 +18,8 @@ open FSharpIL.Utilities.Collections.CollectionFail
 [<IsReadOnly; Struct>]
 type PrimitiveType (encoded: EncodedType) =
     member _.Encoded = encoded
+
+let inline (|PrimitiveType|) (primitive: PrimitiveType) = primitive.Encoded
 
 [<IsReadOnly; Struct>]
 type GenericParamKind =
@@ -32,16 +35,55 @@ type GenericSpecialConstraint =
 
 type [<Interface>] IGenericType<'This> = inherit IEquatable<'This>
 
+let typeNameOf tnamespace (ToString tname: Identifier) =
+    match tnamespace with
+    | ValueSome(ToString tnamespace': Identifier) -> String.Concat(tnamespace', ".", tname)
+    | ValueNone -> tname
+
 type CliType =
     | Primitive of PrimitiveType
     | SZArray of CliType
     | Array of CliType * shape: FSharpIL.Metadata.Signatures.ArrayShape
-    | Modified of modified: ImmutableArray<ModifierType> * CliType
+    | Modified of modifiers: ImmutableArray<ModifierType> * modified: CliType
     | Class of NamedType
     | ValueType of NamedType
     | GenericClass of GenericTypeInstantiation
     | GenericValueType of GenericTypeInstantiation
     | TypeVar of GenericParamType<TypeDefinition>
+
+    override this.ToString() =
+        match this with
+        | Primitive(PrimitiveType EncodedType.Boolean) -> "bool"
+        | Primitive(PrimitiveType EncodedType.Char) -> "char"
+        | Primitive(PrimitiveType EncodedType.I1) -> "int8"
+        | Primitive(PrimitiveType EncodedType.U1) -> "unsigned int8"
+        | Primitive(PrimitiveType EncodedType.I2) -> "int16"
+        | Primitive(PrimitiveType EncodedType.U2) -> "unsigned int16"
+        | Primitive(PrimitiveType EncodedType.I4) -> "int32"
+        | Primitive(PrimitiveType EncodedType.U4) -> "unsigned int32"
+        | Primitive(PrimitiveType EncodedType.I8) -> "int64"
+        | Primitive(PrimitiveType EncodedType.U8) -> "unsigned int64"
+        | Primitive(PrimitiveType EncodedType.R4) -> "float32"
+        | Primitive(PrimitiveType EncodedType.R8) -> "float64"
+        | Primitive(PrimitiveType EncodedType.I) -> "native int"
+        | Primitive(PrimitiveType EncodedType.U) -> "native unsigned int"
+        | Primitive(PrimitiveType EncodedType.Object) -> "object"
+        | Primitive(PrimitiveType EncodedType.String) -> "string"
+        | Primitive prim -> prim.ToString()
+        | SZArray elem -> String.Concat(elem, "[]")
+        | Class(ToString rtype)
+        | GenericClass(ToString rtype) -> String.Concat("class ", rtype)
+        | ValueType(ToString vtype)
+        | GenericValueType(ToString vtype) -> String.Concat("valuetype ", vtype)
+        | TypeVar tvar -> sprintf "!%O" tvar
+        | Array(elem, ToString shape) -> String.Concat(elem, shape)
+        | Modified(modifiers, modified) when modifiers.IsDefaultOrEmpty -> modified.ToString()
+        | Modified(modifiers, modified) ->
+            StringBuilder(6 * modifiers.Length)
+                .AppendJoin(' ', modifiers)
+                .Append(' ')
+                .Append(modified)
+                .ToString()
 
 and [<AbstractClass; Sealed>] Comparers private () =
     // TODO: Implemet hash functionality here so warning does't have to be suppressed.
@@ -50,6 +92,10 @@ and [<AbstractClass; Sealed>] Comparers private () =
     static member val TypeReference = Unchecked.defaultof<IEqualityComparer<TypeReference>> with get, set
     static member val GenericType = Unchecked.defaultof<Equatable.IReferenceComparer<GenericType>> with get, set
     static member val GenericArgumentList = Unchecked.defaultof<Equatable.IReferenceComparer<GenericArgumentList>> with get, set
+
+and [<AbstractClass; Sealed>] ParentName private () =
+    static member val ReferencedType = Unchecked.defaultof<ReferencedType -> string> with get, set
+    static member val DefinedType = Unchecked.defaultof<DefinedType -> string> with get, set
 
 and [<Struct; NoComparison; CustomEquality>] GenericArgumentList private
     (
@@ -91,6 +137,8 @@ and [<Struct; NoComparison; CustomEquality>] GenericArgumentList private
         | :? GenericArgumentList as other -> this === other
         | _ -> false
 
+    override this.ToString() = String.Join(", ", this.ToImmutableArray())
+
 and [<Sealed>] GenericTypeInstantiation =
     val Instantiated: GenericType
     val Arguments: GenericArgumentList
@@ -107,6 +155,13 @@ and [<Sealed>] GenericTypeInstantiation =
         | :? GenericTypeInstantiation as other -> this === other
         | _ -> false
 
+    override this.ToString() =
+        StringBuilder(this.Instantiated.ToString())
+            .Append('<')
+            .AppendJoin(", ", this.Arguments)
+            .Append('>')
+            .ToString()
+
 and [<Struct>] ClassExtends (extends: TypeTok voption) =
     member _.Extends = extends
     member _.IsNull = extends.IsNone
@@ -115,6 +170,11 @@ and TypeReferenceParent =
     | Type of ReferencedType
     | Assembly of ReferencedAssembly
     //| Module of ModuleReference
+
+    override this.ToString() =
+        match this with
+        | Type parent -> String.Concat(ParentName.ReferencedType parent, "/")
+        | Assembly assem -> String.Concat("[", assem, "]")
 
 and [<NoComparison; CustomEquality>] TypeReference =
     { Flags: TypeDefFlags voption
@@ -126,6 +186,8 @@ and [<NoComparison; CustomEquality>] TypeReference =
 
     interface IGenericType<TypeReference>
     interface IEquatable<TypeReference> with member this.Equals other = Comparers.TypeReference.Equals(this, other)
+
+    override this.ToString() = String.Concat(this.ResolutionScope, typeNameOf this.TypeNamespace this.TypeName)
 
     override this.Equals obj =
         match obj with
@@ -145,6 +207,11 @@ and [<NoComparison; CustomEquality>] ReferencedType =
         | :? ReferencedType as other -> this === other
         | _ -> false
 
+    override this.ToString() =
+        match this with
+        | Reference(ToString str)
+        | Generic(ToString str) -> str
+
 and [<NoComparison; CustomEquality>] DefinedType =
     | Definition of TypeDefinition
     | Generic of GenericType<TypeDefinition>
@@ -152,6 +219,11 @@ and [<NoComparison; CustomEquality>] DefinedType =
     override this.GetHashCode() = Comparers.DefinedType.GetHashCode this
 
     interface IEquatable<DefinedType> with member this.Equals other = Comparers.DefinedType.Equals(this, other)
+
+    override this.ToString() =
+        match this with
+        | Definition(ToString str)
+        | Generic(ToString str) -> str
 
     override this.Equals obj =
         match obj with
@@ -161,6 +233,11 @@ and [<NoComparison; CustomEquality>] DefinedType =
 and NamedType =
     | DefinedType of DefinedType
     | ReferencedType of ReferencedType
+
+    override this.ToString() =
+        match this with
+        | DefinedType(ToString name)
+        | ReferencedType(ToString name) -> name
 
 and [<NoComparison; CustomEquality>] TypeDefinition =
     { Flags: TypeDefFlags
@@ -185,6 +262,13 @@ and [<NoComparison; CustomEquality>] TypeDefinition =
         | :? TypeDefinition as other -> this === other
         | _ -> false
 
+    override this.ToString() =
+        let parent =
+            match this.EnclosingClass with
+            | ValueSome parent' -> ParentName.DefinedType parent'
+            | ValueNone -> String.Empty
+        String.Concat(parent, typeNameOf this.TypeNamespace this.TypeName)
+
 and [<Struct; NoComparison; CustomEquality>] GenericType =
     | Defined of definition: GenericType<TypeDefinition>
     | Referenced of reference: GenericType<TypeReference>
@@ -198,13 +282,25 @@ and [<Struct; NoComparison; CustomEquality>] GenericType =
         | :? GenericType as other -> this === other
         | _ -> false
 
+    override this.ToString() =
+        match this with
+        | Defined(ToString name)
+        | Referenced(ToString name) -> name
+
 and [<Struct>] TypeTok =
     | Named of NamedType
     | Specified of spec: CliType
 
+    override this.ToString() =
+        match this with
+        | Named(ToString name)
+        | Specified(ToString name) -> name
+
 and [<Struct>] ModifierType (required: bool, modifier: TypeTok) =
     member _.Required = required
     member _.Modifier = modifier
+
+    override _.ToString() = String.Concat("mod", (if required then "req" else "opt"), "(", modifier.ToString(), ")")
 
 and [<Struct>] GenericParam =
     val Name: Identifier
@@ -243,6 +339,8 @@ and [<Sealed>] GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>>
         else NoSpecialConstriant
 
     interface IEquatable<GenericParamType<'Owner>> with member _.Equals other = owner === other.Owner && i = other.Number
+
+    override this.ToString() = string this.Number
 
     override this.Equals obj =
         match obj with
@@ -342,6 +440,8 @@ and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IGenericTy
     member _.Parameters = parameters
     member val ParameterTypes = GenericParamList<'Type>(initializer, parameters.Length)
 
+    override _.ToString() = tdef.ToString()
+
 module PrimitiveType =
     let Boolean = CliType.Primitive(PrimitiveType EncodedType.Boolean)
     let Char = CliType.Primitive(PrimitiveType EncodedType.Char)
@@ -440,6 +540,16 @@ do Comparers.GenericArgumentList <-
     { new Equatable.IReferenceComparer<GenericArgumentList> with
         member _.Equals(x, y) = Equatable.blocks (x.ToImmutableArray()) (y.ToImmutableArray())
         member _.GetHashCode _ = noImpl "Use override GenericArgumentList.GetHashCode() instead" }
+
+do ParentName.ReferencedType <-
+    function
+    | ReferencedType.Reference tref
+    | ReferencedType.Generic(GenericType(tref, _)) -> tref.ToString()
+
+do ParentName.DefinedType <-
+    function
+    | DefinedType.Definition tdef
+    | DefinedType.Generic(GenericType(tdef, _)) -> tdef.ToString()
 
 type NamedType with
     member inline this.TypeNamespace =
@@ -600,6 +710,8 @@ type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : 
           Extends = extends
           EnclosingClass = enclosingClass }
 
+    override this.ToString() = this.Definition.ToString()
+
 let inline (|TypeDefinition|) (definition: TypeDefinition<'Kind>) = definition.Definition
 
 type TypeDefinition with
@@ -634,6 +746,8 @@ type TypeReference<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : s
           TypeNamespace = typeNamespace
           Flags = ValueSome Unchecked.defaultof<'Kind>.RequiredFlags
           ResolutionScope = parent }
+
+    override this.ToString() = this.Reference.ToString()
 
 let inline (|TypeReference|) (reference: TypeReference<'Kind>) = reference.Reference
 

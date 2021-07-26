@@ -261,12 +261,39 @@ module GenericInst =
     let inline ValueType(instantiated, genericArgs) =
         { IsValueType = true; GenericType = instantiated; GenericArguments = genericArgs }
 
-[<IsReadOnly; Struct>]
-[<NoComparison; CustomEquality>]
+[<IsReadOnly; Struct; NoComparison; CustomEquality>]
 type ArrayShape =
     { Rank: uint32 // TODO: How to prevent a value of zero?
       Sizes: ImmutableArray<uint32> // NOTE: The two arrays containing information for each dimension can contain less items than Rank.
       LowerBounds: ImmutableArray<int32> }
+
+    override this.ToString() =
+        let rank = Checked.int32 this.Rank
+        let str = System.Text.StringBuilder(2 + rank).Append('[')
+
+        for i = 0 to rank - 1 do
+            let lower =
+                if not this.LowerBounds.IsDefaultOrEmpty && i < this.LowerBounds.Length
+                then ValueSome this.LowerBounds.[i]
+                else ValueNone
+
+            let upper =
+                if not this.Sizes.IsDefaultOrEmpty && i < this.Sizes.Length then
+                    let upper' = int64 this.Sizes.[i]
+                    match lower with
+                    | ValueSome lower' -> ValueSome(upper' + int64 lower')
+                    | ValueNone -> ValueSome upper'
+                else ValueNone
+
+            if i > 0 then str.Append ", " |> ignore
+
+            match lower, upper with
+            | ValueNone, ValueNone -> ()
+            | ValueSome lower', ValueNone -> Printf.bprintf str "%i..." lower'
+            | ValueNone, ValueSome upper' -> str.Append upper' |> ignore
+            | ValueSome lower', ValueSome upper' -> Printf.bprintf str "%i...%i" lower' upper'
+
+        str.Append(']').ToString()
 
     interface System.IEquatable<ArrayShape> with
         member this.Equals other =

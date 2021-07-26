@@ -45,6 +45,7 @@ type GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>> =
     member SpecialConstraint: GenericSpecialConstraint
     member RequiresDefaultConstructor: bool
 
+    override ToString: unit -> string
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
@@ -85,6 +86,8 @@ and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IGenericTy
     member Type: 'Type
     member ParameterTypes: GenericParamList<'Type>
 
+    override ToString: unit -> string
+
 val inline (|GenericType|) : GenericType<'Type> -> struct('Type * GenericParamList<'Type>)
 
 [<RequireQualifiedAccess; NoComparison; StructuralEquality>]
@@ -92,6 +95,8 @@ type TypeReferenceParent =
     | Type of ReferencedType
     | Assembly of ReferencedAssembly
     //| Module of ModuleReference
+
+    override ToString: unit -> string
 
     interface IEquatable<TypeReferenceParent>
 
@@ -102,6 +107,8 @@ and [<NoComparison; CustomEquality>] TypeReference =
       TypeNamespace: Identifier voption
       TypeName: Identifier }
 
+    override ToString: unit -> string
+
     interface IEquatable<TypeReference>
     interface IGenericType<TypeReference>
 
@@ -110,6 +117,7 @@ and [<RequireQualifiedAccess; NoComparison; CustomEquality>] ReferencedType =
     | Reference of TypeReference
     | Generic of GenericType<TypeReference>
 
+    override ToString: unit -> string
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
@@ -123,7 +131,7 @@ type CliType =
     | SZArray of CliType
     | Array of CliType * shape: FSharpIL.Metadata.Signatures.ArrayShape
     /// Represents a type that is modified by custom modifiers (II.7.1.1).
-    | Modified of modified: ImmutableArray<ModifierType> * CliType
+    | Modified of modifiers: ImmutableArray<ModifierType> * modified: CliType
     /// A user-defined reference type.
     | Class of NamedType
     /// A user-defined value type.
@@ -136,6 +144,8 @@ type CliType =
     | TypeVar of GenericParamType<TypeDefinition>
     // TODO: Allow using of GenericParamType<SomeMethod>
     //| MethodTypeVar
+
+    override ToString: unit -> string
 
     interface IEquatable<CliType>
 
@@ -151,6 +161,7 @@ and [<IsReadOnly; Struct; NoComparison; CustomEquality>] GenericArgumentList =
 
     member ToImmutableArray: unit -> ImmutableArray<CliType>
 
+    override ToString: unit -> string
     override GetHashCode: unit -> int32
     override Equals: obj -> bool
 
@@ -161,6 +172,7 @@ and [<Sealed>] GenericTypeInstantiation =
     val Instantiated: GenericType
     val Arguments: GenericArgumentList
 
+    override ToString: unit -> string
     override GetHashCode: unit -> int32
     override Equals: obj -> bool
 
@@ -176,6 +188,7 @@ and [<RequireQualifiedAccess; NoComparison; CustomEquality>] DefinedType =
     | Definition of TypeDefinition
     | Generic of GenericType<TypeDefinition>
 
+    override ToString: unit -> string
     override GetHashCode: unit -> int32
     override Equals: obj -> bool
 
@@ -188,12 +201,15 @@ and [<NoComparison; CustomEquality>] NamedType =
     /// Represents a type defined outside of the current module.
     | ReferencedType of ReferencedType
 
+    override ToString: unit -> string
+
     interface IEquatable<NamedType>
 
 and [<IsReadOnly; Struct; NoComparison; CustomEquality; RequireQualifiedAccess>] GenericType =
     | Defined of definition: GenericType<TypeDefinition>
     | Referenced of reference: GenericType<TypeReference>
 
+    override ToString: unit -> string
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
@@ -210,6 +226,7 @@ and [<NoComparison; CustomEquality>] TypeDefinition =
       TypeNamespace: Identifier voption
       TypeName: Identifier }
 
+    override ToString: unit -> string
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 
@@ -221,6 +238,8 @@ and [<IsReadOnly; Struct; NoComparison; StructuralEquality>] ModifierType = inte
 and [<IsReadOnly; Struct; NoComparison; StructuralEquality; RequireQualifiedAccess>] TypeTok =
     | Named of NamedType
     | Specified of spec: CliType
+
+    override ToString: unit -> string
 
     interface IEquatable<TypeTok>
 
@@ -236,6 +255,8 @@ type GenericParamType<'Owner when 'Owner :> IGenericType<'Owner>> with
         flags: GenericParamFlags *
         name: Identifier *
         constraints: ImmutableArray<TypeTok> -> GenericParamType<'Owner>
+
+    override ToString: unit -> string
 
 val inline (|GenericParamIndex|) : parameter: GenericParamType<'Owner> -> uint16
 
@@ -263,6 +284,8 @@ type ModifierType with
     member Modifier: TypeTok
 
     new: required: bool * modifier: TypeTok -> ModifierType
+
+    override ToString: unit -> string
 
 type NamedType with
     member inline TypeName: Identifier
@@ -390,6 +413,8 @@ module TypeKinds =
 type TypeDefinition<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
     member Definition: TypeDefinition
 
+    override ToString: unit -> string
+
     interface IEquatable<TypeDefinition<'Kind>>
 
 val inline (|TypeDefinition|): definition: TypeDefinition<'Kind> -> TypeDefinition
@@ -450,6 +475,8 @@ type TypeDefinition with
 [<NoComparison; CustomEquality>]
 type TypeReference<'Kind when 'Kind :> IAttributeTag<TypeDefFlags> and 'Kind : struct> =
     member Reference: TypeReference
+
+    override ToString: unit -> string
 
     interface IEquatable<TypeReference<'Kind>>
 

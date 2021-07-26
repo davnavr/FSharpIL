@@ -15,6 +15,7 @@ type Field =
     abstract Equals: other: Field -> bool
     default Equals: other: Field -> bool
 
+    override ToString: unit -> string
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 

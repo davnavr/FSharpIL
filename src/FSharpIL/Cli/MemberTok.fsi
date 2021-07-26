@@ -9,6 +9,8 @@ type MemberTok<'Member when 'Member :> IEquatable<'Member>> =
     member Owner: TypeTok
     member Member: 'Member
 
+    override ToString: unit -> string
+
     interface IEquatable<MemberTok<'Member>>
 
 type FieldTok = MemberTok<Field>
@@ -18,6 +20,8 @@ type MethodTok = MemberTok<Method>
 type MethodTok<'Owner, 'Method when 'Method : not struct and 'Method :> Method> =
     member Method: 'Method
     member Token: MethodTok
+
+    override ToString: unit -> string
 
     interface IEquatable<MethodTok<'Owner, 'Method>>
 

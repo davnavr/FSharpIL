@@ -15,6 +15,8 @@ type ReferencedAssembly =
 
     member Flags: AssemblyFlags
 
+    override ToString: unit -> string
+
 [<StructuralComparison; StructuralEquality>]
 type DefinedAssembly =
     { Version: AssemblyVersion

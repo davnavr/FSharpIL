@@ -11,6 +11,8 @@ type MemberTok<'Member when 'Member :> IEquatable<'Member>> (owner: TypeTok, mbe
     member _.Owner = owner
     member _.Member = mber
 
+    override _.ToString() = String.Concat(owner, "::", mber)
+
     interface IEquatable<MemberTok<'Member>> with
         member _.Equals other = owner === other.Owner && mber === other.Member
 
@@ -21,7 +23,7 @@ type MethodTok = MemberTok<Method>
 type MethodTok<'Owner, 'Method when 'Method : not struct and 'Method :> Method> (token: MethodTok) =
     member _.Method = Unsafe.As<'Method> token.Member
     member _.Token = token
-    
+    override _.ToString() = token.ToString()
     new (owner, method: 'Method) = MethodTok<_, _>(token = MethodTok(owner, method))
 
 [<Struct>]

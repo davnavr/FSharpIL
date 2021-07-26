@@ -17,6 +17,8 @@ type Field =
     abstract Equals: other: Field -> bool
     default this.Equals(other: Field) = this.Name === other.Name && this.Type === other.Type
 
+    override this.ToString() = this.Name.ToString()
+
     override this.Equals(obj: obj) =
         match obj with
         | :? Field as other -> this.Equals(other = other)

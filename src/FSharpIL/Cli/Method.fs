@@ -86,6 +86,14 @@ type Method =
         this.HasThis === other.HasThis &&
         this.CallingConvention === other.CallingConvention
 
+    override this.ToString() =
+        System.Text.StringBuilder()
+            .Append(this.Name)
+            .Append('(')
+            .AppendJoin(", ", this.ParameterTypes)
+            .Append(')')
+            .ToString()
+
     override this.Equals(obj: obj) =
         match obj with
         | :? Method as other -> this.Equals(other = other)

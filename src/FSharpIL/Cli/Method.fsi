@@ -81,6 +81,7 @@ type Method =
     abstract Equals: other: Method -> bool
     default Equals: other: Method -> bool
 
+    override ToString: unit -> string
     override Equals: obj -> bool
     override GetHashCode: unit -> int32
 

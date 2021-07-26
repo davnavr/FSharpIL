@@ -38,6 +38,8 @@ type ArrayShape =
       /// <remarks>Corresponds to the <c>NumLoBounds</c> item and <c>LoBound</c> items in the signature.</remarks>
       LowerBounds: ImmutableArray<int32> }
 
+    override ToString: unit -> string
+
     interface IEquatable<ArrayShape>
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
