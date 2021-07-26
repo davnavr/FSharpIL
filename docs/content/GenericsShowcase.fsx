@@ -59,6 +59,26 @@ let example() = // TODO: Make helper function to add reference to System.Private
     validated {
         let! mscorlib' = mscorlib.AddReferencesTo builder
 
+        // [<AbstractClass; Sealed>] type Console
+        let! console =
+            TypeReference.StaticClass (
+                resolutionScope = TypeReferenceParent.Assembly consolelib,
+                typeNamespace = mscorlib.Object.Reference.TypeNamespace,
+                typeName = Identifier.ofStr "Console"
+            )
+            |> builder.ReferenceType
+
+        // static member WriteLine: obj -> unit
+        let! writeln =
+            ReferencedMethod.Static (
+                visibility = ExternalVisibility.Public,
+                returnType = ReturnType.Void',
+                name = MethodName.ofStr "WriteLine",
+                parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.Object)
+            )
+            |> console.ReferenceMethod
+
+        // static 
         let! arrayCopy =
             let array =
                 ReferencedType.Reference mscorlib.Array.Reference
@@ -242,6 +262,67 @@ let example() = // TODO: Make helper function to add reference to System.Private
 
             members.DefineMethod(definition, body, attributes = ValueNone)
 
+        // member public PrintItems: unit -> unit
+        let! print =
+            let definition =
+                DefinedMethod.Instance (
+                    MemberVisibility.Public,
+                    flags = MethodAttributes.None,
+                    returnType = ReturnType.Void',
+                    name = MethodName.ofStr "PrintItems",
+                    parameterTypes = ImmutableArray.Empty,
+                    parameterList = Parameter.emptyList
+                )
+
+            let locals = ImmutableArray.Create(CliType.toLocalType PrimitiveType.I4) // let i: int32
+
+            let body = MethodBody.create InitLocals ValueNone (LocalVariables.Locals locals) [
+                let struct(loopBodyLabel, loopBody) =
+                    InstructionBlock.ofList [
+                        // System.Console.WriteLine(box this.items.[i])
+                        ldarg_0
+                        ldfld items'
+                        ldloc_0
+                        let t' = TypeTok.Specified t
+                        ldelem t'
+                        Instructions.box t'
+                        call writeln.Token
+
+                        // i <- i + 1
+                        ldloc_0
+                        ldc_i4_1
+                        add_ovf
+                        stloc_0
+                    ]
+                    |> InstructionBlock.label
+
+                let struct (loopStartLabel, loopStart) =
+                    InstructionBlock.ofList [
+                        // i < this.items.Length
+                        ldloc_0
+                        ldarg_0
+                        ldfld items'
+                        ldlen
+                        conv_i4
+                        blt_s loopBodyLabel
+                    ]
+                    |> InstructionBlock.label
+
+                InstructionBlock.ofList [
+                    // let mutable i = 0
+                    ldc_i4_0
+                    stloc_0
+                    br_s loopStartLabel
+                ]
+
+                loopBody
+                loopStart
+
+                InstructionBlock.singleton ret
+            ]
+
+            members.DefineMethod(definition, body, ValueNone)
+
         // static member public Main: unit -> unit
         let! _ =
             let main =
@@ -255,12 +336,11 @@ let example() = // TODO: Make helper function to add reference to System.Private
             let istring _ _ = PrimitiveType.String
 
             let locals =
-                ImmutableArray.CreateRange [
-                    // let strings: GenericsShowcase.ArrayList<string>
-                    GenericType.instantiate (GenericType.Defined arrlist.Definition) istring
-                    |> CliType.GenericClass
-                    |> CliType.toLocalType
-                ]
+                // let strings: GenericsShowcase.ArrayList<string>
+                GenericType.instantiate (GenericType.Defined arrlist.Definition) istring
+                |> CliType.GenericClass
+                |> CliType.toLocalType
+                |> ImmutableArray.Create
 
             let body = MethodBody.create InitLocals ValueNone (LocalVariables.Locals locals) [
                 InstructionBlock.ofList [
@@ -279,6 +359,10 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     ldloc_0
                     ldstr "How are you?"
                     call add'
+
+                    // strings.PrintItems()
+                    ldloc_0
+                    call print.Token
 
                     ret
                 ]
@@ -302,9 +386,16 @@ let example() = // TODO: Make helper function to add reference to System.Private
 let tests =
     testList "generics showcase" [
         testCaseExec (lazy example()) "name of test case" __SOURCE_DIRECTORY__ "exout" "GenericsShowcase.dll" <| fun dotnet ->
-            let out = dotnet.StandardOutput.ReadLine()
+            let out =
+                [
+                    while not dotnet.StandardOutput.EndOfStream do
+                        dotnet.StandardOutput.ReadLine()
+                ]
+
             dotnet.StandardError.ReadToEnd() |> stderr.Write
 
-            fun() -> test <@ failwith "TODO: Check stdout" @>
+            fun() ->
+                let code = dotnet.ExitCode
+                test <@ code = 0 && out = [ "Hello!"; "How are you?" ] @>
     ]
 #endif
