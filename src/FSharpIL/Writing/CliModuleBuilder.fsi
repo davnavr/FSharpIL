@@ -6,23 +6,11 @@ open System.Runtime.CompilerServices
 
 open FSharpIL.Cli
 open FSharpIL.Metadata
-open FSharpIL.Metadata.Cil
 open FSharpIL.Metadata.Tables
 
 open FSharpIL.Writing.Cil
 
 open FSharpIL.Utilities.Collections
-
-[<AbstractClass>]
-type DefinedMethodBody = // TODO: Maybe move MethodBodyBuilder higher up to allow its usage in the FSharpIL.Cli namespace.
-    val InitLocals: InitLocals
-    val LocalTypes: ImmutableArray<LocalType>
-
-    new: localTypes: ImmutableArray<LocalType> * initLocals: InitLocals -> DefinedMethodBody
-    new: localTypes: ImmutableArray<LocalType> -> DefinedMethodBody
-    new: unit -> DefinedMethodBody
-
-    abstract WriteInstructions: byref<MethodBodyBuilder> * MetadataTokenSource -> uint16
 
 [<NoComparison; NoEquality>]
 type EntryPoint
@@ -39,7 +27,7 @@ type CustomAttributeBuilder = CustomAttributeList ref voption
 type DefinedTypeMembers =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
     [<DefaultValue>] val mutable internal Method: HybridHashSet<DefinedMethod>
-    [<DefaultValue>] val mutable internal MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
+    [<DefaultValue>] val mutable internal MethodBodyLookup: LateInitDictionary<DefinedMethod, MethodBody>
 
     member Owner: DefinedType
     member FieldCount: int32
@@ -53,12 +41,12 @@ type DefinedTypeMembers =
 
     member DefineMethod:
         method: DefinedMethod *
-        body: DefinedMethodBody voption *
+        body: MethodBody voption *
         attributes: CustomAttributeBuilder -> ValidationResult<MethodTok<DefinedType, DefinedMethod>>
 
     member DefineEntryPoint:
         method: EntryPointMethod *
-        body: DefinedMethodBody *
+        body: MethodBody *
         attributes: CustomAttributeBuilder -> ValidationResult<MethodTok<DefinedType, MethodDefinition<MethodKinds.Static>>>
 
     member ContainsField: field: DefinedField -> bool
@@ -108,7 +96,7 @@ type TypeMemberExtensions =
     static member DefineMethod :
         members: DefinedTypeMembers<'Kind> *
         method: MethodDefinition<MethodKinds.ObjectConstructor> *
-        body: DefinedMethodBody * // TODO: Define helper class for emitting call to base constructor before running rest of ctor code.
+        body: MethodBody * // TODO: Define helper class for emitting call to base constructor before running rest of ctor code.
         attributes: CustomAttributeBuilder ->
             ValidationResult<MethodTok<TypeDefinition<'Kind>, MethodDefinition<MethodKinds.ObjectConstructor>>>
             when 'Kind :> TypeKinds.IHasConstructors
@@ -117,7 +105,7 @@ type TypeMemberExtensions =
     static member DefineMethod :
         members: DefinedTypeMembers<'Kind> *
         method: MethodDefinition<MethodKinds.Instance> *
-        body: DefinedMethodBody *
+        body: MethodBody *
         attributes: CustomAttributeBuilder ->
             ValidationResult<MethodTok<TypeDefinition<'Kind>, MethodDefinition<MethodKinds.Instance>>>
             when 'Kind :> TypeKinds.IHasInstanceMethods

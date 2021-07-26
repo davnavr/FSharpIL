@@ -18,7 +18,7 @@ module CliHeader =
           MinorRuntimeVersion = 5us
           Requires32Bit = false }
 
-// TODO: Make this class internal.
+// TODO: Make this class internal, or remove it entirely.
 
 /// <summary>Builds the CLI metadata stored in the <c>.text</c> section of a PE file (II.24).</summary>
 [<Sealed>]
@@ -26,7 +26,7 @@ type CliMetadataBuilder internal
     (
         header: CliHeader,
         root: CliMetadataRoot<Omitted, Omitted>,
-        methodBodies: FSharpIL.Writing.Cil.MethodBodyList,
+        methodBodies: Lazy<ChunkedMemory>,
         moduleRowBuilder,
         strings: StringsStreamBuilder,
         us: UserStringStreamBuilder,
@@ -37,11 +37,11 @@ type CliMetadataBuilder internal
         //vTableFixups
     )
     =
-    
+
     member val Tables = MetadataTablesBuilder(moduleRowBuilder, strings, guid, blob)
     member _.Header = header
     member _.Root = root
-    member _.MethodBodies = methodBodies
+    member _.MethodBodies = methodBodies.Value
     member _.Strings = strings
     member _.UserString = us
     member _.Guid = guid

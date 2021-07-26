@@ -22,6 +22,8 @@ type LocalVarIndex =
 
 [<AutoOpen>]
 module LocalVarIndex =
+    let inline (|LocalVarIndex|) (index: LocalVarIndex) = uint16 index
+
     /// <summary>Converts an integer into a local variable index.</summary>
     /// <exception cref="T:System.OverflowException">
     /// Thrown when an overflow occurs when the <paramref name="index"/> is converted into an unsigned 16-bit integer.

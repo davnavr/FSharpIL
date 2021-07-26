@@ -8,7 +8,6 @@ open System.Runtime.CompilerServices
 open FSharpIL.Cli
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Blobs
-open FSharpIL.Metadata.Cil
 open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
@@ -18,18 +17,6 @@ open FSharpIL.Writing.Cil
 open FSharpIL.Utilities
 open FSharpIL.Utilities.Collections
 open FSharpIL.Utilities.Compare
-
-[<AbstractClass>]
-type DefinedMethodBody =
-    val LocalTypes: ImmutableArray<LocalType>
-    val InitLocals: InitLocals
-
-    new (localTypes, initLocals) = { LocalTypes = localTypes; InitLocals = initLocals }
-    new (localTypes) = DefinedMethodBody(localTypes, SkipInitLocals)
-    new () = DefinedMethodBody ImmutableArray.Empty
-
-    /// Writes the instructions of the method body, and returns the maximum number of items on the stack.
-    abstract WriteInstructions: byref<MethodBodyBuilder> * MetadataTokenSource -> uint16
 
 type EntryPoint =
     private
@@ -140,10 +127,10 @@ module CustomAttributeList =
 type CustomAttributeBuilder = CustomAttributeList ref voption
 
 [<Sealed>]
-type DefinedTypeMembers (owner: DefinedType, warnings: _ option, namedTypeCache, entryPointToken, attrs) =
+type DefinedTypeMembers (owner: DefinedType, warnings: _ option, methodBodyCache: MethodBodyStream, namedTypeCache, entryPointToken, attrs) =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
     [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
-    [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
+    [<DefaultValue>] val mutable internal MethodBodyLookup: LateInitDictionary<DefinedMethod, MethodBody>
 
     member _.Owner = owner
     member this.FieldCount = this.Field.Count
@@ -163,11 +150,13 @@ type DefinedTypeMembers (owner: DefinedType, warnings: _ option, namedTypeCache,
 
     member this.DefineField(field: DefinedField, attributes) = this.AddDefinedField(field, attributes)
 
-    member private this.AddDefinedMethod(method, body: DefinedMethodBody voption) = // TODO: Run writer for method body here just in case Module is modified in it.
+    member private this.AddDefinedMethod(method, body: MethodBody voption) =
         // TODO: Check that owner is the correct kind of type to own this kind of method.
         if this.Method.Add method then
             match body with
-            | ValueSome body' -> this.MethodBodyLookup.[method] <- body'
+            | ValueSome body' ->
+                methodBodyCache.Add body' |> ignore
+                this.MethodBodyLookup.Inner.Add(method, body')
             | ValueNone -> ()
 
             Ok(MethodTok.ofTypeDef owner method namedTypeCache)
@@ -248,20 +237,6 @@ type GenericParamEntry =
       Parameters: ImmutableArray<GenericParam>
       ConstraintIndex: TableIndex<GenericParamConstraintRow> }
 
-[<IsReadOnly; Struct>]
-type DefinedMethodBodyWriter
-    (
-        localVarSource: ImmutableArray<LocalType> -> TableIndex<StandaloneSigRow>,
-        metadataTokenSource: MetadataTokenSource,
-        body: DefinedMethodBody
-    )
-    =
-    interface IMethodBodySource with
-        member _.Create builder =
-            { InitLocals = body.InitLocals
-              MaxStack = body.WriteInstructions(&builder, metadataTokenSource)
-              LocalVariables = localVarSource body.LocalTypes }
-
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type TypeSpecMember<'Member when 'Member : not struct> = { Owner: CliType; Member: 'Member }
 
@@ -283,6 +258,7 @@ type ModuleBuilderInfo =
       FieldReferences: ImmutableArray<TypeSpecMember<Field>>.Builder // TODO: Rename to GenericTypeFields
       MethodReferences: ImmutableArray<TypeSpecMember<Method>>.Builder // TODO: Rename to GenericTypeMethods
       //MethodSpecifications: 
+      MethodBodies: MethodBodyStream
       EntryPoint: EntryPoint ref }
 
 [<IsReadOnly; Struct>]
@@ -337,6 +313,11 @@ type TypeMemberExtensions = // TODO: For these extension methods, call internal 
 
     //static member DefineEntryPoint(members: ReferenceTypeMembers<'Kind> 
 
+[<IsReadOnly; Struct; NoComparison; NoEquality>]
+type DefinedMethodEntry =
+    { Method: TableIndex<MethodDefRow>
+      Body: MethodBody }
+
 [<Sealed>]
 type CliModuleBuilder // TODO: Consider making an immutable version of this class.
     (
@@ -369,10 +350,13 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
           ReferencedTypes = Dictionary typeRefCapacity'
           FieldReferences = ImmutableArray.CreateBuilder()
           MethodReferences = ImmutableArray.CreateBuilder()
+          MethodBodies = MethodBodyStream()
           EntryPoint = ref Unchecked.defaultof<EntryPoint> }
 
     let createAttributeList owner = CustomAttributeList(owner, info.CustomAttributes)
-    let defineMembersFor owner = DefinedTypeMembers(owner, warnings, info.NamedTypes, info.EntryPoint, info.CustomAttributes)
+
+    let defineMembersFor owner =
+        DefinedTypeMembers(owner, warnings, info.MethodBodies, info.NamedTypes, info.EntryPoint, info.CustomAttributes)
 
     let mutable assemblyDefAttributes =
         match assembly with
@@ -530,11 +514,15 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         | None -> Some(noImpl "TODO: Error for not assembly")
 
     member _.CreateMetadata() =
+        let metadataTokenSource = ref Unchecked.defaultof<IMetadataTokenSource>
+
+        let writeDefinedMethods = lazy info.MethodBodies.ToMemory !metadataTokenSource
+
         let builder =
             CliMetadataBuilder (
                 info.Header,
                 info.Root,
-                FSharpIL.Writing.Cil.MethodBodyList(),
+                lazy fst writeDefinedMethods.Value,
                 (fun str guid _ -> ModuleRow.create (str.Add info.Name) (guid.Add info.Mvid)),
                 StringsStreamBuilder 512,
                 UserStringStreamBuilder 1,
@@ -821,9 +809,10 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
         for tdef in info.NonNestedTypes do serializeDefinedType tdef |> ignore
 
-        let metadataTokenSource =
-            { new MetadataTokenSource() with
-                member _.GetUserString(str: string) = builder.UserString.AddFolded str
+        metadataTokenSource :=
+            { new IMetadataTokenSource with
+                member _.GetLocalVariables locals = getLocalsSig locals
+
                 member _.GetUserString(str: inref<ReadOnlyMemory<char>>) = builder.UserString.AddFolded str
 
                 member _.GetFieldToken field =
@@ -845,7 +834,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
                 member _.GetTypeToken t = TypeMetadataToken.ofCodedIndex(typeDefOrRefOrSpec t) }
 
-        let definedMethodBodies = List<struct(TableIndex<MethodDefRow> * _)>()
+        let definedMethodBodies = ImmutableArray.CreateBuilder info.MethodBodies.Count
 
         let parameterList = MemberIndexCounter<ParamRow>()
         let fieldList = MemberIndexCounter<FieldRow>()
@@ -873,34 +862,39 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             methodList.Reset()
 
             for method in members'.Method do
-                parameterList.Reset()
+                let token = MethodTok.ofTypeDef parent method info.NamedTypes
+                try
+                    parameterList.Reset()
 
-                for i = 0 to method.Parameters.Length - 1 do
-                    let param = &method.Parameters.ItemRef i
-                    parameterList.Last <-
-                        builder.Tables.Param.Add
-                            { Flags = Parameter.flags &param
-                              Name = builder.Strings.Add param.ParamName
-                              Sequence = Checked.uint16(i + 1) }
+                    for i = 0 to method.Parameters.Length - 1 do
+                        let param = &method.Parameters.ItemRef i
+                        parameterList.Last <-
+                            builder.Tables.Param.Add
+                                { Flags = Parameter.flags &param
+                                  Name = builder.Strings.Add param.ParamName
+                                  Sequence = Checked.uint16(i + 1) }
 
-                // Method bodies are written later to avoid bugs regarding members not being added to dictionaries yet.
-                let i' =
-                    { Rva = Unchecked.defaultof<MethodBodyLocation>
-                      ImplFlags = method.ImplFlags
-                      Flags = method.Flags
-                      Name = builder.Strings.Add method.Name
-                      Signature = getMethodSig method
-                      ParamList = parameterList.First }
-                    |> builder.Tables.MethodDef.Add
+                    // Method bodies are written later to avoid bugs regarding members not being added to dictionaries yet.
+                    let i' =
+                        { Rva = Unchecked.defaultof<_>
+                          ImplFlags = method.ImplFlags
+                          Flags = method.Flags
+                          Name = builder.Strings.Add method.Name
+                          Signature = getMethodSig method
+                          ParamList = parameterList.First }
+                        |> builder.Tables.MethodDef.Add
 
-                methodList.Last <- i'
-                definedMethodLookup.[MethodTok.ofTypeDef parent method info.NamedTypes] <- i'
+                    methodList.Last <- i'
+                    definedMethodLookup.[token] <- i'
 
-                match members'.MethodBodyLookup.TryGetValue method with
-                | true, body -> definedMethodBodies.Add(struct(i', body))
-                | false, _ -> ()
+                    match members'.MethodBodyLookup.TryGetValue method with
+                    | true, body -> definedMethodBodies.Add { Method = i'; Body = body }
+                    | false, _ -> ()
 
-                // TODO: Add the methods generic parameters, if any.
+                    // TODO: Add the methods generic parameters, if any.
+                with
+                | ex ->
+                    InvalidOperationException(sprintf "Unable to write method %O" token, ex) |> raise
 
             // TODO: event and property
 
@@ -915,6 +909,12 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         for i = 1 to serializedDefinedTypes.Count - 1 do serializeDefinedMembers serializedDefinedTypes.[i] ValueNone
 
         let miscMemberParent owner = getEncodedType owner |> getTypeSpec |> MemberRefParent.TypeSpec
+
+        (*
+        match members'.MethodBodyLookup.TryGetValue method with
+        | true, body -> (snd writeDefinedMethods.Value).[body]
+        | false, _ -> Unchecked.defaultof<_>
+        *)
 
         for i = 0 to info.FieldReferences.Count - 1 do
             let field = &info.FieldReferences.ItemRef i
@@ -938,9 +938,11 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
             miscMethodLookup.Add(token, i')
 
-        for struct(i, body) in definedMethodBodies do
-            let writer = DefinedMethodBodyWriter(getLocalsSig, metadataTokenSource, body)
-            Unsafe.AsRef &builder.Tables.MethodDef.[i].Rva <- builder.MethodBodies.Add &writer
+        // Safe to generate method bodies, since all referenced members should have been added.
+        for i = 0 to definedMethodBodies.Count - 1 do
+            let entry = &definedMethodBodies.ItemRef i
+            // Safe to manipulate MethodDef row here, since all methods have been added already.
+            Unsafe.AsRef &builder.Tables.MethodDef.[entry.Method].Rva <- (snd writeDefinedMethods.Value).[entry.Body]
 
         for KeyValue(owner, parameters) in genericParamLookup do
             for i = 0 to parameters.Length - 1 do
