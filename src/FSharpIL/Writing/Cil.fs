@@ -418,6 +418,7 @@ module Instructions =
     let bgt_s target = brpops2 Opcode.Bgt_s BranchKind.Short target
     let blt_s target = brpops2 Opcode.Blt_s BranchKind.Short target
     let add = pops1 Opcode.Add
+    let mul = pops1 Opcode.Mul
     let conv_i4 = op Opcode.Conv_i4
     let callvirt method = methodTokenCall Opcode.Callvirt method
 
@@ -452,6 +453,10 @@ module Instructions =
     let newarr etype = { op Opcode.Newarr with Operand = Operand.TypeToken etype }
     let ldlen = op Opcode.Ldlen
     let stelem etype = { pops3 Opcode.Stelem with Operand = Operand.TypeToken etype }
+    let add_ovf = pops1 Opcode.Add_ovf
+    let add_ovf_un = pops1 Opcode.Add_ovf_un
+    let mul_ovf = pops1 Opcode.Mul_ovf
+    let mul_ovf_un = pops1 Opcode.Mul_ovf_un
     let ldarg num = { pushes1 Opcode.Ldarg with Operand = Operand.Short num }
     let ldloc (LocalVarIndex i) = { pushes1 Opcode.Ldloc with Operand = Operand.Short i }
     let stloc (LocalVarIndex i) = { pops1 Opcode.Stloc with Operand = Operand.Short i }

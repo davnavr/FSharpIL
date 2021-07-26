@@ -5,6 +5,9 @@ open FSharpIL.Metadata
 
 [<Sealed>]
 type CoreAssemblyMembers =
+    member Array: ReferencedTypeMembers<TypeKinds.AbstractClass>
+
+    // TODO: Make this a field of some ObjectMembers class instead.
     /// <summary>
     /// The constructor for <see cref="T:System.Object"/>, called in the constructor of all directly derived types.
     /// </summary>
@@ -40,8 +43,14 @@ type CoreAssemblyReference =
     /// the current assembly or module was compiled with (.NET Core, .NET Framework, .NET standard, etc.).
     /// </summary>
     member TargetFrameworkAttribute: TypeReference<TypeKinds.SealedClass>
+    /// <summary>
+    /// The core type <see cref="T:System.Array"/>, which provides many static methods that compilers can use to create arrays.
+    /// </summary>
+    member Array: TypeReference<TypeKinds.AbstractClass>
 
     new: assembly: ReferencedAssembly -> CoreAssemblyReference
+
+    member Assembly : ReferencedAssembly
 
     /// <summary>
     /// Adds a reference to <c>System.Private.CoreLib</c>, which is the core assembly for .NET Core and .NET 5+.

@@ -59,6 +59,21 @@ let example() = // TODO: Make helper function to add reference to System.Private
     validated {
         let! mscorlib' = mscorlib.AddReferencesTo builder
 
+        let! arrayCopy =
+            let array =
+                ReferencedType.Reference mscorlib.Array.Reference
+                |> NamedType.ReferencedType
+                |> CliType.Class
+                |> ParameterType.T
+
+            MethodReference.Static (
+                ExternalVisibility.Public,
+                ReturnType.Void',
+                name = MethodName.ofStr "Copy",
+                parameterTypes = ImmutableArray.Create(array, array, ParameterType.T PrimitiveType.I4)
+            )
+            |> mscorlib'.Array.ReferenceMethod
+
         (* Generates a generic type definition. *)
         // type public [<Sealed>] ArrayList<'T> = inherit System.Object
         let arrlist =
@@ -95,7 +110,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     MemberVisibility.Private,
                     flags = FieldAttributes.InitOnly,
                     name = Identifier.ofStr "items",
-                    signature = CliType.SZArray(CliType.TypeVar arrlist.Parameters.[0])
+                    signature = CliType.SZArray t
                 )
 
             members.Members.DefineField(definition, attributes = ValueNone)
@@ -162,6 +177,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
             let locals =
                 ImmutableArray.CreateRange [
                     CliType.toLocalType PrimitiveType.I4 // let length: int32
+                    CliType.toLocalType (CliType.SZArray t) // let replacement: 'T[]
                 ]
 
             let body = MethodBody.create InitLocals ValueNone (LocalVariables.Locals locals) [
@@ -180,7 +196,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
                         dup
                         ldfld index'
                         ldc_i4_1
-                        add
+                        add_ovf
                         stfld index'
 
                         ret
@@ -201,9 +217,24 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     ldloc_0
                     bgt_s addItemLabel
 
-                    // TODO: Do some resize stuff here.
-                    ldarg_0 // TEMPORARY
-                    pop // TEMPORARY
+                    // let replacement = Microsoft.FSharp.Primitives.Basics.Array.zeroCreateUnchecked(length * 2)
+                    ldloc_0
+                    ldc_i4_2
+                    mul_ovf
+                    newarr (TypeTok.Specified t)
+                    stloc_1
+
+                    // System.Array.Copy(this.items, replacement, length)
+                    ldarg_0
+                    ldfld items'
+                    ldloc_1
+                    ldloc_0
+                    call arrayCopy.Token
+
+                    // this.items <- replacement
+                    ldarg_0
+                    ldloc_1
+                    stfld items'
                 ]
 
                 addItem

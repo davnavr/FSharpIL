@@ -711,40 +711,20 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             match referencedTypeLookup.TryGetValue reference with
             | true, existing -> existing
             | false, _ ->
-                let members = info.ReferencedTypes.[reference]
-
                 let reference' =
                     match reference with
                     | ReferencedType.Reference tref
                     | ReferencedType.Generic(GenericType(tref, _)) -> tref
-
                 let rscope =
                     match reference'.ResolutionScope with
                     | TypeReferenceParent.Assembly assem -> ResolutionScope.AssemblyRef assemblyReferenceLookup.[assem]
                     | TypeReferenceParent.Type parent ->
                         ResolutionScope.TypeRef(serializeReferencedType parent)
-
                 let i =
-                    builder.Tables.TypeRef.Add
-                        { ResolutionScope = rscope
-                          TypeName = builder.Strings.Add reference'.TypeName
-                          TypeNamespace = builder.Strings.Add reference'.TypeNamespace }
-
-                for field in members.Field do
-                    referencedFieldLookup.[FieldTok.ofTypeRef reference field info.NamedTypes] <-
-                        builder.Tables.MemberRef.Add
-                            { Class = MemberRefParent.TypeRef i
-                              Name = builder.Strings.Add field.Name
-                              Signature = { MemberRefSig = getFieldSig(field).FieldSig } }
-
-                for method in members.Method do
-                    referencedMethodLookup.[MethodTok.ofTypeRef reference method info.NamedTypes] <-
-                        builder.Tables.MemberRef.Add
-                            { Class = MemberRefParent.TypeRef i
-                              Name = builder.Strings.Add method.Name
-                              Signature =
-                                // TODO: Use separate lookup if method reference signature has any VarArgs.
-                                { MemberRefSig = getMethodSig(method).MethodDefSig } }
+                    { ResolutionScope = rscope
+                      TypeName = builder.Strings.Add reference'.TypeName
+                      TypeNamespace = builder.Strings.Add reference'.TypeNamespace }
+                    |> builder.Tables.TypeRef.Add
 
                 referencedTypeLookup.[reference] <- i
                 i
@@ -795,13 +775,33 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
         for tref in info.ReferencedTypes.Keys do serializeReferencedType tref |> ignore
 
+        // Members of TypeReferences are added afterward to avoid infinite loops.
+        for KeyValue(tref, i) in referencedTypeLookup do
+            let members = info.ReferencedTypes.[tref]
+
+            for field in members.Field do
+                referencedFieldLookup.[FieldTok.ofTypeRef tref field info.NamedTypes] <-
+                    builder.Tables.MemberRef.Add
+                        { Class = MemberRefParent.TypeRef i
+                          Name = builder.Strings.Add field.Name
+                          Signature = { MemberRefSig = getFieldSig(field).FieldSig } }
+
+            for method in members.Method do
+                referencedMethodLookup.[MethodTok.ofTypeRef tref method info.NamedTypes] <-
+                    builder.Tables.MemberRef.Add
+                        { Class = MemberRefParent.TypeRef i
+                          Name = builder.Strings.Add method.Name
+                          Signature =
+                            // TODO: Use separate lookup if method reference signature has any VarArgs.
+                            { MemberRefSig = getMethodSig(method).MethodDefSig } }
+
         serializeDefinedType ModuleType.Definition' |> ignore // Serialize the <Module> special class.
 
         match info.NestedTypes.TryGetValue ModuleType.Definition' with
         | true, existing -> for child in existing do serializeDefinedType child |> ignore
         | false, _ -> ()
 
-        // Enclosing classes "precede the definition of all classes it encloses" (II.22)
+        // Enclosing classes "precede the definition of all classes it encloses" (II.22).
         for KeyValue(parent, nested) in info.NestedTypes do
             if Object.ReferenceEquals(parent, ModuleType.Definition') |> not then
                 serializeDefinedType parent |> ignore

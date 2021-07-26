@@ -6,7 +6,8 @@ open FSharpIL.Cli
 open FSharpIL.Metadata
 
 [<Sealed>]
-type CoreAssemblyMembers (octor: MethodTok<_, _>, tfmctor: MethodTok<_, _>) =
+type CoreAssemblyMembers (array: ReferencedTypeMembers<_>, octor: MethodTok<_, _>, tfmctor: MethodTok<_, _>) =
+    member _.Array = array
     member _.ObjectConstructor = octor
     member _.TargetFrameworkConstructor = tfmctor
 
@@ -29,6 +30,13 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
             Identifier.ofStr "TargetFrameworkAttribute"
         )
 
+    let array =
+        TypeReference.AbstractClass (
+            TypeReferenceParent.Assembly assembly,
+            system,
+            Identifier.ofStr "Array"
+        )
+
     let octor = ReferencedMethod.Constructor(ExternalVisibility.Public, ImmutableArray.Empty)
     let tfmctor =
         ReferencedMethod.Constructor (
@@ -48,6 +56,9 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
     member val Delegate = referenceSystemType "Delegate"
     member val Enum = referenceSystemType "Enum"
     member _.TargetFrameworkAttribute = tfmattr
+    member _.Array = array
+
+    member _.Assembly = assembly
 
     member this.AddReferencesTo(builder: CliModuleBuilder) =
         builder.ReferenceAssembly assembly
@@ -58,10 +69,11 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
             let! _ = builder.ReferenceType(ReferencedType.Reference this.Delegate)
             let! _ = builder.ReferenceType(ReferencedType.Reference this.Enum)
             let! tfmattr' = builder.ReferenceType tfmattr
+            let! array' = builder.ReferenceType array
 
             let! octor' = object'.ReferenceMethod octor
             let! tfmctor' = tfmattr'.ReferenceMethod tfmctor
-            return CoreAssemblyMembers(octor', tfmctor')
+            return CoreAssemblyMembers(array', octor', tfmctor')
         }
 
     static member NetCore(version, publicKeyToken, ?hash) =

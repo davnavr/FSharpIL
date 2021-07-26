@@ -336,6 +336,12 @@ module Instructions =
 
 
 
+    /// (0x5A) Pops two values from the stack, adds them, and pushes the result onto the stack without an overflow check
+    /// (III.3.48).
+    val mul : Instruction
+
+
+
     /// <summary>
     /// (0x69) Converts the value on top of the stack into an <c>int32</c> without an overflow check (III.3.27).
     /// </summary>
@@ -404,8 +410,10 @@ module Instructions =
 
 
 
+    /// <summary>
     /// (0x8D) Pops a signed native or 32-bit integer <c>length</c> off of the stack and creates "a zero-based, one-dimensional
     /// array" of the specified type (III.4.20).
+    /// </summary>
     val newarr : etype: TypeTok -> Instruction
 
     /// (0x8E) Pops an object reference to an array off of the stack and pushes the length of the array onto the stack as an
@@ -416,6 +424,33 @@ module Instructions =
 
     /// (0xA4) Replaces an array element of a type specified by a token at the specified index (III.4.8).
     val stelem : etype: TypeTok -> Instruction
+
+
+
+
+    /// <summary>
+    /// (0xD6) Pops two signed integers from the stack, adds them, and pushes the result onto the stack, throwing a
+    /// <see cref="T:System.OverflowException"/> on overflow (III.3.2).
+    /// </summary>
+    val add_ovf : Instruction
+
+    /// <summary>
+    /// (0xD7) Pops two signed integers from the stack, adds them, and pushes the result onto the stack, throwing a
+    /// <see cref="T:System.OverflowException"/> on overflow (III.3.2).
+    /// </summary>
+    val add_ovf_un : Instruction
+
+    /// <summary>
+    /// (0xD8) Pops two signed integers from the stack, multiplies them, and pushes the result onto the stack, throwing a
+    /// <see cref="T:System.OverflowException"/> on overflow (III.3.49).
+    /// </summary>
+    val mul_ovf : Instruction
+
+    /// <summary>
+    /// (0xD9) Pops two unsigned integers from the stack, multiplies them, and pushes the result onto the stack, throwing a
+    /// <see cref="T:System.OverflowException"/> on overflow (III.3.49).
+    /// </summary>
+    val mul_ovf_un : Instruction
 
 
 

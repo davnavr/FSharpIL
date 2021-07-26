@@ -488,8 +488,10 @@ type TypeReference with
         typeNamespace: Identifier voption *
         typeName: Identifier -> TypeReference<TypeKinds.ConcreteClass>
 
-
-
+    static member AbstractClass:
+        resolutionScope: TypeReferenceParent *
+        typeNamespace: Identifier voption *
+        typeName: Identifier -> TypeReference<TypeKinds.AbstractClass>
 
     static member SealedClass:
         resolutionScope: TypeReferenceParent *
