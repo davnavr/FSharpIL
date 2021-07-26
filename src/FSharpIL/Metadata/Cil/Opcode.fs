@@ -41,6 +41,10 @@ type Opcode =
 
     | Ret = 0x2Aus
 
+    | Blt_s = 0x32us
+
+    | Blt = 0x3Fus
+
     | Add = 0x58us
     | Sub = 0x59us
     | Mul = 0x5Aus

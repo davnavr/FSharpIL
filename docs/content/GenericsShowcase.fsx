@@ -165,6 +165,12 @@ let example() = // TODO: Make helper function to add reference to System.Private
                 ]
 
             let body = MethodBody.create InitLocals ValueNone (LocalVariables.Locals locals) [
+                let struct(skipArrayResize', skipArrayResize) =
+                    InstructionBlock.ofList [
+                        ret
+                    ]
+                    |> InstructionBlock.label
+
                 InstructionBlock.ofList [
                     // let mutable length = this.items.Length
                     ldarg_0
@@ -177,13 +183,14 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     ldarg_0
                     ldfld index'
                     ldloc_0
+                    blt_s skipArrayResize'
 
+                    // TODO: Do some resize stuff here.
+                    ldarg_0 // TEMPORARY
                     pop // TEMPORARY
-                    pop // TEMPORARY
-                    // TODO: Do some fancy branching.
-
-                    ret // TEMPORARY
                 ]
+
+                skipArrayResize
             ]
 
             members.DefineMethod(definition, body, attributes = ValueNone)

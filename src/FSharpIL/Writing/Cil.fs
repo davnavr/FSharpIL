@@ -153,6 +153,7 @@ type IMetadataTokenSource =
 
 type InvalidCil =
     | StackUnderflow of offset: uint32 * Instruction * uint16
+    | InvalidShortBranchTarget of offset: uint32 * Opcode * targetOffset: int64 * targetLocation: uint32
 
     override this.ToString() =
         match this with
@@ -161,12 +162,20 @@ type InvalidCil =
                 match instruction.StackBehavior with
                 | PopOrPush amount -> -amount
             sprintf
-                "The %O instruction at IL%04X resulted in a stack underflow, expected to pop %i items of the stack but the \
+                "The %O instruction at IL_%04X resulted in a stack underflow, expected to pop %i items of the stack but the \
                 stack only contained %i items"
                 instruction
                 offset
                 popped
                 actual
+        | InvalidShortBranchTarget(offset, instruction, toffset, tlocation) ->
+            sprintf
+                "The %O branch instruction at IL_%04X is invalid, the target location (IL_%04X) requires an offset of %i, which \
+                cannot fit in a 1-byte offset. Use the long form of the instruction instead"
+                (ParsedOpcode.name instruction)
+                offset
+                tlocation
+                toffset
 
 module InvalidCil =
     let (|StackUnderflow|_|) reason =
@@ -300,6 +309,7 @@ type MethodBodyStream () =
 
             for i = 0 to entry.Instructions.Count - 1 do
                 let instruction = &entry.Instructions.ItemRef i
+                let pos = wr.Length - start
 
                 match Opcode.size instruction.Opcode with
                 | 1u -> wr.Write(uint8 instruction.Opcode)
@@ -307,6 +317,8 @@ type MethodBodyStream () =
                 | _ ->
                     wr.Write(uint8(instruction.Opcode >>> 8))
                     wr.Write(uint8(uint16 instruction.Opcode &&& 0xFFus))
+
+                let pos' = wr.Length - start
 
                 match instruction.Operand with
                 | Nothing -> ()
@@ -319,18 +331,20 @@ type MethodBodyStream () =
                 | TypeToken token -> wr.WriteLE(uint32(metadataTokenSource.GetTypeToken token))
                 | StringToken token -> wr.WriteLE(uint32(metadataTokenSource.GetUserString &token))
                 | BranchTarget(kind, target) ->
-                    // TODO: Have error checking in Add method to prevent invalid short branch targets.
-                    let target =
+                    let tlocation = entry.LabelLookup.Value.[target]
+                    let toffset =
                         let size =
                             match kind with
                             | BranchKind.Short -> 1L
                             | BranchKind.Long -> 4L
 
-                        int64(wr.Length - start) + size - int64 entry.LabelLookup.Value.[target]
+                        int64 tlocation - (int64 pos' + size)
 
                     match kind with
-                    | BranchKind.Short -> wr.Write(uint8(Checked.int8 target))
-                    | BranchKind.Long -> wr.WriteLE(uint32 target)
+                    | BranchKind.Short when toffset < int64 SByte.MinValue || toffset > int64 SByte.MaxValue ->
+                        InvalidShortBranchTarget(pos, instruction.Opcode, toffset, tlocation) |> invalidMethodBody body
+                    | BranchKind.Short -> wr.Write(uint8 toffset)
+                    | BranchKind.Long -> wr.WriteLE(uint32 toffset)
 
             let actualCodeSize = wr.Length - start
             if entry.CodeSize <> actualCodeSize then
@@ -353,6 +367,11 @@ module Instructions =
                 let pops = Checked.int8 method.Member.ParameterTypes.Length
                 let pushes = if method.Member.HasReturnValue then 1y else 0y
                 PopOrPush(pushes - pops) }
+
+        let branching opcode behavior kind target =
+            { Opcode = opcode
+              StackBehavior = behavior
+              Operand = Operand.BranchTarget(kind, target) }
 
     open Instruction
 
@@ -388,6 +407,7 @@ module Instructions =
     let pop = pops1 Opcode.Pop
     let call method = methodTokenCall Opcode.Call method
     let ret = op Opcode.Ret
+    let inline blt_s target = branching Opcode.Blt_s (StackBehavior.PopOrPush -2y) BranchKind.Short target
     let conv_i4 = op Opcode.Conv_i4
     let callvirt method = methodTokenCall Opcode.Callvirt method
 

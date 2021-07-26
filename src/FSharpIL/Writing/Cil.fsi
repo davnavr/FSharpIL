@@ -161,6 +161,8 @@ module Instructions =
         /// Creates an instruction that takes no arguments and pops two values from the stack.
         val inline pops2 : opcode: Opcode -> Instruction
 
+        val branching : opcode: Opcode -> StackBehavior -> BranchKind -> target: Label -> Instruction
+
     /// (0x00) An instruction that does nothing (III.3.51).
     val nop : Instruction
 
@@ -301,6 +303,13 @@ module Instructions =
 
     /// (0x2A) Returns from the current method (III.3.56).
     val ret : Instruction
+
+
+
+    /// <summary>
+    /// (0x32) Branches to the <paramref name="target"/> if <c>value1</c> is less than <c>value2</c>, short form (III.3.12).
+    /// </summary>
+    val inline blt_s : target: Label -> Instruction
 
 
 
