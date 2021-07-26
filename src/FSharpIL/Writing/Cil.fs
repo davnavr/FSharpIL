@@ -10,22 +10,36 @@ open FSharpIL.Metadata.Cil
 open FSharpIL.Metadata.Tables
 
 open FSharpIL.Cli
+open FSharpIL.Cli.TypeSystem
 
 open FSharpIL
 open FSharpIL.Utilities
+
+[<Struct; RequireQualifiedAccess>]
+type LocalVariables =
+    | Token of index: TableIndex<StandaloneSigRow>
+    | Locals of ImmutableArray<LocalType>
+
+    member this.IsNull =
+        match this with
+        | Token token -> token.IsNull
+        | Locals locals -> locals.IsDefaultOrEmpty
+
+module LocalVariables =
+    let Null = LocalVariables.Token { TableIndex = 0u }
 
 [<Struct>]
 type MethodHeader =
     { InitLocals: InitLocals
       MaxStack: MaxStack voption
-      LocalVariables: TableIndex<StandaloneSigRow> }
+      LocalVariables: LocalVariables }
 
 [<Sealed>]
 type Label () =
     interface IEquatable<Label> with member this.Equals other = Object.ReferenceEquals(this, other)
 
-[<Struct>]
-type BranchKind = | Shortened | Long
+[<Struct; RequireQualifiedAccess>]
+type BranchKind = | Short | Long
 
 type Operand =
     | Nothing
@@ -36,6 +50,7 @@ type Operand =
     | FieldToken of FieldTok
     | MethodToken of MethodTok
     | TypeToken of TypeTok
+    | StringToken of ReadOnlyMemory<char>
     | BranchTarget of BranchKind * Label
 
     override this.ToString() =
@@ -47,8 +62,9 @@ type Operand =
         | FieldToken(ToString str)
         | MethodToken(ToString str)
         | TypeToken(ToString str) -> str
-        | RawToken token -> sprintf "0x%08X // %A" token.Value token.Type
-        | BranchTarget _ -> "IL_XXXX"
+        | RawToken token -> sprintf "/* %08X */" (uint32 token)
+        | BranchTarget _ -> sprintf "LABEL"
+        | StringToken str -> String.Concat("\"", String str.Span, "\"")
 
 [<Struct>]
 type StackBehavior =
@@ -67,7 +83,6 @@ type Instruction =
         | operand -> String.Concat(opcode, " ", operand)
 
 type InstructionBlock =
-    private
     | InstructionSequence of seq<Instruction>
     | InstructionList of Instruction list
     | InstructionBlock of ImmutableArray<Instruction>
@@ -102,9 +117,14 @@ type MethodBody = { Header: MethodHeader; Instructions: seq<InstructionBlock> }
 module MethodBody =
     let [<Literal>] MaxTinyBodySize = 63u
     let [<Literal>] MaxTinyStackCount = 8us
-    /// The size of the fat format header, as a count of 4-byte integers (II.25.4.3).
     let [<Literal>] FatFormatSize = 3u
     let [<Literal>] FatMethodAlignment = 4u
+
+    let inline create initLocals maxStack localVariables instructions =
+        { Header = { InitLocals = initLocals; MaxStack = maxStack; LocalVariables = localVariables }
+          Instructions = instructions }
+
+    let inline ofSeq instructions = create SkipInitLocals ValueNone LocalVariables.Null [ InstructionBlock.ofSeq instructions ]
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type MethodBodyKind = | Tiny | Fat
@@ -124,17 +144,18 @@ type BranchTargetOffset =
       Offset: ChunkedMemoryBuilder }
 
 type IMetadataTokenSource =
+    abstract GetLocalVariables: ImmutableArray<LocalType> -> TableIndex<StandaloneSigRow>
     abstract GetUserString: inref<ReadOnlyMemory<char>> -> UserStringOffset
     abstract GetMethodToken: method: MethodTok -> MethodMetadataToken
     abstract GetFieldToken: field: FieldTok  -> FieldMetadataToken
     abstract GetTypeToken: TypeTok -> TypeMetadataToken
 
 [<Sealed>]
-type MethodBodyStream (metadataTokenSource: IMetadataTokenSource) =
+type MethodBodyStream () =
     let bodies = Dictionary<MethodBody, MethodBodyEntry>()
 
-    // TODO: Store dictionary of method bodies in CliModuleBuilder, so DefineMethod can report errors with bodies.
-    member _.Add body = // TODO: Return a Result
+    // TODO: Store dictionary of method bodies in CliModuleBuilder, so when DefineMethod is called, it can call this Add method.
+    member _.Add body = // TODO: Define exception type for invalid IL.
         match bodies.TryGetValue body with
         | true, { MaxStack = maxStack; CodeSize = size } -> struct(maxStack, size)
         | false, _ ->
@@ -151,10 +172,7 @@ type MethodBodyStream (metadataTokenSource: IMetadataTokenSource) =
                     | InstructionOrLabel.Instruction instruction ->
                         instructions.Add instruction
 
-                        match instruction.Operand with
-                        | BranchTarget(_, label) when not(resolvedLabels.ContainsKey label) ->
-                            unresolvedLabels.Add label |> ignore
-                        | _ -> ()
+                        // TODO: Check that operands reference valid Local variable indices.
 
                         stack <-
                             match instruction.StackBehavior with
@@ -162,27 +180,24 @@ type MethodBodyStream (metadataTokenSource: IMetadataTokenSource) =
 
                         if stack > uint16 maxStack then maxStack <- MaxStack stack
 
-                        size <- size + Opcode.size instruction.Opcode
-
                         size <- size +
+                            Opcode.size instruction.Opcode +
                             match instruction.Operand with
                             | Nothing -> 0u
-                            | Byte _ -> 1u
+                            | Byte _
+                            | BranchTarget(BranchKind.Short, _) -> 1u
                             | Short _ -> 2u
                             | Integer _
                             | FieldToken _
                             | MethodToken _
                             | TypeToken _
                             | RawToken _
-                            // Initially, all branch targets are assumed to be 4 bytes large, as it simplifies processing.
-                            | BranchTarget _ -> 4u
+                            | BranchTarget(BranchKind.Long, _) -> 4u
                     | InstructionOrLabel.Label label ->
                         resolvedLabels.Add(label, size) // TODO: How to handle erroneous duplication of a label?
                         unresolvedLabels.Remove label |> ignore
 
-            // TODO: Adjust size here after labels are done to shorten some branches into 1-byte offsets.
-
-            if unresolvedLabels.Count > 0 then noImpl "TODO: How to handle unresolved labels?"
+            if unresolvedLabels.Count > 0 then noImpl "TODO: Throw exception for unresolved labels?"
             
             let inline isTinyBody() =
                 body.Header.LocalVariables.IsNull &&
@@ -199,20 +214,37 @@ type MethodBodyStream (metadataTokenSource: IMetadataTokenSource) =
             bodies.Add(body, entry)
             struct(maxStack, size)
 
-    member _.WriteTo(section: byref<ChunkedMemoryBuilder>) =
-        let branchTargetOffsets = ImmutableArray.CreateBuilder<BranchTargetOffset>()
-
+    member _.WriteTo(metadataTokenSource: IMetadataTokenSource, section: byref<ChunkedMemoryBuilder>) =
         for KeyValue(body, entry) in bodies do
-            noImpl "TODO: Write headers"
+            match entry.Kind with
+            | Tiny ->
+                let flags = uint8 ILMethodFlags.TinyFormat ||| (Checked.uint8 entry.CodeSize <<< 2)
+                if flags &&& uint8 ILMethodFlags.FatFormat <> 0uy then invalidOp(sprintf "Invalid tiny method flags %A" flags)
+                section.Write flags
+            | Fat ->
+                let mutable flags' = ILMethodFlags.FatFormat
+
+                match body.Header.InitLocals with
+                | InitLocals -> flags' <- flags' ||| ILMethodFlags.InitLocals
+                | SkipInitLocals -> ()
+
+                //if has extra data sections then flags' <- flags' ||| ILMethodFlags.MoreSects
+
+                section.AlignTo(int32 MethodBody.FatMethodAlignment) // Padding
+                section.WriteLE(uint16 flags' ||| (uint16 MethodBody.FatFormatSize <<< 12)) // Flags & size
+                section.WriteLE(uint16 entry.MaxStack)
+                section.WriteLE entry.CodeSize
+
+                let locals =
+                    match body.Header.LocalVariables with
+                    | LocalVariables.Token token -> token
+                    | LocalVariables.Locals locals -> metadataTokenSource.GetLocalVariables locals
+
+                section.WriteLE(uint32(MetadataToken(MetadataTokenType.StandaloneSig, locals.TableIndex)))
+
+                // TODO: Write extra data sections for fat method.
 
             let start = section.Length
-            // Difference between the actual offsets of the instructions from the start of the method and the recorded offsets.
-            let mutable diff = 0u
-
-            branchTargetOffsets.Clear()
-
-            if branchTargetOffsets.Capacity < entry.LabelLookup.Count then
-                branchTargetOffsets.Capacity <- entry.LabelLookup.Count
 
             for i = 0 to entry.Instructions.Count - 1 do
                 let instruction = &entry.Instructions.ItemRef i
@@ -224,8 +256,6 @@ type MethodBodyStream (metadataTokenSource: IMetadataTokenSource) =
                     section.Write(uint8(instruction.Opcode >>> 8))
                     section.Write(uint8(uint16 instruction.Opcode &&& 0xFFus))
 
-                let pos = section.Length - start
-
                 match instruction.Operand with
                 | Nothing -> ()
                 | Byte value -> section.Write value
@@ -235,56 +265,34 @@ type MethodBodyStream (metadataTokenSource: IMetadataTokenSource) =
                 | FieldToken token -> section.WriteLE(uint32(metadataTokenSource.GetFieldToken token))
                 | MethodToken token -> section.WriteLE(uint32(metadataTokenSource.GetMethodToken token))
                 | TypeToken token -> section.WriteLE(uint32(metadataTokenSource.GetTypeToken token))
-                | BranchTarget _ when isNull entry.LabelLookup ->
-                    invalidOp(sprintf "Cannot lookup branch target label at IL_%04X, no labels were defined" pos)
-                | BranchTarget(kind, label) ->
-                    let target = int64 pos - int64(entry.LabelLookup.[label] - diff)
-                    let offset = section
+                | BranchTarget(kind, target) ->
+                    // TODO: Have error checking in Add method to prevent invalid short branch targets.
+                    let target =
+                        let size =
+                            match kind with
+                            | BranchKind.Short -> 1L
+                            | BranchKind.Long -> 4L
+
+                        int64(section.Length - start) + size - int64 entry.LabelLookup.[target]
 
                     match kind with
-                    | BranchKind.Shortened when target >= int64 SByte.MinValue || target <= int64 SByte.MaxValue ->
-                        section.Write(uint8 target)
-                        diff <- diff + 3u // 3 extra bytes removed since 4-byte offset shortened to 1-byte offset.
-                    | BranchKind.Shortened
-                    | BranchKind.Long ->
-                        section.WriteLE(uint64 target)
-
-                    if target > 0L then
-                        // Offset will need to be continuously updated until the writer writes its target instruction.
-                        branchTargetOffsets.Add { BranchTargetOffset.Offset = offset; Kind = kind; Target = label }
-
-                let mutable targeti = 0
-                while i < branchTargetOffsets.Count do
-                    let target = &branchTargetOffsets.ItemRef i
-                    let label = entry.LabelLookup.[target.Target]
-                    let target' = label - diff // TODO: Avoid code duplication with initial calculation of target.
-                    let pos = section.Length - start
-
-                    if pos >= label then
-                        let target'' = int64 pos - int64 target' // TODO: Avoid code duplication with initial calculation of target.
-                        let mutable offset = target.Offset
-
-                        // Some targets might suddenly be eligible to turn into 1-byte offsets, but it might be too much work to
-                        // shorten them.
-                        match target.Kind with
-                        | BranchKind.Shortened -> offset.Write(uint8(Checked.int8 target''))
-                        | BranchKind.Long -> offset.WriteLE(uint64 target'')
-
-                        targeti <- targeti + 1
-                    else
-                        branchTargetOffsets.RemoveAt 0 // TODO: Use some Queue<T> class to make removing branch targets that no longer need to be updated more efficient.
+                    | BranchKind.Short -> section.Write(uint8(Checked.int8 target))
+                    | BranchKind.Long -> section.WriteLE(uint32 target)
 
 module Instructions =
     module Instruction =
-        let inline simple opcode behavior = { Opcode = opcode; StackBehavior = behavior; Operand = Operand.Nothing }
+        let simple opcode behavior = { Opcode = opcode; StackBehavior = behavior; Operand = Operand.Nothing }
         let inline op opcode = simple opcode (StackBehavior.PopOrPush 0y)
         let inline pushes1 opcode = simple opcode (StackBehavior.PopOrPush 1y)
         let inline pops1 opcode = simple opcode (StackBehavior.PopOrPush -1y)
 
-        let inline branching opcode behavior kind target =
+        let methodTokenCall opcode method =
             { Opcode = opcode
-              StackBehavior = behavior
-              Operand = Operand.BranchTarget(kind, target) }
+              Operand = Operand.MethodToken method
+              StackBehavior =
+                let pops = Checked.int8 method.Member.ParameterTypes.Length
+                let pushes = if method.Member.HasReturnValue then 1y else 0y
+                PopOrPush(pushes - pops) }
 
     open Instruction
 
@@ -303,9 +311,25 @@ module Instructions =
     let stloc_2 = pops1 Opcode.Stloc_2
     let stloc_3 = pops1 Opcode.Stloc_3
 
-    let inline ldarg_s num =
+    let ldarg_s num =
         { Opcode = Opcode.Ldarg_s
           StackBehavior = StackBehavior.PopOrPush 1y
           Operand = Operand.Byte num }
+
+    let call method = methodTokenCall Opcode.Call method
+
+    let ret = op Opcode.Ret
+
+    let callvirt method = methodTokenCall Opcode.Callvirt method
+
+    module Ldstr =
+        let ofOffset { UserStringOffset = offset } =
+            { pushes1 Opcode.Ldstr with Operand = Operand.RawToken(MetadataToken(MetadataTokenType.UserStringHeap, offset)) }
+
+        let ofMemory (str: inref<_>) = { pushes1 Opcode.Ldstr with Operand = Operand.StringToken str }
+
+        let ofString (str: string) = { pushes1 Opcode.Ldstr with Operand = Operand.StringToken(str.AsMemory()) }
+
+    let inline ldstr str = Ldstr.ofString str
 
     module Shortened = ()

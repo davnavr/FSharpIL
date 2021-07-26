@@ -126,28 +126,24 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     parameterList = fun _ _ -> Identifier.ofStr "capacity" |> Parameter.named
                 )
 
-            let body =
-                { new DefinedMethodBody() with
-                    override _.WriteInstructions(wr, tokens) =
-                        // inherit System.Object()
-                        ldarg_0 &wr
-                        callvirt &wr mscorlib'.ObjectConstructor.Token tokens
+            let body = MethodBody.ofSeq [
+                // inherit System.Object()
+                ldarg_0
+                callvirt mscorlib'.ObjectConstructor.Token
 
-                        // TODO: Figure out how to allow creation of generic instantiations in method body generator.
+                // inner = Microsoft.FSharp.Primitives.Basics.Array.zeroCreateUnchecked capacity
+                ldarg_0
+                ldarg_1
+                newarr (TypeTok.Specified t)
+                stfld items'
 
-                        // inner = Microsoft.FSharp.Primitives.Basics.Array.zeroCreateUnchecked capacity
-                        ldarg_0 &wr
-                        ldarg_1 &wr // capacity
-                        newarr &wr (TypeTok.Specified t) tokens
-                        stfld &wr items' tokens
+                // index = 0
+                ldarg_0
+                ldc_i4_0
+                stfld index'
 
-                        // index = 0
-                        ldarg_0 &wr
-                        ldc_i4_0 &wr
-                        stfld &wr index' tokens
-
-                        ret &wr
-                        wr.EstimatedMaxStack }
+                ret
+            ]
 
             members.DefineMethod(definition, body, attributes = ValueNone)
 
@@ -168,7 +164,20 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     CliType.toLocalType PrimitiveType.I4 // let length: int32
                 ]
 
-            let body =
+            let body = MethodBody.create InitLocals ValueNone (LocalVariables.Locals locals) [
+                InstructionBlock.ofList [
+                    // let mutable length = this.items.Length
+                    ldarg_0
+                    ldfld items'
+                    ldlen
+                    conv_i4
+                    stloc_0
+
+
+                ]
+            ]
+
+            let body' =
                 { new DefinedMethodBody(locals, InitLocals) with
                     override _.WriteInstructions(wr, tokens) =
                         // let mutable length = this.items.Length
@@ -212,29 +221,28 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     |> CliType.toLocalType
                 ]
 
-            let ctor' = builder.GenericInstantiation(false, ctor.Token, istring)
-            let add' = builder.GenericInstantiation(false, add.Token, istring)
 
-            let body =
-                { new DefinedMethodBody(locals, InitLocals) with
-                    override _.WriteInstructions(wr, tokens) =
-                        // let strings = new GenericsShowcase.ArrayList<string>(4)
-                        ldc_i4_4 &wr
-                        Newobj.ofMethod &wr ctor' tokens
-                        stloc_0 &wr
+            let body = MethodBody.create InitLocals ValueNone (LocalVariables.Locals locals) [
+                InstructionBlock.ofList [
+                    // let strings = new GenericsShowcase.ArrayList<string>(4)
+                    ldc_i4_4
+                    Newobj.ofMethod (builder.GenericInstantiation(false, ctor.Token, istring))
+                    stloc_0
 
-                        // strings.Add("Hello!")
-                        ldloc_0 &wr
-                        ldstr &wr "Hello!" tokens
-                        call &wr add' tokens
+                    // strings.Add("Hello!")
+                    let add' = builder.GenericInstantiation(false, add.Token, istring)
+                    ldloc_0
+                    ldstr "Hello!"
+                    call add'
 
-                        // strings.Add("How are you?")
-                        ldloc_0 &wr
-                        ldstr &wr "How are you?" tokens
-                        call &wr add' tokens
+                    // strings.Add("How are you?")
+                    ldloc_0
+                    ldstr "How are you?"
+                    call add'
 
-                        ret &wr
-                        wr.EstimatedMaxStack }
+                    ret
+                ]
+            ]
 
             builder.GlobalMembers.DefineEntryPoint(main, body, attributes = ValueNone)
 

@@ -85,10 +85,6 @@
     <Compile Include="Cli\MemberTok.fs" />
     <Compile Include="Cli\CustomAttribute.fsi" />
     <Compile Include="Cli\CustomAttribute.fs" />
-    <Compile Include="Writing\Cil\MethodBodyBuilder.fs" />
-    <Compile Include="Writing\Cil\MethodBodyInstructions.fsi" />
-    <Compile Include="Writing\Cil\MethodBodyInstructions.fs" />
-    <Compile Include="Writing\Cil\MethodBodyList.fs" />
     <Compile Include="Writing\Cil.fsi" />
     <Compile Include="Writing\Cil.fs" />
     <Compile Include="Writing\IStreamBuilder.fs" />

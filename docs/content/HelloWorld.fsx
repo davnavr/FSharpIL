@@ -145,14 +145,14 @@ let example() =
                     name = MethodName.ofStr "Main",
                     kind = EntryPointKind.VoidNoArgs
                 )
-            let body =
-                { new DefinedMethodBody() with
-                    override _.WriteInstructions(wr, tokens) =
-                        // System.Console.WriteLine "Hello World!"
-                        ldstr &wr "Hello World!" tokens
-                        call &wr writeln.Token tokens
-                        ret &wr
-                        wr.EstimatedMaxStack }
+
+            let body = MethodBody.ofSeq [
+                // System.Console.WriteLine "Hello World!"
+                ldstr "Hello World!"
+                call writeln.Token
+                ret
+            ]
+
             members.Members.DefineEntryPoint(main, body, attributes = ValueNone)
 
         (* Sets the target framework of the assembly, this is so the CoreCLR and tools such as ILSpy can recognize it *)

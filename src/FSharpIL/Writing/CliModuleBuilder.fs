@@ -8,7 +8,6 @@ open System.Runtime.CompilerServices
 open FSharpIL.Cli
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Blobs
-open FSharpIL.Metadata.Cil
 open FSharpIL.Metadata.Signatures
 open FSharpIL.Metadata.Tables
 
@@ -18,18 +17,6 @@ open FSharpIL.Writing.Cil
 open FSharpIL.Utilities
 open FSharpIL.Utilities.Collections
 open FSharpIL.Utilities.Compare
-
-[<AbstractClass>]
-type DefinedMethodBody =
-    val LocalTypes: ImmutableArray<LocalType>
-    val InitLocals: InitLocals
-
-    new (localTypes, initLocals) = { LocalTypes = localTypes; InitLocals = initLocals }
-    new (localTypes) = DefinedMethodBody(localTypes, SkipInitLocals)
-    new () = DefinedMethodBody ImmutableArray.Empty
-
-    /// Writes the instructions of the method body, and returns the maximum number of items on the stack.
-    abstract WriteInstructions: byref<MethodBodyBuilder> * MetadataTokenSource -> uint16
 
 type EntryPoint =
     private
@@ -143,7 +130,7 @@ type CustomAttributeBuilder = CustomAttributeList ref voption
 type DefinedTypeMembers (owner: DefinedType, warnings: _ option, namedTypeCache, entryPointToken, attrs) =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
     [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
-    [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, DefinedMethodBody>
+    [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, MethodBody>
 
     member _.Owner = owner
     member this.FieldCount = this.Field.Count
@@ -163,7 +150,7 @@ type DefinedTypeMembers (owner: DefinedType, warnings: _ option, namedTypeCache,
 
     member this.DefineField(field: DefinedField, attributes) = this.AddDefinedField(field, attributes)
 
-    member private this.AddDefinedMethod(method, body: DefinedMethodBody voption) = // TODO: Run writer for method body here just in case Module is modified in it.
+    member private this.AddDefinedMethod(method, body: MethodBody voption) =
         // TODO: Check that owner is the correct kind of type to own this kind of method.
         if this.Method.Add method then
             match body with
@@ -247,20 +234,6 @@ type GenericParamEntry =
     { ParameterIndex: TableIndex<GenericParamRow>
       Parameters: ImmutableArray<GenericParam>
       ConstraintIndex: TableIndex<GenericParamConstraintRow> }
-
-[<IsReadOnly; Struct>]
-type DefinedMethodBodyWriter
-    (
-        localVarSource: ImmutableArray<LocalType> -> TableIndex<StandaloneSigRow>,
-        metadataTokenSource: MetadataTokenSource,
-        body: DefinedMethodBody
-    )
-    =
-    interface IMethodBodySource with
-        member _.Create builder =
-            { InitLocals = body.InitLocals
-              MaxStack = body.WriteInstructions(&builder, metadataTokenSource)
-              LocalVariables = localVarSource body.LocalTypes }
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type TypeSpecMember<'Member when 'Member : not struct> = { Owner: CliType; Member: 'Member }
@@ -535,6 +508,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                 info.Header,
                 info.Root,
                 FSharpIL.Writing.Cil.MethodBodyList(),
+                invalidOp "TODO: How to get token source up here?",
                 (fun str guid _ -> ModuleRow.create (str.Add info.Name) (guid.Add info.Mvid)),
                 StringsStreamBuilder 512,
                 UserStringStreamBuilder 1,
@@ -822,8 +796,9 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         for tdef in info.NonNestedTypes do serializeDefinedType tdef |> ignore
 
         let metadataTokenSource =
-            { new MetadataTokenSource() with
-                member _.GetUserString(str: string) = builder.UserString.AddFolded str
+            { new IMetadataTokenSource with
+                member _.GetLocalVariables locals = getLocalsSig locals
+
                 member _.GetUserString(str: inref<ReadOnlyMemory<char>>) = builder.UserString.AddFolded str
 
                 member _.GetFieldToken field =
@@ -939,8 +914,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             miscMethodLookup.Add(token, i')
 
         for struct(i, body) in definedMethodBodies do
-            let writer = DefinedMethodBodyWriter(getLocalsSig, metadataTokenSource, body)
-            Unsafe.AsRef &builder.Tables.MethodDef.[i].Rva <- builder.MethodBodies.Add &writer
+            Unsafe.AsRef &builder.Tables.MethodDef.[i].Rva <- builder.MethodBodies.Add &writer; failwith "bad"
 
         for KeyValue(owner, parameters) in genericParamLookup do
             for i = 0 to parameters.Length - 1 do

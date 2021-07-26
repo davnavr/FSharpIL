@@ -26,7 +26,8 @@ type CliMetadataBuilder internal
     (
         header: CliHeader,
         root: CliMetadataRoot<Omitted, Omitted>,
-        methodBodies: FSharpIL.Writing.Cil.MethodBodyList,
+        methodBodies: FSharpIL.Writing.Cil.MethodBodyStream,
+        metadataTokenSource: FSharpIL.Writing.Cil.IMetadataTokenSource,
         moduleRowBuilder,
         strings: StringsStreamBuilder,
         us: UserStringStreamBuilder,
@@ -37,11 +38,12 @@ type CliMetadataBuilder internal
         //vTableFixups
     )
     =
-    
+
     member val Tables = MetadataTablesBuilder(moduleRowBuilder, strings, guid, blob)
     member _.Header = header
     member _.Root = root
     member _.MethodBodies = methodBodies
+    member _.Tokens = metadataTokenSource
     member _.Strings = strings
     member _.UserString = us
     member _.Guid = guid
