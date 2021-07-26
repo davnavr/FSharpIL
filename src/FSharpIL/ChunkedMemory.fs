@@ -188,10 +188,13 @@ type ChunkedMemory with
         | 1 -> ImmutableArray.Create(this.chunks.[0].AsMemory().Slice(int32 this.soffset, int32 this.Length))
         | _ ->
             let starti = this.GetIndex 0u
-            let endi = this.GetIndex this.Length
-            let mutable chunks' = Array.zeroCreate<ReadOnlyMemory<byte>>(endi.ListIndex - starti.ListIndex + 1)
+            let endi =
+                match this.GetIndex this.Length with
+                | { ChunkIndex = 0; ListIndex = i } -> i - 1
+                | { ListIndex = i } -> i
+            let mutable chunks' = Array.zeroCreate<ReadOnlyMemory<byte>>(endi - starti.ListIndex + 1)
             let mutable remaining = this.Length
-            for chunki = starti.ListIndex to endi.ListIndex do
+            for chunki = starti.ListIndex to endi do
                 let current = &this.chunks.ItemRef chunki
                 let start = if chunki = starti.ListIndex then starti.ChunkIndex else 0
                 let length = min remaining (uint32 current.Length)
