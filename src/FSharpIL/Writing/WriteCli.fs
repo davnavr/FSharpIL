@@ -125,7 +125,7 @@ let metadata (section: byref<ChunkedMemoryBuilder>) cliHeaderRva builder =
     // StrongNameSignature
 
     info.MethodBodies <- cliHeaderRva + (section.Length - info.StartOffset)
-    builder.MethodBodies.WriteTo(builder.Tokens, &section)
+    section.Write builder.MethodBodies
 
     // Metadata
     root info &section

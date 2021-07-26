@@ -173,31 +173,18 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     conv_i4
                     stloc_0
 
+                    // this.index < length
+                    ldarg_0
+                    ldfld index'
+                    ldloc_0
 
+                    pop // TEMPORARY
+                    pop // TEMPORARY
+                    // TODO: Do some fancy branching.
+
+                    ret // TEMPORARY
                 ]
             ]
-
-            let body' =
-                { new DefinedMethodBody(locals, InitLocals) with
-                    override _.WriteInstructions(wr, tokens) =
-                        // let mutable length = this.items.Length
-                        ldarg_0 &wr
-                        ldfld &wr items' tokens
-                        ldlen &wr
-                        conv_i4 &wr
-                        stloc_0 &wr
-
-                        // this.index < length
-                        ldarg_0 &wr
-                        ldfld &wr index' tokens
-                        ldloc_0 &wr
-
-                        pop &wr // TEMPORARY
-                        pop &wr // TEMPORARY
-                        // TODO: Do some fancy branching.
-
-                        ret &wr
-                        wr.EstimatedMaxStack }
 
             members.DefineMethod(definition, body, attributes = ValueNone)
 
@@ -220,7 +207,6 @@ let example() = // TODO: Make helper function to add reference to System.Private
                     |> CliType.GenericClass
                     |> CliType.toLocalType
                 ]
-
 
             let body = MethodBody.create InitLocals ValueNone (LocalVariables.Locals locals) [
                 InstructionBlock.ofList [

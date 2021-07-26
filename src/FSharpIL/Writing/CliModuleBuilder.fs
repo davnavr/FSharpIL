@@ -127,10 +127,10 @@ module CustomAttributeList =
 type CustomAttributeBuilder = CustomAttributeList ref voption
 
 [<Sealed>]
-type DefinedTypeMembers (owner: DefinedType, warnings: _ option, namedTypeCache, entryPointToken, attrs) =
+type DefinedTypeMembers (owner: DefinedType, warnings: _ option, methodBodyCache: MethodBodyStream, namedTypeCache, entryPointToken, attrs) =
     [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
     [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
-    [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, MethodBody>
+    [<DefaultValue>] val mutable internal MethodBodyLookup: LateInitDictionary<DefinedMethod, MethodBody>
 
     member _.Owner = owner
     member this.FieldCount = this.Field.Count
@@ -154,7 +154,9 @@ type DefinedTypeMembers (owner: DefinedType, warnings: _ option, namedTypeCache,
         // TODO: Check that owner is the correct kind of type to own this kind of method.
         if this.Method.Add method then
             match body with
-            | ValueSome body' -> this.MethodBodyLookup.[method] <- body'
+            | ValueSome body' ->
+                methodBodyCache.Add body' |> ignore
+                this.MethodBodyLookup.Inner.Add(method, body')
             | ValueNone -> ()
 
             Ok(MethodTok.ofTypeDef owner method namedTypeCache)
@@ -256,6 +258,7 @@ type ModuleBuilderInfo =
       FieldReferences: ImmutableArray<TypeSpecMember<Field>>.Builder // TODO: Rename to GenericTypeFields
       MethodReferences: ImmutableArray<TypeSpecMember<Method>>.Builder // TODO: Rename to GenericTypeMethods
       //MethodSpecifications: 
+      MethodBodies: MethodBodyStream
       EntryPoint: EntryPoint ref }
 
 [<IsReadOnly; Struct>]
@@ -342,10 +345,13 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
           ReferencedTypes = Dictionary typeRefCapacity'
           FieldReferences = ImmutableArray.CreateBuilder()
           MethodReferences = ImmutableArray.CreateBuilder()
+          MethodBodies = MethodBodyStream()
           EntryPoint = ref Unchecked.defaultof<EntryPoint> }
 
     let createAttributeList owner = CustomAttributeList(owner, info.CustomAttributes)
-    let defineMembersFor owner = DefinedTypeMembers(owner, warnings, info.NamedTypes, info.EntryPoint, info.CustomAttributes)
+
+    let defineMembersFor owner =
+        DefinedTypeMembers(owner, warnings, info.MethodBodies, info.NamedTypes, info.EntryPoint, info.CustomAttributes)
 
     let mutable assemblyDefAttributes =
         match assembly with
@@ -503,12 +509,15 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         | None -> Some(noImpl "TODO: Error for not assembly")
 
     member _.CreateMetadata() =
+        let metadataTokenSource = ref Unchecked.defaultof<IMetadataTokenSource>
+
+        let writeDefinedMethods = lazy info.MethodBodies.ToMemory !metadataTokenSource
+
         let builder =
             CliMetadataBuilder (
                 info.Header,
                 info.Root,
-                FSharpIL.Writing.Cil.MethodBodyList(),
-                invalidOp "TODO: How to get token source up here?",
+                lazy fst writeDefinedMethods.Value,
                 (fun str guid _ -> ModuleRow.create (str.Add info.Name) (guid.Add info.Mvid)),
                 StringsStreamBuilder 512,
                 UserStringStreamBuilder 1,
@@ -795,7 +804,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
         for tdef in info.NonNestedTypes do serializeDefinedType tdef |> ignore
 
-        let metadataTokenSource =
+        metadataTokenSource :=
             { new IMetadataTokenSource with
                 member _.GetLocalVariables locals = getLocalsSig locals
 
@@ -819,8 +828,6 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                         MethodMetadataToken.Ref miscMethodLookup.[method]
 
                 member _.GetTypeToken t = TypeMetadataToken.ofCodedIndex(typeDefOrRefOrSpec t) }
-
-        let definedMethodBodies = List<struct(TableIndex<MethodDefRow> * _)>()
 
         let parameterList = MemberIndexCounter<ParamRow>()
         let fieldList = MemberIndexCounter<FieldRow>()
@@ -858,9 +865,11 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                               Name = builder.Strings.Add param.ParamName
                               Sequence = Checked.uint16(i + 1) }
 
-                // Method bodies are written later to avoid bugs regarding members not being added to dictionaries yet.
                 let i' =
-                    { Rva = Unchecked.defaultof<MethodBodyLocation>
+                    { Rva =
+                        match members'.MethodBodyLookup.TryGetValue method with
+                        | true, body -> (snd writeDefinedMethods.Value).[body]
+                        | false, _ -> Unchecked.defaultof<_>
                       ImplFlags = method.ImplFlags
                       Flags = method.Flags
                       Name = builder.Strings.Add method.Name
@@ -870,10 +879,6 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
                 methodList.Last <- i'
                 definedMethodLookup.[MethodTok.ofTypeDef parent method info.NamedTypes] <- i'
-
-                match members'.MethodBodyLookup.TryGetValue method with
-                | true, body -> definedMethodBodies.Add(struct(i', body))
-                | false, _ -> ()
 
                 // TODO: Add the methods generic parameters, if any.
 
@@ -912,9 +917,6 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                 |> builder.Tables.MemberRef.Add
 
             miscMethodLookup.Add(token, i')
-
-        for struct(i, body) in definedMethodBodies do
-            Unsafe.AsRef &builder.Tables.MethodDef.[i].Rva <- builder.MethodBodies.Add &writer; failwith "bad"
 
         for KeyValue(owner, parameters) in genericParamLookup do
             for i = 0 to parameters.Length - 1 do

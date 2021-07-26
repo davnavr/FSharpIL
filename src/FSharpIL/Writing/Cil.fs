@@ -214,13 +214,18 @@ type MethodBodyStream () =
             bodies.Add(body, entry)
             struct(maxStack, size)
 
-    member _.WriteTo(metadataTokenSource: IMetadataTokenSource, section: byref<ChunkedMemoryBuilder>) =
+    member _.ToMemory(metadataTokenSource: IMetadataTokenSource) =
+        let wr = ChunkedMemoryBuilder 0x10
+        let locations = Dictionary bodies.Count
+
         for KeyValue(body, entry) in bodies do
+            locations.Add(body, MethodBodyLocation wr.Length)
+
             match entry.Kind with
             | Tiny ->
                 let flags = uint8 ILMethodFlags.TinyFormat ||| (Checked.uint8 entry.CodeSize <<< 2)
                 if flags &&& uint8 ILMethodFlags.FatFormat <> 0uy then invalidOp(sprintf "Invalid tiny method flags %A" flags)
-                section.Write flags
+                wr.Write flags
             | Fat ->
                 let mutable flags' = ILMethodFlags.FatFormat
 
@@ -230,41 +235,41 @@ type MethodBodyStream () =
 
                 //if has extra data sections then flags' <- flags' ||| ILMethodFlags.MoreSects
 
-                section.AlignTo(int32 MethodBody.FatMethodAlignment) // Padding
-                section.WriteLE(uint16 flags' ||| (uint16 MethodBody.FatFormatSize <<< 12)) // Flags & size
-                section.WriteLE(uint16 entry.MaxStack)
-                section.WriteLE entry.CodeSize
+                wr.AlignTo(int32 MethodBody.FatMethodAlignment) // Padding
+                wr.WriteLE(uint16 flags' ||| (uint16 MethodBody.FatFormatSize <<< 12)) // Flags & size
+                wr.WriteLE(uint16 entry.MaxStack)
+                wr.WriteLE entry.CodeSize
 
                 let locals =
                     match body.Header.LocalVariables with
                     | LocalVariables.Token token -> token
                     | LocalVariables.Locals locals -> metadataTokenSource.GetLocalVariables locals
 
-                section.WriteLE(uint32(MetadataToken(MetadataTokenType.StandaloneSig, locals.TableIndex)))
+                wr.WriteLE(uint32(MetadataToken(MetadataTokenType.StandaloneSig, locals.TableIndex)))
 
                 // TODO: Write extra data sections for fat method.
 
-            let start = section.Length
+            let start = wr.Length
 
             for i = 0 to entry.Instructions.Count - 1 do
                 let instruction = &entry.Instructions.ItemRef i
 
                 match Opcode.size instruction.Opcode with
-                | 1u -> section.Write(uint8 instruction.Opcode)
+                | 1u -> wr.Write(uint8 instruction.Opcode)
                 | 2u
                 | _ ->
-                    section.Write(uint8(instruction.Opcode >>> 8))
-                    section.Write(uint8(uint16 instruction.Opcode &&& 0xFFus))
+                    wr.Write(uint8(instruction.Opcode >>> 8))
+                    wr.Write(uint8(uint16 instruction.Opcode &&& 0xFFus))
 
                 match instruction.Operand with
                 | Nothing -> ()
-                | Byte value -> section.Write value
-                | Short value -> section.WriteLE value
-                | Integer value -> section.WriteLE value
-                | RawToken token -> section.WriteLE(uint32 token)
-                | FieldToken token -> section.WriteLE(uint32(metadataTokenSource.GetFieldToken token))
-                | MethodToken token -> section.WriteLE(uint32(metadataTokenSource.GetMethodToken token))
-                | TypeToken token -> section.WriteLE(uint32(metadataTokenSource.GetTypeToken token))
+                | Byte value -> wr.Write value
+                | Short value -> wr.WriteLE value
+                | Integer value -> wr.WriteLE value
+                | RawToken token -> wr.WriteLE(uint32 token)
+                | FieldToken token -> wr.WriteLE(uint32(metadataTokenSource.GetFieldToken token))
+                | MethodToken token -> wr.WriteLE(uint32(metadataTokenSource.GetMethodToken token))
+                | TypeToken token -> wr.WriteLE(uint32(metadataTokenSource.GetTypeToken token))
                 | BranchTarget(kind, target) ->
                     // TODO: Have error checking in Add method to prevent invalid short branch targets.
                     let target =
@@ -273,11 +278,17 @@ type MethodBodyStream () =
                             | BranchKind.Short -> 1L
                             | BranchKind.Long -> 4L
 
-                        int64(section.Length - start) + size - int64 entry.LabelLookup.[target]
+                        int64(wr.Length - start) + size - int64 entry.LabelLookup.[target]
 
                     match kind with
-                    | BranchKind.Short -> section.Write(uint8(Checked.int8 target))
-                    | BranchKind.Long -> section.WriteLE(uint32 target)
+                    | BranchKind.Short -> wr.Write(uint8(Checked.int8 target))
+                    | BranchKind.Long -> wr.WriteLE(uint32 target)
+
+            let actualCodeSize = wr.Length - start
+            if entry.CodeSize <> actualCodeSize then
+                invalidOp(sprintf "Code size mismatch, expected %i bytes but got %i bytes" entry.CodeSize actualCodeSize)
+
+        wr.ToImmutable(), locations :> IReadOnlyDictionary<_, _>
 
 module Instructions =
     module Instruction =
@@ -285,6 +296,7 @@ module Instructions =
         let inline op opcode = simple opcode (StackBehavior.PopOrPush 0y)
         let inline pushes1 opcode = simple opcode (StackBehavior.PopOrPush 1y)
         let inline pops1 opcode = simple opcode (StackBehavior.PopOrPush -1y)
+        let inline pops2 opcode = simple opcode (StackBehavior.PopOrPush -2y)
 
         let methodTokenCall opcode method =
             { Opcode = opcode
@@ -310,16 +322,25 @@ module Instructions =
     let stloc_1 = pops1 Opcode.Stloc_1
     let stloc_2 = pops1 Opcode.Stloc_2
     let stloc_3 = pops1 Opcode.Stloc_3
-
-    let ldarg_s num =
-        { Opcode = Opcode.Ldarg_s
-          StackBehavior = StackBehavior.PopOrPush 1y
-          Operand = Operand.Byte num }
-
+    let ldarg_s num = { pushes1 Opcode.Ldarg_s with Operand = Operand.Byte num }
+    let ldloc_s index = { pushes1 Opcode.Ldloc_s with Operand = Operand.Byte index }
+    let stloc_s index = { pops1 Opcode.Stloc_s with Operand = Operand.Byte index }
+    let ldnull = pushes1 Opcode.Ldnull
+    let ldc_i4_m1 = pushes1 Opcode.Ldc_i4_m1
+    let ldc_i4_0 = pushes1 Opcode.Ldc_i4_0
+    let ldc_i4_1 = pushes1 Opcode.Ldc_i4_1
+    let ldc_i4_2 = pushes1 Opcode.Ldc_i4_2
+    let ldc_i4_3 = pushes1 Opcode.Ldc_i4_3
+    let ldc_i4_4 = pushes1 Opcode.Ldc_i4_4
+    let ldc_i4_5 = pushes1 Opcode.Ldc_i4_5
+    let ldc_i4_6 = pushes1 Opcode.Ldc_i4_6
+    let ldc_i4_7 = pushes1 Opcode.Ldc_i4_7
+    let ldc_i4_8 = pushes1 Opcode.Ldc_i4_8
+    let ldc_i4_s (number: int8) = { pushes1 Opcode.Ldc_i4_s with Operand = Operand.Byte(uint8 number) }
+    let pop = pops1 Opcode.Pop
     let call method = methodTokenCall Opcode.Call method
-
     let ret = op Opcode.Ret
-
+    let conv_i4 = op Opcode.Conv_i4
     let callvirt method = methodTokenCall Opcode.Callvirt method
 
     module Ldstr =
@@ -332,4 +353,56 @@ module Instructions =
 
     let inline ldstr str = Ldstr.ofString str
 
-    module Shortened = ()
+    module Newobj =
+        let ofMethod (ctor: MethodTok) =
+            { Opcode = Opcode.Newobj
+              StackBehavior = PopOrPush(Checked.int8 ctor.Member.ParameterTypes.Length + 1y)
+              Operand = Operand.MethodToken ctor }
+
+        let inline ofDefinedMethod
+            (ctor: MethodTok<TypeDefinition<'Kind>, MethodDefinition<MethodKinds.ObjectConstructor>>
+                when 'Kind :> TypeKinds.IHasConstructors)
+            =
+            ofMethod ctor.Token
+
+    let ldfld field = { op Opcode.Ldfld with Operand = Operand.FieldToken field }
+    let ldflda field = { op Opcode.Ldflda with Operand = Operand.FieldToken field }
+    let stfld field = { pops2 Opcode.Stfld with Operand = Operand.FieldToken field }
+    let ldsfld field = { pushes1 Opcode.Ldsfld with Operand = Operand.FieldToken field }
+    let ldsflda field = { pushes1 Opcode.Ldsflda with Operand = Operand.FieldToken field }
+    let stsfld field = { pops1 Opcode.Stsfld with Operand = Operand.FieldToken field }
+    let newarr etype = { op Opcode.Newarr with Operand = Operand.TypeToken etype }
+    let ldlen = op Opcode.Ldlen
+    let ldarg num = { pushes1 Opcode.Ldarg with Operand = Operand.Short num }
+    let ldloc (LocalVarIndex i) = { pushes1 Opcode.Ldloc with Operand = Operand.Short i }
+    let stloc (LocalVarIndex i) = { pops1 Opcode.Stloc with Operand = Operand.Short i }
+
+    module Shortened =
+        let [<Literal>] MaxShortLocalIndex = 0xFFus
+
+        let ldarg num =
+            match num with
+            | 0us -> ldarg_0
+            | 1us -> ldarg_1
+            | 2us -> ldarg_2
+            | 3us -> ldarg_3
+            | _ when num <= MaxShortLocalIndex -> ldarg_s(uint8 num)
+            | _ -> ldarg num
+
+        let ldloc index =
+            match uint16 index with
+            | 0us -> ldloc_0
+            | 1us -> ldloc_1
+            | 2us -> ldloc_2
+            | 3us -> ldloc_3
+            | index' when index' < MaxShortLocalIndex -> ldloc_s(uint8 index')
+            | _ -> ldloc index
+
+        let stloc index =
+            match uint16 index with
+            | 0us -> stloc_0
+            | 1us -> stloc_1
+            | 2us -> stloc_2
+            | 3us -> stloc_3
+            | index' when index' < MaxShortLocalIndex -> stloc_s(uint8 index')
+            | _ -> stloc index

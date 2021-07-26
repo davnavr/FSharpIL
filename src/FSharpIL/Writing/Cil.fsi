@@ -2,6 +2,7 @@
 module FSharpIL.Writing.Cil
 
 open System
+open System.Collections.Generic
 open System.Collections.Immutable
 open System.Runtime.CompilerServices
 
@@ -109,9 +110,8 @@ type MethodBodyStream =
 
     member Add: body: MethodBody -> struct(MaxStack * uint32)
 
-    member internal WriteTo: metadataTokenSource: IMetadataTokenSource * section: byref<FSharpIL.ChunkedMemoryBuilder> -> unit
-
-//module Branching
+    member ToMemory:
+        metadataTokenSource: IMetadataTokenSource -> FSharpIL.ChunkedMemory * IReadOnlyDictionary<MethodBody, MethodBodyLocation>
 
 [<AutoOpen>]
 module Instructions =
@@ -128,6 +128,9 @@ module Instructions =
 
         /// Creates an instruction that takes no arguments and pops one value from the stack.
         val inline pops1 : opcode: Opcode -> Instruction
+
+        /// Creates an instruction that takes no arguments and pops two values from the stack.
+        val inline pops2 : opcode: Opcode -> Instruction
 
     /// (0x00) An instruction that does nothing (III.3.51).
     val nop : Instruction
@@ -310,8 +313,6 @@ module Instructions =
     /// <remarks>For value types, the <c>initobj</c> instruction is usually used instead.</remarks>
     [<RequireQualifiedAccess>]
     module Newobj =
-        val ofToken : ctor: MethodMetadataToken -> Instruction
-    
         val ofMethod : ctor: MethodTok -> Instruction // TODO: Move Newobj.ofMethod to Unsafe module?
     
         val inline ofDefinedMethod :
