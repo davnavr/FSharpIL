@@ -103,11 +103,38 @@ type IMetadataTokenSource =
     abstract GetFieldToken: field: FieldTok  -> FieldMetadataToken
     abstract GetTypeToken: TypeTok -> TypeMetadataToken
 
+/// Describes why the generated method body is invalid.
+[<NoComparison; NoEquality>]
+type InvalidCil
+
+type InvalidCil with override ToString: unit -> string
+
+[<RequireQualifiedAccess>]
+module InvalidCil =
+    val (|StackUnderflow|_|) :
+        reason: InvalidCil ->
+            {| Offset: uint32
+               Instruction: Instruction
+               ActualStackSize: uint16 |}
+            option
+
+/// <summary>Thrown when a method body contains invalid CIL code.</summary>
+/// <remarks>
+/// Exceptions are thrown when invalid method bodies are generated rather than using monadic error handling as it represents a
+/// compiler bug in the compiler generating the CIL code.
+/// </remarks>
+exception InvalidCilException of body: MethodBody * reason: InvalidCil
+
+type InvalidCilException with override Message: string
+
 /// Represents the method bodies of the CLI metadata (II.25.4).
 [<Sealed>]
 type MethodBodyStream =
     internal new: unit -> MethodBodyStream
 
+    /// <exception cref="T:FSharpIL.Writing.Cil.InvalidCilException">
+    /// Thrown if the method body contains invalid CIL code.
+    /// </exception>
     member Add: body: MethodBody -> struct(MaxStack * uint32)
 
     member ToMemory:

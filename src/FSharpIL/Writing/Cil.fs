@@ -14,6 +14,7 @@ open FSharpIL.Cli.TypeSystem
 
 open FSharpIL
 open FSharpIL.Utilities
+open FSharpIL.Utilities.Collections
 
 [<Struct; RequireQualifiedAccess>]
 type LocalVariables =
@@ -135,7 +136,7 @@ type MethodBodyEntry =
       MaxStack: MaxStack
       CodeSize: uint32
       Instructions: ImmutableArray<Instruction>.Builder
-      LabelLookup: Dictionary<Label, uint32> }
+      LabelLookup: Dictionary<Label, uint32> voption }
 
 [<IsReadOnly; Struct; NoComparison; NoEquality>]
 type BranchTargetOffset =
@@ -150,6 +151,38 @@ type IMetadataTokenSource =
     abstract GetFieldToken: field: FieldTok  -> FieldMetadataToken
     abstract GetTypeToken: TypeTok -> TypeMetadataToken
 
+type InvalidCil =
+    | StackUnderflow of offset: uint32 * Instruction * uint16
+
+    override this.ToString() =
+        match this with
+        | StackUnderflow(offset, instruction, actual) ->
+            let popped =
+                match instruction.StackBehavior with
+                | PopOrPush amount -> -amount
+            sprintf
+                "The %O instruction at IL%04X resulted in a stack underflow, expected to pop %i items of the stack but the \
+                stack only contained %i items"
+                instruction
+                offset
+                popped
+                actual
+
+module InvalidCil =
+    let (|StackUnderflow|_|) reason =
+        match reason with
+        | StackUnderflow(offset, instruction, actual) ->
+            {| Offset = offset
+               Instruction = instruction
+               ActualStackSize = actual |}
+            |> Some
+        | _ -> None
+
+exception InvalidCilException of body: MethodBody * reason: InvalidCil
+    with override this.Message = this.reason.ToString()
+
+let inline invalidMethodBody body reason = raise(InvalidCilException(body, reason))
+
 [<Sealed>]
 type MethodBodyStream () =
     let bodies = Dictionary<MethodBody, MethodBodyEntry>()
@@ -160,11 +193,11 @@ type MethodBodyStream () =
         | true, { MaxStack = maxStack; CodeSize = size } -> struct(maxStack, size)
         | false, _ ->
             let instructions = ImmutableArray.CreateBuilder 16
-            let mutable size, stack, maxStack = 0u, 0us, MaxStack.Zero
-            let mutable resolvedLabels = Unchecked.defaultof<Dictionary<Label, uint32>>
-            let mutable unresolvedLabels = Unchecked.defaultof<HashSet<Label>>
+            let mutable size, stack, maxStack = 0u, 0us, MaxStack.Zero // TODO: Fix, maxstack value might not be accurate if branching is involved.
+            let mutable resolvedLabels = LateInitDictionary<Label, uint32>()
+            let mutable unresolvedLabels = LateInitCollection<_, HashSet<Label>>()
             // TODO: Keep track of SEH information.
-
+            
             // TODO: Avoid allocations by using the struct IEnumerators for some instruction blocks.
             for block in body.Instructions do
                 for item in InstructionBlock.toSeq block do
@@ -174,9 +207,17 @@ type MethodBodyStream () =
 
                         // TODO: Check that operands reference valid Local variable indices.
 
+                        match instruction.Operand with
+                        | BranchTarget(_, target) when not(resolvedLabels.Inner.ContainsKey target) ->
+                            unresolvedLabels.Inner.Add target |> ignore
+                        | _ -> ()
+
                         stack <-
                             match instruction.StackBehavior with
-                            | PopOrPush amt -> Checked.uint16(int32 stack - int32 amt) // TODO: How to deal with stack underflow?
+                            | PopOrPush amt ->
+                                let stack' = int32 stack + int32 amt
+                                if stack' < 0 then InvalidCil.StackUnderflow(size, instruction, stack) |> invalidMethodBody body
+                                uint16 stack'
 
                         if stack > uint16 maxStack then maxStack <- MaxStack stack
 
@@ -191,11 +232,12 @@ type MethodBodyStream () =
                             | FieldToken _
                             | MethodToken _
                             | TypeToken _
+                            | StringToken _
                             | RawToken _
                             | BranchTarget(BranchKind.Long, _) -> 4u
                     | InstructionOrLabel.Label label ->
-                        resolvedLabels.Add(label, size) // TODO: How to handle erroneous duplication of a label?
-                        unresolvedLabels.Remove label |> ignore
+                        resolvedLabels.Inner.Add(label, size) // TODO: Throw exception for erroneous duplication of a label.
+                        unresolvedLabels.Inner.Remove label |> ignore
 
             if unresolvedLabels.Count > 0 then noImpl "TODO: Throw exception for unresolved labels?"
             
@@ -209,7 +251,7 @@ type MethodBodyStream () =
                   MaxStack = maxStack
                   CodeSize = size
                   Instructions = instructions
-                  LabelLookup = resolvedLabels }
+                  LabelLookup = if resolvedLabels.IsInitialized then ValueSome resolvedLabels.Inner else ValueNone }
 
             bodies.Add(body, entry)
             struct(maxStack, size)
@@ -270,6 +312,7 @@ type MethodBodyStream () =
                 | FieldToken token -> wr.WriteLE(uint32(metadataTokenSource.GetFieldToken token))
                 | MethodToken token -> wr.WriteLE(uint32(metadataTokenSource.GetMethodToken token))
                 | TypeToken token -> wr.WriteLE(uint32(metadataTokenSource.GetTypeToken token))
+                | StringToken token -> wr.WriteLE(uint32(metadataTokenSource.GetUserString &token))
                 | BranchTarget(kind, target) ->
                     // TODO: Have error checking in Add method to prevent invalid short branch targets.
                     let target =
@@ -278,7 +321,7 @@ type MethodBodyStream () =
                             | BranchKind.Short -> 1L
                             | BranchKind.Long -> 4L
 
-                        int64(wr.Length - start) + size - int64 entry.LabelLookup.[target]
+                        int64(wr.Length - start) + size - int64 entry.LabelLookup.Value.[target]
 
                     match kind with
                     | BranchKind.Short -> wr.Write(uint8(Checked.int8 target))
