@@ -6,8 +6,6 @@ open System.Collections.Immutable
 
 open FSharpIL.Metadata
 
-open FSharpIL.Utilities.Collections
-
 [<System.Runtime.CompilerServices.IsReadOnly; Struct>]
 type private UserStringEntry =
     { String: ReadOnlyMemory<char>
@@ -53,11 +51,10 @@ type private UserStringSerializer =
 [<Sealed>]
 type UserStringStreamBuilder (capacity: int32) =
     static let encoding = System.Text.Encoding.Unicode
-    static let empty = Unchecked.defaultof<UserStringEntry>
     let mutable offset = 1u
-    let strings = RefArrayList<UserStringEntry> capacity
+    let strings = ImmutableArray.CreateBuilder<UserStringEntry> capacity
     let lookup = Dictionary<ReadOnlyMemory<char>, UserStringOffset>(capacity, StringHelpers.comparer)
-    do strings.Add &empty |> ignore // First entry is empty blob.
+    do strings.Add Unchecked.defaultof<UserStringEntry> // First entry is empty blob.
     do lookup.[ReadOnlyMemory.Empty] <- { UserStringOffset = 0u }
 
     member _.IsEmpty = strings.Count = 1
@@ -75,7 +72,7 @@ type UserStringStreamBuilder (capacity: int32) =
                   Length = uint32(encoding.GetByteCount str.Span)
                   TerminalByte = getTerminalByte &str }
             offset <- offset + BlobWriter.compressedUnsignedSize entry.TotalLength + entry.TotalLength
-            strings.Add &entry |> ignore
+            strings.Add entry
             lookup.[str] <- offset'
             offset'
 

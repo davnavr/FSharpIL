@@ -21,7 +21,6 @@
     <Compile Include="Utilities\Collections\LateInitCollection.fs" />
     <Compile Include="Utilities\Collections\HybridCollection.fs" />
     <Compile Include="Utilities\Collections\HybridHashSet.fs" />
-    <Compile Include="Utilities\Collections\RefArrayList.fs" />
     <Compile Include="Omitted.fs" />
     <Compile Include="ChunkedMemory.fs" />
     <Compile Include="ChunkedMemoryStream.fs" />

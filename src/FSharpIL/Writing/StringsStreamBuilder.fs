@@ -5,8 +5,6 @@ open System.Collections.Generic
 
 open FSharpIL.Metadata
 
-open FSharpIL.Utilities.Collections
-
 [<Struct>]
 type private StringsStreamSerializer =
     interface StringHelpers.IStringSerializer<ReadOnlyMemory<char>> with
@@ -20,9 +18,9 @@ type StringsStreamBuilder (capacity: int32) =
     static let empty = ReadOnlyMemory.Empty
     static let emptyi = { StringOffset = 0u }
     let mutable offset = { StringOffset = 1u }
-    let strings = RefArrayList<ReadOnlyMemory<char>> capacity
+    let strings = System.Collections.Immutable.ImmutableArray.CreateBuilder<ReadOnlyMemory<char>> capacity
     let lookup = Dictionary<ReadOnlyMemory<char>, StringOffset>(capacity, StringHelpers.comparer)
-    do strings.Add &empty |> ignore // First entry is the empty string.
+    do strings.Add empty // First entry is the empty string.
     do lookup.[empty] <- emptyi
 
     member _.IsEmpty = strings.Count = 1
@@ -35,7 +33,7 @@ type StringsStreamBuilder (capacity: int32) =
         let offset' = offset
         offset <- { StringOffset = offset.StringOffset + 1u + uint32 str.Length }
         lookup.[str] <- offset'
-        strings.Add &str |> ignore
+        strings.Add str
         offset'
 
     member private this.Add str =
