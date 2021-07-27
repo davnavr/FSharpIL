@@ -91,6 +91,8 @@ type MethodBodyError =
                 offset
                 expected
                 actual
+        | DataSectionOutOfBounds(offset, size) ->
+            sprintf "The method data section with size %i bytes at offset 0x%08X from the start of the section was out of bounds" size offset
 
 type ParsedOpcode =
     | Nop = 0us

@@ -60,7 +60,7 @@ type SequentialTableReader<'State> =
 type MetadataTablesReader<'State> =
     //| AllAtOnce of (ReferencedMetadataStreams -> FileOffset -> 'State -> Result<'State, ReadError>)
     /// The tables are read in the order that they appear.
-    | [<System.ObsoleteAttribute>] SequentialTableReader of SequentialTableReader<'State>
+    | (*[<System.ObsoleteAttribute>]*) SequentialTableReader of SequentialTableReader<'State>
 
 [<RequireQualifiedAccess>]
 module MetadataTablesReader =

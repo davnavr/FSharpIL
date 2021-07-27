@@ -52,5 +52,6 @@ module ModuleBuilder =
         let rec inner state =
             match builder.Update state with
             | ModuleUpdate.Finish -> ValidationResult.Ok(builder', state)
+            | _ -> FSharpIL.Utilities.Fail.noImpl "what next?"
 
         inner state

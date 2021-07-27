@@ -17,4 +17,4 @@ type ParsedUserStringStream internal (stream: LengthEncodedStream) =
         | true, existing -> Ok existing
         | false, _ ->
             stream.TryReadBytes offset
-            Utilities.Fail.noImpl "TODO: Read the blob"
+            |> Utilities.Fail.noImpl "TODO: Read the blob"
