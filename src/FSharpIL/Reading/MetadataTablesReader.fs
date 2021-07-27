@@ -11,10 +11,12 @@ type ReferencedMetadataStreams =
       Tables: ParsedMetadataTables }
 
 // TODO: Allow function to return a ReadError/BlobError
-[<System.ObsoleteAttribute>]
+// TODO: Remove sequential reader
+// TODO: Make a module called BrowseCli that returns the ReferencedMetadataStreams.
+//[<System.ObsoleteAttribute>]
 type TableRowReader<'Row, 'State> = StructureReader<struct(ReferencedMetadataStreams * 'Row), 'State> // ('Row -> ReferencedMetadataStreams -> FSharpIL.PortableExecutable.FileOffset -> 'State -> 'State voption) voption
 
-[<System.ObsoleteAttribute>]
+//[<System.ObsoleteAttribute>]
 [<NoComparison; NoEquality>]
 type SequentialTableReader<'State> =
     { ReadHeader: StructureReader<ParsedTablesHeader, 'State>

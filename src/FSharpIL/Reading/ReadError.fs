@@ -166,6 +166,7 @@ type ReadError =
         | InvalidStringOffset(offset, max) ->
             sprintf "Invalid offset into the \"#Strings\" stream (%O), maximum valid offset is (%O)" offset max
         | MissingStringStreamTerminator -> "the last byte of the \"#Strings\" stream must end in a null byte"
+        | MissingNullTerminator s -> sprintf "The string \"%s\" is missing a null terminator" s
         | InvalidGuidIndex(offset, max) ->
             sprintf "Invalid index into the \"#GUID\" stream (%O), maximum valid index is (%O)" offset max
         | InvalidBlob(offset, err) -> sprintf "the blob at offset 0x%08X is invalid, %O" offset err
