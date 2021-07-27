@@ -435,7 +435,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
 [<Tests>]
 let tests =
     testList "generics showcase" [
-        testCaseExec (lazy example()) "name of test case" __SOURCE_DIRECTORY__ "exout" "GenericsShowcase.dll" <| fun dotnet ->
+        testCaseExec (lazy example()) "prints list contents" __SOURCE_DIRECTORY__ "exout" "GenericsShowcase.dll" <| fun dotnet ->
             let out =
                 [
                     while not dotnet.StandardOutput.EndOfStream do
