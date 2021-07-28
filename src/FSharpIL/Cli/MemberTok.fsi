@@ -13,10 +13,13 @@ type MemberTok<'Member when 'Member :> IEquatable<'Member>> =
 
     interface IEquatable<MemberTok<'Member>>
 
+    override GetHashCode: unit -> int32
+    override Equals: obj -> bool
+
 type FieldTok = MemberTok<Field>
 type MethodTok = MemberTok<Method>
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+[<IsReadOnly; Struct; NoComparison; CustomEquality>]
 type MethodTok<'Owner, 'Method when 'Method : not struct and 'Method :> Method> =
     member Method: 'Method
     member Token: MethodTok
@@ -25,7 +28,10 @@ type MethodTok<'Owner, 'Method when 'Method : not struct and 'Method :> Method> 
 
     interface IEquatable<MethodTok<'Owner, 'Method>>
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+    override GetHashCode: unit -> int32
+    override Equals: obj -> bool
+
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>] // TODO: Consider using CustomEquality for FieldTok as well if CustomEquality for MethodTok`2 improved performance.
 type FieldTok<'Owner, 'Field when 'Field : not struct and 'Field :> Field> =
     member Field: 'Field
     member Token: FieldTok

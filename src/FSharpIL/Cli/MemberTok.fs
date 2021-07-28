@@ -13,18 +13,36 @@ type MemberTok<'Member when 'Member :> IEquatable<'Member>> (owner: TypeTok, mbe
 
     override _.ToString() = String.Concat(owner, "::", mber)
 
+    override _.GetHashCode() = HashCode.Combine(owner, mber)
+
     interface IEquatable<MemberTok<'Member>> with
         member _.Equals other = owner === other.Owner && mber === other.Member
+
+    override this.Equals obj =
+        match obj with
+        | :? MemberTok<'Member> as other -> this === other
+        | _ -> false
 
 type FieldTok = MemberTok<Field>
 type MethodTok = MemberTok<Method>
 
-[<Struct>]
+[<Struct; NoComparison; CustomEquality>]
 type MethodTok<'Owner, 'Method when 'Method : not struct and 'Method :> Method> (token: MethodTok) =
     member _.Method = Unsafe.As<'Method> token.Member
     member _.Token = token
+
+    new (owner, method: 'Method) = MethodTok<_, _>(token = MethodTok(owner, method :> Method))
+
     override _.ToString() = token.ToString()
-    new (owner, method: 'Method) = MethodTok<_, _>(token = MethodTok(owner, method))
+
+    override _.GetHashCode() = token.GetHashCode()
+
+    interface IEquatable<MethodTok<'Owner, 'Method>> with member _.Equals other = token === other.Token
+
+    override this.Equals obj =
+        match obj with
+        | :? MethodTok<'Owner, 'Method> as other -> this === other
+        | _ -> false
 
 [<Struct>]
 type FieldTok<'Owner, 'Field when 'Field : not struct and 'Field :> Field> (token: FieldTok) =
