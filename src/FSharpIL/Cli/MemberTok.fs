@@ -94,6 +94,10 @@ type EventTok (owner: NamedType, event: Event) =
     member _.Event = event
     member this.Add = this.MethodToken event.Add
     member this.Remove = this.MethodToken event.Remove
+    member this.Raise =
+        match event.Raise with
+        | ValueSome raise -> ValueSome(this.MethodToken raise)
+        | ValueNone -> ValueNone
 
 module EventTok =
     let ofTypeDef owner event cache = EventTok(NamedTypeCache.addDefined owner cache, event)

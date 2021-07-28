@@ -324,6 +324,20 @@ module Instructions =
 
 
     /// <summary>
+    /// (0x2D) Pops a value off of the stack and branches to the <paramref name="target"/> if the value is not
+    /// <see langword="null"/>, short form (III.3.18).
+    /// </summary>
+    val brinst_s : target: Label -> Instruction
+
+    /// <summary>
+    /// (0x2D) Pops a value off of the stack and branches to the <paramref name="target"/> if the value is <see langword="true"/>
+    /// (non-zero), short form (III.3.18).
+    /// </summary>
+    val inline brtrue_s : target: Label -> Instruction
+
+
+
+    /// <summary>
     /// (0x30) Branches to the <paramref name="target"/> if <c>value1</c> is greater than <c>value2</c>, short form (III.3.8).
     /// </summary>
     val bgt_s : target: Label -> Instruction
@@ -385,7 +399,6 @@ module Instructions =
     /// Contains functions for generating the <c>newobj</c> (0x73) instruction, which "creates a new object or a new instance of a
     /// value type" (III.4.21).
     /// </summary>
-    /// <remarks>For value types, the <c>initobj</c> instruction is usually used instead.</remarks>
     [<RequireQualifiedAccess>]
     module Newobj =
         val ofMethod : ctor: MethodTok -> Instruction // TODO: Move Newobj.ofMethod to Unsafe module?
@@ -393,6 +406,12 @@ module Instructions =
         val inline ofDefinedMethod :
             ctor: MethodTok<TypeDefinition<'Kind>, FSharpIL.Cli.MethodDefinition<FSharpIL.Cli.MethodKinds.ObjectConstructor>> ->
             Instruction when 'Kind :> TypeKinds.IHasConstructors
+
+    /// <summary>
+    /// (0x74) Pops a value off of the stack, casts it to the specified class, and pushes the value back onto the stack
+    /// throwing a <see cref="T:System.InvalidCastException"/> on failure (III.4.3).
+    /// </summary>
+    val castclass : toType: TypeTok -> Instruction
 
 
 
@@ -473,6 +492,11 @@ module Instructions =
     /// <see cref="T:System.OverflowException"/> on overflow (III.3.49).
     /// </summary>
     val mul_ovf_un : Instruction
+
+
+
+    /// <summary>(0xFE 0x06) Pushes a pointer to the specified <paramref name="method"/> onto the stack (III.3.41).</summary>
+    val ldftn : method: MethodTok -> Instruction
 
 
 

@@ -78,6 +78,9 @@ let example() =
                 typeName = Identifier.ofStr "EventArgs"
             )
 
+        // TODO: Fix, if System.EventArgs is not added here, then it is added when EventHandler.Invoke is added, which causes an error due to a dictionary being modified as it is being enumerated.
+        let! _ = builder.ReferenceType evargs
+
         // public delegate void EventHandler(object, EventArgs)
         let evhandler =
             TypeReference.SealedClass (
@@ -86,7 +89,32 @@ let example() =
                 typeName = Identifier.ofStr "EventHandler"
             )
 
-        let! _ = builder.ReferenceType evhandler
+        let! evhandler_members = builder.ReferenceType evhandler
+
+        // public void Invoke(object, System.EventArgs)
+        let! evinvoke =
+            let evargs' =
+                ReferencedType.Reference evargs.Reference
+                |> NamedType.ReferencedType
+                |> CliType.Class
+                |> ParameterType.T
+
+            ReferencedMethod.Instance (
+                ExternalVisibility.Public,
+                ReturnType.Void',
+                name = MethodName.ofStr "Invoke",
+                parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.Object, evargs')
+            )
+            |> evhandler_members.Members.ReferenceMethod
+
+        // public EventHandler(object, System.IntPtr)
+        let! evctor =
+            let parameters = ImmutableArray.CreateRange [
+                ParameterType.T PrimitiveType.Object
+                ParameterType.T PrimitiveType.I
+            ]
+
+            evhandler_members.ReferenceMethod(ReferencedMethod.Constructor(ExternalVisibility.Public, parameters))
 
         // public static class Console
         let! console =
@@ -146,12 +174,23 @@ let example() =
 
             button'.DefineMethod(definition, body, attributes = ValueNone)
 
-        let handlerParameterTypes =
-            ReferencedType.Reference evhandler.Reference
-            |> NamedType.ReferencedType
-            |> CliType.Class
-            |> ParameterType.T
-            |> ImmutableArray.Create
+        let evhandler' = NamedType.ReferencedType(ReferencedType.Reference evhandler.Reference)
+        let evhandler'' = CliType.Class evhandler'
+
+        let handlerParameterTypes = ImmutableArray.Create(ParameterType.T evhandler'')
+
+        (* Backing field for event delegate instance *)
+        // private System.EventHandler Clicked;
+        let! clicked =
+            let definition =
+                DefinedField.Instance (
+                    MemberVisibility.Private,
+                    FieldAttributes.None,
+                    name = Identifier.ofStr "Clicked",
+                    signature = evhandler''
+                )
+
+            button'.Members.DefineField(definition, ValueNone)
 
         let addClickHandler =
             let definition =
@@ -164,7 +203,17 @@ let example() =
                     parameterList = Parameter.emptyList
                 )
 
-            let body = MethodBody.ofSeq [ ret ]
+            let body = MethodBody.ofSeq [
+                // this.Clicked = System.Delegate.Combine(this.Clicked, parameter0)
+                ldarg_0
+                dup
+                ldfld clicked.Token
+                ldarg_1
+                call combine2.Token
+                castclass (TypeTok.Named evhandler')
+                stfld clicked.Token
+                ret
+            ]
 
             definition :> DefinedMethod, ValueSome body, ValueNone
 
@@ -179,7 +228,17 @@ let example() =
                     parameterList = Parameter.emptyList
                 )
 
-            let body = MethodBody.ofSeq [ ret ]
+            let body = MethodBody.ofSeq [
+                // this.Clicked = System.Delegate.Remove(this.Clicked, parameter0)
+                ldarg_0
+                dup
+                ldfld clicked.Token
+                ldarg_1
+                call remove.Token
+                castclass (TypeTok.Named evhandler')
+                stfld clicked.Token
+                ret
+            ]
 
             definition :> DefinedMethod, ValueSome body, ValueNone
 
@@ -201,19 +260,41 @@ let example() =
                     parameterList = Parameter.emptyList
                 )
 
-            let body = MethodBody.ofSeq [ ret ]
+            let body = MethodBody.create InitLocals ValueNone LocalVariables.Null [
+                let struct(rclicked', rclicked) =
+                    InstructionBlock.ofList [
+                        // this.Clicked.Invoke(this, parameter0)
+                        ldarg_0
+                        ldfld clicked.Token
+                        ldarg_0
+                        ldarg_1
+                        call evinvoke.Token
+                        ret
+                    ]
+                    |> InstructionBlock.label
+
+                InstructionBlock.ofList [
+                    // this.clicked != null
+                    ldarg_0
+                    ldfld clicked.Token
+                    brinst_s rclicked'
+                    ret
+                ]
+
+                rclicked
+            ]
 
             definition :> DefinedMethod, ValueSome body, ValueNone
 
         // public event System.EventHandler Clicked;
-        let! clicked =
+        let! clicked' =
             let etype =
                 ReferencedType.Reference evhandler.Reference
                 |> NamedType.ReferencedType
                 |> TypeTok.Named
 
             button'.Members.DefineEvent (
-                Identifier.ofStr "Clicked",
+                clicked.Field.Name,
                 etype,
                 addClickHandler,
                 removeClickHandler,
@@ -221,6 +302,35 @@ let example() =
                 List.empty,
                 ValueNone
             )
+
+        let! handler =
+            let parameterTypeList =
+                ImmutableArray.CreateRange [
+                    ParameterType.T PrimitiveType.Object
+
+                    ReferencedType.Reference evargs.Reference
+                    |> NamedType.ReferencedType
+                    |> CliType.Class
+                    |> ParameterType.T
+                ]
+
+            let definition =
+                DefinedMethod.Static (
+                    MemberVisibility.Private,
+                    flags = MethodAttributes.None,
+                    returnType = ReturnType.Void',
+                    name = MethodName.ofStr "MyClickHandler",
+                    parameterTypes = parameterTypeList,
+                    parameterList = Parameter.emptyList
+                )
+
+            let body = MethodBody.ofSeq [
+                ldstr "I was clicked!"
+                call writeln.Token
+                ret
+            ]
+
+            builder.GlobalMembers.DefineMethod(definition, ValueSome body, ValueNone)
 
         // public static void Main()
         let! _ =
@@ -245,6 +355,18 @@ let example() =
                     // button = Button();
                     Newobj.ofDefinedMethod ctor
                     stloc_0
+
+                    // button.Clicked += MyClickHandler;
+                    ldloc_0
+                    ldnull
+                    ldftn handler.Token
+                    Newobj.ofMethod evctor.Token
+                    call clicked'.Add.Token
+
+                    // button.raise_Clicked(null);
+                    ldloc_0
+                    ldnull
+                    call clicked'.Raise.Value.Token
                     ret
                 ]
             ]

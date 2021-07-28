@@ -41,6 +41,9 @@ type Opcode =
 
     | Ret = 0x2Aus
     | Br_s = 0x2Bus
+
+    | Brinst_s = 0x2Dus
+    | Brtrue_s = 0x2Dus
     
     | Bgt_s = 0x30us
 
@@ -75,6 +78,7 @@ type Opcode =
 
     | Ldstr = 0x72us
     | Newobj = 0x73us
+    | Castclass = 0x74us
 
     | Conv_r_un = 0x76us
 
@@ -137,6 +141,7 @@ type Opcode =
     | Cgt_un = 0xFE_03us
     | Clt = 0xFE_04us
     | Clt_un = 0xFE_05us
+    | Ldftn = 0xFE_06us
 
     | Ldarg = 0xFE_09us
 

@@ -380,6 +380,7 @@ module Instructions =
               StackBehavior = behavior
               Operand = Operand.BranchTarget(kind, target) }
 
+        let brpops1 opcode kind target = branching opcode pop1 kind target
         let brpops2 opcode kind target = branching opcode pop2 kind target
 
     open Instruction
@@ -418,6 +419,8 @@ module Instructions =
     let call method = methodTokenCall Opcode.Call method
     let ret = op Opcode.Ret
     let br_s target = { op Opcode.Br_s with Operand = Operand.BranchTarget(BranchKind.Short, target) }
+    let brinst_s target = brpops1 Opcode.Brinst_s BranchKind.Short target
+    let inline brtrue_s target = brinst_s target
     let bgt_s target = brpops2 Opcode.Bgt_s BranchKind.Short target
     let blt_s target = brpops2 Opcode.Blt_s BranchKind.Short target
     let add = pops1 Opcode.Add
@@ -447,6 +450,7 @@ module Instructions =
             =
             ofMethod ctor.Token
 
+    let castclass toType = { op Opcode.Castclass with Operand = Operand.TypeToken toType }
     let ldfld field = { op Opcode.Ldfld with Operand = Operand.FieldToken field }
     let ldflda field = { op Opcode.Ldflda with Operand = Operand.FieldToken field }
     let stfld field = { pops2 Opcode.Stfld with Operand = Operand.FieldToken field }
@@ -462,6 +466,7 @@ module Instructions =
     let add_ovf_un = pops1 Opcode.Add_ovf_un
     let mul_ovf = pops1 Opcode.Mul_ovf
     let mul_ovf_un = pops1 Opcode.Mul_ovf_un
+    let ldftn method = { pushes1 Opcode.Ldftn with Operand = Operand.MethodToken method }
     let ldarg num = { pushes1 Opcode.Ldarg with Operand = Operand.Short num }
     let ldloc (LocalVarIndex i) = { pushes1 Opcode.Ldloc with Operand = Operand.Short i }
     let stloc (LocalVarIndex i) = { pops1 Opcode.Stloc with Operand = Operand.Short i }

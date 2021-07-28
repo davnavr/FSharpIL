@@ -92,6 +92,7 @@ type EventTok =
 
     member Add: DefinedMethodTok
     member Remove: DefinedMethodTok
+    member Raise: DefinedMethodTok voption
     //member Other: seq<DefinedMethodTok>
 
     interface IEquatable<EventTok>
