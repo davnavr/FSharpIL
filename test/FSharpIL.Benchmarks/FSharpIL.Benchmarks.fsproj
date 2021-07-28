@@ -13,7 +13,8 @@
     <Compile Include="Benchmark.fs" />
 
     <PackageReference Include="AsmResolver.DotNet" Version="4.6.0" />
-    <PackageReference Include="BenchmarkDotNet" Version="0.12.1" />
+    <PackageReference Include="BenchmarkDotNet" Version="0.13.0" />
+    <PackageReference Include="BenchmarkDotNet.Diagnostics.Windows" Version="0.13.0" />
     <PackageReference Include="Mono.Cecil" Version="0.11.3" />
 
     <ProjectReference Include="$(RootDirectory)\src\FSharpIL\FSharpIL.fsproj" />

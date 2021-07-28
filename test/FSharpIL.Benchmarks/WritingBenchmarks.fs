@@ -131,7 +131,7 @@ module AsmResolver =
         manifest
 
 [<MemoryDiagnoser>]
-type ToNullStream () =
+type WritingToNullStream () =
     [<Benchmark(Baseline = true)>]
     member _.FSharpIL() = HelloWorld.example() |> FSharpIL.Writing.WritePE.toStream System.IO.Stream.Null
 
@@ -145,7 +145,103 @@ type ToNullStream () =
         let manifest = helloWorldAsmResolver()
         manifest.Write System.IO.Stream.Null
 
+[<AutoOpen>]
+module LargeFile =
+    open System.Collections.Immutable
+
+    open FSharpIL.Metadata
+    open FSharpIL.Metadata.Tables
+
+    open FSharpIL.Cli
+
+    open FSharpIL.Writing
+
+    let generateLargeFile n =
+        let builder =
+            CliModuleBuilder (
+                name = Identifier.ofStr "LargeFile.dll",
+                assembly =
+                    { DefinedAssembly.Version = AssemblyVersion(1us, 0us, 0us, 0us)
+                      PublicKey = ImmutableArray.Empty
+                      Name = FileName.ofStr "LargeFile"
+                      Culture = ValueNone }
+            )
+
+        let msignature = ImmutableArray.Create(ParameterType.T PrimitiveType.I4)
+
+        let mutable baset = Unchecked.defaultof<_>
+
+        for ai = 1 to n do
+            let assem =
+                { ReferencedAssembly.Version = AssemblyVersion(uint16 n, 0us, 0us, 0us)
+                  PublicKeyOrToken = NoPublicKeyOrToken
+                  Name = FileName.ofStr("AssemblyReference" + string ai)
+                  Culture = ValueNone
+                  HashValue = ImmutableArray.Empty }
+
+            builder.ReferenceAssembly assem
+
+            for ti = 1 to n do
+                let tref =
+                    { TypeReference.Flags = ValueNone
+                      ResolutionScope = TypeReferenceParent.Assembly assem
+                      TypeName = Identifier.ofStr("TypeReference" + string ai + "-" + string ti)
+                      TypeNamespace = ValueNone }
+                    |> ReferencedType.Reference
+
+                if System.Object.ReferenceEquals(Unchecked.defaultof<_>, baset) then baset <- NamedType.ReferencedType tref
+
+                let members = ValidationResult.get(builder.ReferenceType tref)
+
+                for mi = 1 to n do
+                    MethodReference.Static (
+                        ExternalVisibility.Public,
+                        ReturnType.Void',
+                        MethodName.ofStr("MethodReference" + string mi),
+                        msignature
+                    )
+                    |> members.ReferenceMethod 
+                    |> ValidationResult.get
+                    |> ignore
+
+        for ti = 1 to n do
+            let ti' = string ti
+            let tdef =
+                { Flags = TypeDefFlags.Public
+                  Extends = ClassExtends.Named baset
+                  EnclosingClass = ValueNone
+                  TypeNamespace = Identifier.ofStr("Namespace" + ti') |> ValueSome
+                  TypeName = Identifier.ofStr("TypeDefinition" + ti') }
+                |> DefinedType.Definition
+
+            let struct(_, members) = ValidationResult.get(builder.DefineType tdef)
+
+            for mi = 1 to n do
+                let mi' = string mi
+                if mi % 2 = 0 then
+                    let field =
+                        FieldDefinition.Instance (
+                            MemberVisibility.Public,
+                            FieldAttributes.None,
+                            Identifier.ofStr("Field" + mi'),
+                            PrimitiveType.Object
+                        )
+
+                    members.DefineField(field, ValueNone)
+                    |> ValidationResult.get
+                    |> ignore
+                else
+                    () // Method
+
+        BuildPE.ofModuleBuilder FSharpIL.PortableExecutable.FileCharacteristics.IsDll builder
+
 [<EventPipeProfiler(EventPipeProfile.GcVerbose)>]
-type Profiled () =
+type WritingProfiled () =
+    //[<Benchmark>]
+    //member _.HelloWorld() = HelloWorld.example() |> FSharpIL.Writing.WritePE.toStream System.IO.Stream.Null
+
+    [<Params(50, 100)>]
+    member val N = 100 with get, set
+
     [<Benchmark>]
-    member _.HelloWorld() = HelloWorld.example() |> FSharpIL.Writing.WritePE.toStream System.IO.Stream.Null
+    member this.LargeCounts() = generateLargeFile this.N |> FSharpIL.Writing.WritePE.toStream System.IO.Stream.Null
