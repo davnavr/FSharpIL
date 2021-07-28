@@ -385,17 +385,22 @@ type ReferencedMethod =
 
 [<RequireQualifiedAccess>]
 module Method =
+    open System.Collections.Generic
+
     [<Sealed>]
     type SignatureComparer () =
-        interface System.Collections.Generic.IEqualityComparer<Method> with // TODO: Account for VarArg types as well when comparing signatures.
-            member _.Equals(x, y) =
-                Equatable.blocks x.ParameterTypes y.ParameterTypes &&
-                x.ReturnType === y.ReturnType &&
-                x.CallingConvention === y.CallingConvention &&
-                x.HasThis === y.HasThis
+        member _.Equals(x: #Method, y: #Method) =
+            Equatable.blocks x.ParameterTypes y.ParameterTypes &&
+            x.ReturnType === y.ReturnType &&
+            x.CallingConvention === y.CallingConvention &&
+            x.HasThis === y.HasThis
 
-            member _.GetHashCode method =
-                HashCode.Combine(method.HasThis, method.CallingConvention, method.ReturnType, method.ParameterTypes)
+        member _.GetHashCode(method: #Method) =
+            HashCode.Combine(method.HasThis, method.CallingConvention, method.ReturnType, method.ParameterTypes)
+
+        interface IEqualityComparer<Method> with // TODO: Account for VarArg types as well when comparing signatures.
+            member this.Equals(x, y) = this.Equals(x, y)
+            member this.GetHashCode method = this.GetHashCode method
 
     let signatureComparer = SignatureComparer()
 

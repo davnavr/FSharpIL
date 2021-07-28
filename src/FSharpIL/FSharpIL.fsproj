@@ -82,6 +82,8 @@
     <Compile Include="Cli\Method.fs" />
     <Compile Include="Cli\Property.fsi" />
     <Compile Include="Cli\Property.fs" />
+    <Compile Include="Cli\Event.fsi" />
+    <Compile Include="Cli\Event.fs" />
     <Compile Include="Cli\MemberTok.fsi" />
     <Compile Include="Cli\MemberTok.fs" />
     <Compile Include="Cli\CustomAttribute.fsi" />

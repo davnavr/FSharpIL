@@ -19,16 +19,15 @@ type Property (name, getter, setter, other) =
 
     interface IEquatable<Property> with
         member _.Equals other =
-            let inline propertyMethodEquals x y =
-                match x, y with
-                | ValueSome x', ValueSome y' -> Equatable.withComparer Method.signatureComparer (x' :> Method) (y' :> Method)
-                | ValueSome _, ValueNone
-                | ValueNone, ValueSome _ -> false
+            let inline propMethodsEqual a b =
+                match a, b with
+                | ValueSome a', ValueSome b' -> Method.signatureComparer.Equals(a', b')
                 | ValueNone, ValueNone -> true
+                | _ -> false
 
             name === other.Name &&
-            propertyMethodEquals getter other.Getter &&
-            propertyMethodEquals setter other.Setter
+            propMethodsEqual getter other.Getter &&
+            propMethodsEqual setter other.Setter
 
     override this.Equals obj =
         match obj with

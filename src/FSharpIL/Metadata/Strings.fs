@@ -3,6 +3,8 @@
 open System
 open System.Runtime.CompilerServices
 
+open FSharpIL.Utilities.Compare
+
 /// <summary>Represents an offset into the <c>#Strings</c> metadata stream pointing to a non-empty string.</summary>
 [<IsReadOnly; Struct>]
 [<RequireQualifiedAccess>]
@@ -20,9 +22,8 @@ type FileNameOffset =
 /// <summary>
 /// Represents a <see cref="T:System.String"/> that cannot be <see langword="null"/>, be empty, or contain any null characters.
 /// </summary>
-[<IsReadOnly>]
-[<StructuralComparison; StructuralEquality>]
-type Identifier = struct
+[<IsReadOnly; Struct; CustomComparison; CustomEquality>]
+type Identifier =
     val private identifier: string
 
     internal new (identifier) = { identifier = identifier }
@@ -38,10 +39,24 @@ type Identifier = struct
         | null
         | "" -> id
         | _ -> Identifier(id.identifier + str)
-end
+
+    override this.GetHashCode() = StringComparer.Ordinal.GetHashCode this.identifier
+
+    interface IEquatable<Identifier> with
+        member this.Equals other = StringComparer.Ordinal.Equals(this.identifier, other.identifier)
+
+    interface IComparable<Identifier> with
+        member this.CompareTo other = StringComparer.Ordinal.Compare(this.identifier, other.identifier)
+
+    interface IComparable with member this.CompareTo obj = Comparable.comparison this (obj :?> Identifier)
+
+    override this.Equals obj =
+        match obj with
+        | :? Identifier as other -> this === other
+        | _ -> false
 
 /// Represents the name of an assembly (II.22.2) or file (II.22.19).
-[<IsReadOnly; Struct>]
+[<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
 type FileName =
     internal { FileName: Identifier }
     override this.ToString() = this.FileName.ToString()

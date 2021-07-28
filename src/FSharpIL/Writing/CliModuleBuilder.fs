@@ -43,6 +43,7 @@ module CustomAttribute =
         static member DefinedField(field: Field) = { Owner = field }
         static member DefinedMethod(method: DefinedMethod) = { Owner = method }
         static member Property(property: Property) = { Owner = property }
+        static member Event(event: Event) = { Owner = event }
 
     let rec private createFixedArgsLoop
         (args: byref<FixedArg[]>)
@@ -127,19 +128,30 @@ module CustomAttributeList =
 
 type CustomAttributeBuilder = CustomAttributeList ref voption
 
-type DefinedPropertyMethod = DefinedMethod * MethodBody voption * CustomAttributeBuilder
+type MethodGenerator = DefinedMethod * MethodBody voption * CustomAttributeBuilder
 
 [<Sealed>]
-type DefinedTypeMembers (owner: DefinedType, warnings: _ option, methodBodyCache: MethodBodyStream, namedTypeCache, entryPointToken, attrs) =
+type DefinedTypeMembers
+    (
+        owner: DefinedType,
+        warnings: _ option,
+        methodBodyCache: MethodBodyStream,
+        namedTypeCache,
+        entryPointToken,
+        attrs
+    )
+    =
     [<DefaultValue>] val mutable Field: HybridHashSet<DefinedField>
     [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
     [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, MethodBody>
     [<DefaultValue>] val mutable Property: HybridHashSet<Property>
+    [<DefaultValue>] val mutable Event: HybridHashSet<Event>
 
     member _.Owner = owner
     member this.FieldCount = this.Field.Count
     member this.MethodCount = this.Method.Count
     member this.PropertyCount = this.Property.Count
+    member this.EventCount = this.Event.Count
 
     member this.AddDefinedField field =
         if this.Field.Add field
@@ -190,37 +202,58 @@ type DefinedTypeMembers (owner: DefinedType, warnings: _ option, methodBodyCache
             return target
         }
 
-    member private this.AddPropertyMethod(method: DefinedPropertyMethod voption) =
+    member private this.AddMethodGenerator((method', body, attributes): MethodGenerator) =
+        validated {
+            let! _ = this.DefineMethod(method', body, attributes)
+            return method'
+        }
+
+    // Should other method list be reversed, order might not really matter since almost no one will define extra property methods.
+    member private this.AddOtherMethods(remaining: MethodGenerator list, result) =
+        match remaining with
+        | [] -> Ok result
+        | (other', body, attributes) :: remaining' ->
+            validated {
+                let! _ = this.DefineMethod(other', body, attributes)
+                return! this.AddOtherMethods(remaining', other' :: result)
+            }
+
+    member private this.AddPropertyMethod(method: MethodGenerator voption) =
         validated {
             match method with
-            | ValueSome(method', body, attributes) ->
-                let! _ = this.DefineMethod(method', body, attributes)
-                return ValueSome method'
+            | ValueSome method' ->
+                let! method'' = this.AddMethodGenerator method'
+                return ValueSome method''
             | ValueNone -> return ValueNone
         }
 
     // TODO: Check that type and signature of property is correct.
     // TODO: Define overload that forces setting of SpecialName flags for all methods.
-    member this.DefineProperty(name, getter, setter, other: DefinedPropertyMethod list, attributes) =
-        // Should other method list be reversed, order might not really matter since almost no one will define extra property methods.
-        let rec addOtherMethods other methods =
-            match other with
-            | [] -> Ok methods
-            | (other', body, attributes) :: remaining ->
-                validated {
-                    let! _ = this.DefineMethod(other', body, attributes)
-                    return! addOtherMethods remaining (other' :: methods)
-                }
-
+    member this.DefineProperty(name, getter, setter, other, attributes) =
         validated {
             let! getter' = this.AddPropertyMethod getter
             let! setter' = this.AddPropertyMethod setter
-            let! other' = addOtherMethods other []
+            let! other' = this.AddOtherMethods(other, [])
             let property = Property(name, getter', setter', other')
 
             if this.Property.Add property then
                 CustomAttributeList.fromRef (CustomAttribute.Owner.Property property) attrs attributes
                 return PropertyTok.ofTypeDef owner property namedTypeCache
+            else
+                return! Error(noImpl "TODO: Error for duplicate property")
+        }
+
+    member this.DefineEvent(name, etype, add, remove, raise, other, attributes) =
+        validated {
+            let! add' = this.AddMethodGenerator add
+            let! remove' = this.AddMethodGenerator remove
+            let! raise' = this.AddPropertyMethod raise
+            let! other' = this.AddOtherMethods(other, [])
+            let event = Event(name, etype, add', remove', raise', other')
+
+            if this.Event.Add event then
+                CustomAttributeList.fromRef (CustomAttribute.Owner.Event event) attrs attributes
+                return EventTok.ofTypeDef owner event namedTypeCache
             else
                 return! Error(noImpl "TODO: Error for duplicate property")
         }
@@ -892,10 +925,11 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             let parameterList = MemberIndexCounter<ParamRow>()
             let fieldList = MemberIndexCounter<FieldRow>()
             let methodList = MemberIndexCounter<MethodDefRow>()
-            //let event
+            let eventList = MemberIndexCounter<EventRow>()
             let propertyList = MemberIndexCounter<PropertyRow>()
 
             fun parent members ->
+                let parent' = definedTypeLookup.[parent]
                 let members' =
                     match members with
                     | ValueNone -> info.DefinedTypes.[parent]
@@ -954,9 +988,40 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
                 let inline methodIndexOf method = definedMethodLookup.[createMethodTok method]
 
-                //eventList.Reset()
+                eventList.Reset()
+                let mutable addEventMap = false
 
-                // TODO: event
+                for event in members'.Event do
+                    if not addEventMap then addEventMap <- true
+
+                    let i' =
+                        { EventFlags = event.Flags
+                          Name = builder.Strings.Add event.Name
+                          EventType = typeDefOrRefOrSpec event.Type }
+                        |> builder.Tables.Event.Add
+
+                    eventList.Last <- i'
+
+                    let methods = List 2
+
+                    let inline addEventMethod flag method = methods.Add(struct(flag, methodIndexOf method))
+
+                    addEventMethod MethodSemanticsFlags.AddOn event.Add
+                    addEventMethod MethodSemanticsFlags.RemoveOn event.Remove
+
+                    match event.Raise with
+                    | ValueSome raise -> addEventMethod MethodSemanticsFlags.Fire raise
+                    | ValueNone -> ()
+
+                    for other in event.Other do addEventMethod MethodSemanticsFlags.Other other
+
+                    sortedMethodSemantics.Add(HasSemantics.Event i', methods)
+
+                if addEventMap then
+                    { EventMapRow.Parent = parent'
+                      EventList = eventList.First }
+                    |> builder.Tables.EventMap.Add
+                    |> ignore
 
                 propertyList.Reset()
                 let mutable addPropertyMap = false
@@ -1000,13 +1065,13 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                         sortedMethodSemantics.Add(HasSemantics.Property i', methods)
 
                 if addPropertyMap then
-                    { PropertyMapRow.Parent = definedTypeLookup.[parent]
+                    { PropertyMapRow.Parent = parent'
                       PropertyList = propertyList.First }
                     |> builder.Tables.PropertyMap.Add
                     |> ignore
 
                 // Safe to manipulate TypeDef row here, as all type definitions have already been added.
-                let parent' = &Unsafe.AsRef &builder.Tables.TypeDef.[definedTypeLookup.[parent]]
+                let parent' = &Unsafe.AsRef &builder.Tables.TypeDef.[parent']
 
                 Unsafe.AsRef &parent'.FieldList <- fieldList.First
                 Unsafe.AsRef &parent'.MethodList <- methodList.First

@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="ExampleHelpers.fs" />
     <Compile Include="..\content\HelloWorld.fsx" />
+    <Compile Include="..\content\EventsShowcase.fsx" />
     <Compile Include="..\content\GenericsShowcase.fsx" />
     <Compile Include="$(RootDirectory)\test\ExpectoEntryPoint.fs" />
 

@@ -24,7 +24,8 @@ type Property =
 
 [<AutoOpen>]
 module PropertyPatterns =
-    val inline (|PropertyMethods|) : property: Property -> struct(DefinedMethod voption * DefinedMethod voption * DefinedMethod list)
+    val inline (|PropertyMethods|) :
+        property: Property -> struct(DefinedMethod voption * DefinedMethod voption * DefinedMethod list)
 
 [<System.Runtime.CompilerServices.IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type Property<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> =

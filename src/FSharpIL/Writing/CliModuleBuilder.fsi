@@ -23,8 +23,8 @@ type CustomAttributeList =
 /// Used to obtain a mutable list of custom attributes.
 type CustomAttributeBuilder = CustomAttributeList ref voption
 
-/// Used to generate a method for a property.
-type DefinedPropertyMethod = DefinedMethod * MethodBody voption * CustomAttributeBuilder
+/// Used to generate a method for a property or event.
+type MethodGenerator = DefinedMethod * MethodBody voption * CustomAttributeBuilder
 
 [<Sealed>]
 type DefinedTypeMembers =
@@ -36,7 +36,7 @@ type DefinedTypeMembers =
     member FieldCount: int32
     member MethodCount: int32
     member PropertyCount: int32
-    //member EventCount: int32
+    member EventCount: int32
 
     member DefineField:
         field: DefinedField *
@@ -54,10 +54,19 @@ type DefinedTypeMembers =
 
     member DefineProperty:
         name: Identifier *
-        getter: DefinedPropertyMethod voption *
-        setter: DefinedPropertyMethod voption *
-        other: DefinedPropertyMethod list *
+        getter: MethodGenerator voption *
+        setter: MethodGenerator voption *
+        other: MethodGenerator list *
         attributes: CustomAttributeBuilder -> ValidationResult<PropertyTok>
+
+    member DefineEvent:
+        name: Identifier *
+        etype: TypeTok *
+        add: MethodGenerator *
+        remove: MethodGenerator *
+        raise: MethodGenerator voption *
+        other: MethodGenerator list *
+        attributes: CustomAttributeBuilder -> ValidationResult<EventTok>
 
     member ContainsField: field: DefinedField -> bool
     member ContainsMethod: method: DefinedMethod -> bool

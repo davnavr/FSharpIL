@@ -3,6 +3,7 @@
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Runtime.CompilerServices
 
 /// <summary>
 /// Contains functions for comparing objects and collections containing objects that implement
@@ -62,6 +63,20 @@ module Equatable =
                     for i = 0 to obj.Length - 1 do hcode.Add obj.[i]
 
                 hcode.ToHashCode()
+
+    [<IsReadOnly; Struct; NoComparison; NoEquality>]
+    type ValueOptionComparer<'T when 'T :> IEquatable<'T>> (comparer: IEqualityComparer<'T>) =
+        interface IEqualityComparer<'T voption> with
+            member _.Equals(x, y) =
+                match x, y with
+                | ValueSome x', ValueSome y' -> comparer.Equals(x', y')
+                | ValueNone, ValueNone -> true
+                | _ -> false
+
+            member _.GetHashCode value =
+                match value with
+                | ValueSome value' -> comparer.GetHashCode value'
+                | ValueNone -> 0
 
 // TODO: Fix equality implementations by making x be a generic parameter.
 /// <summary>Equality operator for objects implementing <see cref="T:System.IEquatable`1"/>.</summary>

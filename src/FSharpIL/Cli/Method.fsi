@@ -88,15 +88,6 @@ type Method =
     interface IEquatable<Method>
 
 [<RequireQualifiedAccess>]
-module Method =
-    [<Sealed>]
-    type SignatureComparer = class
-        interface System.Collections.Generic.IEqualityComparer<Method>
-    end
-
-    val signatureComparer : SignatureComparer
-
-[<RequireQualifiedAccess>]
 module MethodKinds =
     type IKind = interface
         inherit IAttributeTag<MethodDefFlags>
@@ -130,6 +121,15 @@ type DefinedMethod =
     //member Visibility: MemberVisibility
 
     override Equals: Method -> bool
+
+[<RequireQualifiedAccess>]
+module Method =
+    [<Sealed>]
+    type SignatureComparer =
+        member Equals: x: #Method * y: #Method -> bool
+        interface System.Collections.Generic.IEqualityComparer<Method>
+
+    val signatureComparer : SignatureComparer
 
 [<Sealed>]
 type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> = class

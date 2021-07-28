@@ -7,6 +7,7 @@ open FSharpIL.Metadata
 [<Sealed>]
 type CoreAssemblyMembers =
     member Array: ReferencedTypeMembers<TypeKinds.AbstractClass>
+    member Delegate: ReferencedTypeMembers<TypeKinds.AbstractClass>
 
     // TODO: Make this a field of some ObjectMembers class instead.
     /// <summary>
@@ -34,7 +35,7 @@ type CoreAssemblyReference =
     /// <summary>
     /// The core type <see cref="T:System.Delegate"/>, which serves as the base type for all delegates (II.14.6).
     /// </summary>
-    member Delegate: TypeReference
+    member Delegate: TypeReference<TypeKinds.AbstractClass>
     /// <summary>
     /// The core type <see cref="T:System.Enum"/>, which serves as the base type for all enumeration types (II.14.3).
     /// </summary>

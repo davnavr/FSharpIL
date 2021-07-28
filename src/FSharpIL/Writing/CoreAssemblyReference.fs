@@ -6,8 +6,16 @@ open FSharpIL.Cli
 open FSharpIL.Metadata
 
 [<Sealed>]
-type CoreAssemblyMembers (array: ReferencedTypeMembers<_>, octor: MethodTok<_, _>, tfmctor: MethodTok<_, _>) =
+type CoreAssemblyMembers
+    (
+        array: ReferencedTypeMembers<_>,
+        del: ReferencedTypeMembers<_>,
+        octor: MethodTok<_, _>,
+        tfmctor: MethodTok<_, _>
+    )
+    =
     member _.Array = array
+    member _.Delegate = del
     member _.ObjectConstructor = octor
     member _.TargetFrameworkConstructor = tfmctor
 
@@ -37,6 +45,13 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
             Identifier.ofStr "Array"
         )
 
+    let del =
+        TypeReference.AbstractClass (
+            TypeReferenceParent.Assembly assembly,
+            system,
+            Identifier.ofStr "Delegate"
+        )
+
     let octor = ReferencedMethod.Constructor(ExternalVisibility.Public, ImmutableArray.Empty)
     let tfmctor =
         ReferencedMethod.Constructor (
@@ -53,7 +68,7 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
     member _.Reference = assembly
     member _.Object = object
     member val ValueType = referenceSystemType "ValueType"
-    member val Delegate = referenceSystemType "Delegate"
+    member _.Delegate = del
     member val Enum = referenceSystemType "Enum"
     member _.TargetFrameworkAttribute = tfmattr
     member _.Array = array
@@ -66,14 +81,15 @@ type CoreAssemblyReference (assembly: ReferencedAssembly) =
         validated {
             let! object' = builder.ReferenceType object
             let! _ = builder.ReferenceType(ReferencedType.Reference this.ValueType)
-            let! _ = builder.ReferenceType(ReferencedType.Reference this.Delegate)
+            let! del' = builder.ReferenceType this.Delegate
             let! _ = builder.ReferenceType(ReferencedType.Reference this.Enum)
             let! tfmattr' = builder.ReferenceType tfmattr
             let! array' = builder.ReferenceType array
 
             let! octor' = object'.ReferenceMethod octor
             let! tfmctor' = tfmattr'.ReferenceMethod tfmctor
-            return CoreAssemblyMembers(array', octor', tfmctor')
+
+            return CoreAssemblyMembers(array', del', octor', tfmctor')
         }
 
     static member NetCore(version, publicKeyToken, ?hash) =

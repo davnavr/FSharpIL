@@ -61,7 +61,7 @@ module FieldTok =
     let ofTypeRef owner field cache =
         FieldTok<ReferencedType, 'Field>(TypeTok.Named(NamedTypeCache.addReferenced owner cache), field)
 
-type PropertyMethodTok = MethodTok<DefinedType, DefinedMethod>
+type DefinedMethodTok = MethodTok<DefinedType, DefinedMethod>
 
 [<Struct>]
 type PropertyTok (owner: NamedType, property: Property) =
@@ -70,15 +70,30 @@ type PropertyTok (owner: NamedType, property: Property) =
         | NamedType.DefinedType defined -> defined
         | NamedType.ReferencedType _ -> invalidOp "Type references cannot own property definitions"
 
-    member _.Property = property
-
     member inline private _.MethodToken method =
         match method with
-        | ValueSome getter -> ValueSome(PropertyMethodTok(TypeTok.Named owner, getter))
+        | ValueSome getter -> ValueSome(DefinedMethodTok(TypeTok.Named owner, getter))
         | ValueNone -> ValueNone
 
+    member _.Property = property
     member this.Getter = this.MethodToken property.Getter
     member this.Setter = this.MethodToken property.Setter
 
 module PropertyTok =
     let ofTypeDef owner property cache = PropertyTok(NamedTypeCache.addDefined owner cache, property)
+
+[<Struct>]
+type EventTok (owner: NamedType, event: Event) =
+    member _.Owner =
+        match owner with
+        | NamedType.DefinedType defined -> defined
+        | NamedType.ReferencedType _ -> invalidOp "Type references cannot own event definitions"
+
+    member inline private _.MethodToken method = DefinedMethodTok(TypeTok.Named owner, method)
+
+    member _.Event = event
+    member this.Add = this.MethodToken event.Add
+    member this.Remove = this.MethodToken event.Remove
+
+module EventTok =
+    let ofTypeDef owner event cache = EventTok(NamedTypeCache.addDefined owner cache, event)

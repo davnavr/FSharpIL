@@ -68,19 +68,34 @@ module FieldTok =
         cache: NamedTypeCache ->
         FieldTok<ReferencedType, 'Field>
 
-type PropertyMethodTok = MethodTok<DefinedType, DefinedMethod>
+type DefinedMethodTok = MethodTok<DefinedType, DefinedMethod>
 
 [<IsReadOnly; Struct; NoComparison; StructuralEquality>]
 type PropertyTok =
     member Owner: DefinedType
     member Property: Property
 
-    member Getter: PropertyMethodTok voption
-    member Setter: PropertyMethodTok voption
-    //member Other: seq<PropertyMethodTok>
+    member Getter: DefinedMethodTok voption
+    member Setter: DefinedMethodTok voption
+    //member Other: seq<DefinedMethodTok>
 
     interface IEquatable<PropertyTok>
 
 [<RequireQualifiedAccess>]
 module PropertyTok =
     val internal ofTypeDef : owner: DefinedType -> property: Property -> cache: NamedTypeCache -> PropertyTok
+
+[<IsReadOnly; Struct; NoComparison; StructuralEquality>]
+type EventTok =
+    member Owner: DefinedType
+    member Event: Event
+
+    member Add: DefinedMethodTok
+    member Remove: DefinedMethodTok
+    //member Other: seq<DefinedMethodTok>
+
+    interface IEquatable<EventTok>
+
+[<RequireQualifiedAccess>]
+module EventTok =
+    val internal ofTypeDef : owner: DefinedType -> event: Event -> cache: NamedTypeCache -> EventTok

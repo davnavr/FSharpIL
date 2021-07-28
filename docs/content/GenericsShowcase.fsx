@@ -78,7 +78,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
             )
             |> console.ReferenceMethod
 
-        // static 
+        // static member Copy: System.Array * System.Array * int32 -> unit
         let! arrayCopy =
             let array =
                 ReferencedType.Reference mscorlib.Array.Reference
@@ -322,7 +322,7 @@ let example() = // TODO: Make helper function to add reference to System.Private
             members.DefineMethod(definition, body, ValueNone)
 
         // member public Count: int32 with get
-        let! count =
+        let! _ =
             let getdef =
                 DefinedMethod.Instance (
                     MemberVisibility.Public,
