@@ -90,12 +90,14 @@ and [<Sealed>] GenericType<'Type when 'Type : not struct and 'Type :> IGenericTy
 
 val inline (|GenericType|) : GenericType<'Type> -> struct('Type * GenericParamList<'Type>)
 
-[<RequireQualifiedAccess; NoComparison; StructuralEquality>]
+[<RequireQualifiedAccess; NoComparison; CustomEquality>]
 type TypeReferenceParent =
     | Type of ReferencedType
     | Assembly of ReferencedAssembly
     //| Module of ModuleReference
 
+    override Equals: obj -> bool
+    override GetHashCode: unit -> int32
     override ToString: unit -> string
 
     interface IEquatable<TypeReferenceParent>

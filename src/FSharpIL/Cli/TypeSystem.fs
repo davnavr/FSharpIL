@@ -166,7 +166,7 @@ and [<Struct>] ClassExtends (extends: TypeTok voption) =
     member _.Extends = extends
     member _.IsNull = extends.IsNone
 
-and TypeReferenceParent =
+and [<NoComparison; CustomEquality>] TypeReferenceParent =
     | Type of ReferencedType
     | Assembly of ReferencedAssembly
     //| Module of ModuleReference
@@ -175,6 +175,23 @@ and TypeReferenceParent =
         match this with
         | Type parent -> String.Concat(ParentName.ReferencedType parent, "/")
         | Assembly assem -> String.Concat("[", assem, "]")
+
+    override this.GetHashCode() =
+        match this with
+        | Type(HashCodeOf code)
+        | Assembly(HashCodeOf code) -> code
+
+    interface IEquatable<TypeReferenceParent> with
+        member this.Equals other =
+            match this, other with
+            | Type this', Type other' -> Comparers.ReferencedType.Equals(this', other')
+            | Assembly this', Assembly other' -> this' === other'
+            | _ -> false
+
+    override this.Equals obj =
+        match obj with
+        | :? TypeReferenceParent as other -> this === other
+        | _ -> false
 
 and [<NoComparison; CustomEquality>] TypeReference =
     { Flags: TypeDefFlags voption

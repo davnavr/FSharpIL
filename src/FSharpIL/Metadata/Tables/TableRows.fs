@@ -557,8 +557,7 @@ end
 /// (0x1D) Represents a row in the <c>FieldRVA</c> table, which contains a Relative Virtual Address specifying the initial value
 /// of a field (II.22.18).
 /// </summary>
-[<IsReadOnly; Struct>]
-[<NoComparison; CustomEquality>]
+[<IsReadOnly; Struct; NoComparison; CustomEquality>]
 type FieldRvaRow =
     { Rva: FieldValueLocation
       Field: TableIndex<FieldRow> }
@@ -575,7 +574,7 @@ type FieldRvaRow =
     interface ITableRow
     interface IEquatable<FieldRvaRow> with member this.Equals other = this.Equals(other = other)
 
-[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<System.Runtime.CompilerServices.IsReadOnly; Struct; NoComparison; CustomEquality>]
 type AssemblyVersion = // TODO: Update row types for Assembly and AssemblyRef to use this struct.
     val Major: uint16
     val Minor: uint16
@@ -585,6 +584,17 @@ type AssemblyVersion = // TODO: Update row types for Assembly and AssemblyRef to
     new(major, minor, build, revision) = { Major = major; Minor = minor; Build = build; Revision = revision }
 
     static member inline Zero = Unchecked.defaultof<AssemblyVersion>
+
+    override this.GetHashCode() = int32 this.Major + int32 this.Minor + int32 this.Build + int32 this.Revision
+
+    interface IEquatable<AssemblyVersion> with
+        member this.Equals other =
+            this.Major = other.Major && this.Minor = other.Minor && this.Build = other.Build && this.Revision = other.Revision
+
+    override this.Equals obj =
+        match obj with
+        | :? AssemblyVersion as other -> this === other
+        | _ -> false
 
 /// <summary>Specifies the algorithm used to compute the hash for the contents of an assembly (II.23.1.1).</summary>
 type AssemblyHashAlgorithm =

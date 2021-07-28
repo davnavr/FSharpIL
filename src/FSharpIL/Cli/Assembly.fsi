@@ -1,11 +1,12 @@
-﻿namespace rec FSharpIL.Cli
+﻿namespace FSharpIL.Cli
 
+open System
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
-[<StructuralComparison; StructuralEquality>]
+[<NoComparison; CustomEquality>]
 type ReferencedAssembly =
     { Version: AssemblyVersion
       PublicKeyOrToken: PublicKeyOrToken
@@ -16,11 +17,21 @@ type ReferencedAssembly =
     member Flags: AssemblyFlags
 
     override ToString: unit -> string
+    override GetHashCode: unit -> int32
+    override Equals: obj -> bool
 
-[<StructuralComparison; StructuralEquality>]
+    interface IEquatable<ReferencedAssembly>
+
+[<NoComparison; CustomEquality>]
 type DefinedAssembly =
     { Version: AssemblyVersion
       //Flags: AssemblyFlags
       PublicKey: ImmutableArray<byte>
       Name: FileName
       Culture: Identifier voption }
+
+    override ToString: unit -> string
+    override GetHashCode: unit -> int32
+    override Equals: obj -> bool
+
+    interface IEquatable<DefinedAssembly>
