@@ -2,77 +2,67 @@
 
 open System.Runtime.CompilerServices
 
+type IReadState = interface end
+
 [<IsReadOnly; Struct>]
 type MetadataReadState =
-    | FindCliHeader
     /// Indicates that the CLI header is being read (II.25.3.3).
     | ReadCliHeader
     | FindMetadataRoot
-    | ReadMetadataSignature
     | ReadMetadataRoot
     | ReadStreamHeaders
     | ReadStringsStream
     | ReadGuidStream
     | ReadUserStringStream
     | ReadBlobStream
-    | ReadMetadataTablesHeader
+    | ReadTablesStream
     | ReadMetadataTables
-    | MoveToEnd
+    | ReadTableRows
+    | MetadataReadFinished
 
-    member this.Description =
+    override this.ToString() =
         match this with
-        | FindCliHeader -> "searching for CLI header"
         | ReadCliHeader -> "reading CLI header"
-        | FindMetadataRoot -> "searching for CLI metadata root"
-        | ReadMetadataSignature -> "reading CLI metadata root signature"
-        | ReadMetadataRoot -> "reading CLI metadata root"
+        | FindMetadataRoot -> "locating metadata root"
+        | ReadMetadataRoot -> "reading metadata root"
         | ReadStreamHeaders -> "reading metadata stream headers"
-        | ReadStringsStream -> "reading metadata strings stream"
-        | ReadGuidStream -> "reading metadata GUID stream"
-        | ReadUserStringStream -> "reading metadata user strings stream"
+        | ReadStringsStream -> "reading strings stream"
+        | ReadGuidStream -> "reading GUID stream"
+        | ReadUserStringStream -> "reading user strings stream"
         | ReadBlobStream -> "reading metadata blob stream"
-        | ReadMetadataTablesHeader -> "reading metadata tables header"
+        | ReadTablesStream -> "reading tables stream"
         | ReadMetadataTables -> "reading metadata tables"
-        | MoveToEnd -> "moving to end of metadata"
+        | ReadTableRows -> "reading table rows"
+        | MetadataReadFinished -> "the reading of metadata was finished"
+
+    interface IReadState
 
 [<IsReadOnly; Struct>]
 type FileReadState =
-    | ReadPEMagic
+    | ReadDosMagic
     | MoveToLfanew
-    /// <summary>Indicates that the <c>lfanew</c> field pointing to the PE signature is being read (II.25.2.1).</summary>
+    /// <summary>The <c>lfanew</c> field pointing to the PE signature is being read (II.25.2.1).</summary>
     | ReadLfanew
     | MoveToPESignature
     | ReadPESignature
-    /// Indicates that the PE file header after the PE signature is being read (II.25.2.2).
+    /// The PE file header after the PE signature is being read (II.25.2.2).
     | ReadCoffHeader
-    | ReadStandardFields
-    | ReadNTSpecificFields
+    | ReadOptionalHeader
     | ReadDataDirectories
     | ReadSectionHeaders
-    | MoveToTextSectionData
-    | ReadTextSectionData
+    | ReadSectionData
 
-    member this.Description =
+    override this.ToString() =
         match this with
-        | ReadPEMagic -> "reading Portable Executable magic"
+        | ReadDosMagic -> "reading DOS magic"
         | MoveToLfanew -> "moving to lfanew field"
         | ReadLfanew -> "reading lfanew field"
         | MoveToPESignature -> "moving to PE signature"
         | ReadPESignature -> "reading PE signature"
         | ReadCoffHeader -> "reading COFF header"
-        | ReadStandardFields -> "reading PE header standard fields of the PE optional header"
-        | ReadNTSpecificFields -> "reading NT-specific fields of the PE optional header"
+        | ReadOptionalHeader -> "reading PE optional header"
         | ReadDataDirectories -> "reading PE header data directories"
         | ReadSectionHeaders -> "reading section headers"
-        | MoveToTextSectionData -> "moving to text section data"
-        | ReadTextSectionData -> "reading text section data"
+        | ReadSectionData -> "reading section data"
 
-[<RequireQualifiedAccess>]
-type ReadState =
-    | File of FileReadState
-    | Metadata of MetadataReadState
-
-    member this.Description =
-        match this with
-        | File state -> state.Description
-        | Metadata state -> state.Description
+    interface IReadState

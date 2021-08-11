@@ -7,146 +7,166 @@ module FSharpIL.HelloWorld
 open Expecto
 
 open Swensen.Unquote
-open System.IO
 
 open Mono.Cecil
-
-open FSharpIL
 #endif
 #endif
 (**
 # Hello World
 
-The following example creates a simple .NET 5 console application.
+The following example creates a file containing a simple .NET 5 console application. The corresponding F# signature code that
+would produce the same or similar CLI metadata as the example is shown in single line comments.
 
 ## Example
 *)
-open System
 open System.Collections.Immutable
 
 open FSharpIL.Metadata
-open FSharpIL.PortableExecutable
+open FSharpIL.Metadata.Signatures
+open FSharpIL.Metadata.Tables
 
-// TODO: Make common setup code for examples by making this function a CliMetadataBuilder -> PEFile
+open FSharpIL.Cli
+
+open FSharpIL.Writing
+open FSharpIL.Writing.Cil
+
 let example() =
     let builder =
-        { Name = Identifier.ofStr "HelloWorld.exe"
-          Mvid = Guid.NewGuid() }
-        |> CliMetadataBuilder
+        CliModuleBuilder (
+            name = Identifier.ofStr "HelloWorld.exe",
+            assembly =
+                { DefinedAssembly.Version = AssemblyVersion(1us, 0us, 0us, 0us)
+                  PublicKey = ImmutableArray.Empty
+                  Name = FileName.ofStr "HelloWorld"
+                  Culture = ValueNone }
+        )
 
-    (* Define information for the current assembly. *)
-    let assem =
-        { Name = AssemblyName.ofStr "HelloWorld"
-          HashAlgId = ()
-          Version = Version()
-          Flags = ()
-          PublicKey = None
-          Culture = NullCulture }
-        |> Assembly.setRow builder
+    (* Add references to other assemblies *)
+    let mscorlib =
+        (* Contains core types such as System.Object or System.Int32, usually System.Runtime is referenced instead *)
+        { ReferencedAssembly.Version = AssemblyVersion(5us, 0us, 0us, 0us)
+          PublicKeyOrToken = PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
+          Name = FileName.ofStr "System.Private.CoreLib"
+          Culture = ValueNone
+          HashValue = ImmutableArray.Empty }
 
-    (* This computation keeps track of warnings, CLS violations, and errors *)
+    builder.ReferenceAssembly mscorlib
+
+    let consolelib =
+        (* Contains the System.Console type, which is needed to print text onto the screen *)
+        { ReferencedAssembly.Version = AssemblyVersion(5us, 0us, 0us, 0us)
+          PublicKeyOrToken = PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
+          Name = FileName.ofStr "System.Console"
+          Culture = ValueNone
+          HashValue = ImmutableArray.Empty }
+
+    builder.ReferenceAssembly consolelib
+
     validated {
-        (* Add references to other assemblies. *)
-        let! mscorlib =
-            let token =
-                PublicKeyToken(0x7cuy, 0xecuy, 0x85uy, 0xd7uy, 0xbeuy, 0xa7uy, 0x79uy, 0x8euy)
-                |> builder.Blobs.MiscBytes.GetOrAdd
-                |> PublicKeyOrToken
-            AssemblyRef (
-                Version(5, 0, 0, 0),
-                AssemblyName.ofStr "System.Private.CoreLib",
-                token
+        let system = ValueSome(Identifier.ofStr "System")
+
+        (* Add references to types defined in referenced assemblies *)
+        let object =
+            // type Object
+            TypeReference.ConcreteClass (
+                resolutionScope = TypeReferenceParent.Assembly mscorlib,
+                typeNamespace = system,
+                typeName = Identifier.ofStr "Object"
             )
-            |> AssemblyRef.addRowChecked builder
 
-        let! consolelib =
-            let token =
-                PublicKeyToken(0xb0uy, 0x3fuy, 0x5fuy, 0x7fuy, 0x11uy, 0xd5uy, 0x0auy, 0x3auy)
-                |> builder.Blobs.MiscBytes.GetOrAdd
-                |> PublicKeyOrToken
-            AssemblyRef (
-                Version(5, 0, 0, 0),
-                AssemblyName.ofStr "System.Console",
-                token
+        let tfmattr =
+            // [<Sealed>] type TargetFrameworkAttribute
+            TypeReference.SealedClass (
+                resolutionScope = TypeReferenceParent.Assembly mscorlib,
+                typeNamespace = ValueSome(Identifier.ofStr "System.Runtime.Versioning"),
+                typeName = Identifier.ofStr "TargetFrameworkAttribute"
             )
-            |> AssemblyRef.addRowChecked builder
 
-        (* Add references to types defined in referenced assemblies. *)
-        let! console = TypeRef.tryCreateReflectedRow builder (ResolutionScope.AssemblyRef consolelib) typeof<Console>
-        let! object = TypeRef.tryCreateReflectedRow builder (ResolutionScope.AssemblyRef mscorlib) typeof<Object>
-        let! tfmattr =
-            TypeRef (
-                ResolutionScope.AssemblyRef mscorlib,
-                Identifier.ofStr "TargetFrameworkAttribute",
-                "System.Runtime.Versioning"
+        let console =
+            // [<AbstractClass; Sealed>] type Console
+            TypeReference.StaticClass (
+                resolutionScope = TypeReferenceParent.Assembly consolelib,
+                typeNamespace = system,
+                typeName = Identifier.ofStr "Console"
             )
-            |> TypeRef.tryAddRowChecked builder
 
-        (* Add references to methods defined in the types of referenced assemblies. *)
-        let string = ParamItem.create EncodedType.String
+        let! _ = builder.ReferenceType object
+        let! tfmattr' = builder.ReferenceType tfmattr
+        let! console' = builder.ReferenceType console
 
-        // static member WriteLine(_: string): System.Void
-        let! writeLine =
-            let signature = MethodRefDefaultSignature(ReturnType.itemVoid, ImmutableArray.Create string)
-            { Class = MemberRefParent.TypeRef console
-              MemberName = Identifier.ofStr "WriteLine"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> MethodRef.addRowDefaultChecked builder
-        // new(_: string)
-        let! tfmctor =
-            let signature = MethodRefDefaultSignature(true, false, ReturnType.itemVoid, ImmutableArray.Create string)
-            { Class = MemberRefParent.TypeRef tfmattr
-              MemberName = Identifier.ofStr ".ctor"
-              Signature = builder.Blobs.MethodRefSig.GetOrAdd signature }
-            |> MethodRef.addRowDefaultChecked builder
+        (* Add references to methods defined in a referenced types *)
 
-        (* Defines a custom attribute on the current assembly specifying the target framework. *)
+        // new: string -> System.Runtime.Versioning.TargetFrameworkAttribute
+        let tfmctor =
+            ReferencedMethod.Constructor (
+                visibility = ExternalVisibility.Public,
+                parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.String)
+            )
+
+        let! tfmctor' = tfmattr'.ReferenceMethod tfmctor
+
+        // static member WriteLine: string -> unit
+        let! writeln =
+            ReferencedMethod.Static (
+                visibility = ExternalVisibility.Public,
+                returnType = ReturnType.Void',
+                name = MethodName.ofStr "WriteLine",
+                parameterTypes = ImmutableArray.Create(ParameterType.T PrimitiveType.String)
+            )
+            |> console'.ReferenceMethod
+
+        (* Create the class that will contain the entrypoint method *)
+        // [<AbstractClass; Sealed>] type public Program = inherit System.Object
+        let program =
+            let object' =
+                object.Reference
+                |> ReferencedType.Reference
+                |> NamedType.ReferencedType
+                |> ClassExtends.Named
+
+            TypeDefinition.StaticClass (
+                visibility = TypeVisibility.Public,
+                flags = TypeAttributes.None,
+                typeNamespace = ValueSome(Identifier.ofStr "HelloWorld"),
+                enclosingClass = ValueNone,
+                typeName = Identifier.ofStr "Program",
+                extends = object'
+            )
+
+        let! members = builder.DefineType(program, ValueNone)
+
+        (* Create the entrypoint method of the current assembly *)
+        // static member public Main: unit -> unit
+        let! _ =
+            let main =
+                DefinedMethod.EntryPoint (
+                    visibility = MemberVisibility.Public,
+                    flags = MethodAttributes.HideBySig,
+                    name = MethodName.ofStr "Main",
+                    kind = EntryPointKind.VoidNoArgs
+                )
+
+            let body = MethodBody.ofSeq [
+                // System.Console.WriteLine "Hello World!"
+                ldstr "Hello World!"
+                call writeln.Token
+                ret
+            ]
+
+            members.Members.DefineEntryPoint(main, body, attributes = ValueNone)
+
+        (* Sets the target framework of the assembly, this is so the CoreCLR and tools such as ILSpy can recognize it *)
         // [<assembly: System.Runtime.Versioning.TargetFrameworkAttribute(".NETCoreApp,Version=v5.0")>]
-        { FixedArg = FixedArg.Elem (SerString ".NETCoreApp,Version=v5.0") |> ImmutableArray.Create
-          NamedArg = ImmutableArray.Empty }
-        |> builder.Blobs.CustomAttribute.GetOrAdd
-        |> ValueSome
-        |> CustomAttribute.createRow
-            builder
-            (CustomAttributeParent.Assembly assem)
-            (CustomAttributeType.MethodRefDefault tfmctor)
-
-        (* Create the class that will contain the entrypoint method. *)
-        // [<AbstractClass; Sealed>] type Program
-        let! program =
-            { Access = TypeVisibility.Public
-              ClassName = Identifier.ofStr "Program"
-              Extends = Extends.TypeRef object
-              Flags = Flags.staticClass(ClassFlags(AutoLayout, AnsiClass))
-              TypeNamespace = "HelloWorld" }
-            |> StaticClass.tryAddRow builder
-
-        (* Create the entrypoint method of the current assembly. *)
-        // [<EntryPoint>] static member Main(_: string[]): System.Void
-        let! main =
-            let body content =
-                let writer = MethodBodyWriter content
-                writer.Ldstr "Hello World!"
-                writer.Call writeLine
-                writer.Ret()
-                MethodBody(maxStack = 1us)
-            EntryPointMethod (
-                MethodBody.create ValueNone body,
-                Flags.staticMethod(StaticMethodFlags(Public, NoSpecialName, true)),
-                Identifier.ofStr "Main",
-                builder.Blobs.MethodDefSig.GetOrAdd EntryPointSignature.voidWithArgs
-            )
-            |> EntryPoint.tryAddRow builder (StaticClass.typeIndex program)
-
-        // (args)
-        let! _ = Parameters.tryNamed builder (EntryPoint.methodIndex main) [| "args" |]
-
-        EntryPoint.set builder main
-
-        return CliMetadata builder
+        do!
+            builder.AssemblyCustomAttributes.Value.Add
+                { Constructor = CustomAttributeCtor.Referenced tfmctor'
+                  FixedArguments = fun _ _ _ -> Ok(FixedArg.Elem (Elem.SerString ".NETCoreApp,Version=v5.0"))
+                  NamedArguments = ImmutableArray.Empty }
     }
     |> ValidationResult.get
-    |> PEFile.ofMetadata ImageFileFlags.exe
+
+    BuildPE.ofModuleBuilder FSharpIL.PortableExecutable.FileCharacteristics.IsExe builder
+
 (*** hide ***)
 #if COMPILED && !BENCHMARK
 [<Tests>]
@@ -157,8 +177,15 @@ let tests =
     afterRunTests <| fun() -> if metadata.IsValueCreated then metadata.Value.Dispose()
 
     testList "hello world" [
-        testCase "has entrypoint" <| fun() ->
-            metadata.Value.EntryPoint.Name =! "Main"
+        testCase "has entrypoint with correct name and signature" <| fun() ->
+            let epoint = metadata.Value.EntryPoint
+            <@
+                epoint <> null
+                && epoint.Name = "Main"
+                && epoint.Parameters.Count = 0
+                && epoint.ReturnType = metadata.Value.TypeSystem.Void
+            @>
+            |> test
 
         testCase "has method references only" <| fun() ->
             test <@ metadata.Value.GetMemberReferences() |> Seq.forall (fun mref -> mref :? MethodReference) @>
@@ -178,16 +205,9 @@ let tests =
                 metadata.Value.Types
                 |> Seq.map (fun tdef -> tdef.Namespace, tdef.Name)
                 |> List.ofSeq
-            <@
-                expected = actual
-            @>
-            |> test
+            test <@ expected = actual @>
 
-        testCase "entrypoint has correct argument type" <| fun() ->
-            let paramType = (Seq.head metadata.Value.EntryPoint.Parameters).ParameterType
-            test <@ paramType.IsArray && paramType.GetElementType() = metadata.Value.TypeSystem.String @>
-
-        testCaseExec example' "runs correctly" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
+        testCaseExec example' "prints correct message" __SOURCE_DIRECTORY__ "exout" "HelloWorld.dll" <| fun dotnet ->
             let out = dotnet.StandardOutput.ReadLine()
             dotnet.StandardError.ReadToEnd() |> stderr.Write
 

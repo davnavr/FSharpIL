@@ -3,14 +3,16 @@ module ILInfo.Print
 
 open System
 open System.Collections.Generic
+open System.IO
 open System.Reflection
 
 open Microsoft.FSharp.Core.Printf
 
-open FSharpIL.Reading
+open FSharpIL.Metadata
+open FSharpIL.PortableExecutable
 
 [<AbstractClass; Sealed>]
-type private Enumeration<'Enum when 'Enum :> Enum and 'Enum : equality> () =
+type private Enumeration<'Enum when 'Enum : struct and 'Enum :> Enum and 'Enum : equality> () =
     static member val Cache =
         lazy
             let fields = typeof<'Enum>.GetFields(BindingFlags.Public ||| BindingFlags.Static)
@@ -31,7 +33,7 @@ let inline integer wr (value: 'Integer) = fprintf wr "0x%0*X" (2 * sizeof<'Integ
 let inline enumeration wr (value: 'Flag when 'Flag : enum<'Integer>) =
     fprintf wr "0x%0*X (%O)" sizeof<'Flag> (LanguagePrimitives.EnumToValue<_, 'Integer> value) value
 
-let bitfield (wr: System.IO.TextWriter) (value: 'Enum when 'Enum :> Enum) =
+let bitfield (wr: #TextWriter) (value: 'Enum when 'Enum :> Enum) =
     fprintf wr "0x%s " (value.ToString "X")
 
     Seq.choose
@@ -43,8 +45,13 @@ let bitfield (wr: System.IO.TextWriter) (value: 'Enum when 'Enum :> Enum) =
     |> String.concat ", "
     |> fprintf wr "[ %s ]"
 
-let rvaAndSize wr { Rva = rva; Size = size } = fprintf wr "(RVA = 0x%08X, Size = 0x%08X)" rva size
+let inline uint32 wr int = integer wr (uint32 int)
 
-let identifier (stream: ParsedStringsStream) wr name = fprintf wr "'%s'" (stream.GetString name)
+let rvaAndSize wr { Rva = rva; Size = size } = fprintf wr "(RVA = %O, Size = 0x%08X)" rva size
 
-let guid (stream: ParsedGuidStream) wr guid = fprintf wr "%O (%O)" (stream.GetGuid guid) guid
+let metadataToken wr (token: MetadataToken) =
+    fprintf wr "0x%08X" token.Value
+    if not token.IsNull then
+        wr.Write " [ "
+        wr.Write token
+        wr.Write " ]"

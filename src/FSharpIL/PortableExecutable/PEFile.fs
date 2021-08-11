@@ -2,30 +2,45 @@
 
 open System.Collections.Immutable
 
-open FSharpIL.Metadata
+open FSharpIL
+open FSharpIL.Utilities
 
-type PEFile =
-    { FileHeader: CoffHeader<Omitted, Omitted>
-      StandardFields: StandardFields<Omitted, Omitted, Omitted>
-      NTSpecificFields: NTSpecificFields<ImageBase, Alignment, Omitted, uint32, Omitted>
-      Sections: PESections }
+[<System.Runtime.CompilerServices.IsReadOnly>]
+type Section = struct
+    val Header: SectionHeader
+    val Data: ChunkedMemory
+    internal new (header, data) = { Header = header; Data = data }
+end
 
-    member inline this.DataDirectories = this.Sections.DataDirectories
-    member inline this.SectionTable = this.Sections.SectionTable
-    member this.CliHeader = this.DataDirectories.CliHeader |> Option.map (fun header -> header.Header)
-
-    static member Default =
-        { FileHeader = CoffHeader.defaultFields
-          StandardFields = StandardFields.defaultFields
-          NTSpecificFields = NTSpecificFields.defaultFields
-          Sections = PESections.Empty }
+[<Sealed>]
+type PEFile internal
+    (
+        fileHeader: CoffHeader<Omitted, Omitted>,
+        optionalHeader: OptionalHeader,
+        dataDirectories: DataDirectories,
+        sections: ImmutableArray<Section>,
+        sizeOfHeaders: uint32
+    )
+    =
+    member _.FileHeader = fileHeader
+    member _.OptionalHeader = optionalHeader
+    member _.DataDirectories = dataDirectories
+    member _.Sections = sections
+    member _.SizeOfHeaders = sizeOfHeaders
 
 [<RequireQualifiedAccess>]
 module PEFile =
-    let ofMetadata characteristics (metadata: CliMetadata) =
-        let text =
-            { Kind = TextSection
-              Data = [| ClrLoaderStub; CliHeader metadata |].ToImmutableArray() }
-        { PEFile.Default with
-            FileHeader = { CoffHeader.defaultFields with Characteristics = characteristics }
-            Sections = ImmutableArray.Create<Section> text |> PESections }
+    /// <summary>
+    /// Calculates the value of the <c>SizeOfHeaders</c> field in the optional header, rounded up to a multiple of
+    /// <c>FileAlignment</c> (II.25.2.3.2).
+    /// </summary>
+    let internal calculateHeadersSize optionalHeader numOfSections falignment =
+        let optionalHeaderSize =
+            match optionalHeader with
+            | PE32 _ -> Magic.OptionalHeaderSize
+            | PE32Plus _ -> Magic.OptionalHeaderPlusSize
+        uint32 Magic.msDosStub.Length
+        + uint32 Magic.portableExecutableSignature.Length
+        + uint32 optionalHeaderSize
+        + (Magic.SectionHeaderSize * uint32 numOfSections)
+        |> Round.upTo falignment

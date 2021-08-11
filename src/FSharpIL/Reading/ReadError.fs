@@ -6,45 +6,38 @@ open System.Text
 
 open FSharpIL
 open FSharpIL.Metadata
+open FSharpIL.Metadata.Tables
+open FSharpIL.Metadata.Blobs
+open FSharpIL.PortableExecutable
 
-[<NoComparison; NoEquality>]
+/// Represents a structure or file header used in CLI metadata (II.24).
 [<RequireQualifiedAccess>]
-type ParsedStructure =
-    | CliHeader
+type ParsedMetadataStructure =
     | CliMetadataRoot
-    | StreamHeader of index: int32
-    | StringHeap of size: uint32
-    | GuidHeap of size: uint32
-    | UserStringHeap of size: uint32
-    | BlobHeap of size: uint32
     | MetadataSignature
+    | StreamHeader of index: int32
     | MetadataTablesHeader
-    | MetadataTableRowCounts
-    | MetadataRow of table: MetadataTableFlags * index: uint32
+    | MetadataTable of table: ValidTableFlags
 
     override this.ToString() =
         match this with
-        | CliHeader -> "the CLI metadata header"
         | CliMetadataRoot -> "the CLI metadata root"
-        | StreamHeader i -> sprintf "the CLI metadata stream header at index %i" i
-        | StringHeap size -> sprintf "the \"#Strings\" metadata heap (%i bytes)" size
-        | GuidHeap size -> sprintf "the \"#GUID\" metadata heap (%i bytes)" size
-        | UserStringHeap size -> sprintf "the \"#US\" metadata heap (%i bytes)" size
-        | BlobHeap size -> sprintf "the \"#Blob\" metadata heap (%i bytes)" size
         | MetadataSignature -> "the CLI metadata signature"
-        | MetadataTablesHeader -> "the CLI metadata tables header"
-        | MetadataTableRowCounts -> "the CLI metadata table row counts"
-        | MetadataRow(table, index) -> sprintf "the %A metadata row at index %i (0x%08x)" table index index
+        | StreamHeader i -> sprintf "the stream header (index %i)" i
+        | MetadataTablesHeader -> "the metadata tables header"
+        | MetadataTable table -> sprintf "the %A metadata table" table
 
 // TODO: Move offset: uint32 to BlobError case in ReadError and use offset: ParsedBlob
 type BlobError =
-    | BlobOutsideOfHeap of offset: uint32 * size: uint32
+    | BlobOutsideOfHeap of offset: uint32 * size: uint32 // TODO: Rename to BlobOutsideOfStream
     | ExpectedEndOfBlob of offset: uint32 * size: uint32 * remaining: uint32
     | CompressedIntegerOutOfBounds of size: uint32
     | InvalidBlobOffset of offset: uint32 * max: uint32
     | InvalidUnsignedCompressedIntegerKind of msb: uint8
     | InvalidFieldSignatureMagic of actual: uint8
     | InvalidElementType of etype: ElementType
+    | MissingElementType
+    | UnexpectedTypeSpec of TableIndex<TypeSpecRow>
     | InvalidGenericInstantiationKind of ElementType voption
     | MissingGenericArguments
     | InvalidMethodSignatureCallingConvention of uint8 voption
@@ -56,7 +49,7 @@ type BlobError =
         match this with
         | BlobOutsideOfHeap(offset, size) ->
             sprintf
-                "the blob at offset (0x%08X) points to a blob with an invalid size (0x%08X), the blob extends outside of the heap"
+                "the blob at offset (0x%08X) points to a blob with an invalid size (0x%08X), the blob extends outside of the stream"
                 offset
                 size
         | ExpectedEndOfBlob(offset, size, remaining) ->
@@ -73,8 +66,12 @@ type BlobError =
             sprintf
                 "the first byte of the unsigned compressed integer (0b%s) is invalid, only 1-byte integers (0b0???), 2-byte integers (0b10??), or 4-byte integers are valid (0b110?)"
                 (Convert.ToString(msb, 2))
-        | InvalidFieldSignatureMagic actual -> sprintf "expected field signature to begin with the byte 0x06, but got 0x%02X" actual
+        | InvalidFieldSignatureMagic actual ->
+            sprintf "expected field signature to begin with the byte 0x06, but got 0x%02X" actual
         | InvalidElementType etype -> sprintf "the element type %A (0x%02X) is invalid" etype (uint8 etype)
+        | MissingElementType -> "expected ELEMENT_TYPE byte but got the end of the blob instead"
+        | UnexpectedTypeSpec { TableIndex = i } ->
+            sprintf "expected TypeDef or TypeRef but got an index (0x%08X) into the TypeSpec table instead" i
         | InvalidGenericInstantiationKind etype ->
             match etype with
             | ValueNone -> "end of blob"
@@ -87,7 +84,7 @@ type BlobError =
         | InvalidMethodSignatureCallingConvention(ValueSome cconv) ->
             sprintf
                 "the calling conventions of the method signature %A (0x%02X) are invalid"
-                (LanguagePrimitives.EnumOfValue<_, CallingConvention> cconv)
+                (LanguagePrimitives.EnumOfValue<_, CallConvFlags> cconv)
                 cconv
         | InvalidMethodSignatureCallingConvention ValueNone -> "expected method signature calling conventions but got empty blob"
         | InvalidPropertyMagic actual ->
@@ -102,71 +99,86 @@ type BlobError =
             |> sprintf "expected custom attribute PROLOG 0x0001, but %s"
         | MissingNamedArgumentCount -> "missing custom attribute named argument count NumNamed"
 
-[<NoComparison; NoEquality>]
 type ReadError =
-    | InvalidMagic of expected: ImmutableArray<byte> * actual: ImmutableArray<byte>
-    | CannotMoveToPreviousOffset of offset: uint64
-    | OptionalHeaderTooSmall of size: uint16
-    | TooFewDataDirectories of count: uint32
-    | NoCliMetadata
-    | RvaNotInTextSection of rva: uint32
-    | CliHeaderTooSmall of size: uint32
-    | MetadataVersionHasNoNullTerminator of version: ImmutableArray<byte>
-    | StructureOutsideOfCurrentSection of ParsedStructure
-    | MissingNullTerminator of string
-    | InvalidStringIndex of offset: uint32 * size: uint32
-    | BlobError of BlobError
-    | CannotFindMetadataTables
-    | MissingModuleTable
-    | MetadataRowOutOfBounds of table: MetadataTableFlags * index: uint32 * count: uint32
-    // TODO: Move this error elsewhere.
-    | CannotReadDebugTables // TODO: Mark debug tables error as obsolete when debug tables are supported.
     | UnexpectedEndOfFile
+    | InvalidMagic of expected: ImmutableArray<byte> * actual: ImmutableArray<byte>
+    | CannotMoveToPreviousOffset of offset: FileOffset
+    | OptionalHeaderTooSmall of size: uint16
+    | UnsupportedOptionalHeaderSize of size: uint16
+    | InvalidAlignment of salignment: uint32 * falignment: uint32
+    | TooFewDataDirectories of count: uint32
+    | StructureOutOfBounds of ParsedMetadataStructure
+    | NoCliMetadata
+    | RvaNotInCliSection of Rva
+    | InvalidCliHeaderLocation of Rva
+    | CliHeaderOutOfSection of Rva
+    | CliHeaderTooSmall of size: uint32
+    | InvalidEntryPointKind of MetadataTokenType
+    | InvalidMetadataVersionLength of length: uint32
+    | MissingNullTerminator of string
+    | StreamOutOfBounds of index: int32 * ParsedStreamHeader
+    | InvalidStringOffset of StringOffset * max: StringOffset // TODO: This case should be a BlobError case instead.
+    | MissingStringStreamTerminator
+    | InvalidGuidIndex of GuidIndex * max: GuidIndex
+    | InvalidBlob of offset: uint32 * BlobError
+    | TableIsEmpty of ValidTableFlags
+    | TableHasMoreThanOneRow of ValidTableFlags * count: uint32
 
-    member this.Message =
+    override this.ToString() =
         match this with
-        | InvalidMagic(expected, actual) ->
-            sprintf
-                "expected magic %s, but got %s"
-                (Bytes.print(expected.AsSpan()))
-                (Bytes.print(actual.AsSpan()))
-        | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset 0x%016X" offset
-        | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
-        | TooFewDataDirectories count -> sprintf "the number of data directories (%i) is too small" count
-        | NoCliMetadata -> "the Portable Executable file does not contain any CLI metadata"
-        | RvaNotInTextSection rva ->
-            sprintf "the Relative Virtual Address (0x%08X) does not point into the \".text\" section" rva
-        | CliHeaderTooSmall size -> sprintf "the specified CLI header size is too small (%i)" size
-        | MetadataVersionHasNoNullTerminator version ->
-            sprintf
-                "the metadata version in the CLI metadata root \"%s\" does not end in a null terminator"
-                (Encoding.UTF8.GetString(version.AsSpan()))
-        | StructureOutsideOfCurrentSection structure ->
-            sprintf
-                "%O does not fit within the current section, check that the offset to the structure or the size of the section is correct"
-                structure
-        | MissingNullTerminator name -> sprintf "the string \"%s\" does not end in a null terminator" name
-        | InvalidStringIndex(offset, size) ->
-            sprintf "Invalid offset into the \"#Strings\" heap (0x%08X), maximum valid offset is (0x%08X)" offset (size - 1u)
-        | BlobError err -> string err
-        | CannotFindMetadataTables -> "the stream containing the metadata tables \"#~\" could not be found"
-        | MissingModuleTable -> "the Module table (0x00) is missing"
-        | MetadataRowOutOfBounds(table, index, count) ->
-            sprintf
-                "the %A metadata row at index %i (0x%08x) is out of bounds, the table only contains %i (0x%08x) items"
-                table
-                index
-                index
-                count
-                count
-        | CannotReadDebugTables -> "the metadata tables contain debugging metadata, which is currently not supported by FSharpIL"
         | UnexpectedEndOfFile -> "the end of the file was unexpectedly reached"
+        | InvalidMagic(expected, actual) ->
+            let inline print () (bytes: ImmutableArray<byte>) =
+                let sb = StringBuilder(bytes.Length * 5 - 1)
+                for i = 0 to bytes.Length - 1 do
+                    if i > 0 then sb.Append ' ' |> ignore
+                    Printf.bprintf sb "0x%02X" bytes.[i]
+                sb.ToString()
+            sprintf "expected magic %a, but got %a" print expected print actual
+        | CannotMoveToPreviousOffset offset -> sprintf "Cannot move to previous offset %O" offset
+        | OptionalHeaderTooSmall size -> sprintf "the specified optional header size (%i) is too small" size
+        | UnsupportedOptionalHeaderSize size -> sprintf "the parser does not support an optional header size of %i bytes" size
+        | InvalidAlignment(salignment, falignment) ->
+            sprintf "the section alignment (0x%08X) and file alignment (0x%08X) are invalid" salignment falignment
+        | TooFewDataDirectories count -> sprintf "the number of data directories (%i) is too small" count
+        | StructureOutOfBounds structure -> sprintf "%O was out of bounds" structure
+        | NoCliMetadata -> "the Portable Executable file does not contain any CLI metadata"
+        | RvaNotInCliSection rva ->
+            sprintf "the Relative Virtual Address (%O) does not point into the same section containing the CLI header" rva
+        | InvalidCliHeaderLocation rva ->
+            sprintf "the CLI header at the Relative Virtual Address (%O) is not contained within any section" rva
+        | CliHeaderOutOfSection rva ->
+            sprintf "the CLI header at the Relative Virtual Address (%O) extends past the end of the section" rva
+        | CliHeaderTooSmall size -> sprintf "the specified CLI header size is too small (%i)" size
+        | InvalidEntryPointKind kind ->
+            sprintf "the entry point token was expected to be null, MethodDef, or File, but got %A" kind
+        | InvalidMetadataVersionLength length ->
+            if length > 255u
+            then "cannot exceed 255 bytes"
+            else "was expected to be a multiple of 4"
+            |> sprintf "the length of the Version field of the CLI metadata root (%i bytes) %s" length
+        | StreamOutOfBounds(_, header) ->
+            sprintf
+                "the \"%s\" stream at offset %O from the start of the CLI metadata root with size %i bytes was out of bounds"
+                header.PrintedName
+                header.Offset
+                header.Size
+        | InvalidStringOffset(offset, max) ->
+            sprintf "Invalid offset into the \"#Strings\" stream (%O), maximum valid offset is (%O)" offset max
+        | MissingStringStreamTerminator -> "the last byte of the \"#Strings\" stream must end in a null byte"
+        | MissingNullTerminator s -> sprintf "The string \"%s\" is missing a null terminator" s
+        | InvalidGuidIndex(offset, max) ->
+            sprintf "Invalid index into the \"#GUID\" stream (%O), maximum valid index is (%O)" offset max
+        | InvalidBlob(offset, err) -> sprintf "the blob at offset 0x%08X is invalid, %O" offset err
+        | TableIsEmpty table -> sprintf "The %A metadata table was unexpectedly empty" table
+        | TableHasMoreThanOneRow(table, count) ->
+            sprintf "The %A metadata table was expected to have one row, but actual has %i rows" table count
 
 [<RequireQualifiedAccess>]
 module ReadError =
-    let message (state: ReadState) (error: ReadError) { FileOffset = offset } =
-        sprintf "Error occured while %s at offset 0x%X: %s" state.Description offset error.Message
+    let message (state: IReadState) (error: ReadError) { FileOffset = offset } =
+        sprintf "Error occured while %O at offset 0x%X: %O" state offset error
 
 exception ReadException
-    of state: ReadState * error: ReadError * offset: FileOffset
+    of state: IReadState * error: ReadError * offset: FileOffset
     with override this.Message = ReadError.message this.state this.error this.offset

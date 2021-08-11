@@ -6,19 +6,20 @@ open Expecto
 open System.Diagnostics
 open System.IO
 
+open FSharpIL.Writing
+
 open Mono.Cecil
 
 [<RequireQualifiedAccess>]
 module PEFile =
-    let toCecilModule pe =
-        WritePE.stream pe |> ModuleDefinition.ReadModule
+    let inline toCecilModule pe = ModuleDefinition.ReadModule(WritePE.stream pe)
 
-let private testExec testf (Lazy file) (name: string) dir path fileName (test: Process -> _ -> unit): Test =
+let private testExec testf (file: System.Lazy<_>) (name: string) dir path fileName (test: Process -> _ -> unit): Test =
     fun() ->
         let output = Path.Combine(dir, path)
         let executable = Path.Combine(output, fileName)
 
-        WritePE.toPath executable file
+        WritePE.toPath executable file.Value
 
         let config = Path.Combine(output, "example.runtimeconfig.json")
 

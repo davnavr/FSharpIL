@@ -1,169 +1,144 @@
 ﻿namespace FSharpIL.Metadata
 
-open System.Collections.Immutable
-open System.Runtime.CompilerServices
+open System.Collections.Generic
+
+open FSharpIL.Utilities
 
 /// <summary>
-/// Represents a violation of a Common Language Specification rule (I.7).
-/// </summary>
-[<IsReadOnly; Struct>]
-type ClsViolationMessage =
-    { Number: uint8
-      Message: string }
-
-    override this.ToString() = sprintf "Rule %i: %s" this.Number this.Message
-
-/// <category>CLS Rules</category>
-[<AbstractClass>]
-type ClsViolation internal (message: ClsViolationMessage) =
-    member _.Message = message
-
-/// <summary>Base type of all <c>WARNING</c> checks (II.22.1).</summary>
-/// <category>Warnings</category>
-[<AbstractClass>]
-type ValidationWarning internal () = class end
-
-/// <summary>
-/// Base type of all <c>ERROR</c> checks, which indicate that the generated CLI metadata is invalid (II.22.1).
+/// Marker interface used to represent an <c>ERROR</c> check, which indicates that the generated CLI metadata is invalid
+/// (II.22.1).
 /// </summary>
 /// <category>Errors</category>
-[<AbstractClass>]
-type ValidationError internal () =
-    member this.ToResult(): Result<_, ValidationError> = Error this
+type IValidationError = interface end
 
-exception ValidationErrorException of ValidationError
+/// <summary>
+/// Error used when an invalid combination of flags is used in a metadata table row.
+/// </summary>
+/// <category>Errors</category>
+[<Sealed>]
+type InvalidFlagsCombination<'Enum when 'Enum :> System.Enum and 'Enum : struct> (flags: 'Enum) =
+    member _.Flags = flags
+    override _.ToString() = sprintf "The flags combination %A is invalid" flags
+    interface IValidationError
+
+type ValidationResult<'T> = Result<'T, IValidationError>
+
+exception ValidationErrorException
+    of IValidationError
+    with override this.Message = this.Data0.ToString()
 
 [<RequireQualifiedAccess>]
 module ValidationError =
-    /// <exception cref="T:FSharpIL.Metadata.ValidationErrorException">
-    /// Thrown when the <paramref name="result"/> is an error.
-    /// </exception>
-    let check result =
+    /// <summary>Raises the specified validation error as an exception.</summary>
+    /// <exception cref="T:FSharpIL.Writing.Tables.ValidationErrorException">Thrown when this function is called.</exception>
+    let inline throw (error: #IValidationError) = raise(ValidationErrorException error)
+    let inline message (error: #IValidationError) = error.ToString()
+
+    let inline toOption (result: ValidationResult<_>) =
         match result with
-        | Ok success -> success
-        | Error (err: ValidationError) -> raise (ValidationErrorException err)
-
-/// II.22.1
-[<IsReadOnly; Struct>]
-type ValidationResult<'Result> =
-    { ClsViolations: ImmutableArray<ClsViolation>
-      Warnings: ImmutableArray<ValidationWarning>
-      Result: Result<'Result, ValidationError> }
-
-[<AutoOpen>]
-module ValidationResultPatterns =
-    let (|ValidationSuccess|ValidationWarning|ValidationError|) value =
-        match value with
-        | { Result = Ok result } when value.Warnings.IsEmpty -> ValidationSuccess(result, value.ClsViolations)
-        | { Result = Ok result } -> ValidationWarning(result, value.ClsViolations, value.Warnings)
-        | { Result = Error error } -> ValidationError error
-
-    /// Extracts the result only if there are no warnings or CLS rule violations.
-    let (|StrictSuccess|StrictWarning|StrictError|) =
-        function
-        | ValidationSuccess (result, cls) when cls.Length < 1 -> StrictSuccess result
-        | ValidationSuccess (_, cls) -> StrictWarning(cls, ImmutableArray.Empty)
-        | ValidationWarning (_, cls, warning) -> StrictWarning(cls, warning)
-        | ValidationError err -> StrictError err
+        | Ok _ -> None
+        | Error err -> Some err
 
 [<RequireQualifiedAccess>]
 module ValidationResult =
-    let inline success value cls =
-        { ClsViolations = cls
-          Warnings = ImmutableArray.Empty
-          Result = Ok value }
+    let failure (error: #IValidationError) = ValidationResult.Error error
 
-    let inline warning value cls warnings =
-        { ClsViolations = cls
-          Warnings = warnings
-          Result = Ok value }
+    let inline internal (|CheckFlags|_|) flags actual =
+        if Flags.set flags actual
+        then Some(InvalidFlagsCombination flags :> IValidationError)
+        else None
 
-    let inline error err cls warnings =
-        { ClsViolations = cls
-          Warnings = warnings
-          Result = Error err }
+    /// <exception cref="T:FSharpIL.Writing.Tables.ValidationErrorException">
+    /// Thrown when the <paramref name="result"/> is an error.
+    /// </exception>
+    let get (result: ValidationResult<_>) =
+        match result with
+        | Ok success -> success
+        | Error err -> ValidationError.throw err
 
-    /// <summary>
-    /// Retrieves the value associated with the result.
-    /// </summary>
-    /// <exception cref="T:FSharpIL.Metadata.ValidationErrorException"/>
-    let get value =
-        match value with
-        | ValidationSuccess (result, _)
-        | ValidationWarning (result, _, _) -> result
-        | ValidationError err -> ValidationErrorException err |> raise
+    let inline toValueOption (result: ValidationResult<_>) =
+        match result with
+        | Ok success -> ValueSome success
+        | Error _ -> ValueNone
 
-    let ofOption none value =
-        match value with
-        | Some value' -> success value' ImmutableArray.Empty
-        | None -> error none ImmutableArray.Empty ImmutableArray.Empty
+/// <summary>Marker interface used to represent a <c>WARNING</c> check (II.22.1).</summary>
+/// <category>Warnings</category>
+type IValidationWarning = interface end
 
-    let toOption value =
-        match value with
-        | ValidationSuccess (result, _)
-        | ValidationWarning (result, _, _) -> Some result
-        | ValidationError _ -> None
+type ValidationWarningsBuilder = ICollection<IValidationWarning>
 
-    let toResult value =
-        match value with
-        | ValidationSuccess (result, _)
-        | ValidationWarning (result, _, _) -> Ok result
-        | ValidationError err -> Error err
+/// A read-only collection containing the warnings produced during validation of metadata.
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+type ValidationWarningsCollection internal (?warnings: ValidationWarningsBuilder) =
+    member _.Count =
+        match warnings with
+        | Some warnings' -> warnings'.Count
+        | None -> 0
 
-type ClsViolationsBuilder = ImmutableArray<ClsViolation>.Builder
-type WarningsBuilder = ImmutableArray<ValidationWarning>.Builder
+    member _.Contains warning =
+        match warnings with
+        | Some warnings' -> warnings'.Contains warning
+        | None -> false
+
+    member _.GetEnumerator() =
+        match warnings with
+        | Some warnings' -> warnings'.GetEnumerator()
+        | None -> Seq.empty.GetEnumerator()
+
+    interface IReadOnlyCollection<IValidationWarning> with
+        member this.Count = this.Count
+        member this.GetEnumerator() = this.GetEnumerator()
+        member this.GetEnumerator() = this.GetEnumerator() :> System.Collections.IEnumerator
 
 [<Sealed>]
 type ValidationResultBuilder internal () =
-    member inline _.Bind(comp, func) =
-        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
-            match comp with
-            | Ok result -> func result cls warnings
-            | Error (err: ValidationError) -> Error err
+    member inline _.Bind(result: ValidationResult<_>, body: _ -> ValidationResult<_>) =
+        match result with
+        | Ok value -> body value
+        | Error err -> Error err
 
-    member inline _.Bind(comp: ValidationResult<_>, func) =
-        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
-            cls.AddRange comp.ClsViolations
-            warnings.AddRange comp.Warnings
-            match comp.Result with
-            | Ok result -> func result cls warnings
-            | Error err -> Error err
+    member inline _.Bind(result: IValidationError option, body: unit -> ValidationResult<_>) =
+        match result with
+        | None -> body()
+        | Some err -> Error err
 
-    member inline _.Bind(comp: WarningsBuilder -> _, func) =
-        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
-            let result = comp warnings
-            func result cls warnings
+    member inline _.Combine(x: ValidationResult<unit>, y: ValidationResult<_>) =
+        match x with
+        | Ok() -> y
+        | Error err -> Error err
 
-    member inline _.Bind(comp: WarningsBuilder -> Result<_, ValidationError>, func) =
-        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
-            match comp warnings with
-            | Ok result -> func result cls warnings
-            | Error err -> Error err
+    member inline _.Delay(f: _ -> ValidationResult<_>) = f()
 
-    member inline _.Return value (_: ClsViolationsBuilder) (_: WarningsBuilder) = Result<_, ValidationError>.Ok value
+    member inline _.Return value: ValidationResult<_> = Ok value
 
-    member inline _.ReturnFrom(value: Result<_, ValidationError>) =
-        fun (_: ClsViolationsBuilder) (_: WarningsBuilder) -> value
+    member inline _.ReturnFrom(result: ValidationResult<_>) = result
 
-    member inline _.ReturnFrom(value: ValidationResult<_>) =
-        fun (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) ->
-            cls.AddRange value.ClsViolations
-            warnings.AddRange value.Warnings
-            value.Result
+    member inline _.Zero() = ValidationResult.Ok()
 
-    member inline _.Run expr =
-        let cls = ImmutableArray.CreateBuilder<_>()
-        let warnings = ImmutableArray.CreateBuilder<_>()
-        let result = expr cls warnings
-        { ClsViolations = cls.ToImmutable()
-          Warnings = warnings.ToImmutable()
-          Result = result }
+[<Sealed>]
+type internal ValidationErrorBuilder internal () =
+    member inline _.Bind(result: IValidationError option, body) =
+        match result with
+        | None -> body()
+        | err -> err
 
-    member inline _.TryFinally(expr, compensation) (cls: ClsViolationsBuilder) (warnings: WarningsBuilder) =
-        try expr cls warnings: Result<_, ValidationError>
-        finally compensation()
+    member inline _.Bind(result: ValidationResult<_>, body: _ -> IValidationError option) =
+        match result with
+        | Ok value -> body value
+        | Error err -> Some err
 
-    member inline this.Zero() = this.Return()
+    member inline _.Combine(x: IValidationError option, y) =
+        match x with
+        | None -> y
+        | err -> err
+
+    member inline _.Delay(f: _ -> IValidationError option) = f()
+
+    member inline _.ReturnFrom(result: IValidationError option) = result
+
+    member inline _.Zero() = Option<IValidationError>.None
 
 [<AutoOpen>]
-module ValidationResultBuilder = let validated = ValidationResultBuilder()
+module ValidationResultBuilders =
+    let validated = ValidationResultBuilder()
+    let internal canfail = ValidationErrorBuilder()

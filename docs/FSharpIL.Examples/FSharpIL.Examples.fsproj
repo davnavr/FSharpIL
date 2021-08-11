@@ -9,16 +9,8 @@
   <ItemGroup>
     <Compile Include="ExampleHelpers.fs" />
     <Compile Include="..\content\HelloWorld.fsx" />
-    <Compile Include="..\content\DelegatesExample.fsx" />
-    <Compile Include="..\content\EnumsExample.fsx" />
-    <Compile Include="..\content\InterfacesExample.fsx" />
-    <Compile Include="..\content\EventsExample.fsx" />
-    <Compile Include="..\content\ConstantsExample.fsx" />
-    <Compile Include="..\content\PointersExample.fsx" />
-    <Compile Include="..\content\Factorial.fsx" />
-    <Compile Include="..\content\CustomNumericTypes.fsx" />
-    <Compile Include="..\content\CustomCollections.fsx" />
-    <Compile Include="$(RootDirectory)\test\FSharpIL.Benchmarks\LargeCountsBenchmarks.fs" />
+    <Compile Include="..\content\EventsShowcase.fsx" />
+    <Compile Include="..\content\GenericsShowcase.fsx" />
     <Compile Include="$(RootDirectory)\test\ExpectoEntryPoint.fs" />
 
     <PackageReference Include="Expecto" Version="9.0.2" />

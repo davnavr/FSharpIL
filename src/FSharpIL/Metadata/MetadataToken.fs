@@ -1,26 +1,47 @@
-﻿/// Provides functions for writing metadata tokens.
-[<RequireQualifiedAccess>]
-module internal FSharpIL.Metadata.MetadataToken
+﻿namespace FSharpIL.Metadata
 
-open FSharpIL.Writing
+open FSharpIL.Utilities
 
-open FSharpIL.Metadata.Heaps
+type MetadataTokenType =
+    | Module = 0uy
+    | TypeRef = 1uy
+    | TypeDef = 2uy
+    | Field = 4uy
+    | MethodDef = 6uy
+    | MemberRef = 0xAuy
+    | StandaloneSig = 0x11uy
+    | TypeSpec = 0x1Buy
+    | File = 0x26uy
+    | MethodSpec = 0x2Buy
+    | UserStringHeap = 0x70uy
 
 /// <summary>
-/// Writes a metadata token, which is used as an argument to some CIL instructions (III.1.9).
+/// Represents a metadata token (III.1.9).
 /// </summary>
-/// <exception cref="T:System.ArgumentException">The <paramref name="index"/> cannot be represented in 3 bytes.</exception>
-let write index table (writer: ChunkWriter) =
-    if index > 0xFF_FF_FFu then
-        invalidArg
-            (nameof index)
-            "The row or offset pointed to by a metadata token must be able to fit in 3 bytes"
-    index &&& 0xFFu |> writer.WriteU1
-    (index >>> 8) &&& 0xFFu |> writer.WriteU1
-    (index >>> 16) &&& 0xFFu |> writer.WriteU1
-    writer.WriteU1 table
+[<System.Runtime.CompilerServices.IsReadOnly; Struct>]
+[<StructuralComparison; StructuralEquality>]
+type MetadataToken internal (value: uint32) =
+    static let [<Literal>] IndexMask = 0xFFFFFFu
 
-let userString str (us: UserStringHeap) =
-    us.Add str
-    let { BlobIndex.Index = i } = us.IndexOf str
-    write i 0x70uy
+    internal new (tag: MetadataTokenType, index) =
+        if index > IndexMask then argOutOfRange "index" index "The index must be able to fit into 3 bytes"
+        MetadataToken((uint32 tag <<< 24) ||| index)
+
+    member _.Index = value &&& IndexMask
+    member _.Type = LanguagePrimitives.EnumOfValue<_, MetadataTokenType>(uint8(value >>> 24))
+    member _.IsNull = value = 0u
+    member _.Value = value
+
+    static member op_Implicit(token: MetadataToken) = token.Value
+
+    override this.ToString() =
+        if this.IsNull
+        then System.String.Empty
+        else sprintf "%A (0x%08X)" this.Type this.Index
+
+[<RequireQualifiedAccess>]
+module MetadataToken =
+    let inline (|Token|Null|) (token: MetadataToken) =
+        if token.IsNull
+        then Null
+        else Token(struct(token.Type, token.Index))

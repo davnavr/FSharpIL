@@ -8,9 +8,9 @@ type IncludeHeaders =
     | IncludeHeaders
 
 [<IsReadOnly; Struct>]
-type IncludeIL =
-    | IncludeIL
-    | NoIL
+type IncludeMetadata =
+    | IncludeMetadata
+    | NoMetadata
 
 [<RequireQualifiedAccess>]
 type OutputKind =

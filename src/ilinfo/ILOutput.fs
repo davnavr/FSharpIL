@@ -1,775 +1,418 @@
-﻿[<RequireQualifiedAccess>]
-module ILInfo.ILOutput
+﻿namespace ILInfo
 
 open System.Collections.Immutable
-open System.IO
-open System.Reflection
-open System.Text
 
-open Microsoft.FSharp.Core.Printf
-
+open FSharpIL
 open FSharpIL.Metadata
 open FSharpIL.PortableExecutable
+
 open FSharpIL.Reading
 
-let indented wr = new IndentedTextWriter(wr, 4)
+type WriteString = IndentedTextWriter -> (IndentedTextWriter -> unit) -> unit
 
-let inline heading name (offset: FileOffset) wr = fprintfn wr "// ----- %s (0x%016X)" name (uint64 offset)
+[<NoComparison; NoEquality>]
+type ILOutput =
+    { Comment: WriteString
+      Declaration: WriteString
+      Keyword: WriteString
+      StringLiteral: WriteString }
 
-let inline fieldf name size printer wr value = fprintfn wr "// %s (%i bytes) = %a" name size printer value
+[<RequireQualifiedAccess>]
+module ILOutput =
+    let inline chars (str: string) (wr: IndentedTextWriter) = wr.Write str
+    let inline newline (_, wr: IndentedTextWriter) = wr.WriteLine()
+    let inline endn out =
+        newline out
+        ValueSome out
 
-let inline field name printer wr (value: 'Value) = fieldf name sizeof<'Value> printer wr value
-
-let inline optional printer wr value  = ValueOption.iter (printer wr) value
-
-// TODO: Format identifier strings correctly.
-//let inline sqstring
-//let inline id
-
-/// Prints a string surrounded by double quotes (II.5.2).
-let qstring (wr: #TextWriter) (str: string) =
-    wr.Write '"'
-    for i = 0 to str.Length - 1 do
-        match str.[i] with
-        | '\t' | '\n' as c ->
-            wr.Write "\\"
-            wr.Write c
-        | '"' | '\\' | '\r' | '\000' as c ->
-            fprintf wr "\\%03o" (uint16 c)
-        | c -> wr.Write c
-    wr.Write '"'
-
-/// Prints a list of bytes in hexadecimal (II.5.5).
-let bytes wr (bytes: ImmutableArray<byte>) =
-    let max = bytes.Length - 1
-    for i = 0 to max do
-        fprintf wr "%02X" bytes.[i]
-        if i < max then wr.Write ' '
-
-// TODO: Format values nicely
-
-let coffHeader header offset wr =
-    heading "COFF Header" offset wr
-    field "Machine" Print.enumeration wr header.Machine
-    field "NumberOfSections" Print.integer wr header.NumberOfSections
-    field "TimeDateStamp" Print.integer wr header.TimeDateStamp
-    field "SymbolTablePointer" Print.integer wr header.SymbolTablePointer
-    field "SymbolCount" Print.integer wr header.SymbolCount
-    field "OptionalHeaderSize" Print.integer wr header.OptionalHeaderSize
-    field "Characteristics" Print.bitfield wr header.Characteristics
-    wr
-
-let standardFields fields offset wr =
-    heading "Standard Fields" offset wr
-    field "Magic" Print.enumeration wr fields.Magic
-    field "MajorLinkerVersion" Print.integer wr fields.LMajor
-    field "MinorLinkerVersion" Print.integer wr fields.LMinor
-    field "SizeOfCode" Print.integer wr fields.CodeSize
-    field "SizeOfInitializedData" Print.integer wr fields.InitializedDataSize
-    field "SizeOfUninitializedData" Print.integer wr fields.UninitializedDataSize
-    field "EntryPointRva" Print.integer wr fields.EntryPointRva
-    field "BaseOfCode" Print.integer wr fields.BaseOfCode
-    optional (field "BaseOfData" Print.integer) wr fields.BaseOfData
-    wr
-
-let ntSpecificFields fields offset wr =
-    let (salignment, falignment) = fields.Alignment
-    heading "NT Specific Fields" offset wr
-    // TODO: Write different size fields if PE32+
-    field "ImageBase" Print.integer wr (uint32 fields.ImageBase) // NOTE: This is 8 bytes long instead for PE32+
-    field "SectionAlignment" Print.integer wr salignment
-    field "FileAlignment" Print.integer wr falignment
-    field "MajorOperatingSystemVersion" Print.integer wr fields.OSMajor
-    field "MinorOperatingSystemVersion" Print.integer wr fields.OSMinor
-    field "MajorImageVersion" Print.integer wr fields.UserMajor
-    field "MinorImageVersion" Print.integer wr fields.UserMinor
-    field "MajorSubsystemVersion" Print.integer wr fields.SubSysMajor
-    field "MinorSubsystemVersion" Print.integer wr fields.SubSysMinor
-    field "Win32VersionValue" Print.integer wr fields.Win32VersionValue
-    field "SizeOfImage" Print.integer wr fields.ImageSize
-    field "SizeOfHeaders" Print.integer wr fields.HeadersSize
-    field "FileChecksum" Print.integer wr fields.FileChecksum
-    field "Subsystem" Print.enumeration wr fields.Subsystem
-    field "DllCharacteristics" Print.bitfield wr fields.DllFlags
-    field "SizeOfStackReserve" Print.integer wr (uint32 fields.StackReserveSize) // NOTE: This is 8 bytes long instead for PE32+
-    field "SizeOfStackCommit" Print.integer wr (uint32 fields.StackCommitSize) // NOTE: This is 8 bytes long instead for PE32+
-    field "SizeOfHeapReserve" Print.integer wr (uint32 fields.HeapReserveSize) // NOTE: This is 8 bytes long instead for PE32+
-    field "SizeOfHeapCommit" Print.integer wr (uint32 fields.HeapCommitSize) // NOTE: This is 8 bytes long instead for PE32+
-    field "LoaderFlags" Print.integer wr fields.LoaderFlags
-    field "NumberOfDataDirectories" Print.integer wr fields.NumberOfDataDirectories
-    wr.WriteLine()
-    fprintfn wr ".imagebase 0x%08X" fields.ImageBase
-    fprintfn wr ".file alignment 0x%08X" falignment
-    fprintfn wr ".stackreserve 0x%08X" fields.StackReserveSize
-    fprintfn wr ".subsystem 0x%04X" (uint16 fields.Subsystem)
-    wr.WriteLine()
-    wr
-
-let dataDirectoryNames =
-    [|
-        "Export Table"
-        "Import Table"
-        "Resource Table"
-        "Exception Table"
-        "Certificate Table"
-        "Base Relocation Table"
-        "Debug"
-        "Copyright"
-        "Global Pointer"
-        "TLS Table"
-        "Load Configuration Table"
-        "Bound Import"
-        "Import Address Table"
-        "Delay Import Descriptor"
-        "CLI Header"
-        "Reserved"
-    |]
-
-let dataDirectories (directories: ParsedDataDirectories) offset wr =
-    heading "Data Directories" offset wr
-    for i = 0 to directories.Length - 1 do
-        let name =
-            if i < dataDirectoryNames.Length
-            then sprintf "%s Table" dataDirectoryNames.[i]
-            else "Unknown"
-        field name Print.rvaAndSize wr directories.[i]
-    wr
-
-let sectionHeaders (headers: ParsedSectionHeaders) (offset: FileOffset) wr =
-    for i = 0 to headers.Length - 1 do
-        let header = headers.[i]
-        heading (sprintf "\"%O\" Section Header" header.SectionName) (offset + (uint64 i * 40UL)) wr
-        field "Name" (fun wr () -> wr.Write header.SectionName) wr () // TODO: Make sure length includes padding // TODO: Fix length
-        field "VirtualSize" Print.integer wr header.Data.VirtualSize
-        field "VirtualAddress" Print.integer wr header.Data.VirtualAddress
-        field "SizeOfRawData" Print.integer wr header.Data.RawDataSize
-        field "PointerToRawData" Print.integer wr header.Data.RawDataPointer
-        field "PointerToRelocations" Print.integer wr header.PointerToRelocations
-        field "PointerToLineNumbers" Print.integer wr header.PointerToLineNumbers
-        field "NumberOfRelocations" Print.integer wr header.NumberOfRelocations
-        field "NumberOfLineNumbers" Print.integer wr header.NumberOfLineNumbers
-        field "Characteristics" Print.bitfield wr header.Characteristics
-    wr
-
-let cliHeader (header: ParsedCliHeader) offset wr =
-    heading "CLI Header" offset wr
-    field "Cb" Print.integer wr header.Size
-    field "MajorRuntimeVersion" Print.integer wr header.MajorRuntimeVersion
-    field "MinorRuntimeVersion" Print.integer wr header.MinorRuntimeVersion
-    field "MetaData" Print.rvaAndSize wr header.MetaData
-    field "Flags" Print.bitfield wr header.Flags
-    field "EntryPointToken" Print.integer wr header.EntryPointToken // TODO: Show what table the EntryPointToken refers to.
-    field "Resources" Print.rvaAndSize wr header.Resources
-    field "StrongNameSignature" Print.integer wr header.StrongNameSignature
-    field "CodeManagerTable" Print.integer wr header.CodeManagerTable
-    field "VTableFixups" Print.rvaAndSize wr header.VTableFixups
-    field "ExportAddressTableJumps" Print.integer wr header.ExportAddressTableJumps
-    field "ManagedNativeHeader" Print.integer wr header.ManagedNativeHeader
-    wr.WriteLine()
-    fprintfn wr ".corflags 0x%08X" (uint32 header.Flags)
-    wr.WriteLine()
-    wr
-
-let metadataRoot (root: ParsedMetadataRoot) offset wr =
-    heading "CLI Metadata Root" offset wr
-    field "MajorVersion" Print.integer wr root.MajorVersion
-    field "MinorVersion" Print.integer wr root.MinorVersion
-    field "Reserved" Print.integer wr root.Reserved
-    field "Length" Print.integer wr root.Version.Length
-    // TODO: Make sure length includes padding
-    fieldf "Version" root.Version.Length (fun wr () -> fprintf wr "\"%O\"" root.Version) wr ()
-    field "Flags" Print.integer wr root.Flags
-    field "Streams" Print.integer wr root.Streams
-    wr
-
-let streamHeader (header: ParsedStreamHeader) _ offset wr =
-    let name = Encoding.ASCII.GetString(header.Name.AsSpan())
-    heading (sprintf "\"%s\" Stream Header" name) offset wr
-    field "Offset" Print.integer wr header.Offset
-    field "Size" Print.integer wr header.Size
-    fieldf "Name" header.Name.Length (fun wr -> fprintf wr "\"%s\"") wr name
-    wr
-
-let metadataTablesHeader header offset wr =
-    let rec rows wr flags =
-        match flags with
-        | MetadataTableFlags.None -> ()
-        | _ ->
-            let flags' = flags >>> 1
-            match header.Rows.TryGetValue(flags &&& MetadataTableFlags.Module) with
-            | true, count -> fprintf wr "0x%08X, " count
-            | false, _ -> ()
-            rows wr flags'
-    heading "Metadata Tables Header" offset wr
-    field "Reserved" Print.integer wr header.Reserved1
-    field "MajorVersion" Print.integer wr header.MajorVersion
-    field "MinorVersion" Print.integer wr header.MinorVersion
-    field "HeapSizes" Print.bitfield wr header.HeapSizes
-    field "Reserved" Print.integer wr header.Reserved2
-    field "Valid" Print.bitfield wr header.Valid
-    field "Sorted" Print.bitfield wr header.Sorted
-    fieldf
-        "Rows"
-        (4 * header.Rows.Count)
-        (fun wr () ->
-            wr.Write '['
-            rows wr header.Valid
-            wr.Write ']')
-        wr
-        ()
-
-let inline rowIndex wr i = fprintfn wr "// (0x%08X)" (i + 1)
-
-let moduleTable (tables: ParsedMetadataTables) strings guid (wr: TextWriter) =
-    wr.WriteLine()
-    wr.WriteLine "// Module (0x00)"
-    for i = 0 to int32 tables.Module.RowCount - 1 do
-        let row = tables.Module.[i]
-        let inline fguid name id = fieldf name tables.Header.HeapSizes.GuidSize (Print.guid guid) wr id
-        field "Generation" Print.integer wr row.Generation
-        wr.Write ".module "
-        Print.identifier strings wr row.Name
-        fprintfn wr "// %O" row.Name
-        fguid "Mvid" row.Mvid
-        fguid "GenerationId" row.EncId
-        fguid "BaseGenerationId" row.EncBaseId
-
-// TODO: Print DottedNames correctly, see II.5.3
-
-let assemblyTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) blobs wr =
-    match tables.Assembly with
-    | ValueSome table ->
-        for i = 0 to int32 table.RowCount - 1 do
-            let row = table.[i]
-            fprintfn wr ".assembly %s" (strings.GetString row.Name)
-            wr.WriteLine '{'
-            let wr' = indented wr
-            fprintfn wr' ".hash algorithm 0x%08X" (int32 row.HashAlgId)
-
-            // TODO: Reduce amount of duplicated code with AssemblyRef
-            match strings.GetString row.Culture with
-            | ""
-            | null -> ()
-            | culture -> fprintfn wr' ".culture %a" qstring culture
-
-            fprintfn wr' ".ver %i:%i:%i:%i" row.MajorVersion row.MinorVersion row.BuildNumber row.RevisionNumber
-
-            wr.WriteLine '}'
-            wr.WriteLine()
-    | ValueNone -> ()
-
-let assemblyRefTable (tables: ParsedMetadataTables) (strings: ParsedStringsStream) blobs wr =
-    match tables.AssemblyRef with
-    | ValueSome table ->
-        for i = 0 to int32 table.RowCount - 1 do
-            let row = table.[i]
-            fprintfn wr ".assembly extern %s" (strings.GetString row.Name)
-            wr.WriteLine '{'
-            let wr' = indented wr
-
-            // TODO: List custom attributes of AssemblyRef.
-
-            match strings.GetString row.Culture with
-            | ""
-            | null -> ()
-            | culture -> fprintfn wr' ".culture %a" qstring culture
-
-            match blobs with
-            | ValueSome(blobs': ParsedBlobStream) ->
-                match blobs'.TryReadBytes row.PublicKeyOrToken with
-                | Ok token ->
-                    wr'.Write ".hash = ("
-                    bytes wr' token
-                    wr'.WriteLine ')'
-                | Error err -> fprintfn wr' "// error : Unable to read assembly hash, %O" err
-
-                match blobs'.TryReadBytes row.PublicKeyOrToken with
-                | Ok token ->
-                    wr'.Write ".publickey"
-                    if not(row.Flags.HasFlag AssemblyNameFlags.PublicKey) then
-                        wr'.Write "token"
-                    wr'.Write " = ("
-                    bytes wr' token
-                    wr'.WriteLine ')'
-                | Error err -> fprintfn wr' "// error : Unable to read public key or token, %O" err
-            | ValueNone -> wr'.Write "// TODO: How to deal with missing blob heap when writing assembly references?"
-
-            fprintfn wr' ".ver %i:%i:%i:%i" row.MajorVersion row.MinorVersion row.BuildNumber row.RevisionNumber
-
-            wr.WriteLine '}'
-            wr.WriteLine()
-    | ValueNone -> ()
-
-let typeRefTable (tables: ParsedMetadataTables) strings (wr: TextWriter) =
-    match tables.TypeRef with
-    | ValueSome table ->
-        wr.WriteLine()
-        wr.WriteLine "// TypeRef (0x01)"
-        for i = 0 to int32 table.RowCount - 1 do
-            let row = table.[i]
-            wr.WriteLine()
-            rowIndex wr i
-            fieldf
-                "ResolutionScope"
-                (CodedIndex.resolutionScopeParser(tables.Header.Rows).Length)
-                (fun wr { ParsedTypeRefRow.ResolutionScope = rscope } ->
-                    match rscope with
-                    | ParsedResolutionScope.Null -> "Null"
-                    | ParsedResolutionScope.Unknown _ -> "Unknown"
-                    | ParsedResolutionScope.Module i -> sprintf "Module (0x%08X)" i
-                    | ParsedResolutionScope.ModuleRef i -> sprintf "ModuleRef (0x%08X)" i
-                    | ParsedResolutionScope.AssemblyRef i -> sprintf "AssemblyRef (0x%08X)" i
-                    | ParsedResolutionScope.TypeRef i -> sprintf "TypeRef (0x%08X)" i
-                    |> wr.Write)
-                wr
-                row
-            fieldf "TypeName" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeName
-            fieldf "TypeNamespace" tables.Header.HeapSizes.StringSize (Print.identifier strings) wr row.TypeNamespace
-    | ValueNone -> ()
-
-let fieldRow (table: ParsedFieldTable) tables i vfilter (strings: ParsedStringsStream) (blobs: ParsedBlobStream) (wr: #TextWriter) =
-    match table.TryGetRow i with
-    | Ok row when VisibilityFilter.field vfilter row.Flags ->
-        wr.Write ".field "
-
-        match row.Flags &&& FieldAttributes.FieldAccessMask with
-        | FieldAttributes.Public -> "public "
-        | FieldAttributes.Assembly -> "assembly "
-        | FieldAttributes.FamORAssem -> "famorassem "
-        | FieldAttributes.FamANDAssem -> "famandassem "
-        | FieldAttributes.Family -> "family "
-        | FieldAttributes.Private -> "private "
-        | FieldAttributes.PrivateScope
-        | _ -> "compilercontrolled "
-        |> wr.Write
-
-        if row.Flags.HasFlag FieldAttributes.Static then wr.Write "static "
-        if row.Flags.HasFlag FieldAttributes.InitOnly then wr.Write "initonly "
-        if row.Flags.HasFlag FieldAttributes.Literal then wr.Write "literal "
-        if row.Flags.HasFlag FieldAttributes.NotSerialized then wr.Write "notserialized "
-        if row.Flags.HasFlag FieldAttributes.SpecialName then wr.Write "specialname "
-        if row.Flags.HasFlag FieldAttributes.RTSpecialName then wr.Write "rtspecialname "
-        if row.Flags.HasFlag FieldAttributes.HasFieldMarshal then
-            wr.Write "marshal ("
-            // TODO: Write field marshalling information.
-            wr.Write ") "
-
-        match blobs.TryReadFieldSig(row.Signature) with
-        | Ok signature ->
-            // TODO: Include custom modifiers of field type.
-            TypeName.encoded signature.FieldType tables strings blobs wr
-        | Error err -> fprintfn wr "Error reading type %O" err
-
-        fprintf wr " '%s' " (strings.GetString row.Name)
-        rowIndex wr (int32 i)
-        wr.WriteLine()
-    | Ok _ -> ()
-    | Error err -> fprintfn wr "// error : Cannot find field %i, %s" i err.Message
-
-let typeDefFields
-    (tables: ParsedMetadataTables)
-    i
-    (row: inref<ParsedTypeDefRow>)
-    vfilter
-    strings
-    (blobs: ParsedBlobStream voption)
-    (wr: #TextWriter)
-    =
-    match tables.Field with
-    | ValueSome ftable when row.FieldList > 0u ->
-        let ttable = tables.TypeDef.Value
-        let max =
-            if i = int32 ttable.RowCount - 1
-            then tables.Header.Rows.[MetadataTableFlags.Field]
-            else ttable.[i + 1].FieldList
-        let mutable fieldi = row.FieldList
-        while fieldi < max do
-            // TODO: Report an error if blobs does not exist
-            fieldRow ftable tables fieldi vfilter strings blobs.Value wr
-            fieldi <- fieldi + 1u
-    | ValueSome _
-    | ValueNone -> ()
-
-// TODO: Include exception handling information.
-let rec methodBodyInstruction (wr: #TextWriter) (operand: outref<ParsedOperand>) (body: byref<MethodBodyParser>) =
-    let offset = body.Offset
-    match body.Read &operand with
-    | _, Error err ->
-        fprintfn wr "// error : %O" err
-        // TODO: Show remaining method body bytes on error
-    | 0u, _ -> ()
-    | _, Ok opcode ->
-        fprintf wr "IL_%04X: " offset
-        wr.Write(ParsedOpcode.name opcode)
-        match operand with
-        | ParsedOperand.U1 num -> fprintf wr " %i // 0x%02X" num num
-        | ParsedOperand.U2 num -> fprintf wr " %i // 0x%04X" num num
-        | ParsedOperand.None -> ()
-        wr.WriteLine()
-        methodBodyInstruction wr &operand &body
-
-let methodBodyInstructions data (body: MethodBodyStream) =
-    let wr = body.Parse()
-    let mutable operand = ParsedOperand()
-    let mutable cont, error = true, None
-    while error.IsNone do
-        match wr.Read &operand with
-        | 0u, _ -> ()
-    ()
-
-let methodRow
-    (table: ParsedMethodDefTable)
-    tables
-    i
-    vfilter
-    (strings: ParsedStringsStream)
-    (blobs: ParsedBlobStream)
-    (bodies: ParsedMethodBodies)
-    (wr: #TextWriter)
-    =
-    match table.TryGetRow i with
-    | Ok row when VisibilityFilter.methodDef vfilter row.Flags ->
-        wr.Write ".method "
-
-        match row.Flags &&& MethodAttributes.MemberAccessMask with
-        | MethodAttributes.Public -> "public "
-        | MethodAttributes.Assembly -> "assembly "
-        | MethodAttributes.FamORAssem -> "famorassem "
-        | MethodAttributes.FamANDAssem -> "famandassem "
-        | MethodAttributes.Family -> "family "
-        | MethodAttributes.Private -> "private "
-        | MethodAttributes.PrivateScope
-        | _ -> "compilercontrolled "
-        |> wr.Write
-        
-        if row.Flags.HasFlag MethodAttributes.Final then wr.Write "final "
-        if row.Flags.HasFlag MethodAttributes.CheckAccessOnOverride then wr.Write "strict "
-        if row.Flags.HasFlag MethodAttributes.HideBySig then wr.Write "hidebysig "
-        if row.Flags.HasFlag MethodAttributes.NewSlot then wr.Write "newslot "
-        if row.Flags.HasFlag MethodAttributes.Abstract then wr.Write "abstract "
-        if row.Flags.HasFlag MethodAttributes.Virtual then wr.Write "virtual "
-        if row.Flags.HasFlag MethodAttributes.Static then wr.Write "static "
-        if row.Flags.HasFlag MethodAttributes.SpecialName then wr.Write "specialname "
-        if row.Flags.HasFlag MethodAttributes.RTSpecialName then wr.Write "rtspecialname "
-
-        match blobs.TryReadMethodDefSig row.Signature with
-        | Ok signature ->
-            wr.WriteLine()
-            let wr' = indented wr
-            match signature.HasThis with
-            | ParsedMethodThis.NoThis -> ()
-            | ParsedMethodThis.HasThis -> wr'.Write "instance "
-            | ParsedMethodThis.ExplicitThis -> wr'.Write "instance explicit "
-
-            match signature.CallingConvention with
-            | Default
-            | Generic _ -> ()
-            | VarArg -> wr'.Write "vararg "
-
-            let struct(retmod, rtype) = signature.ReturnType
-            TypeName.retType rtype tables strings blobs wr'
-            TypeName.cmodifiers retmod tables strings blobs wr'
-
-            wr'.Write " '"
-            wr'.Write(strings.GetString row.Name)
-            wr'.Write "' "
-
-            if signature.Parameters.IsEmpty
-            then wr'.Write '('
-            else
-                wr'.WriteLine '('
-                let wr'' = indented wr'
-                for i = 0 to signature.Parameters.Length - 1 do
-                    if i > 0 then wr''.WriteLine ','
-
-                    let prow =
-                        match tables.Param with
-                        | ValueSome ptable ->
-                            match ptable.TryGetRow(row.ParamList + uint32 i) with
-                            | Ok prow -> ValueSome prow
-                            | Error _ -> ValueNone
-                        | ValueNone -> ValueNone
-
-                    match prow with
-                    | ValueSome { Flags = pflags } ->
-                        if pflags.HasFlag ParameterAttributes.In then wr''.Write "in "
-                        if pflags.HasFlag ParameterAttributes.Optional then wr''.Write "opt "
-                        if pflags.HasFlag ParameterAttributes.Out then wr''.Write "out "
-
-                        // TODO: Include marshalling information
-                    | ValueNone -> ()
-
-                    let param = signature.Parameters.[i]
-                    TypeName.paramType param.ParamType tables strings blobs wr''
-                    TypeName.cmodifiers param.CustomModifiers tables strings blobs wr''
-
-                    match prow with
-                    | ValueSome prow ->
-                        match strings.GetString prow.Name with
-                        | null
-                        | "" -> ()
-                        | name ->
-                            wr''.Write " '"
-                            wr''.Write name
-                            wr''.Write '''
-                    | ValueNone -> ()
-                wr'.WriteLine()
-            wr'.Write ')'
-
-            match row.ImplFlags &&& MethodImplAttributes.CodeTypeMask with
-            | MethodImplAttributes.Native -> wr'.Write " native"
-            | MethodImplAttributes.Runtime -> wr'.Write " runtime"
-            | MethodImplAttributes.IL
-            | _ -> wr'.Write " cil"
-
-            wr'.Write ' '
-            match row.ImplFlags &&& MethodImplAttributes.ManagedMask with
-            | MethodImplAttributes.Unmanaged -> wr'.Write "un"
-            | _ -> ()
-            wr'.Write "managed"
-
-            if row.ImplFlags.HasFlag MethodImplAttributes.ForwardRef then wr'.Write " forwardref"
-            if row.ImplFlags.HasFlag MethodImplAttributes.InternalCall then wr'.Write " internalcall"
-            if row.ImplFlags.HasFlag MethodImplAttributes.NoInlining then wr'.Write " noinlining"
-            if row.ImplFlags.HasFlag MethodImplAttributes.NoOptimization then wr'.Write " nooptimization"
-            if row.ImplFlags.HasFlag MethodImplAttributes.Synchronized then wr'.Write " synchronized"
+    let comment ({ Comment = print }, wr) text =
+        print wr <| fun wr' ->
+            wr'.Write "// "
+            text wr'
             wr'.WriteLine()
-        | Error err -> fprintfn wr "// error : Invalid method signature, %O" err
 
+    let commentin ({ Comment = print }, wr) text =
+        print wr <| fun wr' ->
+            wr'.Write "/*"
+            text wr'
+            wr'.Write "*/"
+
+    let declaration ({ Declaration = print }, wr) (name: string) =
+        print wr <| fun wr' ->
+            wr'.Write '.'
+            wr'.Write name
+            wr'.Write ' '
+    let inline decleq ((_, wr) as out) name =
+        declaration out name
+        wr.Write "= "
+
+    let keyword ({ Keyword = print }, wr) (name: string) =
+        print wr <| fun wr' ->
+            wr'.Write name
+            wr'.Write ' '
+
+    let inline heading name (offset: FileOffset) out = comment out (fun wr -> fprintf wr "----- %s (%O)" name offset)
+    let inline fieldf name size printer value out = comment out (fun wr -> fprintf wr "%s (%i bytes) = %a" name size printer value)
+    let inline field name printer (value: 'Value) out = fieldf name sizeof<'Value> printer value out
+
+    let inline startBlock (wr: IndentedTextWriter) =
         wr.WriteLine '{'
-        let wr' = indented wr
-        if row.Rva > 0u then
-            match bodies.TryParseBody row.Rva with
-            | Ok(header, data, body) ->
-                fprintfn wr' "// Method begins at RVA 0x%08X" row.Rva
-                fprintfn wr' "// Code size %i (0x%08X)" header.CodeSize header.CodeSize
-                fprintfn wr' ".maxstack %i" header.MaxStack
+        wr.Indent()
 
-                match header.LocalVarSigTok with
-                | ValueSome _ ->
-                    wr'.Write ".locals "
-                    if header.Flags.HasFlag ILMethodFlags.InitLocals then
-                        wr'.Write "init "
-                    wr'.WriteLine '('
-                    wr'.WriteLine ')'
-                | ValueNone -> ()
-
-                let mutable operand = ParsedOperand()
-                let mutable parser = body.Parse()
-                methodBodyInstruction wr' &operand &parser
-            | Error err -> fprintfn wr' "// %O" err
-        wr.WriteLine '}'
-    | Ok _ -> ()
-    | Error err -> fprintfn wr "// error : Cannot find method %i, %s" i err.Message
-
-let typeDefMethods
-    (tables: ParsedMetadataTables)
-    i
-    (row: inref<ParsedTypeDefRow>)
-    vfilter
-    strings
-    (blobs: _ voption)
-    (wr: #TextWriter)
-    =
-    match tables.MethodDef with
-    | ValueSome mtable when row.MethodList > 0u -> // TODO: Avoid duplicating code with field printing.
-        let ttable = tables.TypeDef.Value
-        let max =
-            if i = int32 ttable.RowCount - 1
-            then tables.Header.Rows.[MetadataTableFlags.MethodDef]
-            else ttable.[i + 1].MethodList
-        let mutable methodi = row.MethodList
-        while methodi < max do
-            if methodi > 0u then wr.WriteLine()
-            // TODO: Report an error if blobs does not exist
-            methodRow mtable tables methodi vfilter strings blobs.Value (tables.GetMethodBodies()) wr
-            methodi <- methodi + 1u
-    | ValueSome _
-    | ValueNone -> ()
-
-let propertyRow
-    (ptable: ParsedPropertyTable)
-    (mtable: PropertyMapTable)
-    (tables: ParsedMetadataTables)
-    i
-    vfilter
-    (strings: ParsedStringsStream)
-    (blobs: ParsedBlobStream)
-    (wr: #TextWriter)
-    =
-    match ptable.TryGetRow i with
-    | Ok row -> // TODO: Only include properties with specified visibility
-        wr.Write ".property "
-        if row.Flags.HasFlag PropertyAttributes.SpecialName then wr.Write "specialname "
-        if row.Flags.HasFlag PropertyAttributes.RTSpecialName then wr.Write "rtspecialname "
-
-        match blobs.TryReadPropertySig row.Type with
-        | Ok signature ->
-            if signature.HasThis then wr.Write "instance "
-            TypeName.encoded signature.PropertyType tables strings blobs wr
-            TypeName.cmodifiers signature.CustomModifiers tables strings blobs wr
-            wr.Write " '"
-            wr.Write(strings.GetString row.Name)
-            wr.Write '''
-            if not signature.Parameters.IsEmpty then
-                wr.WriteLine '('
-                let wr' = indented wr
-                for i = 0 to signature.Parameters.Length - 1 do
-                    if i > 0 then wr'.WriteLine ','
-                    let param = signature.Parameters.[i]
-                    TypeName.paramType param.ParamType tables strings blobs wr'
-                    TypeName.cmodifiers param.CustomModifiers tables strings blobs wr'
-                wr.WriteLine ')'
-            else wr.WriteLine()
-        | Error err -> fprintfn wr "// error : Cannot read property signature, %O" err
-
-        wr.WriteLine '{'
-        // TODO: Access property map for get, set, and other methods.
+    let inline endBlock (wr: IndentedTextWriter) =
+        wr.Dedent()
         wr.WriteLine '}'
 
-    | Error err -> fprintfn wr "// error : Cannot find property %i, %s" i err.Message
+    /// Outputs IL code as text.
+    let text =
+        let print wr content = content wr
+        { Comment = print
+          Declaration = print
+          Keyword = print
+          StringLiteral = print }
 
-let typeDefProperties
-    trow
-    (tables: ParsedMetadataTables)
-    vfilter
-    (strings: ParsedStringsStream)
-    (blobs: ParsedBlobStream voption)
-    (wr: #TextWriter)
-    =
-    match blobs, tables.Property, tables.PropertyMap with
-    | ValueSome blobs', ValueSome ptable, ValueSome mtable ->
-        // TODO: Store property map in a dictionary to avoid iterating through the map table for each type.
-        let mutable i = 0u
-        while i < mtable.RowCount do
-            let row = mtable.[int32 i]
-            if row.Parent = trow then
-                propertyRow
-                    ptable
-                    mtable
-                    tables
-                    i
-                    vfilter
-                    strings
-                    blobs'
-                    wr
-            i <- i + 1u
-    | ValueSome _, _, _ -> wr.Write "// error : Cannot access property tables for some reason?"
-    | ValueNone, _, _ -> wr.Write "// error : Cannot access blob stream to get property signatures"
+    /// Outputs IL code as HTML.
+    let html =
+        //failwith "TODO: HTML output is not yet available"
+        Unchecked.defaultof<ILOutput>
 
-let typeDefTable (tables: ParsedMetadataTables) vfilter (strings: ParsedStringsStream) blobs (wr: TextWriter) =
-    match tables.TypeDef with
-    | ValueSome table ->
-        for i = 0 to int32 table.RowCount - 1 do
-            let row = table.[i]
-            if VisibilityFilter.typeDef vfilter row.Flags then
-                wr.WriteLine()
-                rowIndex wr i
-                field "Flags" Print.bitfield wr row.Flags
-                //field "TypeName"
-                //field "TypeNamespace"
-                //field "Extends"
-                field "FieldList" Print.integer wr row.FieldList
-                field "MethodList" Print.integer wr row.MethodList
+    [<RequireQualifiedAccess>]
+    module Headers =
+        let coffHeader header offset out =
+            heading "COFF Header" offset out
+            field "Machine" Print.enumeration header.Machine out
+            field "NumberOfSections" Print.integer header.NumberOfSections out
+            field "TimeDateStamp" Print.integer header.TimeDateStamp out
+            field "SymbolTablePointer" Print.integer header.SymbolTablePointer out
+            field "SymbolCount" Print.integer header.SymbolCount out
+            field "OptionalHeaderSize" Print.integer header.OptionalHeaderSize out
+            field "Characteristics" Print.bitfield (FileCharacteristics.flags header.Characteristics) out
+            endn out
 
-                // TODO: Print this differently for nested classes.
-                wr.Write ".class "
+        let private standardFieldsCommon fields out =
+            field "Magic" Print.enumeration fields.Magic out
+            field "MajorLinkerVersion" Print.integer fields.LMajor out
+            field "MinorLinkerVersion" Print.integer fields.LMinor out
+            field "SizeOfCode" Print.integer fields.CodeSize out
+            field "SizeOfInitializedData" Print.integer fields.InitializedDataSize out
+            field "SizeOfUninitializedData" Print.integer fields.UninitializedDataSize out
+            field "EntryPointRva" Print.integer fields.EntryPointRva out
+            field "BaseOfCode" Print.integer fields.BaseOfCode out
 
-                if row.Flags.HasFlag TypeAttributes.Interface then wr.Write "interface "
-                if row.Flags &&& TypeAttributes.VisibilityMask > TypeAttributes.Public then wr.Write "nested "
+        let private ntSpecificFieldsCommon fields out =
+            field "SectionAlignment" Print.integer fields.Alignment.SectionAlignment out
+            field "FileAlignment" Print.integer fields.Alignment.FileAlignment out
+            field "MajorOperatingSystemVersion" Print.integer fields.OSMajor out
+            field "MinorOperatingSystemVersion" Print.integer fields.OSMinor out
+            field "MajorImageVersion" Print.integer fields.UserMajor out
+            field "MinorImageVersion" Print.integer fields.UserMinor out
+            field "MajorSubsystemVersion" Print.integer fields.SubSysMajor out
+            field "MinorSubsystemVersion" Print.integer fields.SubSysMinor out
+            field "Win32VersionValue" Print.integer fields.Win32VersionValue out
+            field "SizeOfImage" Print.integer fields.ImageSize out
+            field "SizeOfHeaders" Print.integer fields.HeadersSize out
+            field "FileChecksum" Print.integer fields.FileChecksum out
+            field "Subsystem" Print.enumeration fields.Subsystem out
+            field "DllCharacteristics" Print.bitfield fields.DllFlags out
 
-                match row.Flags &&& TypeAttributes.VisibilityMask with
-                | TypeAttributes.NestedPublic 
-                | TypeAttributes.Public -> "public "
-                | TypeAttributes.NestedFamily -> "family "
-                | TypeAttributes.NestedAssembly -> "assembly "
-                | TypeAttributes.NestedFamANDAssem -> "famandassem "
-                | TypeAttributes.NestedFamORAssem -> "famorassem "
-                | TypeAttributes.NestedPrivate
-                | TypeAttributes.NotPublic
-                | _ -> "private "
-                |> wr.Write
+        let inline private optionalHeaderImageBase { ImageBase = imageBase } out =
+            field "ImageBase" Print.integer imageBase out
 
-                match row.Flags &&& TypeAttributes.LayoutMask with
-                | TypeAttributes.SequentialLayout -> "sequential "
-                | TypeAttributes.ExplicitLayout -> "explicit "
-                | TypeAttributes.AutoLayout
-                | _ -> "auto "
-                |> wr.Write
+        let inline private ntSpecificFieldsSizes fields out =
+            field "SizeOfStackReserve" Print.integer fields.StackReserveSize out
+            field "SizeOfStackCommit" Print.integer fields.StackCommitSize out
+            field "SizeOfHeapReserve" Print.integer fields.HeapReserveSize out
+            field "SizeOfHeapCommit" Print.integer fields.HeapCommitSize out
 
-                match row.Flags &&& TypeAttributes.StringFormatMask with
-                | TypeAttributes.AnsiClass -> wr.Write "ansi "
-                | TypeAttributes.UnicodeClass -> wr.Write "unicode "
-                | TypeAttributes.AutoClass -> wr.Write "autochar "
-                | _ -> ()
+        let private ntSpecificFieldsRemaining fields out =
+            field "LoaderFlags" Print.integer fields.LoaderFlags out
+            field "NumberOfDataDirectories" Print.integer fields.NumberOfDataDirectories out
 
-                if row.Flags.HasFlag TypeAttributes.Abstract then wr.Write "abstract "
-                if row.Flags.HasFlag TypeAttributes.Sealed then wr.Write "sealed "
-                if row.Flags.HasFlag TypeAttributes.SpecialName then wr.Write "specialname "
-                if row.Flags.HasFlag TypeAttributes.RTSpecialName then wr.Write "rtspecialname "
-                if row.Flags.HasFlag TypeAttributes.Serializable then wr.Write "serializable "
-                if row.Flags.HasFlag TypeAttributes.BeforeFieldInit then wr.Write "beforefieldinit "
+        let inline private ntSpecificFields nt out =
+            optionalHeaderImageBase nt out
+            ntSpecificFieldsCommon nt out
+            ntSpecificFieldsSizes nt out
+            ntSpecificFieldsRemaining nt out
 
-                wr.Write '''
-                let ns = strings.GetString row.TypeNamespace 
-                if ns.Length > 0 then
-                    wr.Write ns
-                    wr.Write '.'
-                wr.Write(strings.GetString row.TypeName)
-                wr.WriteLine '''
+        let optionalHeader header offset out =
+            match header with
+            | ParsedOptionalHeader.PE32(std, nt) ->
+                heading "PE32 Optional Header" offset out
+                standardFieldsCommon std out
+                field "BaseOfData" Print.integer std.BaseOfData out
+                ntSpecificFields nt out
+            | ParsedOptionalHeader.PE32Plus(std, nt) ->
+                heading "PE32+ Optional Header" offset out
+                standardFieldsCommon std out
+                ntSpecificFields nt out
+            newline out
+            //fprintfn wr ".imagebase 0x%08X" fields.ImageBase
+            //fprintfn wr ".file alignment 0x%08X" falignment
+            //fprintfn wr ".stackreserve 0x%08X" fields.StackReserveSize
+            //fprintfn wr ".subsystem 0x%04X" (uint16 fields.Subsystem)
+            endn out
 
-                match ParsedExtends.toTypeDefOrRefOrSpec row.Extends with
-                | ValueNone -> ()
-                | ValueSome extends ->
-                    wr.Write "    extends "
-                    // TODO: Check that blob stream exists for typespec.
-                    TypeName.ofTypeDefOrRefOrSpec extends tables strings (ValueOption.get blobs) wr
-                    wr.WriteLine()
+        let private dataDirectoryNames =
+            [|
+                "Export Table"
+                "Import Table"
+                "Resource Table"
+                "Exception Table"
+                "Certificate Table"
+                "Base Relocation Table"
+                "Debug"
+                "Copyright"
+                "Global Pointer"
+                "TLS Table"
+                "Load Configuration Table"
+                "Bound Import"
+                "Import Address Table"
+                "Delay Import Descriptor"
+                "CLI Header"
+                "Reserved"
+            |]
 
-                wr.WriteLine '{'
-                let wr' = indented wr
-                typeDefFields tables i &row vfilter strings blobs wr'
-                typeDefMethods tables i &row vfilter strings blobs wr'
-                typeDefProperties (uint32 i) tables vfilter strings blobs wr'
-                // TODO: Write other members.
-                wr.WriteLine '}'
-    | ValueNone -> ()
+        let dataDirectories ((_, directories): ParsedDataDirectories) offset out =
+            heading "Data Directories" offset out
+            for i = 0 to directories.Length - 1 do
+                let name =
+                    if i < dataDirectoryNames.Length
+                    then sprintf "%s Table" dataDirectoryNames.[i]
+                    else "Unknown"
+                field name Print.rvaAndSize directories.[i] out
+            endn out
 
-let metadataTables headers il vfilter strings guid blobs (tables: ParsedMetadataTables) offset wr =
-    match headers with
-    | NoHeaders -> ()
-    | IncludeHeaders ->
-        metadataTablesHeader tables.Header offset wr
-    match il, strings, guid with
-    | _, ValueNone, _ -> eprintfn "error : \"#Strings\" metadata heap is missing."
-    | _, _, ValueNone -> eprintfn "error : \"#GUID\" metadata heap is missing."
-    | NoIL, _, _ -> ()
-    | IncludeIL, ValueSome strings', ValueSome guid' ->
-        moduleTable tables strings' guid' wr
-        assemblyTable tables strings' blobs wr
-        assemblyRefTable tables strings' blobs wr
-        typeRefTable tables strings' wr
-        typeDefTable tables vfilter strings' blobs wr
-    wr
+        let sectionHeaders (headers: ParsedSectionHeaders) (offset: FileOffset) out =
+            for i = 0 to headers.Length - 1 do
+                let header = headers.[i]
+                heading (sprintf "\"%O\" Section Header" header.SectionName) (offset + (uint32 i * Magic.SectionHeaderSize)) out
+                fieldf "Name" 8u (fun wr () -> wr.Write header.SectionName) () out
+                field "VirtualSize" Print.integer header.VirtualSize out
+                field "VirtualAddress" Print.uint32 header.VirtualAddress out
+                field "SizeOfRawData" Print.integer header.RawDataSize out
+                field "PointerToRawData" Print.uint32 header.RawDataPointer out
+                field "PointerToRelocations" Print.integer header.PointerToRelocations out
+                field "PointerToLineNumbers" Print.integer header.PointerToLineNumbers out
+                field "NumberOfRelocations" Print.integer header.NumberOfRelocations out
+                field "NumberOfLineNumbers" Print.integer header.NumberOfLineNumbers out
+                field "Characteristics" Print.bitfield header.Characteristics out
+                newline out
+            ValueSome out
 
-let handleError state error offset wr =
-    eprintfn "error : %s" (ReadError.message state error offset)
-    wr
+        let cliHeader (header: ParsedCliHeader) offset out =
+            heading "CLI Header" offset out
+            field "Cb" Print.integer header.Cb out
+            field "MajorRuntimeVersion" Print.integer header.MajorRuntimeVersion out
+            field "MinorRuntimeVersion" Print.integer header.MinorRuntimeVersion out
+            field "MetaData" Print.rvaAndSize header.Metadata out
+            field "Flags" Print.bitfield header.Flags out
+            field "EntryPointToken" Print.metadataToken header.EntryPointToken.Token out
+            field "Resources" Print.rvaAndSize header.Resources out
+            field "StrongNameSignature" Print.rvaAndSize header.StrongNameSignature out
+            field "CodeManagerTable" Print.rvaAndSize header.CodeManagerTable out
+            field "VTableFixups" Print.rvaAndSize header.VTableFixups out
+            field "ExportAddressTableJumps" Print.rvaAndSize header.ExportAddressTableJumps out
+            field "ManagedNativeHeader" Print.rvaAndSize header.ManagedNativeHeader out
+            newline out
+            //".corflags 0x%08X" (uint32 header.Flags)
+            endn out
 
-let write headers il vfilter =
-    let inline header printer =
-        match headers with
-        | IncludeHeaders -> ValueSome printer
-        | NoHeaders -> ValueNone
-    { MetadataReader.empty with
-       ReadCoffHeader = header coffHeader
-       ReadStandardFields = header standardFields
-       ReadNTSpecificFields = header ntSpecificFields
-       ReadDataDirectories = header dataDirectories
-       ReadSectionHeaders = header sectionHeaders
-       ReadCliHeader = header cliHeader
-       ReadMetadataRoot = header metadataRoot
-       ReadStreamHeader = header streamHeader
-       //ReadString
-       ReadMetadataTables = ValueSome(metadataTables headers il vfilter)
-       HandleError = handleError }
+        let cliMetadataRoot (root: ParsedCliMetadataRoot) offset out =
+            heading "CLI Metadata Root" offset out
+            field "MajorVersion" Print.integer root.MajorVersion out
+            field "MinorVersion" Print.integer root.MinorVersion out
+            field "Reserved" Print.integer root.Reserved out
+            field "Length" Print.integer root.Version.Length out
+            fieldf "Version" root.Version.Length (fun wr () -> fprintf wr "\"%O\"" root.Version) () out
+            field "Flags" Print.integer root.Flags out
+            field "Streams" Print.integer root.Streams out
+            endn out
+
+        let metadataStreamHeaders (headers: ImmutableArray<ParsedStreamHeader>) offset out =
+            for i = 0 to headers.Length - 1 do
+                let header = &headers.ItemRef i
+                let name = header.PrintedName
+                heading (sprintf "\"%s\" Stream Header" name) offset out
+                field "Offset" Print.integer (uint32 header.Offset) out
+                field "Size" Print.integer header.Size out
+                fieldf "Name" header.StreamName.Length (fun wr -> fprintf wr "\"%s\"") name out
+                newline out
+            ValueSome out
+
+        let metadataTablesHeader (header: ParsedTablesHeader) offset out =
+            heading "Metadata Tables Header" offset out
+            field "Reserved" Print.integer header.Reserved1 out
+            field "MajorVersion" Print.integer header.MajorVersion out
+            field "MinorVersion" Print.integer header.MinorVersion out
+            field "HeapSizes" Print.bitfield header.HeapSizes out
+            field "Reserved" Print.integer header.Reserved2 out
+            field "Valid" Print.bitfield header.Valid out
+            field "Sorted" Print.bitfield header.Sorted out
+            // TODO: Ensure that row counts are printed in order.
+            fieldf
+                "Rows"
+                (4 * header.Rows.Count)
+                (fun wr () ->
+                    wr.Write "[ "
+                    Seq.map (fun (KeyValue(_, count)) -> sprintf "0x%08X" count) header.Rows
+                    |> String.concat ", "
+                    |> wr.Write
+                    wr.Write " ]")
+                ()
+                out
+            endn out
+
+    [<RequireQualifiedAccess>]
+    module Rows =
+        open FSharpIL.Metadata.Tables
+
+        /// Prints a string surrounded by double quotes (II.5.2).
+        let private qstring (wr: IndentedTextWriter) (str: string) =
+            wr.Write '"'
+            for i = 0 to str.Length - 1 do
+                match str.[i] with
+                | '\t' | '\n' as c ->
+                    wr.Write "\\"
+                    wr.Write c
+                | '"' | '\\' | '\r' | '\000' as c ->
+                    fprintf wr "\\%03o" (uint16 c)
+                | c -> wr.Write c
+            wr.Write '"'
+
+        let private identifier ((_, wr: IndentedTextWriter) as out) (strings: ParsedStringsStream) str =
+            match strings.TryGetString str with
+            | Ok str' ->
+                //let mutable quoted = false
+                // TODO: Quote SQSTRING when necessary.
+                //if quoted then wr.Write '`'
+                wr.Write str'
+                //if quoted then wr.Write '`'
+            | Error _ -> commentin out (fun wr -> wr.Write str)
+
+        let private declbytes ((_, wr) as out) name (blobs: ParsedBlobStream) offset =
+            match blobs.TryGetBytes offset with
+            | Ok bytes' when bytes'.IsEmpty -> ()
+            | result ->
+                decleq out name
+                wr.Write '('
+                match result with
+                | Ok bytes' ->
+                    let chunks = bytes'.AsMemoryArray()
+                    for chunki = 0 to chunks.Length - 1 do
+                        let chunk' = chunks.ItemRef(chunki).Span
+                        for i = 0 to chunk'.Length - 1 do
+                            if chunki > 0 || i > 0 then wr.Write ' '
+                            fprintf wr "%02X" chunk'.[i]
+                | Error _ -> commentin out (fun wr -> wr.Write offset)
+                wr.Write ')'
+                newline out
+
+        let moduleRow (struct({ Strings = strings; Guid = guids }, row: ModuleRow)) _ ((_, wr) as out) =
+            declaration out "module"
+            identifier out strings ((|IdentifierOffset|) row.Name)
+            wr.WriteLine()
+            comment out <| fun wr ->
+                wr.Write "Mvid = "
+                wr.Write row.Mvid
+                match guids.TryGetGuid row.Mvid with
+                | Ok mvid ->
+                    wr.Write " ("
+                    wr.Write mvid
+                    wr.Write ')'
+                | Error _ -> ()
+            newline out
+            ValueSome out
+
+        let private version (ver: System.Version) ((_, wr) as out) =
+            decleq out "ver"
+            wr.Write ver.Major
+            wr.Write ':'
+            wr.Write ver.Minor
+            wr.Write ':'
+            wr.Write ver.Build
+            wr.Write ':'
+            wr.Write ver.Revision
+            newline out
+
+        let private culture (strings: ParsedStringsStream) culture ((_, wr) as out) =
+            match strings.TryGetString culture with
+            | Ok "" -> ()
+            | result ->
+                decleq out "culture"
+                match result with
+                | Ok culture' -> qstring wr culture'
+                | Error _ -> commentin out (fun wr -> wr.Write culture)
+                newline out
+
+        let assemblyRow (struct({ Strings = strings; Blob = blobs }, row: AssemblyRow)) _ ((_, wr) as out) =
+            declaration out "assembly"
+            identifier out strings ((|FileNameOffset|) row.Name)
+            newline out
+            startBlock wr
+            decleq out "hash algorithm"
+            fprintf wr "0x%08X" (uint32 row.HashAlgId)
+            wr.Write ' '
+            comment out (fun wr' -> wr'.Write row.HashAlgId)
+            culture strings row.Culture out
+            // TODO: Write public key of Assembly
+            version row.Version out
+            endBlock wr
+            endn out
+
+        let assemblyRefRow (struct({ Strings = strings; Blob = blobs }, row: AssemblyRefRow)) _ ((_, wr) as out) =
+            declaration out "assembly"
+            keyword out "extern"
+            identifier out strings ((|FileNameOffset|) row.Name)
+            newline out
+            startBlock wr
+            declbytes out "hash" blobs row.HashValue
+            culture strings row.Culture out
+            declbytes
+                out
+                (if row.Flags.HasFlag AssemblyFlags.PublicKey then "publickey" else "publickeytoken")
+                blobs
+                row.PublicKeyOrToken.Token
+            version row.Version out
+            endBlock wr
+            endn out
+
+    let write includeFileHeaders includeCilMetadata vfilter =
+        let inline header printer =
+            match includeFileHeaders with
+            | IncludeHeaders -> ValueSome printer
+            | NoHeaders -> ValueNone
+        let error state error offset out =
+            eprintfn "error : %s" (ReadError.message state error offset)
+            out
+        { ReadLfanew = header (fun lfanew offset out ->
+              heading "lfanew" offset out
+              field "lfanew" Print.integer (uint32 lfanew) out
+              newline out
+              ValueSome out)
+          ReadCoffHeader = header Headers.coffHeader
+          ReadOptionalHeader = header Headers.optionalHeader
+          ReadDataDirectories = header Headers.dataDirectories
+          ReadSectionHeaders = header Headers.sectionHeaders
+          ReadCliMetadata =
+            match includeCilMetadata with
+            | IncludeMetadata ->
+                { ReadCliHeader = header Headers.cliHeader
+                  ReadMetadataRoot = header Headers.cliMetadataRoot
+                  ReadStreamHeaders = header Headers.metadataStreamHeaders
+                  // TODO: Read contents of streams if specified.
+                  ReadStringsStream = ValueNone
+                  ReadGuidStream = ValueNone
+                  ReadUserStringStream = ValueNone
+                  ReadBlobStream = ValueNone
+                  ReadTables =
+                    { MetadataTablesReader.defaultSequentialReader with
+                        ReadHeader = header Headers.metadataTablesHeader
+                        ReadModule = ValueSome Rows.moduleRow
+                        ReadAssembly = ValueSome Rows.assemblyRow
+                        ReadAssemblyRef = ValueSome Rows.assemblyRefRow }
+                    |> SequentialTableReader
+                    |> ValueSome
+                  HandleError = error }
+                |> ValueSome
+            | NoMetadata -> ValueNone
+          HandleError = error }
