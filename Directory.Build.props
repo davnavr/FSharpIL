@@ -2,8 +2,6 @@
 
   <PropertyGroup>
     <LangVersion>5.0</LangVersion>
-    <NeutralLanguage>en-US</NeutralLanguage>
-    <RootNamespace>FSharpIL</RootNamespace>
     <RootDirectory>$(MSBuildThisFileDirectory)</RootDirectory>
   </PropertyGroup>
 
