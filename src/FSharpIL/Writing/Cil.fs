@@ -250,6 +250,7 @@ type MethodBodyStream () =
                             | StringToken _
                             | RawToken _
                             | BranchTarget(BranchKind.Long, _) -> 4u
+                            | Long _ -> 8u
                     | InstructionOrLabel.Label label ->
                         resolvedLabels.Inner.Add(label, size) // TODO: Throw exception for erroneous duplication of a label.
                         unresolvedLabels.Inner.Remove label |> ignore
@@ -329,6 +330,7 @@ type MethodBodyStream () =
                 | Byte value -> wr.Write value
                 | Short value -> wr.WriteLE value
                 | Integer value -> wr.WriteLE value
+                | Long value -> wr.WriteLE value
                 | RawToken token -> wr.WriteLE(uint32 token)
                 | FieldToken token -> wr.WriteLE(uint32(metadataTokenSource.GetFieldToken token))
                 | MethodToken token -> wr.WriteLE(uint32(metadataTokenSource.GetMethodToken token))
