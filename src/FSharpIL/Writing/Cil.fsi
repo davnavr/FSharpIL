@@ -224,12 +224,21 @@ module Instructions =
 
 
 
+
+    /// <summary>
+    /// (0x10) Short form of an instruction that pops a value from the stack and stores it into the specified argument
+    /// (III.3.61).
+    /// </summary>
+    /// <param name="num">The index of the argument to store the value into.</param>
+    val starg_s : num: uint8 -> Instruction
+
     /// <summary>
     /// (0x11) Short form of an instruction that loads the local variable at the specified <paramref name="index"/> onto the
     /// stack (III.3.43).
     /// </summary>
     /// <param name="index">The index of the local variable that is loaded onto the stack.</param>
     val ldloc_s : index: uint8 -> Instruction
+
 
 
 
@@ -509,8 +518,10 @@ module Instructions =
 
 
 
+
     /// <summary>(0xFE 0x06) Pushes a pointer to the specified <paramref name="method"/> onto the stack (III.3.41).</summary>
     val ldftn : method: MethodTok -> Instruction
+
 
 
 
@@ -519,11 +530,17 @@ module Instructions =
 
 
 
+
+    /// (0xFE 0x0B) Long form of an instruction that pops a value from the stack and stores it into the specified argument
+    /// (III.3.61).
+    val starg : num: uint16 -> Instruction
+
     /// <summary>
     /// (0xFE 0x0C) Long form of an instruction that loads the local variable at the specified <paramref name="index"/> onto the
     /// stack (III.3.43).
     /// </summary>
     val ldloc : index: LocalVarIndex -> Instruction
+
 
 
 
@@ -535,19 +552,23 @@ module Instructions =
 
     /// Contains functions used to write the most shortened from of CIL opcodes whenever possible.
     module Shortened =
-        /// (0x02 to 0x05, 0x0E, 0xFE 0x09) Shortest form of an instruction that loads the specified argument onto the stack
+        /// (0x02 to 0x05, 0x0E, or 0xFE 0x09) Shortest form of an instruction that loads the specified argument onto the stack
         /// (III.3.38).
         val ldarg : num: uint16 -> Instruction
 
         /// <summary>
-        /// (0x06 to 0x09, 0x11, 0xFE 0x0C) Shortest form of an instruction that loads the local variable at the specified
+        /// (0x06 to 0x09, 0x11, or 0xFE 0x0C) Shortest form of an instruction that loads the local variable at the specified
         /// <paramref name="index"/> onto the stack (III.3.43).
         /// </summary>
         val ldloc : index: LocalVarIndex -> Instruction
 
+        /// (0x10 or 0xFE 0x0B) Shortest form of an instruction that pops a value from the stack and stores it into the specified
+        /// argument (III.3.61).
+        val starg : num: uint16 -> Instruction
+
         /// <summary>
-        /// (0x0A to 0x0D, 0x13, 0xFE 0x0E) Shortest form of an instruction that pops a value from the stack and stores it into
-        /// the local variable at the specified <paramref name="index"/> (III.3.63).
+        /// (0x0A to 0x0D, 0x13, or 0xFE 0x0E) Shortest form of an instruction that pops a value from the stack and stores it
+        /// into the local variable at the specified <paramref name="index"/> (III.3.63).
         /// </summary>
         val stloc : index: LocalVarIndex -> Instruction
 

@@ -404,6 +404,7 @@ module Instructions =
     let stloc_2 = pops1 Opcode.Stloc_2
     let stloc_3 = pops1 Opcode.Stloc_3
     let ldarg_s num = { pushes1 Opcode.Ldarg_s with Operand = Operand.Byte num }
+    let starg_s num = { pushes1 Opcode.Starg_s with Operand = Operand.Byte num }
     let ldloc_s index = { pushes1 Opcode.Ldloc_s with Operand = Operand.Byte index }
     let stloc_s index = { pops1 Opcode.Stloc_s with Operand = Operand.Byte index }
     let ldnull = pushes1 Opcode.Ldnull
@@ -474,6 +475,7 @@ module Instructions =
     let mul_ovf_un = pops1 Opcode.Mul_ovf_un
     let ldftn method = { pushes1 Opcode.Ldftn with Operand = Operand.MethodToken method }
     let ldarg num = { pushes1 Opcode.Ldarg with Operand = Operand.Short num }
+    let starg num = { pushes1 Opcode.Starg with Operand = Operand.Short num }
     let ldloc (LocalVarIndex i) = { pushes1 Opcode.Ldloc with Operand = Operand.Short i }
     let stloc (LocalVarIndex i) = { pops1 Opcode.Stloc with Operand = Operand.Short i }
 
@@ -497,6 +499,11 @@ module Instructions =
             | 3us -> ldloc_3
             | index' when index' < MaxShortLocalIndex -> ldloc_s(uint8 index')
             | _ -> ldloc index
+
+        let starg num =
+            if num <= uint16 Byte.MaxValue
+            then starg_s(uint8 num)
+            else starg num
 
         let stloc index =
             match uint16 index with

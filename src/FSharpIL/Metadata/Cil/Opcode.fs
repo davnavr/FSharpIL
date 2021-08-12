@@ -18,6 +18,7 @@ type Opcode =
     | Stloc_3 = 0xDus
     | Ldarg_s = 0xEus
 
+    | Starg_s = 0x10us
     | Ldloc_s = 0x11us
 
     | Stloc_s = 0x13us
@@ -149,6 +150,7 @@ type Opcode =
 
     | Ldarg = 0xFE_09us
 
+    | Starg = 0xFE_0Bus
     | Ldloc = 0xFE_0Cus
 
     | Stloc = 0xFE_0Eus
