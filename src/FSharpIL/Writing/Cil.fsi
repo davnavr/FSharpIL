@@ -305,6 +305,13 @@ module Instructions =
     /// </summary>
     val ldc_i4 : number: int32 -> Instruction
 
+    /// <summary>
+    /// (0x21) Long form of an instruction that pushes the signed 8-byte integer constant <paramref name="number"/> onto the
+    /// stack as an <c>int64</c> (III.3.40).
+    /// </summary>
+    val ldc_i8 : number: int64 -> Instruction
+
+
 
 
     /// (0x25) "Duplicates the value on the top of the stack" (III.3.33).

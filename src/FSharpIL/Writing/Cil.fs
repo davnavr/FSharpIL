@@ -46,6 +46,7 @@ type Operand =
     | Byte of uint8
     | Short of uint16
     | Integer of uint32
+    | Long of uint64
     | RawToken of MetadataToken
     | FieldToken of FieldTok
     | MethodToken of MethodTok
@@ -59,6 +60,7 @@ type Operand =
         | Byte(ToString str)
         | Short(ToString str)
         | Integer(ToString str)
+        | Long(ToString str)
         | FieldToken(ToString str)
         | MethodToken(ToString str)
         | TypeToken(ToString str) -> str
@@ -415,6 +417,7 @@ module Instructions =
     let ldc_i4_8 = pushes1 Opcode.Ldc_i4_8
     let ldc_i4_s (number: int8) = { pushes1 Opcode.Ldc_i4_s with Operand = Operand.Byte(uint8 number) }
     let ldc_i4 (number: int32) = { pushes1 Opcode.Ldc_i4 with Operand = Operand.Integer(uint32 number) }
+    let ldc_i8 (number: int64) = { pushes1 Opcode.Ldc_i8 with Operand = Operand.Long(uint64 number) }
     let dup = pushes1 Opcode.Dup
     let pop = pops1 Opcode.Pop
     let call method = methodTokenCall Opcode.Call method
