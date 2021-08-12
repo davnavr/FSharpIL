@@ -303,7 +303,7 @@ module Instructions =
     /// (0x20) Long form of an instruction that pushes the signed 4-byte integer constant <paramref name="number"/> onto the
     /// stack as an <c>int32</c> (III.3.40).
     /// </summary>
-    val idc_i4 : number: int32 -> Instruction
+    val ldc_i4 : number: int32 -> Instruction
 
 
 
