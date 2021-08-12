@@ -173,6 +173,9 @@ module Instructions =
         /// Creates a branching instruction that pops two values from the stack.
         val brpops2 : opcode: Opcode -> BranchKind -> target: Label -> Instruction
 
+        /// Creates a branching instruction that will target the specified label.
+        val branchingRef : opcode: Opcode -> StackBehavior -> BranchKind -> target: Label ref -> Instruction
+
     /// (0x00) An instruction that does nothing (III.3.51).
     val nop : Instruction
 

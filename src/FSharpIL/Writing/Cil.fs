@@ -53,6 +53,7 @@ type Operand =
     | TypeToken of TypeTok
     | StringToken of ReadOnlyMemory<char>
     | BranchTarget of BranchKind * Label
+    | BranchTargetRef of BranchKind * Label ref
 
     override this.ToString() =
         match this with
@@ -65,7 +66,8 @@ type Operand =
         | MethodToken(ToString str)
         | TypeToken(ToString str) -> str
         | RawToken token -> sprintf "/* %08X */" (uint32 token)
-        | BranchTarget _ -> sprintf "LABEL"
+        | BranchTarget(kind, HashCodeOf id) -> sprintf "%O_label_%i" kind id
+        | BranchTargetRef(kind, HashCodeOf id) -> sprintf "%O_label_reference_%i" kind id
         | StringToken str -> String.Concat("\"", String str.Span, "\"")
 
 [<Struct>]
@@ -241,7 +243,8 @@ type MethodBodyStream () =
                             match instruction.Operand with
                             | Nothing -> 0u
                             | Byte _
-                            | BranchTarget(BranchKind.Short, _) -> 1u
+                            | BranchTarget(BranchKind.Short, _)
+                            | BranchTargetRef(BranchKind.Short, _) -> 1u
                             | Short _ -> 2u
                             | Integer _
                             | FieldToken _
@@ -249,7 +252,8 @@ type MethodBodyStream () =
                             | TypeToken _
                             | StringToken _
                             | RawToken _
-                            | BranchTarget(BranchKind.Long, _) -> 4u
+                            | BranchTarget(BranchKind.Long, _)
+                            | BranchTargetRef(BranchKind.Long, _) -> 4u
                             | Long _ -> 8u
                     | InstructionOrLabel.Label label ->
                         resolvedLabels.Inner.Add(label, size) // TODO: Throw exception for erroneous duplication of a label.
@@ -336,7 +340,8 @@ type MethodBodyStream () =
                 | MethodToken token -> wr.WriteLE(uint32(metadataTokenSource.GetMethodToken token))
                 | TypeToken token -> wr.WriteLE(uint32(metadataTokenSource.GetTypeToken token))
                 | StringToken token -> wr.WriteLE(uint32(metadataTokenSource.GetUserString &token))
-                | BranchTarget(kind, target) ->
+                | BranchTarget(kind, target)
+                | BranchTargetRef(kind, { contents = target }) ->
                     let tlocation = entry.LabelLookup.Value.[target]
                     let toffset =
                         let size =
@@ -386,6 +391,11 @@ module Instructions =
 
         let brpops1 opcode kind target = branching opcode pop1 kind target
         let brpops2 opcode kind target = branching opcode pop2 kind target
+
+        let branchingRef opcode behavior kind target =
+            { Opcode = opcode
+              StackBehavior = behavior
+              Operand = Operand.BranchTargetRef(kind, target) }
 
     open Instruction
 
