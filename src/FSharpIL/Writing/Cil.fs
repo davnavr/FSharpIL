@@ -414,6 +414,7 @@ module Instructions =
     let ldc_i4_7 = pushes1 Opcode.Ldc_i4_7
     let ldc_i4_8 = pushes1 Opcode.Ldc_i4_8
     let ldc_i4_s (number: int8) = { pushes1 Opcode.Ldc_i4_s with Operand = Operand.Byte(uint8 number) }
+    let ldc_i4 (number: int32) = { pushes1 Opcode.Ldc_i4 with Operand = Operand.Integer(uint32 number) }
     let dup = pushes1 Opcode.Dup
     let pop = pops1 Opcode.Pop
     let call method = methodTokenCall Opcode.Call method
@@ -500,3 +501,18 @@ module Instructions =
             | 3us -> stloc_3
             | index' when index' < MaxShortLocalIndex -> stloc_s(uint8 index')
             | _ -> stloc index
+
+        let ldc_i4 number =
+            match number with
+            | -1 -> ldc_i4_m1
+            | 0 -> ldc_i4_0
+            | 1 -> ldc_i4_1
+            | 2 -> ldc_i4_2
+            | 3 -> ldc_i4_3
+            | 4 -> ldc_i4_4
+            | 5 -> ldc_i4_5
+            | 6 -> ldc_i4_6
+            | 7 -> ldc_i4_7
+            | 8 -> ldc_i4_8
+            | _ when number >= int32 SByte.MinValue && number <= int32 SByte.MaxValue -> ldc_i4_s(int8 number)
+            | _ -> ldc_i4 number

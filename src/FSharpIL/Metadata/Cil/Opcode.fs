@@ -33,6 +33,10 @@ type Opcode =
     | Ldc_i4_7 = 0x1Dus
     | Ldc_i4_8 = 0x1Eus
     | Ldc_i4_s = 0x1Fus
+    | Ldc_i4 = 0x20us
+    | Ldc_i8 = 0x21us
+    | Ldc_r4 = 0x22us
+    | Ldc_r8 = 0x23us
 
     | Dup = 0x25us
     | Pop = 0x26us

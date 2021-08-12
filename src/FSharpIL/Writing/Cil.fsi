@@ -299,6 +299,13 @@ module Instructions =
     /// </summary>
     val ldc_i4_s : number: int8 -> Instruction
 
+    /// <summary>
+    /// (0x20) Long form of an instruction that pushes the signed 4-byte integer constant <paramref name="number"/> onto the
+    /// stack as an <c>int32</c> (III.3.40).
+    /// </summary>
+    val idc_i4 : number: int32 -> Instruction
+
+
 
     /// (0x25) "Duplicates the value on the top of the stack" (III.3.33).
     val dup : Instruction
@@ -532,7 +539,13 @@ module Instructions =
         val ldloc : index: LocalVarIndex -> Instruction
 
         /// <summary>
-        /// (0x0A to 0x0D, 0x13, 0xFE 0x0E) Shortest from of an instruction that pops a value from the stack and stores it into
+        /// (0x0A to 0x0D, 0x13, 0xFE 0x0E) Shortest form of an instruction that pops a value from the stack and stores it into
         /// the local variable at the specified <paramref name="index"/> (III.3.63).
         /// </summary>
         val stloc : index: LocalVarIndex -> Instruction
+
+        /// <summary>
+        /// (0x15 to 0x20) Shortest form of an instruction that pushes an integer constant <paramref name="number"/> onto the
+        /// stack as an <c>int32</c> (III.3.40).
+        /// </summary>
+        val idc_i4 : number: int32 -> Instruction
