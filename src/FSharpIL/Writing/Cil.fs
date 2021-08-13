@@ -442,6 +442,7 @@ module Instructions =
     let blt_s target = brpops2 Opcode.Blt_s BranchKind.Short target
     let add = pops1 Opcode.Add
     let mul = pops1 Opcode.Mul
+    let xor = pops1 Opcode.Xor
     let conv_i4 = op Opcode.Conv_i4
     let callvirt method = methodTokenCall Opcode.Callvirt method
 
@@ -483,6 +484,7 @@ module Instructions =
     let add_ovf_un = pops1 Opcode.Add_ovf_un
     let mul_ovf = pops1 Opcode.Mul_ovf
     let mul_ovf_un = pops1 Opcode.Mul_ovf_un
+    let ceq = pops1 Opcode.Ceq
     let ldftn method = { pushes1 Opcode.Ldftn with Operand = Operand.MethodToken method }
     let ldarg num = { pushes1 Opcode.Ldarg with Operand = Operand.Short num }
     let starg num = { pushes1 Opcode.Starg with Operand = Operand.Short num }

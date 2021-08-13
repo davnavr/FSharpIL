@@ -390,6 +390,11 @@ module Instructions =
 
 
 
+    /// (0x61) Pops two values from the stack, computes the bitwise <c>xor</c>, and pushes the result onto the stack (III.3.67).
+    val xor : Instruction
+
+
+
     /// <summary>
     /// (0x69) Converts the value on top of the stack into an <c>int32</c> without an overflow check (III.3.27).
     /// </summary>
@@ -518,6 +523,14 @@ module Instructions =
     /// <see cref="T:System.OverflowException"/> on overflow (III.3.49).
     /// </summary>
     val mul_ovf_un : Instruction
+
+
+
+
+    /// (0xFE 0x01) Pops two values onto the stack, compares them, then pushes <c>1</c> onto the stack if the values are equal,
+    /// or <c>0</c> otherwise.
+    val ceq : Instruction
+
 
 
 
