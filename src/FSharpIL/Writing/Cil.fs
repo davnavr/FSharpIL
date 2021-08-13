@@ -441,6 +441,7 @@ module Instructions =
     let bgt_s target = brpops2 Opcode.Bgt_s BranchKind.Short target
     let blt_s target = brpops2 Opcode.Blt_s BranchKind.Short target
     let add = pops1 Opcode.Add
+    let sub = pops1 Opcode.Sub
     let mul = pops1 Opcode.Mul
     let xor = pops1 Opcode.Xor
     let conv_i4 = op Opcode.Conv_i4

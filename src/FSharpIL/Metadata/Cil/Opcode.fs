@@ -46,15 +46,22 @@ type Opcode =
 
     | Ret = 0x2Aus
     | Br_s = 0x2Bus
-
+    | Brfalse_s = 0x2Cus
+    | Brnull_s = 0x2Cus
+    | Brzero_s = 0x2Cus
     | Brinst_s = 0x2Dus
     | Brtrue_s = 0x2Dus
     
     | Bgt_s = 0x30us
 
     | Blt_s = 0x32us
+    | Bne_un_s = 0x33us
+
+    | Br = 0x38us
+    | Brfalse = 0x39us
 
     | Blt = 0x3Fus
+    | Bne_un = 0x40us
 
     | Add = 0x58us
     | Sub = 0x59us

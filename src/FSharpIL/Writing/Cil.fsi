@@ -382,7 +382,11 @@ module Instructions =
     /// (III.3.1).
     val add : Instruction
 
-
+    /// <summary>
+    /// (0x59) Pops <c>value1</c> then <c>value2</c> from the stack, subtracts <c>value2</c> from <c>value1</c>, and pushes the
+    /// result onto the stack without an overflow check (III.3.64).
+    /// </summary>
+    val sub : Instruction
 
     /// (0x5A) Pops two values from the stack, adds them, and pushes the result onto the stack without an overflow check
     /// (III.3.48).
