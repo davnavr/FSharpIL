@@ -15,7 +15,8 @@ type Field =
     new (name, fieldType) = { Name = name; Type = fieldType }
 
     abstract Equals: other: Field -> bool
-    default this.Equals(other: Field) = this.Name === other.Name && this.Type === other.Type
+    default this.Equals(other: Field) =
+        this.Name === other.Name && this.Type === other.Type
 
     override this.ToString() = this.Name.ToString()
 
@@ -36,9 +37,7 @@ type DefinedField (flags: FieldFlags, name, fieldType) =
 
     override _.Equals(other: Field) =
         match other with
-        | :? DefinedField as other' ->
-            (flags ||| other'.Flags &&& FieldFlags.FieldAccessMask <> FieldFlags.CompilerControlled)
-            && base.Equals(other = other)
+        | :? DefinedField -> base.Equals(other = other)
         | _ -> false
 
 [<Sealed>]
@@ -112,6 +111,8 @@ type FieldReference<'Kind when 'Kind :> IAttributeTag<FieldFlags>> (visibility, 
 
 [<RequireQualifiedAccess>]
 module Field =
+    open System.Collections.Generic
+
     let inline (|Defined|Referenced|) (field: Field) =
         match field with
         | :? DefinedField as fdef -> Defined fdef
@@ -119,11 +120,20 @@ module Field =
 
     [<Sealed>]
     type SignatureComparer() =
-        interface System.Collections.Generic.IEqualityComparer<Field> with
+        interface IEqualityComparer<Field> with
             member _.Equals(x, y) = x.Type === y.Type
             member _.GetHashCode field = field.Type.GetHashCode()
 
     let signatureComparer = SignatureComparer()
+
+    [<Sealed>]
+    type DefinitionComparer() =
+        interface IEqualityComparer<DefinedField> with
+            member _.Equals(x, y) =
+                (x.Flags ||| y.Flags &&& FieldFlags.FieldAccessMask <> FieldFlags.CompilerControlled) && x.Equals y
+            member _.GetHashCode field = field.GetHashCode()
+
+    let definitionComparer = DefinitionComparer()
 
 [<RequireQualifiedAccess>]
 module DefinedField =

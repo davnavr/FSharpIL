@@ -88,12 +88,19 @@ type FieldReference<'Kind when 'Kind :> IAttributeTag<FieldFlags>> =
 
 [<RequireQualifiedAccess>]
 module Field =
+    open System.Collections.Generic
+
     val inline (|Defined|Referenced|): field: Field -> Choice<DefinedField, ReferencedField>
 
     [<Sealed; Class>]
-    type SignatureComparer = interface System.Collections.Generic.IEqualityComparer<Field>
+    type SignatureComparer = interface IEqualityComparer<Field>
 
     val signatureComparer : SignatureComparer
+
+    [<Sealed; Class>]
+    type DefinitionComparer = interface IEqualityComparer<DefinedField>
+
+    val definitionComparer : DefinitionComparer
 
 [<RequireQualifiedAccess>]
 module DefinedField =

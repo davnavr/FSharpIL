@@ -141,12 +141,15 @@ type DefinedTypeMembers
         attrs
     )
     =
-    [<DefaultValue>] val mutable Field: HybridHashSet<DefinedField>
-    [<DefaultValue>] val mutable Method: HybridHashSet<DefinedMethod>
+    let field = HashSet<DefinedField> Field.definitionComparer // TODO: Figure out how to use HybridHashSet with comparer
+    let method = HashSet<DefinedMethod> Method.definitionComparer // TODO: Figure out how to use HybridHashSet with comparer
+
     [<DefaultValue>] val mutable MethodBodyLookup: LateInitDictionary<DefinedMethod, MethodBody>
     [<DefaultValue>] val mutable Property: HybridHashSet<Property>
     [<DefaultValue>] val mutable Event: HybridHashSet<Event>
 
+    member _.Field = field
+    member _.Method = method
     member _.Owner = owner
     member this.FieldCount = this.Field.Count
     member this.MethodCount = this.Method.Count

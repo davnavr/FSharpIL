@@ -120,16 +120,22 @@ type DefinedMethod =
 
     //member Visibility: MemberVisibility
 
-    override Equals: Method -> bool
-
 [<RequireQualifiedAccess>]
 module Method =
+    open System.Collections.Generic
+
     [<Sealed>]
     type SignatureComparer =
         member Equals: x: #Method * y: #Method -> bool
-        interface System.Collections.Generic.IEqualityComparer<Method>
+        interface IEqualityComparer<Method>
 
     val signatureComparer : SignatureComparer
+
+    [<Sealed>]
+    type DefinitionComparer =
+        interface IEqualityComparer<DefinedMethod>
+
+    val definitionComparer : DefinitionComparer
 
 [<Sealed>]
 type MethodDefinition<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct> = class

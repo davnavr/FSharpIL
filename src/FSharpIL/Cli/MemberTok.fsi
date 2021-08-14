@@ -26,17 +26,24 @@ type MethodTok<'Owner, 'Method when 'Method : not struct and 'Method :> Method> 
 
     override ToString: unit -> string
 
+    override GetHashCode: unit -> int32
+
     interface IEquatable<MethodTok<'Owner, 'Method>>
 
-    override GetHashCode: unit -> int32
     override Equals: obj -> bool
 
-[<IsReadOnly; Struct; NoComparison; StructuralEquality>] // TODO: Consider using CustomEquality for FieldTok as well if CustomEquality for MethodTok`2 improved performance.
+[<IsReadOnly; Struct; NoComparison; CustomEquality>]
 type FieldTok<'Owner, 'Field when 'Field : not struct and 'Field :> Field> =
     member Field: 'Field
     member Token: FieldTok
 
+    override ToString: unit -> string
+
+    override GetHashCode: unit -> int32
+
     interface IEquatable<FieldTok<'Owner, 'Field>>
+
+    override Equals: obj -> bool
 
 val inline internal (|MethodTok|) : method: MethodTok<'Owner, 'Method> -> struct(TypeTok * 'Method)
 

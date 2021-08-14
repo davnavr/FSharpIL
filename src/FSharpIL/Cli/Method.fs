@@ -238,11 +238,9 @@ type DefinedMethod =
           ImplFlags = implFlags
           Parameters = Unsafe.As &parameters }
 
-    override this.Equals(other: Method) =
+    override _.Equals(other: Method) =
         match other with
-        | :? DefinedMethod as other' ->
-            (this.Flags ||| other'.Flags &&& MethodDefFlags.MemberAccessMask <> MethodDefFlags.CompilerControlled)
-            && base.Equals(other = other)
+        | :? DefinedMethod -> base.Equals(other = other)
         | _ -> false
 
 [<Sealed>]
@@ -403,6 +401,15 @@ module Method =
             member this.GetHashCode method = this.GetHashCode method
 
     let signatureComparer = SignatureComparer()
+
+    [<Sealed>]
+    type DefinitionComparer () =
+        interface IEqualityComparer<DefinedMethod> with
+            member _.Equals(x, y) =
+                (x.Flags ||| y.Flags &&& MethodDefFlags.MemberAccessMask <> MethodDefFlags.CompilerControlled) && x.Equals y
+            member _.GetHashCode method = method.GetHashCode()
+
+    let definitionComparer = DefinitionComparer()
 
 [<Sealed>]
 type MethodReference<'Kind when 'Kind :> MethodKinds.IKind and 'Kind : struct>

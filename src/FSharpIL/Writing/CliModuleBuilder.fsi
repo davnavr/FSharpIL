@@ -1,7 +1,7 @@
 ﻿namespace FSharpIL.Writing
 
 open System
-open System.Collections.Immutable
+open System.Collections.Generic
 open System.Runtime.CompilerServices
 
 open FSharpIL.Cli
@@ -28,10 +28,6 @@ type MethodGenerator = DefinedMethod * MethodBody voption * CustomAttributeBuild
 
 [<Sealed>]
 type DefinedTypeMembers =
-    [<DefaultValue>] val mutable internal Field: HybridHashSet<DefinedField>
-    [<DefaultValue>] val mutable internal Method: HybridHashSet<DefinedMethod>
-    [<DefaultValue>] val mutable internal MethodBodyLookup: LateInitDictionary<DefinedMethod, MethodBody>
-
     member Owner: DefinedType
     member FieldCount: int32
     member MethodCount: int32

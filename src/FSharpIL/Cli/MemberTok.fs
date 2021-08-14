@@ -44,12 +44,23 @@ type MethodTok<'Owner, 'Method when 'Method : not struct and 'Method :> Method> 
         | :? MethodTok<'Owner, 'Method> as other -> this === other
         | _ -> false
 
-[<Struct>]
+[<Struct; NoComparison; CustomEquality>]
 type FieldTok<'Owner, 'Field when 'Field : not struct and 'Field :> Field> (token: FieldTok) =
     member _.Field = Unsafe.As<'Field> token.Member
     member _.Token = token
 
     new (owner, field: 'Field) = FieldTok<_, _>(token = FieldTok(owner, field))
+
+    override _.ToString() = token.ToString()
+
+    override _.GetHashCode() = token.GetHashCode()
+
+    interface IEquatable<FieldTok<'Owner, 'Field>> with member _.Equals other = token === other.Token
+
+    override this.Equals obj =
+        match obj with
+        | :? FieldTok<'Owner, 'Field> as other -> this === other
+        | _ -> false
 
 let inline (|MethodTok|) (method: MethodTok<_, _>) = struct(method.Token.Owner, method.Method)
 
