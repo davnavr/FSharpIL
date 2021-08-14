@@ -1132,6 +1132,16 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                     |> builder.Tables.GenericParamConstraint.Add
                     |> ignore
 
+        if info.NestedTypes.Count > 0 then
+            for KeyValue(parent, nested) in info.NestedTypes do
+                for t in nested do // TODO: Fix, NestedClass table should be sorted by nested class, not by parent?
+                    { NestedClassRow.EnclosingClass = definedTypeLookup.[parent]
+                      NestedClass = definedTypeLookup.[t] }
+                    |> builder.Tables.NestedClass.Add
+                    |> ignore
+
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.NestedClass
+
         if sortedMethodSemantics.Count > 0 then
             for KeyValue(parent, methods) in sortedMethodSemantics do
                 for (flag, methodi) in methods do
