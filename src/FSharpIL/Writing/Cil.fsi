@@ -406,6 +406,13 @@ module Instructions =
 
 
 
+    /// <summary>
+    /// (0x64) Converts the value on top of the stack into an <c>unsigned uint32</c> without an overflow check (III.3.27).
+    /// </summary>
+    val conv_u4 : Instruction
+
+
+
     /// <summary>(0x6F) Calls a method associated with an object (III.4.2).</summary>
     val callvirt : method: MethodTok -> Instruction // TODO: Take a non-static method here.
 
@@ -469,6 +476,13 @@ module Instructions =
 
     /// (0x80) Pops a value off of the stack and stores it into a static field (III.4.30).
     val stsfld : field: FieldTok -> Instruction // TODO: How to accept both DefinedField and ReferencedField that are static only?
+
+
+
+    /// <summary>
+    /// (0x84) Converts the unsigned value on top of the stack into an <c>int32</c> with an overflow check (III.3.29).
+    /// </summary>
+    val conv_ovf_i4_un : Instruction
 
 
 

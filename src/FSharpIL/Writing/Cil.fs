@@ -445,6 +445,7 @@ module Instructions =
     let mul = pops1 Opcode.Mul
     let xor = pops1 Opcode.Xor
     let conv_i4 = op Opcode.Conv_i4
+    let conv_u4 = op Opcode.Conv_u4
     let callvirt method = methodTokenCall Opcode.Callvirt method
 
     module Ldstr =
@@ -476,6 +477,7 @@ module Instructions =
     let ldsfld field = { pushes1 Opcode.Ldsfld with Operand = Operand.FieldToken field }
     let ldsflda field = { pushes1 Opcode.Ldsflda with Operand = Operand.FieldToken field }
     let stsfld field = { pops1 Opcode.Stsfld with Operand = Operand.FieldToken field }
+    let conv_ovf_i4_un = op Opcode.Conv_ovf_i4_un
     let box t = { op Opcode.Box with Operand = Operand.TypeToken t }
     let newarr etype = { op Opcode.Newarr with Operand = Operand.TypeToken etype }
     let ldlen = op Opcode.Ldlen
