@@ -439,10 +439,12 @@ module Instructions =
     let brinst_s target = brpops1 Opcode.Brinst_s BranchKind.Short target
     let inline brtrue_s target = brinst_s target
     let beq_s target = brpops2 Opcode.Beq_s BranchKind.Short target
+    let bge_s target = brpops2 Opcode.Bge_s BranchKind.Short target
     let bgt_s target = brpops2 Opcode.Bgt_s BranchKind.Short target
     let ble_s target = brpops2 Opcode.Ble_s BranchKind.Short target
     let blt_s target = brpops2 Opcode.Blt_s BranchKind.Short target
     let beq target = brpops2 Opcode.Beq BranchKind.Long target
+    let bge target = brpops2 Opcode.Bge BranchKind.Long target
     let ble target = brpops2 Opcode.Ble BranchKind.Long target
     let add = pops1 Opcode.Add
     let sub = pops1 Opcode.Sub
@@ -477,6 +479,7 @@ module Instructions =
             ofMethod ctor.Token
 
     let castclass toType = { op Opcode.Castclass with Operand = Operand.TypeToken toType }
+    let throw = pops1 Opcode.Throw
     let ldfld field = { op Opcode.Ldfld with Operand = Operand.FieldToken field }
     let ldflda field = { op Opcode.Ldflda with Operand = Operand.FieldToken field }
     let stfld field = { pops2 Opcode.Stfld with Operand = Operand.FieldToken field }
@@ -495,6 +498,7 @@ module Instructions =
     let mul_ovf = pops1 Opcode.Mul_ovf
     let mul_ovf_un = pops1 Opcode.Mul_ovf_un
     let ceq = pops1 Opcode.Ceq
+    let clt = pops1 Opcode.Clt
     let ldftn method = { pushes1 Opcode.Ldftn with Operand = Operand.MethodToken method }
     let ldarg num = { pushes1 Opcode.Ldarg with Operand = Operand.Short num }
     let starg num = { pushes1 Opcode.Starg with Operand = Operand.Short num }

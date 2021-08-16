@@ -366,7 +366,11 @@ module Instructions =
     /// </summary>
     val beq_s : target: Label -> Instruction
 
-
+    /// <summary>
+    /// (0x2F) Branches to the <paramref name="target"/> if <c>value1</c> is greater than or equal to <c>value2</c>, short form
+    /// (III.3.6).
+    /// </summary>
+    val bge_s : target: Label -> Instruction
 
     /// <summary>
     /// (0x30) Branches to the <paramref name="target"/> if <c>value1</c> is greater than <c>value2</c>, short form (III.3.8).
@@ -374,7 +378,8 @@ module Instructions =
     val bgt_s : target: Label -> Instruction
 
     /// <summary>
-    /// (0x31) Branches to the <paramref name="target"/> if <c>value1</c> is less than or equal to <c>value2</c>, short form (III.3.10).
+    /// (0x31) Branches to the <paramref name="target"/> if <c>value1</c> is less than or equal to <c>value2</c>, short form
+    /// (III.3.10).
     /// </summary>
     val ble_s : target: Label -> Instruction
 
@@ -392,6 +397,15 @@ module Instructions =
     /// (0x3B) Branches to the <paramref name="target"/> if <c>value1</c> is equal to <c>value2</c> (III.3.5).
     /// </summary>
     val beq : target: Label -> Instruction
+
+    /// <summary>
+    /// (0x3C) Branches to the <paramref name="target"/> if <c>value1</c> is greater than or equal to <c>value2</c> (III.3.6).
+    /// </summary>
+    val bge : target: Label -> Instruction
+
+
+
+
 
 
 
@@ -493,6 +507,16 @@ module Instructions =
 
 
 
+
+
+
+
+    /// <summary>
+    /// (0x7A) Throws the exception object on top of the stack, note that the object does not have to derive from
+    /// <see cref="T:System.Exception"/> (III.4.31).
+    /// </summary>
+    val throw : Instruction
+
     /// (0x7B) Pops a member reference off of the stack and pushes the value of an instance field onto the stack (III.4.10).
     // TODO: Instead take a FieldDefinition<FieldKinds.Instance> or FieldReference<FieldKinds.Instance>
     val ldfld : field: FieldTok -> Instruction
@@ -590,6 +614,12 @@ module Instructions =
     val ceq : Instruction
 
 
+
+    /// <summary>
+    /// (0xFE 0x04) Pops <c>value1</c> then <c>value2</c> off of the stack, then pushes <c>1</c> onto the stack if <c>value1</c>
+    /// is less than <c>value2</c>, or <c>0</c> otherwise. (III.3.25).
+    /// </summary>
+    val clt : Instruction
 
 
 

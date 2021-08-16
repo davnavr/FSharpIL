@@ -52,6 +52,7 @@ type Opcode =
     | Brinst_s = 0x2Dus
     | Brtrue_s = 0x2Dus
     | Beq_s = 0x2Eus
+    | Bge_s = 0x2Fus
 
     | Bgt_s = 0x30us
     | Ble_s = 0x31us
@@ -63,6 +64,7 @@ type Opcode =
     | Brfalse = 0x39us
 
     | Beq = 0x3Bus
+    | Bge = 0x3Cus
 
     | Ble = 0x3Eus
     | Blt = 0x3Fus
