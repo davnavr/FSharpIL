@@ -392,6 +392,18 @@ module Instructions =
     /// (III.3.48).
     val mul : Instruction
 
+    /// <summary>
+    /// (0x5B) Pops <c>value1</c> then <c>value2</c> from the stack, divides <c>value1</c> by <c>value2</c>, and pushes the
+    /// result onto the stack (III.3.31).
+    /// </summary>
+    val div : Instruction
+
+    /// <summary>
+    /// (0x5C) Pops <c>value1</c> then <c>value2</c> from the stack as unsigned integers, divides <c>value1</c> by <c>value2</c>,
+    /// and pushes the result onto the stack (III.3.32).
+    /// </summary>
+    val div_un : Instruction
+
 
 
     /// (0x61) Pops two values from the stack, computes the bitwise <c>xor</c>, and pushes the result onto the stack (III.3.67).
