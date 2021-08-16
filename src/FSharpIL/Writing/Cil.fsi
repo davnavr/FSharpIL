@@ -361,12 +361,22 @@ module Instructions =
     /// </summary>
     val inline brtrue_s : target: Label -> Instruction
 
+    /// <summary>
+    /// (0x2E) Branches to the <paramref name="target"/> if <c>value1</c> is equal to <c>value2</c>, short form (III.3.5).
+    /// </summary>
+    val beq_s : target: Label -> Instruction
+
 
 
     /// <summary>
     /// (0x30) Branches to the <paramref name="target"/> if <c>value1</c> is greater than <c>value2</c>, short form (III.3.8).
     /// </summary>
     val bgt_s : target: Label -> Instruction
+
+    /// <summary>
+    /// (0x31) Branches to the <paramref name="target"/> if <c>value1</c> is less than or equal to <c>value2</c>, short form (III.3.10).
+    /// </summary>
+    val ble_s : target: Label -> Instruction
 
 
 
@@ -375,6 +385,20 @@ module Instructions =
     /// (0x32) Branches to the <paramref name="target"/> if <c>value1</c> is less than <c>value2</c>, short form (III.3.12).
     /// </summary>
     val blt_s : target: Label -> Instruction
+
+
+
+    /// <summary>
+    /// (0x3B) Branches to the <paramref name="target"/> if <c>value1</c> is equal to <c>value2</c> (III.3.5).
+    /// </summary>
+    val beq : target: Label -> Instruction
+
+
+
+    /// <summary>
+    /// (0x3E) Branches to the <paramref name="target"/> if <c>value1</c> is less than or equal to <c>value2</c> (III.3.10).
+    /// </summary>
+    val ble : target: Label -> Instruction
 
 
 
@@ -527,6 +551,10 @@ module Instructions =
     /// <param name="etype">The type of the elements of the array to store a value into.</param>
     val stelem : etype: TypeTok -> Instruction
 
+
+
+    /// (0xD3) Converts the value on top of the stack into a <c>native int</c> without an overflow check (III.3.27).
+    val conv_i : Instruction
 
 
 

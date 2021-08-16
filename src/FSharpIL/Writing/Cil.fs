@@ -438,8 +438,12 @@ module Instructions =
     let br_s target = { op Opcode.Br_s with Operand = Operand.BranchTarget(BranchKind.Short, target) }
     let brinst_s target = brpops1 Opcode.Brinst_s BranchKind.Short target
     let inline brtrue_s target = brinst_s target
+    let beq_s target = brpops2 Opcode.Beq_s BranchKind.Short target
     let bgt_s target = brpops2 Opcode.Bgt_s BranchKind.Short target
+    let ble_s target = brpops2 Opcode.Ble_s BranchKind.Short target
     let blt_s target = brpops2 Opcode.Blt_s BranchKind.Short target
+    let beq target = brpops2 Opcode.Beq BranchKind.Long target
+    let ble target = brpops2 Opcode.Ble BranchKind.Long target
     let add = pops1 Opcode.Add
     let sub = pops1 Opcode.Sub
     let mul = pops1 Opcode.Mul
@@ -485,6 +489,7 @@ module Instructions =
     let ldlen = op Opcode.Ldlen
     let ldelem etype = { pops1 Opcode.Ldelem with Operand = Operand.TypeToken etype }
     let stelem etype = { pops3 Opcode.Stelem with Operand = Operand.TypeToken etype }
+    let conv_i = op Opcode.Conv_i
     let add_ovf = pops1 Opcode.Add_ovf
     let add_ovf_un = pops1 Opcode.Add_ovf_un
     let mul_ovf = pops1 Opcode.Mul_ovf
