@@ -424,6 +424,14 @@ module Instructions =
 
 
 
+    /// <summary>
+    /// (0x52) Pops an address to store a value at and the value to store off of the stack, and stores the value as an
+    /// <c>int8</c> into the address (III.3.62).
+    /// </summary>
+    val stind_i1 : Instruction
+
+
+
     /// (0x58) Pops two values from the stack, adds them, and pushes the result onto the stack without an overflow check
     /// (III.3.1).
     val add : Instruction
@@ -452,8 +460,21 @@ module Instructions =
 
 
 
+    /// <summary>
+    /// (0x5F) Pops two values from the stack, computes the bitwise <c>and</c>, and pushes the result onto the stack (III.3.3).
+    /// </summary>
+    val ``and`` : Instruction
+
+
+
+    /// <summary>
     /// (0x61) Pops two values from the stack, computes the bitwise <c>xor</c>, and pushes the result onto the stack (III.3.67).
+    /// </summary>
     val xor : Instruction
+
+    /// (0x62) Pops an integer to shift and an integer amount to shift off of the stack, and pushes the integer shifted to the
+    /// left by the specified bits onto the stack (III.3.58).
+    val shl : Instruction
 
 
 
@@ -591,7 +612,14 @@ module Instructions =
 
 
 
+    /// <summary>
+    /// (0xD2) Converts the value on top of the stack into an <c>unsigned int8</c> without an overflow check (III.3.27).
+    /// </summary>
+    val conv_u1 : Instruction
+
+    /// <summary>
     /// (0xD3) Converts the value on top of the stack into a <c>native int</c> without an overflow check (III.3.27).
+    /// </summary>
     val conv_i : Instruction
 
 
@@ -627,7 +655,6 @@ module Instructions =
     /// <see cref="T:System.OverflowException"/> on overflow (III.3.49).
     /// </summary>
     val mul_ovf_un : Instruction
-
 
 
 

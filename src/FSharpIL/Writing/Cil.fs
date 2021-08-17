@@ -447,12 +447,15 @@ module Instructions =
     let bge target = brpops2 Opcode.Bge BranchKind.Long target
     let ble target = brpops2 Opcode.Ble BranchKind.Long target
     let ldind_u1 = op Opcode.Ldind_u1
+    let stind_i1 = pops2 Opcode.Stind_i1
     let add = pops1 Opcode.Add
     let sub = pops1 Opcode.Sub
     let mul = pops1 Opcode.Mul
     let div = pops1 Opcode.Div
     let div_un = pops1 Opcode.Div_un
+    let ``and`` = pops1 Opcode.And
     let xor = pops1 Opcode.Xor
+    let shl = pops1 Opcode.Shl
     let shr_un = pops1 Opcode.Shr_un
     let conv_i4 = op Opcode.Conv_i4
     let conv_u4 = op Opcode.Conv_u4
@@ -494,6 +497,7 @@ module Instructions =
     let ldlen = op Opcode.Ldlen
     let ldelem etype = { pops1 Opcode.Ldelem with Operand = Operand.TypeToken etype }
     let stelem etype = { pops3 Opcode.Stelem with Operand = Operand.TypeToken etype }
+    let conv_u1 = op Opcode.Conv_u1
     let conv_i = op Opcode.Conv_i
     let conv_ovf_i = op Opcode.Conv_ovf_i
     let add_ovf = pops1 Opcode.Add_ovf

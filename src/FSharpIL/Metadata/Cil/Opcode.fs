@@ -72,6 +72,8 @@ type Opcode =
 
     | Ldind_u1 = 0x47us
 
+    | Stind_i1 = 0x52us
+
     | Add = 0x58us
     | Sub = 0x59us
     | Mul = 0x5Aus
