@@ -446,12 +446,14 @@ module Instructions =
     let beq target = brpops2 Opcode.Beq BranchKind.Long target
     let bge target = brpops2 Opcode.Bge BranchKind.Long target
     let ble target = brpops2 Opcode.Ble BranchKind.Long target
+    let ldind_u1 = op Opcode.Ldind_u1
     let add = pops1 Opcode.Add
     let sub = pops1 Opcode.Sub
     let mul = pops1 Opcode.Mul
     let div = pops1 Opcode.Div
     let div_un = pops1 Opcode.Div_un
     let xor = pops1 Opcode.Xor
+    let shr_un = pops1 Opcode.Shr_un
     let conv_i4 = op Opcode.Conv_i4
     let conv_u4 = op Opcode.Conv_u4
     let callvirt method = methodTokenCall Opcode.Callvirt method
@@ -493,6 +495,7 @@ module Instructions =
     let ldelem etype = { pops1 Opcode.Ldelem with Operand = Operand.TypeToken etype }
     let stelem etype = { pops3 Opcode.Stelem with Operand = Operand.TypeToken etype }
     let conv_i = op Opcode.Conv_i
+    let conv_ovf_i = op Opcode.Conv_ovf_i
     let add_ovf = pops1 Opcode.Add_ovf
     let add_ovf_un = pops1 Opcode.Add_ovf_un
     let mul_ovf = pops1 Opcode.Mul_ovf

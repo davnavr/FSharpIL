@@ -70,6 +70,8 @@ type Opcode =
     | Blt = 0x3Fus
     | Bne_un = 0x40us
 
+    | Ldind_u1 = 0x47us
+
     | Add = 0x58us
     | Sub = 0x59us
     | Mul = 0x5Aus

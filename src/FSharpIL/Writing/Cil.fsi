@@ -416,6 +416,14 @@ module Instructions =
 
 
 
+    /// <summary>
+    /// (0x47) Pops an address off of the stack and pushes the <c>unsigned int8</c> value at that address onto the stack as an
+    /// <c>int32</c> (III.3.42).
+    /// </summary>
+    val ldind_u1 : Instruction
+
+
+
     /// (0x58) Pops two values from the stack, adds them, and pushes the result onto the stack without an overflow check
     /// (III.3.1).
     val add : Instruction
@@ -449,6 +457,12 @@ module Instructions =
 
 
 
+    /// (0x64) Pops an integer to shift and an integer amount to shift off of the stack, and pushes the integer shifted to the
+    /// right by the specified bits onto the stack, inserting a zero bit on each shift (III.3.60).
+    val shr_un : Instruction
+
+
+
     /// <summary>
     /// (0x69) Converts the value on top of the stack into an <c>int32</c> without an overflow check (III.3.27).
     /// </summary>
@@ -457,7 +471,7 @@ module Instructions =
 
 
     /// <summary>
-    /// (0x64) Converts the value on top of the stack into an <c>unsigned uint32</c> without an overflow check (III.3.27).
+    /// (0x6D) Converts the value on top of the stack into an <c>unsigned uint32</c> without an overflow check (III.3.27).
     /// </summary>
     val conv_u4 : Instruction
 
@@ -579,6 +593,14 @@ module Instructions =
 
     /// (0xD3) Converts the value on top of the stack into a <c>native int</c> without an overflow check (III.3.27).
     val conv_i : Instruction
+
+
+
+    /// <summary>
+    /// (0xD4) Converts the value on top of the stack into a <c>native int</c>, throwing a
+    /// <see cref="T:System.OverflowException"/> on overflow (III.3.28).
+    /// </summary>
+    val conv_ovf_i : Instruction
 
 
 
