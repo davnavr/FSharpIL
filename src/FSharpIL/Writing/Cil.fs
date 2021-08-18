@@ -502,6 +502,7 @@ module Instructions =
     let ldlen = op Opcode.Ldlen
     let ldelem etype = { pops1 Opcode.Ldelem with Operand = Operand.TypeToken etype }
     let stelem etype = { pops3 Opcode.Stelem with Operand = Operand.TypeToken etype }
+    let conv_ovf_u4 = op Opcode.Conv_ovf_u4
     let conv_u1 = op Opcode.Conv_u1
     let conv_i = op Opcode.Conv_i
     let conv_ovf_i = op Opcode.Conv_ovf_i
@@ -516,6 +517,7 @@ module Instructions =
     let starg num = { pushes1 Opcode.Starg with Operand = Operand.Short num }
     let ldloc (LocalVarIndex i) = { pushes1 Opcode.Ldloc with Operand = Operand.Short i }
     let stloc (LocalVarIndex i) = { pops1 Opcode.Stloc with Operand = Operand.Short i }
+    let initblk = pops3 Opcode.Initblk
 
     module Shortened =
         let [<Literal>] MaxShortLocalIndex = 0xFFus

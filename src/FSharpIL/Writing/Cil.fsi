@@ -613,6 +613,14 @@ module Instructions =
 
 
     /// <summary>
+    /// (0xB8) Converts the value on top of the stack into an <c>unsigned int32</c>, throwing a
+    /// <see cref="T:System.OverflowException"/> on overflow (III.3.28).
+    /// </summary>
+    val conv_ovf_u4 : Instruction
+
+
+
+    /// <summary>
     /// (0xD2) Converts the value on top of the stack into an <c>unsigned int8</c> without an overflow check (III.3.27).
     /// </summary>
     val conv_u1 : Instruction
@@ -702,6 +710,14 @@ module Instructions =
     /// specified <paramref name="index"/> (III.3.63).
     /// </summary>
     val stloc : index: LocalVarIndex -> Instruction
+
+
+
+    /// <summary>
+    /// (0xFE 0x18) Pops an address, an initial byte value, and an <c>unsigned int32</c> size off of the stack and sets all bytes
+    /// in the specified block of memory to the specified value (III.3.36).
+    /// </summary>
+    val initblk : Instruction
 
     /// Contains functions used to write the most shortened from of CIL opcodes whenever possible.
     module Shortened =
