@@ -176,6 +176,14 @@ module Instructions =
         /// Creates a branching instruction that will target the specified label.
         val branchingRef : opcode: Opcode -> StackBehavior -> BranchKind -> target: Label ref -> Instruction
 
+    module Prefixes =
+        /// <summary>
+        /// (0xFE 0x12) Appended before a <c>ldind</c>, <c>stind</c>, <c>ldfld</c>, <c>stfld</c>, <c>ldobj</c>, <c>stobj</c>,
+        /// <c>initblk</c>, or <c>cpblk</c> instruction to indicate that the address "on the stack might not be aligned to the
+        /// natural size" (III.2.5).
+        /// </summary>
+        val unaligned_ : alignment: uint8 -> Instruction
+
     /// (0x00) An instruction that does nothing (III.3.51).
     val nop : Instruction
 

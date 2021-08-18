@@ -404,6 +404,9 @@ module Instructions =
 
     open Instruction
 
+    module Prefixes =
+        let unaligned_ alignment = { op Opcode.Unaligned_ with Operand = Operand.Byte alignment }
+
     let nop = op Opcode.Nop
     let ``break`` = op Opcode.Break
     let ldarg_0 = pushes1 Opcode.Ldarg_0

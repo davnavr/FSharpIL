@@ -175,7 +175,7 @@ type Opcode =
     | Localloc = 0xFE_0Fus
 
     | Endfilter = 0xFE_11us
-
+    | Unaligned_ = 0xFE_12us
     | Volatile_ = 0xFE_13us
     | Tail_ = 0xFE_14us
 
