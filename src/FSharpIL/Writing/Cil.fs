@@ -310,7 +310,12 @@ type MethodBodyStream () =
                     | LocalVariables.Token token -> token
                     | LocalVariables.Locals locals -> metadataTokenSource.GetLocalVariables locals
 
-                wr.WriteLE(uint32(MetadataToken(MetadataTokenType.StandaloneSig, locals.TableIndex)))
+                let locals' =
+                    if locals.IsNull
+                    then 0u
+                    else uint32(MetadataToken(MetadataTokenType.StandaloneSig, locals.TableIndex))
+
+                wr.WriteLE locals'
 
                 // TODO: Write extra data sections for fat method.
 
