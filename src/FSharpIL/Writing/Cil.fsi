@@ -473,7 +473,10 @@ module Instructions =
     /// </summary>
     val ``and`` : Instruction
 
-
+    /// <summary>
+    /// (0x60) Pops two values from the stack, computes the bitwise <c>or</c>, and pushes the result onto the stack (III.3.53).
+    /// </summary>
+    val ``or`` : Instruction
 
     /// <summary>
     /// (0x61) Pops two values from the stack, computes the bitwise <c>xor</c>, and pushes the result onto the stack (III.3.67).

@@ -462,6 +462,7 @@ module Instructions =
     let div = pops1 Opcode.Div
     let div_un = pops1 Opcode.Div_un
     let ``and`` = pops1 Opcode.And
+    let ``or`` = pops1 Opcode.Or
     let xor = pops1 Opcode.Xor
     let shl = pops1 Opcode.Shl
     let shr_un = pops1 Opcode.Shr_un
