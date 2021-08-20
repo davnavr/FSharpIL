@@ -515,7 +515,10 @@ module Instructions =
     let mul_ovf = pops1 Opcode.Mul_ovf
     let mul_ovf_un = pops1 Opcode.Mul_ovf_un
     let ceq = pops1 Opcode.Ceq
+    let cgt = pops1 Opcode.Cgt
+    let cgt_un = pops1 Opcode.Cgt_un
     let clt = pops1 Opcode.Clt
+    let clt_un = pops1 Opcode.Clt_un
     let ldftn method = { pushes1 Opcode.Ldftn with Operand = Operand.MethodToken method }
     let ldarg num = { pushes1 Opcode.Ldarg with Operand = Operand.Short num }
     let starg num = { pushes1 Opcode.Starg with Operand = Operand.Short num }
