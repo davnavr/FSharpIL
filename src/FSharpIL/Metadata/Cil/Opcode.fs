@@ -59,6 +59,9 @@ type Opcode =
 
     | Blt_s = 0x32us
     | Bne_un_s = 0x33us
+    | Bge_un_s = 0x34us
+
+    | Ble_un_s = 0x36us
 
     | Br = 0x38us
     | Brfalse = 0x39us

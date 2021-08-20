@@ -681,7 +681,17 @@ module Instructions =
     /// or <c>0</c> otherwise.
     val ceq : Instruction
 
+    /// <summary>
+    /// (0xFE 0x02) Pops <c>value1</c> then <c>value2</c> off of the stack, then pushes <c>1</c> onto the stack if <c>value1</c>
+    /// is greater than <c>value2</c>, or <c>0</c> otherwise. (III.3.22).
+    /// </summary>
+    val cgt : Instruction
 
+    /// <summary>
+    /// (0xFE 0x03) Pops two unsigned or unordered numbers <c>value1</c> then <c>value2</c> off of the stack, then pushes
+    /// <c>1</c> onto the stack if <c>value1</c> is greater than <c>value2</c>, or <c>0</c> otherwise. (III.3.23).
+    /// </summary>
+    val cgt_un : Instruction
 
     /// <summary>
     /// (0xFE 0x04) Pops <c>value1</c> then <c>value2</c> off of the stack, then pushes <c>1</c> onto the stack if <c>value1</c>
@@ -689,7 +699,11 @@ module Instructions =
     /// </summary>
     val clt : Instruction
 
-
+    /// <summary>
+    /// (0xFE 0x05) Pops two unsigned or unordered numbers <c>value1</c> then <c>value2</c> off of the stack, then pushes
+    /// <c>1</c> onto the stack if <c>value1</c> is less than <c>value2</c>, or <c>0</c> otherwise. (III.3.26).
+    /// </summary>
+    val clt_un : Instruction
 
     /// <summary>(0xFE 0x06) Pushes a pointer to the specified <paramref name="method"/> onto the stack (III.3.41).</summary>
     val ldftn : method: MethodTok -> Instruction
