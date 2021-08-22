@@ -429,6 +429,10 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
           MethodBodies = MethodBodyStream()
           EntryPoint = ref Unchecked.defaultof<EntryPoint> }
 
+    let embeddedDataBytes = List<ReadOnlyMemory<byte>>()
+    /// Stores the initial values of fields (II.16.4.1).
+    let fieldDataLookup = Dictionary<DefinedField, int32>()
+
     let createAttributeList owner = CustomAttributeList(owner, info.CustomAttributes)
 
     let defineMembersFor owner =
@@ -572,6 +576,15 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         | TypeTok.Named(NamedType.DefinedType(DefinedType.Generic definition)) -> create(GenericType.Defined definition)
         | TypeTok.Named(NamedType.ReferencedType(ReferencedType.Generic reference)) -> create(GenericType.Referenced reference)
         | TypeTok.Specified tspec -> failwith "TODO: Handle usage of TypeSpec when generating MemberRef to a method of a generic type"
+
+    member _.SetFieldRva(field: DefinedField, data) =
+        // TODO: Check that field is defined in this module.
+        // TODO: Check that field type is a value type.
+        if Flags.set FieldFlags.HasFieldRva field.Flags then
+            let i = embeddedDataBytes.Count
+            embeddedDataBytes.Add data
+            fieldDataLookup.Add(field, i)
+        else failwithf "TODO: Error for field must have HasFieldRva flag"
 
     member this.SetTargetFramework(tfm, ctor: CustomAttributeCtor) =
         match this.AssemblyCustomAttributes with
@@ -922,6 +935,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
 
         let definedMethodBodies = ImmutableArray.CreateBuilder info.MethodBodies.Count
         let sortedMethodSemantics = SortedDictionary<HasSemantics, List<_>>()
+        let sortedFieldRvas = SortedDictionary<TableIndex<FieldRow>, FieldValueLocation>()
 
         /// Adds the fields, methods, events, and properties of a type definition.
         let serializeDefinedMembers =
@@ -946,6 +960,10 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                           Name = builder.Strings.Add field.Name
                           Signature = getFieldSig field }
                         |> builder.Tables.Field.Add
+
+                    match fieldDataLookup.TryGetValue field with
+                    | false, _ -> ()
+                    | true, datai -> sortedFieldRvas.Add(i', builder.AddEmbeddedData embeddedDataBytes.[datai])
 
                     fieldList.Last <- i'
                     definedFieldLookup.[FieldTok.ofTypeDef parent field info.NamedTypes] <- i'
@@ -1194,6 +1212,15 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                     |> ignore
 
             builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.CustomAttribute
+
+        if sortedFieldRvas.Count > 0 then
+            for KeyValue(field, rva) in sortedFieldRvas do
+                { FieldRvaRow.Field = field
+                  Rva = rva }
+                |> builder.Tables.FieldRva.Add
+                |> ignore
+
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.FieldRva
 
         builder.EntryPointToken <-
             match !info.EntryPoint with

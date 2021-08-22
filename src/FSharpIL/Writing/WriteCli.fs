@@ -25,7 +25,10 @@ type CliInfo =
       [<DefaultValue>] mutable Resources: RvaAndSizeWriter
       [<DefaultValue>] mutable StrongNameSignature: RvaAndSizeWriter
       [<DefaultValue>] mutable VTableFixups: RvaAndSizeWriter
-      [<DefaultValue>] mutable MethodBodies: Rva }
+      [<DefaultValue>] mutable MethodBodies: Rva
+      [<DefaultValue>] mutable EmbeddedData: Rva }
+
+    member this.CurrentRva(section: byref<ChunkedMemoryBuilder>) = this.StartRva + (section.Length - this.StartOffset)
 
 type RvaAndSizeWriter with
     member this.StartOffset = this.start
@@ -33,22 +36,6 @@ type RvaAndSizeWriter with
         this.start <- offset
         this.builder.WriteLE(uint32 start + (offset - start'))
     member this.WriteSize offset = this.builder.WriteLE(offset - this.start)
-
-(*
-The metadata is written in the following order:
-- CLI Header (II.25.3.3)
-- Strong Name Signature (II.6.2.1.3) (currently not implemented, would require writing of all metadata first to allow calculation of a hash)
-- Method Bodies (II.25.4)
-- CLI Metadata (II.24)
-  - Metadata Root (II.24.2.1)
-  - Stream Headers (II.24.2.2)
-  - Streams
-    - #~ (II.24.2.6 and II.22)
-    - #Strings (II.24.2.3)
-    - #US (II.24.2.4)
-    - #GUID (II.24.2.5)
-    - #Blob (II.24.2.4 and II.23.2)
-*)
 
 /// Writes the CLI header (II.25.3.3).
 let header info (wr: byref<ChunkedMemoryBuilder>) =
@@ -91,7 +78,7 @@ let streams info (wr: byref<ChunkedMemoryBuilder>) =
         header.WriteLE(wr.Length - info.Metadata.StartOffset) // Offset
 
         let start = wr.Length
-        stream.Serialize(&wr, info.MethodBodies)
+        stream.Serialize(&wr, info.MethodBodies, info.EmbeddedData)
         wr.AlignTo 4
         let size = wr.Length - start
 
@@ -119,15 +106,20 @@ let metadata (section: byref<ChunkedMemoryBuilder>) cliHeaderRva builder =
             if not builder.Guid.IsEmpty then streams.Add builder.Guid
             if not builder.Blob.IsEmpty then streams.Add builder.Blob
             streams }
+
     header info &section
 
     // TODO: Write strong name signature.
     // StrongNameSignature
 
-    info.MethodBodies <- cliHeaderRva + (section.Length - info.StartOffset)
+    // C# compiler places field data after Import Table contents.
+    // Data is instead inserted here so RVAs are known before tables are written.
+    info.EmbeddedData <- info.CurrentRva &section
+    for data in builder.EmbeddedData do section.Write data
+
+    info.MethodBodies <- info.CurrentRva &section
     section.Write builder.MethodBodies
 
-    // Metadata
     root info &section
     streams info &section
     info.Metadata.WriteSize section.Length

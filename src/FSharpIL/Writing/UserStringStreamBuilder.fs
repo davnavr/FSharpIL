@@ -93,4 +93,4 @@ type UserStringStreamBuilder (capacity: int32) =
     interface IStreamBuilder with
         member this.StreamLength = ValueSome this.StreamLength
         member _.StreamName = Magic.StreamNames.us
-        member _.Serialize(wr, _) = StringHelpers.serializeStringHeap<UserStringSerializer, _> encoding &wr strings
+        member _.Serialize(wr, _, _) = StringHelpers.serializeStringHeap<UserStringSerializer, _> encoding &wr strings

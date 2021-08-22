@@ -219,6 +219,8 @@ type CliModuleBuilder =
 
     // TODO: Add helper methods for making Extends instances, maybe even replace public constructors for ClassExtends.
 
+    member SetFieldRva: field: DefinedField * data: ReadOnlyMemory<byte> -> unit
+
     /// <summary>
     /// Attempts to add a <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/> to the current assembly.
     /// </summary>

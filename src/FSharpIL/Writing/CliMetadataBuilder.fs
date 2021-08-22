@@ -37,7 +37,8 @@ type CliMetadataBuilder internal
         //vTableFixups
     )
     =
-
+    let mutable nextEmbeddedData = 0u
+    member val internal EmbeddedData = System.Collections.Generic.List<System.ReadOnlyMemory<byte>>()
     member val Tables = MetadataTablesBuilder(moduleRowBuilder, strings, guid, blob)
     member _.Header = header
     member _.Root = root
@@ -48,6 +49,12 @@ type CliMetadataBuilder internal
     member _.Blob = blob
 
     member val EntryPointToken: EntryPointToken = EntryPointToken.Null with get, set
+
+    member this.AddEmbeddedData data =
+        let location = FSharpIL.Metadata.Tables.FieldValueLocation nextEmbeddedData
+        this.EmbeddedData.Add data
+        nextEmbeddedData <- Checked.(+) nextEmbeddedData (Checked.uint32 data.Length)
+        location
 
     member _.HeaderFlags =
         let mutable flags = CorFlags.ILOnly
