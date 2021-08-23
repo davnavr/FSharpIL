@@ -152,6 +152,7 @@ type MetadataTablesBuilder (moduleRowBuilder: RowBuilder<ModuleRow>, strings, gu
                 | ValidTableFlags.ModuleRef -> count builder.ModuleRef
                 | ValidTableFlags.TypeSpec -> count builder.TypeSpec
 
+                | ValidTableFlags.FieldRva -> count builder.FieldRva
                 | ValidTableFlags.Assembly -> count builder.Assembly
                 | ValidTableFlags.AssemblyRef -> count builder.AssemblyRef
                 | ValidTableFlags.File -> count builder.File
@@ -218,6 +219,7 @@ type MetadataTablesBuilder (moduleRowBuilder: RowBuilder<ModuleRow>, strings, gu
             this.SerializeTable(&wr, this.ModuleRef, methodBodiesRva, embeddedDataRva)
             this.SerializeTable(&wr, this.TypeSpec, methodBodiesRva, embeddedDataRva)
 
+            this.SerializeTable(&wr, this.FieldRva, methodBodiesRva, embeddedDataRva)
             this.SerializeTable(&wr, this.Assembly, methodBodiesRva, embeddedDataRva)
             this.SerializeTable(&wr, this.AssemblyRef, methodBodiesRva, embeddedDataRva)
             this.SerializeTable(&wr, this.File, methodBodiesRva, embeddedDataRva)

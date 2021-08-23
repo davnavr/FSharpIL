@@ -158,6 +158,8 @@ type TypeSpec = struct
         member _.Serialize(hsizes, _, row, _, _, wr) = WriteIndex.blob &wr hsizes row.Signature
 end
 
+
+
 type FieldRva = struct
     interface ISerializer<FieldRvaRow> with
         member _.Serialize(_, tsizes, row, _, embeddedDataRva, wr) =
