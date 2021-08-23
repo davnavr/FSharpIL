@@ -221,6 +221,8 @@ type CliModuleBuilder =
 
     member SetFieldRva: field: DefinedField * data: ReadOnlyMemory<byte> -> unit
 
+    member SetClassLayout: definition: DefinedType * packingSize: PackingSize * classSize: ClassSize -> unit
+
     /// <summary>
     /// Attempts to add a <see cref="T:System.Runtime.Versioning.TargetFrameworkAttribute"/> to the current assembly.
     /// </summary>

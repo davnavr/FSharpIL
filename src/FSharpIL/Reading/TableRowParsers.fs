@@ -233,7 +233,7 @@ type ClassLayoutParser (counts: ITableRowCounts) =
     member inline private _.Parent = TableIndexParser(ValidTableFlags.TypeDef, counts)
     interface IByteParser<ClassLayoutRow> with
         member this.Parse buffer =
-            { PackingSize = ChunkedMemory.readU2 0u &buffer
+            { PackingSize = PackingSize.ofInt(ChunkedMemory.readU2 0u &buffer)
               ClassSize = ChunkedMemory.readU4 2u &buffer
               Parent = ByteParser.parse 6u &buffer this.Parent }
         member this.Length = 6u + ByteParser.length this.Parent

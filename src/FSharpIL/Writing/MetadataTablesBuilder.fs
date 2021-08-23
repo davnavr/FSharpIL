@@ -78,7 +78,7 @@ type MetadataTablesBuilder (moduleRowBuilder: RowBuilder<ModuleRow>, strings, gu
     // (0x0E)
     // member DeclSecurity
     // (0x0F)
-    // member ClassLayout
+    member val ClassLayout = RowTableBuilder<_, RowSerializers.ClassLayout>(valid, ValidTableFlags.ClassLayout)
     // (0x10)
     // member FieldLayout
     // (0x11)
@@ -141,6 +141,8 @@ type MetadataTablesBuilder (moduleRowBuilder: RowBuilder<ModuleRow>, strings, gu
                 | ValidTableFlags.MemberRef -> count builder.MemberRef
                 | ValidTableFlags.Constant -> count builder.Constant
                 | ValidTableFlags.CustomAttribute -> count builder.CustomAttribute
+
+                | ValidTableFlags.ClassLayout -> count builder.ClassLayout
 
                 | ValidTableFlags.StandAloneSig -> count builder.StandAloneSig
                 | ValidTableFlags.EventMap -> count builder.EventMap
@@ -208,6 +210,8 @@ type MetadataTablesBuilder (moduleRowBuilder: RowBuilder<ModuleRow>, strings, gu
             this.SerializeTable(&wr, this.MemberRef, methodBodiesRva, embeddedDataRva)
             this.SerializeTable(&wr, this.Constant, methodBodiesRva, embeddedDataRva)
             this.SerializeTable(&wr, this.CustomAttribute, methodBodiesRva, embeddedDataRva)
+
+            this.SerializeTable(&wr, this.ClassLayout, methodBodiesRva, embeddedDataRva)
 
             this.SerializeTable(&wr, this.StandAloneSig, methodBodiesRva, embeddedDataRva)
             this.SerializeTable(&wr, this.EventMap, methodBodiesRva, embeddedDataRva)

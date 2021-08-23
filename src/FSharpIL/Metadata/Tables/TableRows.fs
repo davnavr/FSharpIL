@@ -354,8 +354,7 @@ type ConstantRow =
     interface IEquatable<ConstantRow> with member this.Equals other = this.Equals(other = other)
 
 /// <summary>(0x0C) Represents a row in the <c>CustomAttribute</c> table (II.22.10).</summary>
-[<IsReadOnly; Struct>]
-[<StructuralComparison; StructuralEquality>]
+[<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
 type CustomAttributeRow =
     { Parent: HasCustomAttribute
       Type: CustomAttributeType
@@ -364,15 +363,52 @@ type CustomAttributeRow =
 
 
 
+/// (II.10.7).
+[<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
+type PackingSize =
+    val Size: uint16
+    internal new (size) = { Size = size }
+    override this.ToString() = sprintf ".pack %i" this.Size
+    static member Zero = PackingSize 0us
+    static member MaxValue = PackingSize 128us
+    static member inline op_Implicit(size: PackingSize) = size.Size
+
+[<AutoOpen>]
+module PackingSizePatterns = let inline (|PackingSize|) (size: PackingSize) = uint16 size
+
+[<RequireQualifiedAccess>]
+module PackingSize =
+    let tryOfInt (size: uint16) =
+        match size with
+        | 0us
+        | 1us
+        | 2us
+        | 4us
+        | 8us
+        | 16us
+        | 32us
+        | 64us
+        | 128us -> ValueSome(PackingSize size)
+        | _ -> ValueNone
+
+    let ofInt size =
+        match tryOfInt size with
+        | ValueSome size' -> size'
+        | ValueNone ->
+            invalidArg
+                (nameof size)
+                (sprintf "The packing size must be a power of two less than or equal to %i" PackingSize.MaxValue.Size)
+
+type ClassSize = uint32 // TODO: Make a ClassSize struct whose max value is 1 MByte (0x100000 bytes)
+
 /// <summary>
 /// (0x0F) Represents a row in the <c>ClassLayout</c> table, which describes how the fields of a type are laid out by the Common
 /// Language Infrastructure (II.22.8).
 /// </summary>
-[<IsReadOnly; Struct>]
-[<NoComparison; CustomEquality>]
+[<IsReadOnly; Struct; NoComparison; CustomEquality>]
 type ClassLayoutRow =
-    { PackingSize: uint16
-      ClassSize: uint32
+    { PackingSize: PackingSize
+      ClassSize: ClassSize
       Parent: TableIndex<TypeDefRow> }
 
     member this.Equals other = this.Parent === other.Parent
@@ -392,8 +428,7 @@ type ClassLayoutRow =
 /// <summary>
 /// (0x11) Represents a row in the <c>StandAloneSig</c> table, which contains an offset into the <c>#Blob</c> heap (II.22.36).
 /// </summary>
-[<IsReadOnly; Struct>]
-[<StructuralComparison; StructuralEquality>]
+[<IsReadOnly; Struct; StructuralComparison; StructuralEquality>]
 type StandaloneSigRow =
     internal { StandAloneSig: BlobOffset }
     member this.Signature = this.StandAloneSig

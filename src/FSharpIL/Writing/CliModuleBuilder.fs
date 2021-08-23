@@ -335,6 +335,7 @@ type ModuleBuilderInfo =
       MethodReferences: ImmutableArray<TypeSpecMember<Method>>.Builder // TODO: Rename to GenericTypeMethods
       //MethodSpecifications: 
       MethodBodies: MethodBodyStream
+      ClassLayouts: Dictionary<DefinedType, struct(PackingSize * ClassSize)>
       EntryPoint: EntryPoint ref }
 
 [<IsReadOnly; Struct>]
@@ -427,6 +428,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
           FieldReferences = ImmutableArray.CreateBuilder()
           MethodReferences = ImmutableArray.CreateBuilder()
           MethodBodies = MethodBodyStream()
+          ClassLayouts = Dictionary()
           EntryPoint = ref Unchecked.defaultof<EntryPoint> }
 
     let embeddedDataBytes = List<ReadOnlyMemory<byte>>()
@@ -585,6 +587,21 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
             embeddedDataBytes.Add data
             fieldDataLookup.Add(field, i)
         else failwithf "TODO: Error for field must have HasFieldRva flag"
+
+    member _.SetClassLayout(definition, packingSize, classSize) =
+        if info.DefinedTypes.ContainsKey definition then
+            match definition with
+            | DefinedType.Definition { Flags = flags }
+            | DefinedType.Generic(GenericType({ Flags = flags }, _)) ->
+                match TypeDefFlags.LayoutMask &&& flags with
+                | TypeDefFlags.AutoLayout ->
+                    failwith "TODO: Error for classes marked AutoLayout cannot have explicit layout information"
+                | TypeDefFlags.ExplicitLayout when packingSize = PackingSize.Zero ->
+                    failwith "TODO: Error for classes marked ExplicitLayout cannot have a non-zero packing size"
+                | _ ->
+                    info.ClassLayouts.Add(definition, struct(packingSize, classSize))
+        else
+            failwith "TODO: Error for cannot set layout of type that doesn't exist in the module"
 
     member this.SetTargetFramework(tfm, ctor: CustomAttributeCtor) =
         match this.AssemblyCustomAttributes with
@@ -769,6 +786,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                 then { TableIndex = 0u }
                 else lookup locals
 
+        let sortedClassLayouts = SortedDictionary()
+
         serializeDefinedType <- fun definition ->
             match definedTypeLookup.TryGetValue definition with
             | true, existing -> existing
@@ -803,6 +822,10 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                 match definition with
                 | DefinedType.Generic generic -> genericParamLookup.Add(TypeOrMethodDef.Type i, generic.Parameters)
                 | _ -> ()
+
+                match info.ClassLayouts.TryGetValue definition with
+                | true, layout -> sortedClassLayouts.Add(i, layout)
+                | false, _ -> ()
 
                 i
 
@@ -1221,6 +1244,16 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                 |> ignore
 
             builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.FieldRva
+
+        if sortedClassLayouts.Count > 0 then
+            for KeyValue(parent, struct(packingSize, classSize)) in sortedClassLayouts do
+                { ClassLayoutRow.PackingSize = packingSize
+                  ClassSize = classSize
+                  Parent = parent }
+                |> builder.Tables.ClassLayout.Add
+                |> ignore
+
+            builder.Tables.Sorted <- builder.Tables.Sorted ||| ValidTableFlags.ClassLayout
 
         builder.EntryPointToken <-
             match !info.EntryPoint with

@@ -94,6 +94,13 @@ end
 
 
 
+[<Struct>]
+type ClassLayout =
+    interface ISerializer<ClassLayoutRow> with
+        member _.Serialize(_, tsizes, row, _, _, wr) =
+            wr.WriteLE(uint16 row.PackingSize)
+            wr.WriteLE(uint32 row.ClassSize)
+            WriteIndex.table &wr tsizes ValidTableFlags.TypeDef row.Parent
 
 
 
