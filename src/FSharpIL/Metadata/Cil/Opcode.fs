@@ -145,6 +145,7 @@ type Opcode =
 
     | Ckfinite = 0xC3us
 
+    | Ldtoken = 0xD0us
     | Conv_u2 = 0xD1us
     | Conv_u1 = 0xD2us
     | Conv_i = 0xD3us

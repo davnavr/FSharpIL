@@ -507,6 +507,10 @@ module Instructions =
     let ldelem etype = { pops1 Opcode.Ldelem with Operand = Operand.TypeToken etype }
     let stelem etype = { pops3 Opcode.Stelem with Operand = Operand.TypeToken etype }
     let conv_ovf_u4 = op Opcode.Conv_ovf_u4
+
+    module Ldtoken =
+        let ofField field = { pushes1 Opcode.Ldtoken with Operand = Operand.FieldToken field }
+
     let conv_u1 = op Opcode.Conv_u1
     let conv_i = op Opcode.Conv_i
     let conv_ovf_i = op Opcode.Conv_ovf_i

@@ -632,6 +632,18 @@ module Instructions =
 
 
     /// <summary>
+    /// Contains functions for generating the <c>ldtoken</c> (0xD0) instruction (III.4.17).
+    /// </summary>
+    module Ldtoken =
+        /// <summary>
+        /// (0xD0) Pushes a <see cref="T:System.RuntimeFieldHandle"/> representing the specified <paramref name="field"/> onto
+        /// the stack.
+        /// </summary>
+        val ofField: field: FieldTok -> Instruction
+
+
+
+    /// <summary>
     /// (0xD2) Converts the value on top of the stack into an <c>unsigned int8</c> without an overflow check (III.3.27).
     /// </summary>
     val conv_u1 : Instruction
