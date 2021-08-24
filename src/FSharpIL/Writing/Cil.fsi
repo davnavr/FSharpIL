@@ -751,6 +751,12 @@ module Instructions =
 
 
     /// <summary>
+    /// (0xFE 0x17) Pops a destination address, a source address, and an <c>unsigned int32</c> number of bytes to copy off the stack,
+    /// and copies the bytes from the source to the destination.
+    /// </summary>
+    val cpblk : Instruction
+
+    /// <summary>
     /// (0xFE 0x18) Pops an address, an initial byte value, and an <c>unsigned int32</c> size off of the stack and sets all bytes
     /// in the specified block of memory to the specified value (III.3.36).
     /// </summary>

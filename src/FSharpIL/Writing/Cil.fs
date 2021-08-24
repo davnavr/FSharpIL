@@ -528,6 +528,7 @@ module Instructions =
     let starg num = { pushes1 Opcode.Starg with Operand = Operand.Short num }
     let ldloc (LocalVarIndex i) = { pushes1 Opcode.Ldloc with Operand = Operand.Short i }
     let stloc (LocalVarIndex i) = { pops1 Opcode.Stloc with Operand = Operand.Short i }
+    let cpblk = pops3 Opcode.Cpblk
     let initblk = pops3 Opcode.Initblk
 
     module Shortened =
