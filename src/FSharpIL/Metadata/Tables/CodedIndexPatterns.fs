@@ -21,7 +21,10 @@ module TypeDefOrRef =
 
 [<RequireQualifiedAccess>]
 module HasCustomAttribute =
+    let MethodDef ({ TableIndex = index }: TableIndex<MethodDefRow>) = HasCustomAttribute(HasCustomAttributeTag.MethodDef, index)
     let Module = HasCustomAttribute(HasCustomAttributeTag.Module, 1u)
+    
+    let Property ({ TableIndex = index }: TableIndex<PropertyRow>) = HasCustomAttribute(HasCustomAttributeTag.Property, index)
 
     let Assembly ({ TableIndex = index }: TableIndex<AssemblyRow>) = HasCustomAttribute(HasCustomAttributeTag.Assembly, index)
 

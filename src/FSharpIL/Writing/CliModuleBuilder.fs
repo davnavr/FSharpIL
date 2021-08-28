@@ -50,6 +50,8 @@ module CustomAttribute =
         (parameterTypes: ImmutableArray<ParameterType>)
         (parameterNames: ImmutableArray<Parameter>)
         (source: FixedArgSource)
+        // TODO: Allow user to specify translation of enum types NamedType -> ElemType
+        //(namedTypeMapping)
         i
         =
         if i < args.Length then
@@ -662,6 +664,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
         let definedTypeLookup = Dictionary<DefinedType, _> serializedDefinedTypes.Capacity
         let definedFieldLookup = Dictionary<FieldTok<DefinedType, DefinedField>, _>()
         let definedMethodLookup = Dictionary<MethodTok<DefinedType, DefinedMethod>, _>()
+        let definedPropertyLookup = Dictionary<Property, TableIndex<_>>()
 
         let miscFieldLookup = Dictionary<FieldTok, _>()
         let miscMethodLookup = Dictionary<MethodTok, _>()
@@ -1083,6 +1086,7 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                         |> builder.Tables.Property.Add
 
                     propertyList.Last <- i'
+                    definedPropertyLookup.[property] <- i'
 
                     match property with
                     | PropertyMethods(ValueNone, ValueNone, []) -> ()
@@ -1211,6 +1215,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                         HasCustomAttribute.Assembly assemblyDefIndex.Value
                     else
                         match parent with
+                        | :? DefinedMethod as method -> failwith "TODO: Custom attribute for METHODS"
+                        | :? Property as prop -> HasCustomAttribute.Property definedPropertyLookup.[prop]
                         | _ ->
                             parent.GetType().Name
                             |> sprintf "Unsupported custom attribute parent type %s"
