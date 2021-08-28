@@ -16,6 +16,8 @@ type CustomAttributeCtor =
 module CustomAttributeCtor =
     type Constructor = MethodReference<MethodKinds.ObjectConstructor>
 
+    val ofTokenUnsafe : token: MethodTok -> CustomAttributeCtor
+
     val Referenced :
         target: MethodTok<TypeReference<'Kind>, Constructor> ->
         CustomAttributeCtor when 'Kind :> TypeKinds.IHasConstructors

@@ -5,6 +5,13 @@ open System
 open FSharpIL.Metadata
 open FSharpIL.Metadata.Tables
 
+//type DefinedField =
+//    | Instance
+//    | Static
+//    /// Represents a defined field whose value is stored at a specified Relative Virtual Address (II.16.3.2).
+//    | WithRva
+//    | Constant
+
 [<Class>]
 type Field =
     val Name: Identifier

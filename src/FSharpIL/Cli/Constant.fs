@@ -19,6 +19,7 @@ type IntegerConstantKind =
     | I8
     | U8
 
+// TODO: Make this a normal union type.
 [<IsReadOnly>]
 [<StructuralComparison; StructuralEquality>]
 type IntegerConstant = struct
