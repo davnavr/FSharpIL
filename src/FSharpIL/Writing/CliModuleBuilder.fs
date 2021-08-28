@@ -193,6 +193,16 @@ type DefinedTypeMembers
 
     member this.DefineMethod(method: DefinedMethod, body, attributes) = this.AddDefinedMethod<_>(method, body, attributes)
 
+    member this.DefineMethod(method: DefinedMethod, attributes) =
+        // TODO: Avoid code duplication
+        if this.Method.Add method then
+            let lbody body =
+                methodBodyCache.Add body |> ignore
+                this.MethodBodyLookup.Inner.Add(method, body)
+            CustomAttributeList.fromRef (CustomAttribute.Owner.DefinedMethod method) attrs attributes
+            Ok(lbody, MethodTok.ofTypeDef owner method namedTypeCache)
+        else ValidationResult.Error(noImpl "error for duplicate method")
+
     member this.DefineEntryPoint(method: EntryPointMethod, body, attributes) =
         validated {
             match owner with

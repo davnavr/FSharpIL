@@ -43,6 +43,10 @@ type DefinedTypeMembers =
         body: MethodBody voption *
         attributes: CustomAttributeBuilder -> ValidationResult<MethodTok<DefinedType, DefinedMethod>>
 
+    member DefineMethod:
+        method: DefinedMethod *
+        attributes: CustomAttributeBuilder -> ValidationResult<(MethodBody -> unit) * MethodTok<DefinedType, DefinedMethod>>
+
     member DefineEntryPoint:
         method: EntryPointMethod *
         body: MethodBody *
