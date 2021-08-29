@@ -197,9 +197,11 @@ type ChunkedMemory with
             for chunki = starti.ListIndex to endi do
                 let current = &this.chunks.ItemRef chunki
                 let start = if chunki = starti.ListIndex then starti.ChunkIndex else 0
-                let length = min remaining (uint32 current.Length)
-                chunks'.[chunki - starti.ListIndex] <- current.AsMemory().Slice(start, int32 length)
-                remaining <- remaining - length
+                let length = (min remaining (uint32 current.Length))
+                let length' = min (current.Length - start) (int32 length)
+                chunks'.[chunki - starti.ListIndex] <- current.AsMemory().Slice(start, length')
+                remaining <- remaining - uint32 length'
+            if remaining > 0u then failwith "TODO: Fix, chunk copying code is broken again"
             Unsafe.As &chunks'
 
     member this.ToImmutableArray() =
