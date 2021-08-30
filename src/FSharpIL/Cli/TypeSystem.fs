@@ -49,7 +49,8 @@ type CliType =
     | ValueType of NamedType
     | GenericClass of GenericTypeInstantiation
     | GenericValueType of GenericTypeInstantiation
-    | TypeVar of GenericParamType<TypeDefinition>
+    | TypeDefVar of GenericParamType<TypeDefinition>
+    | TypeRefVar of GenericParamType<TypeReference>
 
     override this.ToString() =
         match this with
@@ -75,7 +76,8 @@ type CliType =
         | GenericClass(ToString rtype) -> String.Concat("class ", rtype)
         | ValueType(ToString vtype)
         | GenericValueType(ToString vtype) -> String.Concat("valuetype ", vtype)
-        | TypeVar tvar -> sprintf "!%O" tvar
+        | TypeDefVar tvar -> sprintf "!%O" tvar
+        | TypeRefVar tvar -> sprintf "!%O" tvar
         | Array(elem, ToString shape) -> String.Concat(elem, shape)
         | Modified(modifiers, modified) when modifiers.IsDefaultOrEmpty -> modified.ToString()
         | Modified(modifiers, modified) ->

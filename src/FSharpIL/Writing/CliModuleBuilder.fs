@@ -889,7 +889,8 @@ type CliModuleBuilder // TODO: Consider making an immutable version of this clas
                     | CliType.Modified(modifiers, elem) when modifiers.IsDefaultOrEmpty -> getEncodedType elem
                     | CliType.Modified(modifiers, elem) -> EncodedType.Modified(getCustomModifiers modifiers, getEncodedType elem)
                     | CliType.Array(elem, shape) -> EncodedType.Array(getEncodedType elem, shape)
-                    | CliType.TypeVar(GenericParamIndex i) -> EncodedType.Var(uint32 i)
+                    | CliType.TypeDefVar(GenericParamIndex i)
+                    | CliType.TypeRefVar(GenericParamIndex i) -> EncodedType.Var(uint32 i)
                     | CliType.Primitive prim -> invalidOp(sprintf "Primitive types \"%A\" should not be cached" prim)
 
             function // Ensures that only non-primitive types are cached.

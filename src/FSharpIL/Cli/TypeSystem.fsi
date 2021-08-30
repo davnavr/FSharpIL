@@ -143,7 +143,8 @@ type CliType =
     /// A generic instantiation of a user-defined value type.
     | GenericValueType of GenericTypeInstantiation
     //| Pointer of UnmanagedPointerType
-    | TypeVar of GenericParamType<TypeDefinition>
+    | TypeDefVar of GenericParamType<TypeDefinition>
+    | TypeRefVar of GenericParamType<TypeReference>
     // TODO: Allow using of GenericParamType<SomeMethod>
     //| MethodTypeVar
 
